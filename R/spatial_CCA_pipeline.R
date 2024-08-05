@@ -1,0 +1,705 @@
+
+
+#' S4 object 
+#'
+#' @slot normalizedData A `matrix` object to store normalized data. 
+#' @slot normalizedDataSub A `matrix` object to store the subset of 
+#' the normalized data. The subset only contain relevant cell types 
+#' of interest specified by the user. 
+#' @slot locationData A `data.frame` object to store the location. It should 
+#' either contain two columns named by "x" and "y", or three columns named by
+#' "x", "y", and "z". No other names allowed 
+#' @slot locationDataSub A `data.frame` object to store the subset of 
+#' the location data. 
+#' @slot metaData A `data.frame` object to store metadata for each cell. 
+#' @slot metaDataSub A `data.frame` object to store the subset of 
+#' the meta data. 
+#' @slot cellTypes A `vector` object with elements being character. It should
+#' match the number of cells in the data matrix and each represents a cell type
+#' label of a cell. 
+#' @slot cellTypesSub A `vector` object with elements being character. It stores
+#' the subset of  the cell type labels. 
+#' @slot cellTypesOfInterest A `vector` object with elements being character. 
+#' Specifies the cell types of interest. It will be used to subset the dataset
+#' @slot pcaResults A `list` object to store the PCA output for each cell type. 
+#' @slot distances A `list` object to store the pairwise distances between any
+#' two cell types of interest. 
+#' @slot geneList A `vector` object with elements being character. To store the
+#' gene names.
+#' @slot kernelMatrices A `list` object. To store the kernel matrix generated 
+#' from the distance matrices.
+#' @slot sigmaSquares A `vector` object with elements being numeric. To store 
+#' a set of sigma values used for generating the kernel matrix. 
+#' @slot nPCA A single numeric value. Number of PCs in to retain for downstream
+#' analyses. 
+#' @slot skrCCAOut A `list` object. Output from the skrCCA. 
+#' @slot cellScores A `matrix` object. Cell scores for each cell type.
+#' @slot geneScores A `matrix` object. Gene scores for each cell type. 
+#'
+#' @export
+#'
+#' @examples
+setClass("CoPro",
+         slots = list(
+           
+           ## cell by gene data matrix 
+           normalizedData = "matrix",
+           normalizedDataSub = "matrix",
+           
+           ## location data
+           locationData = "data.frame",
+           locationDataSub = "data.frame",
+           
+           ## cell by meta.data matrix 
+           metaData = "data.frame",
+           metaDataSub = "data.frame",
+           
+           ## cell type labels for each cell
+           cellTypes = "character",
+           cellTypesSub = "character",
+           
+           ## cell types of interest
+           cellTypesOfInterest = "character",
+           
+           ## pca results of normalized data matrix 
+           pcaResults = "list",
+           
+           ## cell by cell distances 
+           distances = "list",
+           
+           ## geneList 
+           geneList = "character",
+           kernelMatrices = "list",
+           sigmaSquares = "numeric",
+           nPCA = "numeric",
+           
+           ## skr CCA output 
+           skrCCAOut = "list",
+           cellScores = "matrix",
+           geneScores = "matrix"
+         ))
+
+## function to create a new object 
+#' Title
+#'
+#' @param normalizedData 
+#' @param locationData 
+#' @param metaData 
+#' @param cellTypes 
+#'
+#' @return
+#' @export
+#'
+#' @examples
+setGeneric("newCoPro", 
+           function(normalizedData, locationData, metaData, cellTypes){
+             standardGeneric("newCoPro")}
+           )
+
+
+
+setMethod("newCoPro", signature("matrix", "data.frame", "character"),
+          function(normalizedData, locationData, metaData, cellTypes) {
+            
+            ## check dimension of input
+            if(length(cellTypes) != nrow(normalizedData) | 
+               nrow(normalizedData) != nrow(metaData) |
+               nrow(normalizedData) != nrow(locationData)){
+              stop('input data do not match dimensionality, please check')
+            }
+            
+            ## check the format of location data
+            if(!all(tolower(colnames(locationData)) %in% c('x', 'y', 'z'))){
+              stop(paste('locationData should only contain x, y, (or z)',
+                     'axis info and colnames should be named accordingly',
+                     sep = " "))
+            }
+            
+            ## check cellTypes are characters 
+            if (!is.character(cellTypes)) {
+              stop("Cell types must be character strings.")
+            }
+            
+            
+            colnames(locationData) <- tolower(colnames(locationData))
+            
+            ## check cell id and gene names 
+            if(is.null(rownames(metaData)) | is.null(rownames(normalizedData)) |
+               is.null(rownames(locationData))){
+              stop(paste('please make sure the rownames of data,',
+                   'metaData, and locationData are cell barcodes', sep = " "))
+            }else if(rownames(metaData) != rownames(normalizedData)|
+                     rownames(locationData) != rownames(normalizedData)){
+              stop(paste('please make sure the cell barcodes match,',
+                   'between data, metaData,and locationData', sep = " "))
+            }
+            
+            ## check gene names
+            if(is.null(colnames(normalizedData))){
+              stop('please make sure colnames of data are gene names')
+            }
+            
+            geneList <- colnames(normalizedData)
+            
+            
+            ## create new object 
+            new("CoPro", normalizedData = normalizedData, 
+                metaData = metaData,
+                cellTypes = cellTypes, geneList = geneList)
+            }
+          )
+
+
+
+#' subsetData
+#'
+#' Take a subset of the original matrix based on cell types of interest
+#'
+#' @param CoPro A `CoPro` object
+#'
+#' @return A `CoPro` object with subset slots 
+#' @export
+#'
+setMethod("subsetData", "CoPro", function(object, cellTypesOfInterest) {
+  
+  if(length(cellTypesOfInterest) < 2){
+    stop("at least two cell types are needed for this analysis")
+  }
+  
+  if(!all(cellTypesOfInterest %in% object@cellTypes)){
+    stop('some cellTypesOfInterest are not in cellTypes, please check')
+  }
+  
+  subsetIndices <- object@cellTypes %in% cellTypesOfInterest
+  
+  if(sum(subsetIndices) < 10){
+    stop('Fewer than 10 cells from the subset, please check the 
+         cellTypesOfInterest')
+  }
+  
+  object@cellTypesOfInterest <- cellTypesOfInterest
+  
+  ## subset the data 
+  object@normalizedDataSub <- object@normalizedData[subsetIndices, ]
+  object@metaDataSub <- object@metaData[subsetIndices, ]
+  object@locationDataSub <- object@locationData[subsetIndices, ]
+  
+  object
+})
+
+#' computePCA with irlba package
+#'
+#' @importFrom irlba prcomp_irlba
+#' @param object A `CoPro` object 
+#' @param nPCA Number of Pcs 
+#' @param center Whether to center data before PCA 
+#' @param scale. Whether to scale data by sd before PCA 
+#'
+#' @return A `CoPro` object 
+#' @export
+#' 
+setMethod("computePCA", "CoPro", 
+          function(object, nPCA = 40, center = TRUE, scale. = TRUE) {
+            
+            ## choose cell types
+            if(!is.null(object@cellTypesOfInterest)){
+              cts <- object@cellTypesOfInterest
+            }else{
+              warning('no cell type of interest specified, 
+                      using all cell types to run the analysis')
+              cts <- unique(object@cellTypes)
+            }
+            
+            ## PCA results will be saved under the name of cell types 
+            object@pcaResults <- setNames(rep(list(), length = length(cts)),
+                                          cts)
+
+            ## iterate over cell types 
+            for(i in cts){
+              ## cell type specific subset 
+              subD <- object@normalizedDataSub[object@cellTypesSub == i,]
+              
+              ## center and scale the data using our own function, because
+              ## for genes with mostly zero expression, this will not scale 
+              ## them up too much
+              
+              if(center & scale.){
+                scaledData <- center_scale_matrix_opt(subD)
+              }else if(center){
+                scaledData <- t(t(subD) - colMeans(subD))
+              }else{
+                warning(paste('It is not recommended to skip both centering,',  
+                        'and scaling of the data', sep = " "))
+                scaledData <- subD
+              }
+              
+              ## PCA, on the matrix that is already centered and scaled
+              pca <- prcomp_irlba(scaledData, center = F, scale. = F, n = nPCA)
+              object@pcaResults[[i]] <- pca
+            }
+            
+            ## return
+            return(object)
+})
+
+
+#' computeDistance between pairs of cell types 
+#'
+#' @importFrom fields rdist
+#' @param CoPro A `CoPro` object
+#'
+#' @return `CoPro` object with distnace matrix computed 
+#' @export
+#'
+#' @note To-do: add morphology-aware kernel
+#'  
+#' @examples
+setMethod("computeDistance", "CoPro", 
+          function(object, distType = c("Euclidean2D", "Euclidean3D",
+                                        "Morphology-Aware"),
+                   xDistScale = 1,
+                   yDistScale = 1, zDistScale = 1) {
+            
+            ## match arg
+            distType <- match.arg(distType)
+            ## choose cell types
+            if(!is.null(object@cellTypesOfInterest)){
+              cts <- object@cellTypesOfInterest
+            }else{
+              warning(paste('no cell type of interest specified,', 
+                      'using all cell types to run the analysis', sep = " "))
+              cts <- unique(object@cellTypes)
+            }
+            
+            ## check dist
+            if(distType == "Euclidean3D" ){
+              if(!all(c('x', 'y', 'z') %in% object@locationDataSub)){
+                stop(paste('please make sure x, y, z are all available to run',
+                '3D Euclidean distance calcuation', sep = " "))
+              }
+            }
+            
+            ## distances are between any two cell types 
+            
+            distances <- setNames(rep(list(), length = length(cts)), cts)
+            for(i in cts){
+              distances[[i]] <- setNames(rep(list(), length = length(cts)), cts)
+            }
+            
+            n_mat <- length(cts)
+            
+            pair_cell_types <- combn(cts, 2)
+            ct_ind_sub <- object@cellTypesSub
+            
+            for(pp in 1:ncol(pair_cell_types)){
+              i <- pair_cell_types[1, pp]
+              j <- pair_cell_types[2, pp]
+              if(distType == 'Euclidean2D'){
+                mat1 = cbind(
+                  object@locationDataSub$x[ct_ind_sub == i] * xDistScale,
+                  object@locationDataSub$y[ct_ind_sub == i] * yDistScale)
+                mat2 = cbind(
+                  object@locationDataSub$x[ct_ind_sub == j] * xDistScale,
+                  object@locationDataSub$y[ct_ind_sub == j] * yDistScale)
+              }else if(distType == "Euclidean3D"){
+                mat1 = cbind(
+                  object@locationDataSub$x[ct_ind_sub == i] * xDistScale,
+                  object@locationDataSub$y[ct_ind_sub == i] * yDistScale,
+                  object@locationDataSub$z[ct_ind_sub == i] * zDistScale)
+                mat2 = cbind(
+                  object@locationDataSub$x[ct_ind_sub == j] * xDistScale,
+                  object@locationDataSub$y[ct_ind_sub == j] * yDistScale,
+                  object@locationDataSub$z[ct_ind_sub == j] * zDistScale)
+              }else if(distType == "Morphology-Aware"){
+                stop('morphology-aware kernel is not availabe at this moment')
+              }
+              
+              ## compute distance
+              distances_ij <- fields::rdist(mat1, mat2) 
+              if(any(distances_ij == 0)){
+                warning(paste("Zero distances detected, replacing with",
+                              "the smallest non-zero distances, please",
+                              "consider checking the location of cells",
+                              sep = " "))
+                distances_ij[distances_ij == 0] <- 
+                  min(distances_ij[distances_ij != 0])
+                }
+              
+              ## save the distances 
+              distances[[i]][[j]] <- distances_ij
+
+            }
+            
+
+            object@distances <- distances
+            return(object)
+})
+
+#' Compute Kernel Matrix for CoPro
+#'
+#' This method calculates the kernel matrices for pairs of cell types based on 
+#' their distances and a range of sigma square values. 
+#' The matrices are adjusted by clipping the upper quantile of
+#'  the values to reduce the effect of outliers.
+#' The results are stored within the object.
+#'
+#' @param object A `CoPro` object.
+#' @param sigmaSquares A vector of sigma square values used for kernel calculation.
+#' @param lowerLimit The lower limit for the kernel function, default is 0.05.
+#' @param upperQuantile The quantile used for clipping the kernel values, default is 0.8.
+#' @return The `CoPro` object with computed kernel matrices added. The kernel
+#' matrices are organized into a three-layer nested list object. The first layer
+#' is a 
+#' @examples
+#' # Assuming `spatialObj` is a `CoPro` object with distances computed:
+#' sigma_values <- c(0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.5)
+#' spatialObj <- computeKernelMatrix(spatialObj, sigma_values)
+#' @export
+setMethod("computeKernelMatrix", "CoPro", 
+          function(object, sigmaSquares,
+                   lowerLimit = 0.05, upperQuantile = 0.8) {
+  
+            
+            ## make sure distance matrix exist 
+            if(is.null(object@distances)){
+              stop('Please run computeDistance before computing kernel')
+            }
+            
+            
+            cts <- object@cellTypesOfInterest     
+  n_mat <- length(cts)
+  if (n_mat < 2) {
+    stop("At least two cell types are needed to compute kernel matrices.")
+  }
+  
+  if(is.null(sigmaSquares)){
+    warning('No Sigma specified, setting to the 5% quantile of cell distance')
+    dist12 <- object@distances[[1]][[2]]
+    sigmaSquares <- quantile(dist12[dist12>0], 0.05)
+  }
+  
+  if(!is.numeric(sigmaSquares)){
+    stop("SigmaSquares must be numeric values or a vector")
+  }
+  
+  ## save the sigmaSquares 
+  object@sigmaSquares <- sigmaSquares
+  
+  ## Initialize the list of kernel matrices
+  kernel_mat <- vector("list", length(sigmaSquares))
+  sigma_names <- paste('sigma', sigmaSquares, sep = "_")
+  names(kernel_mat) <- sigma_names
+  for(t in sigma_names){
+    kernel_mat[[t]] <- setNames(vector("list", n_mat), cts)
+    for(i in cts){
+      kernel_mat[[t]][[i]] <- setNames(vector("list", n_mat), cts)
+    }
+  }
+  
+  pair_cell_types <- combn(cts, 2)
+  
+  for(tt in seq_along(sigmaSquares)){
+    t <- sigma_names[tt]
+    sigma_square_chose <- sigmaSquares[tt]
+    
+    for(pp in 1:ncol(pair_cell_types)){
+      i <- pair_cell_types[1, pp]
+      j <- pair_cell_types[2, pp]
+      
+      kernel_current <- kernel_from_distance(
+        sigma_square = sigma_square_chose, 
+        dist_mat = object@distances[[i]][[j]], 
+        lower_limit = lowerLimit
+      )
+      
+      cat(paste("Quantile of number of neighbors for cell type", i, '\n'))
+      print(quantile(rowSums(kernel_current != 0)))
+      cat(paste("Quantile of number of neighbors for cell type", j, '\n'))
+      print(quantile(colSums(kernel_current != 0)))
+      
+      ## Clipping large values
+      upper_clip <- quantile(kernel_current[kernel_current != 0], upperQuantile)
+      kernel_current[kernel_current >= upper_clip] <- upper_clip
+      
+      kernel_mat[[t]][[i]][[j]] <- kernel_current
+    }
+  }
+  
+  object@kernelMatrices <- kernel_mat
+  return(object)
+})
+
+
+#' runSkrCCA 
+#'
+#' @param CoPro CoPro object
+#' @param scalePCs Whether to scale each PCs to a uniform variance before 
+#' running the program 
+#' @param maxIter Maximum iterations 
+#'
+#' @return CoPro object with distnace matrix computed 
+#' @export
+#'
+#' @note To-do: add morphology-aware kernel
+#'  
+#' @examples
+setMethod("runSkrCCA", "CoPro", 
+          function(object, 
+                   scalePCs = TRUE,
+                   maxIter = 200
+                   ) {
+            
+            ## check whether the kernel matrix is available 
+            if(is.null(object@kernelMatrices)){
+              stop("Kernel matrix is empty, please run computeKernelMatrix first")
+            }
+            
+            ## check sigmaSquares
+            if(is.null(object@sigmaSquares)){
+              stop("sigmaSquares is empty, please specify")
+            }else{
+              sigmaSquares <- object@sigmaSquares
+            }
+            
+            ## choose cell types
+            if(!is.null(object@cellTypesOfInterest)){
+              cts <- object@cellTypesOfInterest
+            }else{
+              warning('no cell type of interest specified, 
+                      using all cell types to run the analysis')
+              cts <- unique(object@cellTypes)
+            }
+            
+            ## get PC matrices 
+            allPCs <- object@pcaResults
+            PCmats <- setNames(vector("list", length = length(allPCs)),
+                               names(allPCs))
+            
+            ## optionally, scale the PCs before running CCA
+            if(scalePCs){
+              for(i in names(allPCs)){
+                pca_A_sd <- allPCs[[i]]$sdev
+                PCmats[[i]] <- scale(allPCs[[i]]$x, center = FALSE, 
+                                     scale = pca_A_sd)
+              }
+            } else {
+              for(i in names(allPCs)){
+                PCmats[[i]] <- allPCs[[i]]$x
+              }
+            }
+            
+            ## run across different sigma values 
+            cca_out <- vector("list", length = length(sigmaSquares))
+            sigma_names <- paste('sigma', sigmaSquares, sep = "_")
+            names(cca_out) <- sigma_names
+            
+            ## for loop to run the analysis
+            for(tt in seq_along(sigmaSquares)){
+              t <- sigma_names[tt]
+              cca_result <- optimize_bilinear_multi(
+                X_list  = PCmats, 
+                K_list = object@kernelMatrices[[t]],
+                max_iter = maxIter)
+              names(cca_result) <- cts
+              cca_out[[t]] <- cca_result
+            }
+            
+            object@skrCCAOut <- cca_out
+            return(object)
+          })
+
+
+#' Compute Normalized Correlation for CoPro
+#'
+#' This method calculates the normalized correlation between pairs of cell types
+#' based on CCA weights and the respective kernel matrix. It uses the spectral norm
+#' of the kernel matrix for normalization.
+#'
+#' @param object A `CoPro` object containing CCA results and kernel matrices.
+#' @param cellType1 The first cell type for correlation calculation.
+#' @param cellType2 The second cell type for correlation calculation.
+#' @return The `CoPro` object with the normalized correlation value 
+#' added as a new slot, `normalizedCorrelation`. 
+#' @export
+setMethod("computeNormalizedCorrelation", "CoPro", 
+          function(object,scalePCs = TRUE) {
+            ## Check for required components
+            if(is.null(object@skrCCAOut)){
+              stop("CCA results are not available. Please run CCA first.")
+            }
+            if(is.null(object@kernelMatrices)){
+              stop("Kernel matrices are not available. Please compute the kernel matrices first.")
+            }
+            ## choose cell types
+            if(!is.null(object@cellTypesOfInterest)){
+              cts <- object@cellTypesOfInterest
+            }else{
+              warning(paste('no cell type of interest specified,', 
+                      'using all cell types to run the analysis'))
+              cts <- unique(object@cellTypes)
+            }
+            
+            ## check sigmaSquares
+            if(is.null(object@sigmaSquares)){
+              stop("sigmaSquares is empty, please specify")
+            }
+            
+            sigmaSquares <- object@sigmaSquares
+            
+            
+            ## get PC matrices 
+            allPCs <- object@pcaResults
+            PCmats <- setNames(vector("list", length = length(allPCs)),
+                               names(allPCs))
+            
+            ## optionally, scale the PCs before running CCA
+            if(scalePCs){
+              for(i in names(allPCs)){
+                pca_A_sd <- allPCs[[i]]$sdev
+                PCmats[[i]] <- scale(allPCs[[i]]$x, center = FALSE, 
+                                     scale = pca_A_sd)
+              }
+            } else {
+              for(i in names(allPCs)){
+                PCmats[[i]] <- allPCs[[i]]$x
+              }
+            }
+            
+            
+            pair_cell_types <- combn(cts, 2)
+            
+            correlation_value <- vector("list", length = length(sigmaSquares))
+            sigma_names <- paste('sigma', sigmaSquares, sep = "_")
+            names(correlation_value) <- sigma_names
+            
+            
+            for(tt in seq_along(sigmaSquares)){
+              t <- sigma_names[tt]
+              correlation_value[[t]] <- data.frame(
+                cellType1 = pair_cell_types[1,],
+                cellType2 = pair_cell_types[2,],
+                normalizedCorrelation = numeric(ncol(pair_cell_types)),
+                stringsAsFactors = FALSE)
+              for(pp in 1:ncol(pair_cell_types)){
+                cellType1 <- pair_cell_types[1, pp]
+                cellType2 <- pair_cell_types[2, pp]
+                
+                w_1 <- object@skrCCAOut[[t]][[cellType1]]
+                w_2 <- object@skrCCAOut[[t]][[cellType2]]
+                
+                A <- PCmats[[cellType1]]
+                B <- PCmats[[cellType2]]
+                K <- object@kernelMatrices[[t]][[cellType1]][[cellType2]]
+                
+                A_w1 <- A %*% w_1
+                B_w2 <- B %*% w_2
+                
+                ## Calculate the spectral norm of the kernel matrix
+                norm_K12 <- norm(K, type = '2')
+                
+                ## Calculate normalized correlation
+                correlation_value[[t]]$normalizedCorrelation[pp] <- 
+                  (t(A_w1) %*% K %*% B_w2) /
+                  (sqrt(sum(A_w1^2)) * sqrt(sum(B_w2^2)) * norm_K12)
+              }
+            }
+            
+            
+            ## Store the result in the object
+            object@normalizedCorrelation <- correlation_value
+            
+            ## Return the modified object
+            return(object)
+          })
+
+
+
+#' computeGeneAndCellScores
+#'
+#' @param CoPro A `CoPro` object containing CCA results 
+#' and kernel matrices.
+#'
+#' @return A `CoPro` object with gene and cell score computed
+#' @export
+#'
+setMethod("computeGeneAndCellScores", "CoPro", 
+          function(object) {
+            
+            ## Check for required components
+            if(is.null(object@skrCCAOut)){
+              stop("CCA results are not available. Please run CCA first.")
+            }
+            if(is.null(object@kernelMatrices)){
+              stop("Kernel matrices are not available. Please compute the kernel matrices first.")
+            }
+            ## choose cell types
+            if(!is.null(object@cellTypesOfInterest)){
+              cts <- object@cellTypesOfInterest
+            }else{
+              warning(paste('no cell type of interest specified,', 
+                            'using all cell types to run the analysis'))
+              cts <- unique(object@cellTypes)
+            }
+            
+            ## check sigmaSquares
+            if(is.null(object@sigmaSquares)){
+              stop("sigmaSquares is empty, please specify")
+            }
+            
+            sigmaSquares <- object@sigmaSquares
+            
+            ## get PC matrices 
+            allPCs <- object@pcaResults
+            PCmats <- setNames(vector("list", length = length(allPCs)),
+                               names(allPCs))
+            
+            ## optionally, scale the PCs before running CCA
+            if(scalePCs){
+              for(i in names(allPCs)){
+                pca_A_sd <- allPCs[[i]]$sdev
+                PCmats[[i]] <- scale(allPCs[[i]]$x, center = FALSE, 
+                                     scale = pca_A_sd)
+              }
+            } else {
+              for(i in names(allPCs)){
+                PCmats[[i]] <- allPCs[[i]]$x
+              }
+            }
+            
+            # pair_cell_types <- combn(cts, 2)
+            
+            sigma_names <- paste('sigma', sigmaSquares, sep = "_")
+            cellScores <- matrix(nrow = nrow(object@normalizedDataSub),
+                                 ncol = length(sigmaSquares))
+            colnames(cellScores) <- sigma_names
+            rownames(cellScores) <- rownames(object@normalizedDataSub)
+            
+            geneScores <- matrix(nrow = ncol(object@normalizedDataSub),
+                                 ncol = length(sigmaSquares))
+            colnames(geneScores) <- sigma_names
+            rownames(geneScores) <- colnames(object@normalizedDataSub)
+            
+            for(tt in seq_along(sigmaSquares)){
+              t <- sigma_names[tt]
+              for(i in cts){
+                w_1 <- object@skrCCAOut[[t]][[i]]
+                if(scalePCs){
+                  geneScores[,t] <- as.vector(
+                    matrix(w_1 * allPCs[[i]]$sdev,nrow = 1) %*% 
+                      t(allPCs[[i]]$rotation)) 
+                }else{
+                  geneScores[,t]<- as.vector(
+                    matrix(w_1,nrow = 1) %*% 
+                      t(allPCs[[i]]$rotation))
+                }
+                cellScores[,t] <- PCmats[[i]] %*% w_1
+                
+              }
+            }
+            
+            object@cellScores <- cellScores
+            object@geneScores <- geneScores
+            
+          })
+
+
