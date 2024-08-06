@@ -1,2 +1,6 @@
+^renv$
+^renv\.lock$
 ^CoPro\.Rproj$
 ^\.Rproj\.user$
+^README\.Rmd$
+^\.github$

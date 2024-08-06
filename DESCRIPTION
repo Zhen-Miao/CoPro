@@ -1,10 +1,12 @@
 Package: CoPro
-Title: What the Package Does (One Line, Title Case)
+Title: Detecting co-progression between cell types in spatial transcriptomics data
 Version: 0.0.0.9000
 Authors@R: 
-    person("First", "Last", , "first.last@example.com", role = c("aut", "cre"),
-           comment = c(ORCID = "YOUR-ORCID-ID"))
-Description: What the package does (one paragraph).
+    person("Zhen", "Miao", , "zhenmiao@pennmedicine.upenn.edu", role = c("aut", "cre"),
+           comment = c(ORCID = "https://orcid.org/0000-0002-3255-9517"))
+Description: Detecting co-progression between cell types in spatial 
+ transcriptomics data. The method works in both supervised and unsupervised manner,
+ so it can be used for explorative data analyses. 
 License: `use_mit_license()`, `use_gpl3_license()` or friends to pick a
     license
 Encoding: UTF-8
