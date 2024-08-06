@@ -7,11 +7,12 @@ kernel_from_distance <- function(
 }
 
 
-#' function for centering and scaling the matrix
+#' centering and scaling the matrix
 #' @importFrom stats sd
 #' @param matrix Input matrix to be column-centered
 #'
 #' @return centered and scaled matrix
+#' @noRd
 center_scale_matrix_opt <- function(matrix) {
   # Calculate column means and standard deviations
   col_means <- colMeans(matrix)
@@ -36,7 +37,15 @@ normalize_vec <- function(v) {
 }
 
 
-# Multi-group optimization
+
+#' SkrCCA optimization function for multiple groups
+#'
+#' @param X_list List of data matrices (cell by PC matrix)
+#' @param K_list Kernel matrices between any two pairs of matrices
+#' @param max_iter Maximum number of iterations
+#' @param tol tolerance of accuracy
+#'
+#' @return `w_list`, a list of weight vectors for each cell type
 optimize_bilinear_multi <- function(X_list, K_list, max_iter = 1000,
                                     tol = 1e-5) {
   n_mat <- length(X_list)
@@ -56,7 +65,6 @@ optimize_bilinear_multi <- function(X_list, K_list, max_iter = 1000,
       ))
     }
   }
-
 
   # Initialize w1 and w2 by their right singular vector
   w_list <- rep(list(), length = length(X_list))
@@ -112,8 +120,18 @@ optimize_bilinear_multi <- function(X_list, K_list, max_iter = 1000,
 }
 
 
-## multi-group optimization to identify the functions beyond the first component
-## This is like the PCA where we can compute second PC and so on
+#' Run multi version of skrCCA to detect the second component
+#'
+#' This is like the PCA where we can compute second PC and so on
+#' @param X_list List of data matrices (cell by PC matrix)
+#' @param K_list Kernel matrices between any two pairs of matrices
+#' @param w_list A list of weights for each data matrix, pre-computed and to
+#' be regressed out
+#' @param max_iter Maximum number of iterations
+#' @param tol tolerance of accuracy
+#'
+#' @return A list of weights
+#' @noRd
 optimize_bilinear_multi_w <- function(X_list, K_list, w_list, max_iter = 1000,
                                       tol = 1e-5) {
   # Function to normalize_vec a vector to have unit norm

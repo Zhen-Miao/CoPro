@@ -40,5 +40,5 @@ computeDistance(
 computeDistance between pairs of cell types
 }
 \note{
-To-do: add morphology-aware kernelexample usage of computeDistancecomputeDistance(CoProObject, distType = "Euclidean2D",xDistScale = 1, yDistScale = 1, zDistScale = 1)
+To-do: add morphology-aware kernel
 }

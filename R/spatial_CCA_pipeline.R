@@ -1,3 +1,11 @@
+
+# Define a virtual class that is a union of 'matrix' and 'sparseMatrix'
+library(Matrix)
+setClassUnion("matrixOrSparseMatrix", c("matrix", "dgCMatrix",
+                                        "dgTMatrix"))
+
+
+
 #' S4 object
 #'
 #' @slot normalizedData A `matrix` object to store normalized data.
@@ -42,8 +50,8 @@ setClass("CoPro",
   slots = list(
 
     ## cell by gene data matrix
-    normalizedData = "matrix",
-    normalizedDataSub = "matrix",
+    normalizedData = "matrixOrSparseMatrix",
+    normalizedDataSub = "matrixOrSparseMatrix",
 
     ## location data
     locationData = "data.frame",
@@ -76,7 +84,8 @@ setClass("CoPro",
     ## skr CCA output
     skrCCAOut = "list",
     cellScores = "matrix",
-    geneScores = "matrix"
+    geneScores = "matrix",
+    normalizedCorrelation = "list"
   )
 )
 
@@ -97,9 +106,8 @@ setClass("CoPro",
 #'
 setGeneric(
   "newCoPro",
-  function(normalizedData, locationData, metaData, cellTypes) {
+  function(normalizedData, locationData, metaData, cellTypes)
     standardGeneric("newCoPro")
-  }
 )
 
 
@@ -108,7 +116,7 @@ setGeneric(
 #' @export
 setMethod(
   "newCoPro", signature(
-    "matrix", "data.frame",
+    "matrixOrSparseMatrix", "data.frame",
     "data.frame", "character"
   ),
   function(normalizedData, locationData, metaData, cellTypes) {
@@ -142,8 +150,8 @@ setMethod(
         "metaData, and locationData are cell barcodes",
         sep = " "
       ))
-    } else if (rownames(metaData) != rownames(normalizedData) |
-      rownames(locationData) != rownames(normalizedData)) {
+    } else if (any((rownames(metaData) != rownames(normalizedData)) |
+      any(rownames(locationData) != rownames(normalizedData)))) {
       stop(paste("please make sure the cell barcodes match,",
         "between data, metaData,and locationData",
         sep = " "
@@ -161,7 +169,7 @@ setMethod(
     ## create new object
     new("CoPro",
       normalizedData = normalizedData,
-      metaData = metaData,
+      metaData = metaData,locationData = locationData,
       cellTypes = cellTypes, geneList = geneList
     )
   }
@@ -183,17 +191,14 @@ setMethod(
 #' @return A `CoPro` object with subset slots
 #' @export
 #'
-setGeneric("subsetData", function(object, cellTypesOfInterest) {
+setGeneric("subsetData", function(object, cellTypesOfInterest)
   standardGeneric("subsetData")
-})
+)
 
 #' @rdname subsetData
 #' @aliases subsetData,CoPro-method
 #' @export
 setMethod("subsetData", "CoPro", function(object, cellTypesOfInterest) {
-  if (!inherits(object, "CoPro")) {
-    stop("The input object must be of class 'CoPro'")
-  }
 
   if (length(cellTypesOfInterest) < 2) {
     stop("at least two cell types are needed for this analysis")
@@ -216,6 +221,7 @@ setMethod("subsetData", "CoPro", function(object, cellTypesOfInterest) {
   object@normalizedDataSub <- object@normalizedData[subsetIndices, ]
   object@metaDataSub <- object@metaData[subsetIndices, ]
   object@locationDataSub <- object@locationData[subsetIndices, ]
+  object@cellTypesSub <- object@cellTypes[subsetIndices]
 
   object
 })
@@ -236,9 +242,9 @@ setMethod("subsetData", "CoPro", function(object, cellTypesOfInterest) {
 #' @export
 #'
 setGeneric("computePCA", function(object, nPCA = 40,
-                                  center = TRUE, scale. = TRUE) {
+                                  center = TRUE, scale. = TRUE)
   standardGeneric("computePCA")
-})
+)
 
 #' @rdname computePCA
 #' @importFrom stats setNames
@@ -253,7 +259,7 @@ setMethod(
     } else {
       warning("no cell type of interest specified,
                       using all cell types to run the analysis")
-      cts <- unique(object@cellTypes)
+      cts <- unique(object@cellTypesSub)
     }
 
     ## PCA results will be saved under the name of cell types
@@ -265,7 +271,7 @@ setMethod(
     ## iterate over cell types
     for (i in cts) {
       ## cell type specific subset
-      subD <- object@normalizedDataSub[object@cellTypesSub == i, ]
+      subD <- as.matrix(object@normalizedDataSub[object@cellTypesSub == i, ])
 
       ## center and scale the data using our own function, because
       ## for genes with mostly zero expression, this will not scale
@@ -308,18 +314,12 @@ setMethod(
 #' @return `CoPro` object with distance matrix computed
 #' @export
 #' @note To-do: add morphology-aware kernel
-#' # example usage of computeDistance
-#' # computeDistance(CoProObject, distType = "Euclidean2D",
-#' # xDistScale = 1, yDistScale = 1, zDistScale = 1)
-setGeneric("computeDistance", function(object, distType =
-                                         c(
-                                           "Euclidean2D", "Euclidean3D",
-                                           "Morphology-Aware"
-                                         ),
-                                       xDistScale = 1, yDistScale = 1,
-                                       zDistScale = 1) {
-  standardGeneric("computeDistance")
-})
+setGeneric("computeDistance",
+           function(object, distType =
+                      c("Euclidean2D", "Euclidean3D","Morphology-Aware"),
+                    xDistScale = 1, yDistScale = 1,
+                    zDistScale = 1) standardGeneric("computeDistance")
+)
 
 #' @rdname computeDistance
 #' @aliases computeDistance,CoPro-method
@@ -337,6 +337,7 @@ setMethod(
            yDistScale = 1, zDistScale = 1) {
     ## match arg
     distType <- match.arg(distType)
+
     ## choose cell types
     if (!is.null(object@cellTypesOfInterest)) {
       cts <- object@cellTypesOfInterest
@@ -345,7 +346,7 @@ setMethod(
         "using all cell types to run the analysis",
         sep = " "
       ))
-      cts <- unique(object@cellTypes)
+      cts <- unique(object@cellTypesSub)
     }
 
     ## check dist
@@ -437,11 +438,10 @@ setMethod(
 #' is indexed by the sigma value, and the second and the third layers are cell
 #' types
 #' @export
-setGeneric("computeKernelMatrix", function(object, sigmaSquares,
-                                           lowerLimit = 0.05,
-                                           upperQuantile = 0.8) {
-  standardGeneric("computeKernelMatrix")
-})
+setGeneric("computeKernelMatrix",
+           function(object, sigmaSquares,lowerLimit = 0.05, upperQuantile = 0.8,
+                    verbose = TRUE) standardGeneric("computeKernelMatrix")
+)
 
 
 #' @rdname computeKernelMatrix
@@ -452,7 +452,7 @@ setGeneric("computeKernelMatrix", function(object, sigmaSquares,
 setMethod(
   "computeKernelMatrix", "CoPro",
   function(object, sigmaSquares,
-           lowerLimit = 0.05, upperQuantile = 0.8) {
+           lowerLimit = 0.05, upperQuantile = 0.8, verbose = TRUE) {
     ## make sure distance matrix exist
     if (is.null(object@distances)) {
       stop("Please run computeDistance before computing kernel")
@@ -493,22 +493,26 @@ setMethod(
 
     for (tt in seq_along(sigmaSquares)) {
       t <- sigma_names[tt]
-      sigma_square_chose <- sigmaSquares[tt]
+      sigma_square_choose <- sigmaSquares[tt]
 
       for (pp in seq_len(ncol(pair_cell_types))) {
         i <- pair_cell_types[1, pp]
         j <- pair_cell_types[2, pp]
 
         kernel_current <- kernel_from_distance(
-          sigma_square = sigma_square_chose,
+          sigma_square = sigma_square_choose,
           dist_mat = object@distances[[i]][[j]],
           lower_limit = lowerLimit
         )
 
-        cat(paste("Quantile of number of neighbors for cell type", i, "\n"))
+        ## print info
+
+        cat(paste("Current Sigma value is ",sigma_square_choose ))
+        cat(paste("Quantiles of N_neighbors for cell type", i, "\n"))
         print(quantile(rowSums(kernel_current != 0)))
-        cat(paste("Quantile of number of neighbors for cell type", j, "\n"))
+        cat(paste("Quantiles of N_neighbors for cell type", j, "\n"))
         print(quantile(colSums(kernel_current != 0)))
+        cat("\n")
 
         ## Clipping large values
         upper_clip <- quantile(kernel_current[kernel_current != 0], upperQuantile)
@@ -534,11 +538,10 @@ setMethod(
 #' @return CoPro object with distnace matrix computed
 #' @export
 #'
-setGeneric("runSkrCCA", function(object,
-                                 scalePCs = TRUE,
-                                 maxIter = 200) {
-  standardGeneric("runSkrCCA")
-})
+setGeneric("runSkrCCA",
+           function(object,scalePCs = TRUE,maxIter = 200)
+             standardGeneric("runSkrCCA")
+)
 
 #' @rdname runSkrCCA
 #' @aliases runSkrCCA,CoPro-method
@@ -555,7 +558,7 @@ setMethod(
     }
 
     ## record whether PCs have been scaled
-    if (is.null(object@scalePCs)) {
+    if (length(object@scalePCs) == 0) {
       object@scalePCs <- scalePCs
     } else if (object@scalePCs != scalePCs) {
       stop("Previously set scalePCs was different from the function input")
@@ -574,7 +577,7 @@ setMethod(
     } else {
       warning("no cell type of interest specified,
                       using all cell types to run the analysis")
-      cts <- unique(object@cellTypes)
+      cts <- unique(object@cellTypesSub)
     }
 
     ## get PC matrices
@@ -634,9 +637,9 @@ setMethod(
 #' added as a new slot, `normalizedCorrelation`.
 #' @export
 #'
-setGeneric("computeNormalizedCorrelation", function(object) {
-  standardGeneric("computeNormalizedCorrelation")
-})
+setGeneric("computeNormalizedCorrelation",
+           function(object) standardGeneric("computeNormalizedCorrelation")
+)
 
 
 #' @rdname computeNormalizedCorrelation
@@ -664,14 +667,15 @@ setMethod(
         "no cell type of interest specified,",
         "using all cell types to run the analysis"
       ))
-      cts <- unique(object@cellTypes)
+      cts <- unique(object@cellTypesSub)
     }
 
     ## load whether the PCs are being scaled prior to CCA
-    scalePCs <- object@scalePCs
+
     if (is.null(object@scalePCs)) {
       stop("object@scalePCs not specified")
     }
+    scalePCs <- object@scalePCs
 
     ## check sigmaSquares
     if (is.null(object@sigmaSquares)) {
@@ -762,9 +766,9 @@ setMethod(
 #' @return A `CoPro` object with gene and cell score computed
 #' @export
 #'
-setGeneric("computeGeneAndCellScores", function(object) {
-  standardGeneric("computeGeneAndCellScores")
-})
+setGeneric("computeGeneAndCellScores",
+           function(object) standardGeneric("computeGeneAndCellScores")
+)
 
 #' @rdname computeGeneAndCellScores
 #' @aliases computeGeneAndCellScores,CoPro-method
@@ -787,7 +791,7 @@ setMethod(
         "no cell type of interest specified,",
         "using all cell types to run the analysis"
       ))
-      cts <- unique(object@cellTypes)
+      cts <- unique(object@cellTypesSub)
     }
 
     ## check sigmaSquares
@@ -798,10 +802,11 @@ setMethod(
     sigmaSquares <- object@sigmaSquares
 
     ## load whether the PCs are being scaled prior to CCA
-    scalePCs <- object@scalePCs
+
     if (is.null(object@scalePCs)) {
       stop("object@scalePCs not specified")
     }
+    scalePCs <- object@scalePCs
 
     ## get PC matrices
     allPCs <- object@pcaResults
