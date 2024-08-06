@@ -31,7 +31,8 @@ computeKernelMatrix(
 \value{
 The \code{CoPro} object with computed kernel matrices added. The kernel
 matrices are organized into a three-layer nested list object. The first layer
-is a
+is indexed by the sigma value, and the second and the third layers are cell
+types
 }
 \description{
 This method calculates the kernel matrices for pairs of cell types based on
@@ -39,9 +40,4 @@ their distances and a range of sigma square values.
 The matrices are adjusted by clipping the upper quantile of
 the values to reduce the effect of outliers.
 The results are stored within the object.
-}
-\examples{
-# Assuming `spatialObj` is a `CoPro` object with distances computed:
-sigma_values <- c(0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.5)
-spatialObj <- computeKernelMatrix(spatialObj, sigma_values)
 }

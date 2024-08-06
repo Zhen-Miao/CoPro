@@ -60,5 +60,8 @@ analyses.}
 \item{\code{cellScores}}{A \code{matrix} object. Cell scores for each cell type.}
 
 \item{\code{geneScores}}{A \code{matrix} object. Gene scores for each cell type.}
+
+\item{\code{scalePCs}}{A \code{logical} value. Whether to scale each PC before computing
+skrCCA}
 }}
 

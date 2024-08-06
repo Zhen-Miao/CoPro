@@ -6,7 +6,12 @@ kernel_from_distance <- function(
   return(kernel_mat)
 }
 
-## function for centering and scaling the matrix
+
+#' function for centering and scaling the matrix
+#' @importFrom stats sd
+#' @param matrix Input matrix to be column-centered
+#'
+#' @return centered and scaled matrix
 center_scale_matrix_opt <- function(matrix) {
   # Calculate column means and standard deviations
   col_means <- colMeans(matrix)

@@ -5,19 +5,16 @@
 \alias{computeNormalizedCorrelation,CoPro-method}
 \title{Compute Normalized Correlation for CoPro}
 \usage{
-computeNormalizedCorrelation(object, scalePCs = TRUE)
+computeNormalizedCorrelation(object)
 
-\S4method{computeNormalizedCorrelation}{CoPro}(object, scalePCs = TRUE)
+\S4method{computeNormalizedCorrelation}{CoPro}(object)
 }
 \arguments{
 \item{object}{A \code{CoPro} object containing CCA results and kernel matrices.}
-
-\item{cellType1}{The first cell type for correlation calculation.}
-
-\item{cellType2}{The second cell type for correlation calculation.}
 }
 \value{
 The \code{CoPro} object with the normalized correlation value
+between any pair of cell types
 added as a new slot, \code{normalizedCorrelation}.
 }
 \description{

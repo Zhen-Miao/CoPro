@@ -10,7 +10,7 @@ computeGeneAndCellScores(object)
 \S4method{computeGeneAndCellScores}{CoPro}(object)
 }
 \arguments{
-\item{CoPro}{A \code{CoPro} object containing CCA results
+\item{object}{A \code{CoPro} object containing CCA results
 and kernel matrices.}
 }
 \value{

@@ -81,7 +81,7 @@ setClass("CoPro",
 )
 
 #' Function to create a new object
-#'
+#' @importFrom methods new
 #' @param normalizedData A `matrix` object to store normalized data.
 #' @param locationData A `data.frame` object to store the location. It should
 #' either contain two columns named by "x" and "y", or three columns named by
@@ -90,7 +90,8 @@ setClass("CoPro",
 #' @param cellTypes A `vector` object with elements being character. It should
 #' match the number of cells in the data matrix and each represents a cell type
 #' label of a cell.
-#'
+#' @rdname newCoPro
+#' @aliases newCoPro,CoPro-method
 #' @return A `CoPro` object
 #' @export
 #'
@@ -102,7 +103,9 @@ setGeneric(
 )
 
 
-
+#' @rdname newCoPro
+#' @aliases newCoPro,CoPro-method
+#' @export
 setMethod(
   "newCoPro", signature(
     "matrix", "data.frame",
@@ -171,7 +174,9 @@ setMethod(
 #' Take a subset of the original matrix based on cell types of interest. The
 #' original data are stored without being thrown away
 #'
-#' @param CoPro A `CoPro` object
+#' @param object A `CoPro` object
+#' @param cellTypesOfInterest Input cell types of interest as a vector of
+#' characters for subsetting the data
 #'
 #' @rdname subsetData
 #' @aliases subsetData,CoPro-method
@@ -216,7 +221,7 @@ setMethod("subsetData", "CoPro", function(object, cellTypesOfInterest) {
 })
 
 #' computePCA with irlba package
-#'
+#' @importFrom stats setNames
 #' @importFrom irlba prcomp_irlba
 #' @param object A `CoPro` object
 #' @param nPCA Number of Pcs
@@ -236,6 +241,7 @@ setGeneric("computePCA", function(object, nPCA = 40,
 })
 
 #' @rdname computePCA
+#' @importFrom stats setNames
 #' @aliases computePCA,CoPro-method
 #' @export
 setMethod(
@@ -290,6 +296,8 @@ setMethod(
 #' computeDistance between pairs of cell types
 #'
 #' @importFrom fields rdist
+#' @importFrom utils combn
+#' @importFrom stats setNames
 #' @param object A `CoPro` object
 #' @param distType Type of distance to compute: "Euclidean2D",
 #'  "Euclidean3D", or "Morphology-Aware"
@@ -300,7 +308,6 @@ setMethod(
 #' @return `CoPro` object with distance matrix computed
 #' @export
 #' @note To-do: add morphology-aware kernel
-#' @examples
 #' # example usage of computeDistance
 #' # computeDistance(CoProObject, distType = "Euclidean2D",
 #' # xDistScale = 1, yDistScale = 1, zDistScale = 1)
@@ -316,6 +323,9 @@ setGeneric("computeDistance", function(object, distType =
 
 #' @rdname computeDistance
 #' @aliases computeDistance,CoPro-method
+#' @importFrom utils combn
+#' @importFrom stats setNames
+#' @importFrom fields rdist
 #' @export
 setMethod(
   "computeDistance", "CoPro",
@@ -417,17 +427,15 @@ setMethod(
 #'  the values to reduce the effect of outliers.
 #' The results are stored within the object.
 #'
+#' @importFrom utils combn
 #' @param object A `CoPro` object.
 #' @param sigmaSquares A vector of sigma square values used for kernel calculation.
 #' @param lowerLimit The lower limit for the kernel function, default is 0.05.
 #' @param upperQuantile The quantile used for clipping the kernel values, default is 0.8.
 #' @return The `CoPro` object with computed kernel matrices added. The kernel
 #' matrices are organized into a three-layer nested list object. The first layer
-#' is a
-#' @examples
-#' # Assuming `spatialObj` is a `CoPro` object with distances computed:
-#' sigma_values <- c(0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.5)
-#' spatialObj <- computeKernelMatrix(spatialObj, sigma_values)
+#' is indexed by the sigma value, and the second and the third layers are cell
+#' types
 #' @export
 setGeneric("computeKernelMatrix", function(object, sigmaSquares,
                                            lowerLimit = 0.05,
@@ -435,8 +443,11 @@ setGeneric("computeKernelMatrix", function(object, sigmaSquares,
   standardGeneric("computeKernelMatrix")
 })
 
+
 #' @rdname computeKernelMatrix
 #' @aliases computeKernelMatrix,CoPro-method
+#' @importFrom utils combn
+#' @importFrom stats setNames quantile
 #' @export
 setMethod(
   "computeKernelMatrix", "CoPro",
@@ -514,8 +525,8 @@ setMethod(
 
 
 #' runSkrCCA
-#'
-#' @param CoPro CoPro object
+#' @importFrom stats setNames
+#' @param object A CoPro object
 #' @param scalePCs Whether to scale each PCs to a uniform variance before
 #' running the program
 #' @param maxIter Maximum iterations
@@ -531,6 +542,7 @@ setGeneric("runSkrCCA", function(object,
 
 #' @rdname runSkrCCA
 #' @aliases runSkrCCA,CoPro-method
+#' @importFrom stats setNames
 #' @export
 setMethod(
   "runSkrCCA", "CoPro",
@@ -617,9 +629,8 @@ setMethod(
 #' of the kernel matrix for normalization.
 #'
 #' @param object A `CoPro` object containing CCA results and kernel matrices.
-#' @param cellType1 The first cell type for correlation calculation.
-#' @param cellType2 The second cell type for correlation calculation.
 #' @return The `CoPro` object with the normalized correlation value
+#' between any pair of cell types
 #' added as a new slot, `normalizedCorrelation`.
 #' @export
 #'
@@ -627,8 +638,10 @@ setGeneric("computeNormalizedCorrelation", function(object) {
   standardGeneric("computeNormalizedCorrelation")
 })
 
+
 #' @rdname computeNormalizedCorrelation
 #' @aliases computeNormalizedCorrelation,CoPro-method
+#' @importFrom utils combn
 #' @export
 setMethod(
   "computeNormalizedCorrelation", "CoPro",
@@ -741,7 +754,7 @@ setMethod(
 
 #' computeGeneAndCellScores
 #'
-#' @param CoPro A `CoPro` object containing CCA results
+#' @param object A `CoPro` object containing CCA results
 #' and kernel matrices.
 #'
 #' @return A `CoPro` object with gene and cell score computed

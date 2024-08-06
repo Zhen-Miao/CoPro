@@ -10,7 +10,10 @@ subsetData(object, cellTypesOfInterest)
 \S4method{subsetData}{CoPro}(object, cellTypesOfInterest)
 }
 \arguments{
-\item{CoPro}{A \code{CoPro} object}
+\item{object}{A \code{CoPro} object}
+
+\item{cellTypesOfInterest}{Input cell types of interest as a vector of
+characters for subsetting the data}
 }
 \value{
 A \code{CoPro} object with subset slots

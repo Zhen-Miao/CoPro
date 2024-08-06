@@ -10,12 +10,12 @@ runSkrCCA(object, scalePCs = TRUE, maxIter = 200)
 \S4method{runSkrCCA}{CoPro}(object, scalePCs = TRUE, maxIter = 200)
 }
 \arguments{
+\item{object}{A CoPro object}
+
 \item{scalePCs}{Whether to scale each PCs to a uniform variance before
 running the program}
 
 \item{maxIter}{Maximum iterations}
-
-\item{CoPro}{CoPro object}
 }
 \value{
 CoPro object with distnace matrix computed
