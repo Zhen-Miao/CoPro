@@ -18,7 +18,7 @@ You can install the current version of CoPro from
 
 ``` r
 # install.packages("devtools")
-devtools::install_github("Zhen-Miao/CoPro") 
+devtools::install_github("Zhen-Miao/CoPro")
 ```
 
 ## Example

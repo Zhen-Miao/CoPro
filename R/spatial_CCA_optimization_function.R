@@ -134,7 +134,7 @@ optimize_bilinear_multi_w <- function(X_list, K_list, w_list, max_iter = 1000,
 
     if (is.null(K_list[[i]][[j]])) {
       stop(paste("Kernel matrix between", i, "and", j, "not available",
-                 sep = " "
+        sep = " "
       ))
     }
   }

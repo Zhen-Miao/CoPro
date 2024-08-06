@@ -114,8 +114,8 @@ setMethod(
   function(normalizedData, locationData, metaData, cellTypes) {
     ## check dimension of input
     if (length(cellTypes) != nrow(normalizedData) |
-          nrow(normalizedData) != nrow(metaData) |
-          nrow(normalizedData) != nrow(locationData)) {
+      nrow(normalizedData) != nrow(metaData) |
+      nrow(normalizedData) != nrow(locationData)) {
       stop("input data do not match dimensionality, please check")
     }
 
@@ -137,13 +137,13 @@ setMethod(
 
     ## check cell id and gene names
     if (is.null(rownames(metaData)) | is.null(rownames(normalizedData)) |
-          is.null(rownames(locationData))) {
+      is.null(rownames(locationData))) {
       stop(paste("please make sure the rownames of data,",
         "metaData, and locationData are cell barcodes",
         sep = " "
       ))
     } else if (rownames(metaData) != rownames(normalizedData) |
-                 rownames(locationData) != rownames(normalizedData)) {
+      rownames(locationData) != rownames(normalizedData)) {
       stop(paste("please make sure the cell barcodes match,",
         "between data, metaData,and locationData",
         sep = " "
@@ -555,9 +555,9 @@ setMethod(
     }
 
     ## record whether PCs have been scaled
-    if(is.null(object@scalePCs)){
+    if (is.null(object@scalePCs)) {
       object@scalePCs <- scalePCs
-    }else if(object@scalePCs != scalePCs){
+    } else if (object@scalePCs != scalePCs) {
       stop("Previously set scalePCs was different from the function input")
     }
 
@@ -651,8 +651,10 @@ setMethod(
       stop("CCA results are not available. Please run CCA first.")
     }
     if (is.null(object@kernelMatrices)) {
-      stop(paste("Kernel matrices are not available.",
-           "Please compute the kernel matrices first."))
+      stop(paste(
+        "Kernel matrices are not available.",
+        "Please compute the kernel matrices first."
+      ))
     }
     ## choose cell types
     if (!is.null(object@cellTypesOfInterest)) {
@@ -797,7 +799,7 @@ setMethod(
 
     ## load whether the PCs are being scaled prior to CCA
     scalePCs <- object@scalePCs
-    if(is.null(object@scalePCs)){
+    if (is.null(object@scalePCs)) {
       stop("object@scalePCs not specified")
     }
 
