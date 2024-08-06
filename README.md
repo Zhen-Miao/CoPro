@@ -6,14 +6,19 @@
 <!-- badges: start -->
 <!-- badges: end -->
 
-The goal of CoPro is to …
+The goal of CoPro is to identify co-progression between cell types, in
+either supervised or unsupervised manner. In the presence of tissue
+structures, CoPro will also be able to identify tissue
+structure-associated cellular programs.
 
 ## Installation
 
-You can install the development version of CoPro like so:
+You can install the current version of CoPro from
+[GitHub](https://github.com/) with:
 
 ``` r
-# FILL THIS IN! HOW CAN PEOPLE INSTALL YOUR DEV PACKAGE?
+# install.packages("devtools")
+devtools::install_github("Zhen-Miao/CoPro") 
 ```
 
 ## Example
@@ -41,10 +46,3 @@ summary(cars)
 
 You’ll still need to render `README.Rmd` regularly, to keep `README.md`
 up-to-date. `devtools::build_readme()` is handy for this.
-
-You can also embed plots, for example:
-
-<img src="man/figures/README-pressure-1.png" width="100%" />
-
-In that case, don’t forget to commit and push the resulting figure
-files, so they display on GitHub and CRAN.
