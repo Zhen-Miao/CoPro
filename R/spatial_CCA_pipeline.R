@@ -42,6 +42,8 @@ setClassUnion("matrixOrSparseMatrix", c("matrix", "dgCMatrix",
 #' @slot cellScores A `matrix` object. Cell scores for each cell type.
 #' @slot geneScores A `matrix` object. Gene scores for each cell type.
 #' @slot scalePCs A `logical` value. Whether to scale each PC before computing
+#' @slot normalizedCorrelation A `list` object. Normalized correlation values
+#' for each sigma value.
 #' skrCCA
 #'
 #' @export
@@ -83,9 +85,10 @@ setClass("CoPro",
 
     ## skr CCA output
     skrCCAOut = "list",
-    cellScores = "matrix",
-    geneScores = "matrix",
-    normalizedCorrelation = "list"
+    cellScores = "list",
+    geneScores = "list",
+    normalizedCorrelation = "list",
+    sigmaSquaredChoice = "numeric"
   )
 )
 
@@ -254,7 +257,7 @@ setMethod(
   "computePCA", "CoPro",
   function(object, nPCA = 40, center = TRUE, scale. = TRUE) {
     ## choose cell types
-    if (!is.null(object@cellTypesOfInterest)) {
+    if (lenght(object@cellTypesOfInterest) != 0) {
       cts <- object@cellTypesOfInterest
     } else {
       warning("no cell type of interest specified,
@@ -339,7 +342,7 @@ setMethod(
     distType <- match.arg(distType)
 
     ## choose cell types
-    if (!is.null(object@cellTypesOfInterest)) {
+    if (length(object@cellTypesOfInterest) != 0) {
       cts <- object@cellTypesOfInterest
     } else {
       warning(paste("no cell type of interest specified,",
@@ -454,7 +457,7 @@ setMethod(
   function(object, sigmaSquares,
            lowerLimit = 0.05, upperQuantile = 0.8, verbose = TRUE) {
     ## make sure distance matrix exist
-    if (is.null(object@distances)) {
+    if (length(object@distances) == 0) {
       stop("Please run computeDistance before computing kernel")
     }
 
@@ -465,7 +468,7 @@ setMethod(
       stop("At least two cell types are needed to compute kernel matrices.")
     }
 
-    if (is.null(sigmaSquares)) {
+    if (length(sigmaSquares) == 0) {
       warning("No Sigma specified, setting to the 5% quantile of cell distance")
       dist12 <- object@distances[[1]][[2]]
       sigmaSquares <- quantile(dist12[dist12 > 0], 0.05)
@@ -506,13 +509,15 @@ setMethod(
         )
 
         ## print info
+        if(verbose){
+          cat(paste("Current Sigma value is ",sigma_square_choose ))
+          cat(paste("Quantiles of N_neighbors for cell type", i, "\n"))
+          print(quantile(rowSums(kernel_current != 0)))
+          cat(paste("Quantiles of N_neighbors for cell type", j, "\n"))
+          print(quantile(colSums(kernel_current != 0)))
+          cat("\n")
+        }
 
-        cat(paste("Current Sigma value is ",sigma_square_choose ))
-        cat(paste("Quantiles of N_neighbors for cell type", i, "\n"))
-        print(quantile(rowSums(kernel_current != 0)))
-        cat(paste("Quantiles of N_neighbors for cell type", j, "\n"))
-        print(quantile(colSums(kernel_current != 0)))
-        cat("\n")
 
         ## Clipping large values
         upper_clip <- quantile(kernel_current[kernel_current != 0], upperQuantile)
@@ -553,7 +558,7 @@ setMethod(
            scalePCs = TRUE,
            maxIter = 200) {
     ## check whether the kernel matrix is available
-    if (is.null(object@kernelMatrices)) {
+    if (length(object@kernelMatrices) == 0) {
       stop("Kernel matrix is empty, please run computeKernelMatrix first")
     }
 
@@ -565,14 +570,14 @@ setMethod(
     }
 
     ## check sigmaSquares
-    if (is.null(object@sigmaSquares)) {
+    if (length(object@sigmaSquares) == 0) {
       stop("sigmaSquares is empty, please specify")
     } else {
       sigmaSquares <- object@sigmaSquares
     }
 
     ## choose cell types
-    if (!is.null(object@cellTypesOfInterest)) {
+    if (length(object@cellTypesOfInterest) != 0) {
       cts <- object@cellTypesOfInterest
     } else {
       warning("no cell type of interest specified,
@@ -650,17 +655,17 @@ setMethod(
   "computeNormalizedCorrelation", "CoPro",
   function(object) {
     ## Check for required components
-    if (is.null(object@skrCCAOut)) {
+    if (length(object@skrCCAOut) == 0) {
       stop("CCA results are not available. Please run CCA first.")
     }
-    if (is.null(object@kernelMatrices)) {
+    if (length(object@kernelMatrices) == 0) {
       stop(paste(
         "Kernel matrices are not available.",
         "Please compute the kernel matrices first."
       ))
     }
     ## choose cell types
-    if (!is.null(object@cellTypesOfInterest)) {
+    if (length(object@cellTypesOfInterest) != 0) {
       cts <- object@cellTypesOfInterest
     } else {
       warning(paste(
@@ -672,13 +677,13 @@ setMethod(
 
     ## load whether the PCs are being scaled prior to CCA
 
-    if (is.null(object@scalePCs)) {
+    if (length(object@scalePCs) == 0) {
       stop("object@scalePCs not specified")
     }
     scalePCs <- object@scalePCs
 
     ## check sigmaSquares
-    if (is.null(object@sigmaSquares)) {
+    if (length(object@sigmaSquares) == 0) {
       stop("sigmaSquares is empty, please specify")
     }
 
@@ -718,9 +723,10 @@ setMethod(
     for (tt in seq_along(sigmaSquares)) {
       t <- sigma_names[tt]
       correlation_value[[t]] <- data.frame(
+        sigmaSquares = sigmaSquares[tt],
         cellType1 = pair_cell_types[1, ],
         cellType2 = pair_cell_types[2, ],
-        normalizedCorrelation = numeric(ncol(pair_cell_types)),
+        normalizedCorrelation = numeric(length = ncol(pair_cell_types)),
         stringsAsFactors = FALSE
       )
       for (pp in seq_len(ncol(pair_cell_types))) {
@@ -747,9 +753,21 @@ setMethod(
       }
     }
 
-
     ## Store the result in the object
     object@normalizedCorrelation <- correlation_value
+
+    ## obtain the sigmaSqured value with the highest
+    ## normalized correlation
+    ncorr <- do.call(rbind, correlation_value)
+    ncorr$ct12 <- paste(ncorr$cellType1, ncorr$cellType2, sep = "-")
+
+    # Calculate the mean of column 2 for each unique value in column 1
+    meanCorr <- tapply(ncorr$normalizedCorrelation,
+                       ncorr$sigmaSquares, mean)
+
+    # Find the value of column 1 with the highest mean in column 2
+    sigmaSquaredChoice <- as.numeric(names(which.max(meanCorr)))
+    object@sigmaSquaredChoice <- sigmaSquaredChoice
 
     ## Return the modified object
     return(object)
@@ -777,14 +795,14 @@ setMethod(
   "computeGeneAndCellScores", "CoPro",
   function(object) {
     ## Check for required components
-    if (is.null(object@skrCCAOut)) {
+    if (length(object@skrCCAOut) == 0) {
       stop("CCA results are not available. Please run CCA first.")
     }
-    if (is.null(object@kernelMatrices)) {
+    if (length(object@kernelMatrices) == 0) {
       stop("Kernel matrices are not available. Please compute the kernel matrices first.")
     }
     ## choose cell types
-    if (!is.null(object@cellTypesOfInterest)) {
+    if (length(object@cellTypesOfInterest) != 0) {
       cts <- object@cellTypesOfInterest
     } else {
       warning(paste(
@@ -795,7 +813,7 @@ setMethod(
     }
 
     ## check sigmaSquares
-    if (is.null(object@sigmaSquares)) {
+    if (length(object@sigmaSquares) == 0) {
       stop("sigmaSquares is empty, please specify")
     }
 
@@ -803,7 +821,7 @@ setMethod(
 
     ## load whether the PCs are being scaled prior to CCA
 
-    if (is.null(object@scalePCs)) {
+    if (length(object@scalePCs) == 0) {
       stop("object@scalePCs not specified")
     }
     scalePCs <- object@scalePCs
@@ -833,40 +851,82 @@ setMethod(
     # pair_cell_types <- combn(cts, 2)
 
     sigma_names <- paste("sigma", sigmaSquares, sep = "_")
-    cellScores <- matrix(
-      nrow = nrow(object@normalizedDataSub),
-      ncol = length(sigmaSquares)
-    )
-    colnames(cellScores) <- sigma_names
-    rownames(cellScores) <- rownames(object@normalizedDataSub)
 
-    geneScores <- matrix(
-      nrow = ncol(object@normalizedDataSub),
-      ncol = length(sigmaSquares)
+    ## cell scores and gene scores are both by cell types
+    cellScores <- setNames(
+      vector(mode = "list", length = length(cts)),
+      cts
     )
-    colnames(geneScores) <- sigma_names
-    rownames(geneScores) <- colnames(object@normalizedDataSub)
+    for (i in cts) {
+      cellScores[[i]] <- matrix(
+        nrow = sum(object@cellTypesSub == i),
+        ncol = length(sigmaSquares)
+      )
+      colnames(cellScores[[i]]) <- sigma_names
+      rownames(cellScores[[i]]) <- rownames(object@normalizedDataSub)[
+        object@cellTypesSub == i
+      ]
+    }
 
+    ## gene scores
+    geneScores <- setNames(
+      vector(mode = "list", length = length(cts)),
+      cts
+    )
+    for (i in cts) {
+      geneScores[[i]] <- matrix(
+        nrow = ncol(object@normalizedDataSub),
+        ncol = length(sigmaSquares)
+      )
+      colnames(geneScores[[i]]) <- sigma_names
+      rownames(geneScores[[i]]) <- colnames(object@normalizedDataSub)
+    }
+
+    ## go over all cell types, then over all sigma values
     for (tt in seq_along(sigmaSquares)) {
       t <- sigma_names[tt]
       for (i in cts) {
         w_1 <- object@skrCCAOut[[t]][[i]]
         if (scalePCs) {
-          geneScores[, t] <- as.vector(
+          geneScores[[i]][, t] <- as.vector(
             matrix(w_1 * allPCs[[i]]$sdev, nrow = 1) %*%
               t(allPCs[[i]]$rotation)
           )
         } else {
-          geneScores[, t] <- as.vector(
+          geneScores[[i]][, t] <- as.vector(
             matrix(w_1, nrow = 1) %*%
               t(allPCs[[i]]$rotation)
           )
         }
-        cellScores[, t] <- PCmats[[i]] %*% w_1
+        cellScores[[i]][, t] <- as.vector(PCmats[[i]] %*% w_1)
       }
     }
 
+    ## change the column names to make it more informative
+    for (i in cts) {
+      colnames(cellScores[[i]]) <-
+        paste0("cellScore_", colnames(cellScores[[i]]))
+      colnames(geneScores[[i]]) <-
+        paste0("geneScore_", colnames(geneScores[[i]]))
+    }
+
+    ## save cellscores and gene scores
     object@cellScores <- cellScores
     object@geneScores <- geneScores
+
+    ## add cell score information to the cell metadata
+    meta_t <- stats::setNames(vector(mode = "list", length = length(cts)),
+                             cts)
+    for (t in cts) {
+      meta_t[[t]] <- object@metaDataSub[object@cellTypesSub == t,]
+      meta_t[[t]] <- cbind(meta_t[[t]], cellScores[[t]][rownames(loc_t[[t]]),])
+    }
+
+    ## combine each cell type meta.data back
+    names(meta_t) <- NULL
+    meta_all <- do.call(rbind, meta_t)[rownames(object@metaDataSub),]
+    object@metaDataSub <- meta_all
+
+    return(object)
   }
 )

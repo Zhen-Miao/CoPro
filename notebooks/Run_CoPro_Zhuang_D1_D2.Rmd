@@ -90,9 +90,13 @@ br <- runSkrCCA(br,scalePCs = TRUE,maxIter = 500)
 br <- computeNormalizedCorrelation(br)
 ```
 
+## compute gene and cell scores
+```{r}
+br <- computeGeneAndCellScores(br)
+```
 
-
-```{r pressure, echo=FALSE}
+## generate some plots 
+```{r}
 plot(pressure)
 ```
 
