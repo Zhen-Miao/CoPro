@@ -1,41 +1,57 @@
-
 ## correlation plot
 
-plotNormCorr <- function(object){
-
+#' Get normalized correlation vs Sigma squared values
+#'
+#' Get a data.frame with normalized correlation vs Sigma squared values.
+#' This helps to evaluate which sigma squared value to choose for downstream
+#' analyses.
+#' @importFrom methods is
+#' @importFrom methods slot
+#'
+#' @param object A `CoPro` object
+#'
+#' @return A `data.frame` with correlation information
+#' @export
+getNormCorr <- function(object) {
   ## check input
   if (!is(object, "CoPro")) {
     stop("Input must be a CoPro object")
   }
 
   ## make sure normalizedCorrelation exists
-  if (length(object@normalizedCorrelation) == 0){
-    stop(paste("normalizedCorrelation slot does not exist,",
-               "run computeNormalizedCorrelation first"))
+  if (length(object@normalizedCorrelation) == 0) {
+    stop(paste(
+      "normalizedCorrelation slot does not exist,",
+      "run computeNormalizedCorrelation first"
+    ))
   }
 
   ## organize into a data.frame
   ncorr <- do.call(rbind, slot(object, "normalizedCorrelation"))
-  ncorr$ct12 <- paste(ncorr$cellType1, ncorr$cellType2, sep = "-")
-  ncorr$sigmaSquares <- factor(ncorr$sigmaSquares,
-                               levels = sort(unique(ncorr$sigmaSquares),
-                                             decreasing = FALSE))
+  ncorr$"ct12" <- paste(ncorr$"cellType1", ncorr$"cellType2", sep = "-")
+  ncorr$"sigmaSquares" <- factor(ncorr$"sigmaSquares",
+    levels = sort(unique(ncorr$"sigmaSquares"),
+      decreasing = FALSE
+    )
+  )
 
-  p1 <- ggplot(data = ncorr)+
-    geom_line(mapping = aes(x = sigmaSquares, y = normalizedCorrelation))+
-    facet_wrap(vars(ct12))+
-    xlab("Sigma squared")+
-    ylab("Norm. Corr.")+
-    ggtitle(label = "Norm. Corr. across sigma squared values")+
-    theme_minimal()
-
-  return(p1)
-
+  return(ncorr)
 }
 
 
-plotCellScoresInSitu <- function(object, sigmaSquaredChoice,
-                                 scoreColorType = c("binary", "continuous") ){
+#' Get cell score and location information as a data.frame
+#'
+#' @importFrom stats median
+#' @param object A `CoPro` object
+#' @param sigmaSquaredChoice A value to specify the sigma squared to
+#' use for selecting the particular cell score information
+#' @param scoreColorType Should the color be in binary scale or
+#' continuous scale?
+#'
+#' @return A data.frame object with cell scores and their locations
+#' @export
+getCellScoresInSitu <- function(object, sigmaSquaredChoice,
+                                scoreColorType = c("binary", "continuous")) {
   ## check input
   if (!is(object, "CoPro")) {
     stop("Input must be a CoPro object")
@@ -46,19 +62,23 @@ plotCellScoresInSitu <- function(object, sigmaSquaredChoice,
 
   ## make sure normalizedCorrelation exists
   if (length(object@cellScores) == 0 |
-      length(object@geneScores == 0)){
-    stop(paste("cellScores slot does not exist,",
-               "run computeNormalizedCorrelation first"))
+    length(object@geneScores) == 0) {
+    stop(paste(
+      "cellScores slot does not exist,",
+      "run computeNormalizedCorrelation first"
+    ))
   }
 
-  if(is.null(sigmaSquaredChoice)){
-    stop(paste("sigmaSquaredChoice is not given",
-               "default set to the value with highest",
-               "normalized correlation."))
+  if (is.null(sigmaSquaredChoice)) {
+    stop(paste(
+      "sigmaSquaredChoice is not given",
+      "default set to the value with highest",
+      "normalized correlation."
+    ))
     sigmaSquaredChoice <- object@sigmaSquaredChoice
   }
 
-  if (!(sigmaSquaredChoice %in% object@sigmaSquares)){
+  if (!(sigmaSquaredChoice %in% object@sigmaSquares)) {
     stop("sigmaSquaredChoice does not exist in the list of sigmaSquares")
   }
 
@@ -73,56 +93,37 @@ plotCellScoresInSitu <- function(object, sigmaSquaredChoice,
     cts <- unique(object@cellTypesSub)
   }
 
-  sigma_name_choice <- paste("sigma", sigmaSquaredChoice, sep = "_")
+  sigma_name_choice <- paste("cellScore_sigma", sigmaSquaredChoice, sep = "_")
 
-  loc_t <- stats::setNames(vector(mode = "list", length = length(cts)),
-                           cts)
+  loc_t <- stats::setNames(
+    vector(mode = "list", length = length(cts)),
+    cts
+  )
   median_score_t <- vector("numeric", length = length(cts))
   names(median_score_t) <- cts
 
   for (t in cts) {
-    loc_t[[t]] <- object@locationDataSub[object@cellTypesSub == t,]
-    loc_t[[t]]$cellScores <- object@cellScores[[t]][rownames(loc_t[[t]]),
-                                               sigma_name_choice]
+    loc_t[[t]] <- object@locationDataSub[object@cellTypesSub == t, ]
+    loc_t[[t]]$cellScores <- object@cellScores[[t]][
+      rownames(loc_t[[t]]),
+      sigma_name_choice
+    ]
     loc_t[[t]]$cellTypesSub <- t
-    median_score_t[t] <- median(object@cellScores[[t]][,sigma_name_choice])
+    median_score_t[t] <- median(object@cellScores[[t]][, sigma_name_choice])
     loc_t[[t]]$cellScores_b <- ifelse(loc_t[[t]]$cellScores > median_score_t[t],
-                                      paste0("high_",t), paste0("low_",t))
-
+      paste0("high_", t), paste0("low_", t)
+    )
   }
 
   combinations <- expand.grid(c("high", "low"), cts)
-  all_binary_scores <- apply(combinations, 1, function(x) paste(x[1], x[2], sep = "-"))
+  all_binary_scores <- apply(combinations, 1, function(x) paste(x[1], x[2], sep = "_"))
 
   names(loc_t) <- NULL
-  loc_all <- do.call(rbind, loc_t)[rownames(object@locationDataSub),]
+  loc_all <- do.call(rbind, loc_t)[rownames(object@locationDataSub), ]
 
-  loc_all$cellScores_b = factor(loc_all$cellScores_b,
-                                levels = all_binary_scores)
+  loc_all$cellScores_b <- factor(loc_all$cellScores_b,
+    levels = all_binary_scores
+  )
 
-  if (scoreColorType == "binary") {
-    p2 <- ggplot(data = loc_all)+
-      geom_point(aes(x = x,
-                     y = y,
-                     color = cellScores_b), size = 0.8)+
-      scale_color_discrete(type = c('darkgreen','#d4f8d4','darkred','#ffd8d8'))+
-      coord_fixed()+
-      theme_minimal()
-    return(p2)
-  }else{
-    p2 <- ggplot(data = loc_all)+
-      geom_point(aes(x = x,
-                     y = y,
-                     color = cellScores), size = 0.8)+
-      coord_fixed()+
-      theme_minimal()
-    return(p2)
-  }
-
-
+  return(loc_all)
 }
-
-
-
-
-

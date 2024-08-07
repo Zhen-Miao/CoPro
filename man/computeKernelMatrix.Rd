@@ -9,14 +9,16 @@ computeKernelMatrix(
   object,
   sigmaSquares,
   lowerLimit = 0.05,
-  upperQuantile = 0.8
+  upperQuantile = 0.8,
+  verbose = TRUE
 )
 
 \S4method{computeKernelMatrix}{CoPro}(
   object,
   sigmaSquares,
   lowerLimit = 0.05,
-  upperQuantile = 0.8
+  upperQuantile = 0.8,
+  verbose = TRUE
 )
 }
 \arguments{
@@ -26,7 +28,10 @@ computeKernelMatrix(
 
 \item{lowerLimit}{The lower limit for the kernel function, default is 0.05.}
 
-\item{upperQuantile}{The quantile used for clipping the kernel values, default is 0.8.}
+\item{upperQuantile}{The quantile used for clipping the kernel values,
+default is 0.8.}
+
+\item{verbose}{Whether to output the progress and related information}
 }
 \value{
 The \code{CoPro} object with computed kernel matrices added. The kernel

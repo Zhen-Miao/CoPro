@@ -1,8 +1,9 @@
-
 # Define a virtual class that is a union of 'matrix' and 'sparseMatrix'
 library(Matrix)
-setClassUnion("matrixOrSparseMatrix", c("matrix", "dgCMatrix",
-                                        "dgTMatrix"))
+setClassUnion("matrixOrSparseMatrix", c(
+  "matrix", "dgCMatrix",
+  "dgTMatrix"
+))
 
 
 
@@ -38,13 +39,15 @@ setClassUnion("matrixOrSparseMatrix", c("matrix", "dgCMatrix",
 #' a set of sigma values used for generating the kernel matrix.
 #' @slot nPCA A single numeric value. Number of PCs in to retain for downstream
 #' analyses.
+#' @slot scalePCs A `logical` value. Whether to scale each PC before computing
+#'  skrCCA
 #' @slot skrCCAOut A `list` object. Output from the skrCCA.
 #' @slot cellScores A `matrix` object. Cell scores for each cell type.
 #' @slot geneScores A `matrix` object. Gene scores for each cell type.
-#' @slot scalePCs A `logical` value. Whether to scale each PC before computing
 #' @slot normalizedCorrelation A `list` object. Normalized correlation values
 #' for each sigma value.
-#' skrCCA
+#' @slot sigmaSquaredChoice A `numeric` value. The optimal sigma squared based
+#' on the median normalized correlation value.
 #'
 #' @export
 #'
@@ -109,8 +112,9 @@ setClass("CoPro",
 #'
 setGeneric(
   "newCoPro",
-  function(normalizedData, locationData, metaData, cellTypes)
+  function(normalizedData, locationData, metaData, cellTypes) {
     standardGeneric("newCoPro")
+  }
 )
 
 
@@ -172,7 +176,7 @@ setMethod(
     ## create new object
     new("CoPro",
       normalizedData = normalizedData,
-      metaData = metaData,locationData = locationData,
+      metaData = metaData, locationData = locationData,
       cellTypes = cellTypes, geneList = geneList
     )
   }
@@ -194,15 +198,14 @@ setMethod(
 #' @return A `CoPro` object with subset slots
 #' @export
 #'
-setGeneric("subsetData", function(object, cellTypesOfInterest)
+setGeneric("subsetData", function(object, cellTypesOfInterest) {
   standardGeneric("subsetData")
-)
+})
 
 #' @rdname subsetData
 #' @aliases subsetData,CoPro-method
 #' @export
 setMethod("subsetData", "CoPro", function(object, cellTypesOfInterest) {
-
   if (length(cellTypesOfInterest) < 2) {
     stop("at least two cell types are needed for this analysis")
   }
@@ -245,9 +248,9 @@ setMethod("subsetData", "CoPro", function(object, cellTypesOfInterest) {
 #' @export
 #'
 setGeneric("computePCA", function(object, nPCA = 40,
-                                  center = TRUE, scale. = TRUE)
+                                  center = TRUE, scale. = TRUE) {
   standardGeneric("computePCA")
-)
+})
 
 #' @rdname computePCA
 #' @importFrom stats setNames
@@ -257,7 +260,7 @@ setMethod(
   "computePCA", "CoPro",
   function(object, nPCA = 40, center = TRUE, scale. = TRUE) {
     ## choose cell types
-    if (lenght(object@cellTypesOfInterest) != 0) {
+    if (length(object@cellTypesOfInterest) != 0) {
       cts <- object@cellTypesOfInterest
     } else {
       warning("no cell type of interest specified,
@@ -317,11 +320,14 @@ setMethod(
 #' @return `CoPro` object with distance matrix computed
 #' @export
 #' @note To-do: add morphology-aware kernel
-setGeneric("computeDistance",
-           function(object, distType =
-                      c("Euclidean2D", "Euclidean3D","Morphology-Aware"),
-                    xDistScale = 1, yDistScale = 1,
-                    zDistScale = 1) standardGeneric("computeDistance")
+setGeneric(
+  "computeDistance",
+  function(object, distType =
+             c("Euclidean2D", "Euclidean3D", "Morphology-Aware"),
+           xDistScale = 1, yDistScale = 1,
+           zDistScale = 1) {
+    standardGeneric("computeDistance")
+  }
 )
 
 #' @rdname computeDistance
@@ -435,15 +441,20 @@ setMethod(
 #' @param object A `CoPro` object.
 #' @param sigmaSquares A vector of sigma square values used for kernel calculation.
 #' @param lowerLimit The lower limit for the kernel function, default is 0.05.
-#' @param upperQuantile The quantile used for clipping the kernel values, default is 0.8.
+#' @param upperQuantile The quantile used for clipping the kernel values,
+#' default is 0.8.
+#' @param verbose Whether to output the progress and related information
 #' @return The `CoPro` object with computed kernel matrices added. The kernel
 #' matrices are organized into a three-layer nested list object. The first layer
 #' is indexed by the sigma value, and the second and the third layers are cell
 #' types
 #' @export
-setGeneric("computeKernelMatrix",
-           function(object, sigmaSquares,lowerLimit = 0.05, upperQuantile = 0.8,
-                    verbose = TRUE) standardGeneric("computeKernelMatrix")
+setGeneric(
+  "computeKernelMatrix",
+  function(object, sigmaSquares, lowerLimit = 0.05, upperQuantile = 0.8,
+           verbose = TRUE) {
+    standardGeneric("computeKernelMatrix")
+  }
 )
 
 
@@ -509,8 +520,8 @@ setMethod(
         )
 
         ## print info
-        if(verbose){
-          cat(paste("Current Sigma value is ",sigma_square_choose ))
+        if (verbose) {
+          cat(paste("Current Sigma value is ", sigma_square_choose))
           cat(paste("Quantiles of N_neighbors for cell type", i, "\n"))
           print(quantile(rowSums(kernel_current != 0)))
           cat(paste("Quantiles of N_neighbors for cell type", j, "\n"))
@@ -543,9 +554,11 @@ setMethod(
 #' @return CoPro object with distnace matrix computed
 #' @export
 #'
-setGeneric("runSkrCCA",
-           function(object,scalePCs = TRUE,maxIter = 200)
-             standardGeneric("runSkrCCA")
+setGeneric(
+  "runSkrCCA",
+  function(object, scalePCs = TRUE, maxIter = 200) {
+    standardGeneric("runSkrCCA")
+  }
 )
 
 #' @rdname runSkrCCA
@@ -642,8 +655,9 @@ setMethod(
 #' added as a new slot, `normalizedCorrelation`.
 #' @export
 #'
-setGeneric("computeNormalizedCorrelation",
-           function(object) standardGeneric("computeNormalizedCorrelation")
+setGeneric(
+  "computeNormalizedCorrelation",
+  function(object) standardGeneric("computeNormalizedCorrelation")
 )
 
 
@@ -762,8 +776,10 @@ setMethod(
     ncorr$ct12 <- paste(ncorr$cellType1, ncorr$cellType2, sep = "-")
 
     # Calculate the mean of column 2 for each unique value in column 1
-    meanCorr <- tapply(ncorr$normalizedCorrelation,
-                       ncorr$sigmaSquares, mean)
+    meanCorr <- tapply(
+      ncorr$normalizedCorrelation,
+      ncorr$sigmaSquares, mean
+    )
 
     # Find the value of column 1 with the highest mean in column 2
     sigmaSquaredChoice <- as.numeric(names(which.max(meanCorr)))
@@ -784,8 +800,9 @@ setMethod(
 #' @return A `CoPro` object with gene and cell score computed
 #' @export
 #'
-setGeneric("computeGeneAndCellScores",
-           function(object) standardGeneric("computeGeneAndCellScores")
+setGeneric(
+  "computeGeneAndCellScores",
+  function(object) standardGeneric("computeGeneAndCellScores")
 )
 
 #' @rdname computeGeneAndCellScores
@@ -915,16 +932,18 @@ setMethod(
     object@geneScores <- geneScores
 
     ## add cell score information to the cell metadata
-    meta_t <- stats::setNames(vector(mode = "list", length = length(cts)),
-                             cts)
+    meta_t <- stats::setNames(
+      vector(mode = "list", length = length(cts)),
+      cts
+    )
     for (t in cts) {
-      meta_t[[t]] <- object@metaDataSub[object@cellTypesSub == t,]
-      meta_t[[t]] <- cbind(meta_t[[t]], cellScores[[t]][rownames(loc_t[[t]]),])
+      meta_t[[t]] <- object@metaDataSub[object@cellTypesSub == t, ]
+      meta_t[[t]] <- cbind(meta_t[[t]], cellScores[[t]][rownames(meta_t[[t]]), ])
     }
 
     ## combine each cell type meta.data back
     names(meta_t) <- NULL
-    meta_all <- do.call(rbind, meta_t)[rownames(object@metaDataSub),]
+    meta_all <- do.call(rbind, meta_t)[rownames(object@metaDataSub), ]
     object@metaDataSub <- meta_all
 
     return(object)

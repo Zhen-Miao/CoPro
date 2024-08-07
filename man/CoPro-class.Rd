@@ -55,13 +55,19 @@ a set of sigma values used for generating the kernel matrix.}
 \item{\code{nPCA}}{A single numeric value. Number of PCs in to retain for downstream
 analyses.}
 
+\item{\code{scalePCs}}{A \code{logical} value. Whether to scale each PC before computing
+skrCCA}
+
 \item{\code{skrCCAOut}}{A \code{list} object. Output from the skrCCA.}
 
 \item{\code{cellScores}}{A \code{matrix} object. Cell scores for each cell type.}
 
 \item{\code{geneScores}}{A \code{matrix} object. Gene scores for each cell type.}
 
-\item{\code{scalePCs}}{A \code{logical} value. Whether to scale each PC before computing
-skrCCA}
+\item{\code{normalizedCorrelation}}{A \code{list} object. Normalized correlation values
+for each sigma value.}
+
+\item{\code{sigmaSquaredChoice}}{A \code{numeric} value. The optimal sigma squared based
+on the median normalized correlation value.}
 }}
 
