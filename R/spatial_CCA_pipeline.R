@@ -1,10 +1,11 @@
 # Define a virtual class that is a union of 'matrix' and 'sparseMatrix'
 library(Matrix)
-setClassUnion("matrixOrSparseMatrix", c(
-  "matrix", "dgCMatrix",
-  "dgTMatrix"
-))
 
+setClassUnion("matrixOrSparseMatrix", c(
+  "matrix", "dgCMatrix", "dgTMatrix" ))
+
+setClassUnion("factorOrCharacter", c("factor", "character"))
+setClassUnion("matrixOrDataFrame", c("matrix", "data.frame"))
 
 
 #' S4 object
@@ -59,16 +60,16 @@ setClass("CoPro",
     normalizedDataSub = "matrixOrSparseMatrix",
 
     ## location data
-    locationData = "data.frame",
-    locationDataSub = "data.frame",
+    locationData = "matrixOrDataFrame",
+    locationDataSub = "matrixOrDataFrame",
 
     ## cell by meta.data matrix
     metaData = "data.frame",
     metaDataSub = "data.frame",
 
     ## cell type labels for each cell
-    cellTypes = "character",
-    cellTypesSub = "character",
+    cellTypes = "factorOrCharacter",
+    cellTypesSub = "factorOrCharacter",
 
     ## cell types of interest
     cellTypesOfInterest = "character",
@@ -112,9 +113,8 @@ setClass("CoPro",
 #'
 setGeneric(
   "newCoPro",
-  function(normalizedData, locationData, metaData, cellTypes) {
-    standardGeneric("newCoPro")
-  }
+  function(normalizedData, locationData, metaData,
+           cellTypes)  standardGeneric("newCoPro")
 )
 
 
@@ -123,8 +123,8 @@ setGeneric(
 #' @export
 setMethod(
   "newCoPro", signature(
-    "matrixOrSparseMatrix", "data.frame",
-    "data.frame", "character"
+    "matrixOrSparseMatrix", "matrixOrDataFrame",
+    "data.frame", "factorOrCharacter"
   ),
   function(normalizedData, locationData, metaData, cellTypes) {
     ## check dimension of input
@@ -142,11 +142,15 @@ setMethod(
       ))
     }
 
-    ## check cellTypes are characters
+    ## convert cellTypes to characters
     if (!is.character(cellTypes)) {
-      stop("Cell types must be character strings.")
+      cellTypes <- as.character(cellTypes)
     }
 
+    ## convert locationData to data.frame
+    if (is.matrix(locationData)) {
+      locationData <- as.data.frame(locationData)
+    }
 
     colnames(locationData) <- tolower(colnames(locationData))
 
@@ -171,7 +175,6 @@ setMethod(
     }
 
     geneList <- colnames(normalizedData)
-
 
     ## create new object
     new("CoPro",
@@ -198,9 +201,10 @@ setMethod(
 #' @return A `CoPro` object with subset slots
 #' @export
 #'
-setGeneric("subsetData", function(object, cellTypesOfInterest) {
-  standardGeneric("subsetData")
-})
+setGeneric("subsetData",
+           function(object,
+                    cellTypesOfInterest) standardGeneric("subsetData")
+)
 
 #' @rdname subsetData
 #' @aliases subsetData,CoPro-method
@@ -229,7 +233,7 @@ setMethod("subsetData", "CoPro", function(object, cellTypesOfInterest) {
   object@locationDataSub <- object@locationData[subsetIndices, ]
   object@cellTypesSub <- object@cellTypes[subsetIndices]
 
-  object
+  return(object)
 })
 
 #' computePCA with irlba package
@@ -247,10 +251,10 @@ setMethod("subsetData", "CoPro", function(object, cellTypesOfInterest) {
 #'
 #' @export
 #'
-setGeneric("computePCA", function(object, nPCA = 40,
-                                  center = TRUE, scale. = TRUE) {
-  standardGeneric("computePCA")
-})
+setGeneric("computePCA",
+           function(object, nPCA = 40, center = TRUE,
+                    scale. = TRUE) standardGeneric("computePCA")
+)
 
 #' @rdname computePCA
 #' @importFrom stats setNames
@@ -325,9 +329,7 @@ setGeneric(
   function(object, distType =
              c("Euclidean2D", "Euclidean3D", "Morphology-Aware"),
            xDistScale = 1, yDistScale = 1,
-           zDistScale = 1) {
-    standardGeneric("computeDistance")
-  }
+           zDistScale = 1) standardGeneric("computeDistance")
 )
 
 #' @rdname computeDistance
@@ -362,9 +364,7 @@ setMethod(
     if (distType == "Euclidean3D") {
       if (!all(c("x", "y", "z") %in% object@locationDataSub)) {
         stop(paste("please make sure x, y, z are all available to run",
-          "3D Euclidean distance calcuation",
-          sep = " "
-        ))
+          "3D Euclidean distance calcuation"))
       }
     }
 
@@ -452,9 +452,7 @@ setMethod(
 setGeneric(
   "computeKernelMatrix",
   function(object, sigmaSquares, lowerLimit = 0.05, upperQuantile = 0.8,
-           verbose = TRUE) {
-    standardGeneric("computeKernelMatrix")
-  }
+           verbose = TRUE) standardGeneric("computeKernelMatrix")
 )
 
 
@@ -556,9 +554,8 @@ setMethod(
 #'
 setGeneric(
   "runSkrCCA",
-  function(object, scalePCs = TRUE, maxIter = 200) {
-    standardGeneric("runSkrCCA")
-  }
+  function(object, scalePCs = TRUE,
+           maxIter = 200) standardGeneric("runSkrCCA")
 )
 
 #' @rdname runSkrCCA
@@ -702,7 +699,6 @@ setMethod(
     }
 
     sigmaSquares <- object@sigmaSquares
-
 
     ## get PC matrices
     allPCs <- object@pcaResults

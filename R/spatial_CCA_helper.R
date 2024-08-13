@@ -127,3 +127,21 @@ getCellScoresInSitu <- function(object, sigmaSquaredChoice,
 
   return(loc_all)
 }
+
+
+
+#' Assign distance matrix manually
+#'
+#' @param object
+#'
+#' @return
+#' @export
+#'
+#' @examples
+setGeneric("assignDistanceManuall",
+           function(object) standardGeneric("assignDistanceManuall")
+)
+
+
+
+
