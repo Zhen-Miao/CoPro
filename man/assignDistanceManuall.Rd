@@ -7,7 +7,7 @@
 assignDistanceManuall(object)
 }
 \arguments{
-\item{object}{}
+\item{object}{A \code{CoPro} object}
 }
 \description{
 Assign distance matrix manually

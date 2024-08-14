@@ -177,7 +177,7 @@ setMethod(
     geneList <- colnames(normalizedData)
 
     ## create new object
-    new("CoPro",
+    methods::new("CoPro",
       normalizedData = normalizedData,
       metaData = metaData, locationData = locationData,
       cellTypes = cellTypes, geneList = geneList
@@ -354,9 +354,7 @@ setMethod(
       cts <- object@cellTypesOfInterest
     } else {
       warning(paste("no cell type of interest specified,",
-        "using all cell types to run the analysis",
-        sep = " "
-      ))
+        "using all cell types to run the analysis"))
       cts <- unique(object@cellTypesSub)
     }
 
@@ -469,7 +467,6 @@ setMethod(
     if (length(object@distances) == 0) {
       stop("Please run computeDistance before computing kernel")
     }
-
 
     cts <- object@cellTypesOfInterest
     n_mat <- length(cts)
