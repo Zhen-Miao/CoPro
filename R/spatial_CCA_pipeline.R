@@ -998,6 +998,11 @@ setMethod(
         stop(paste("The names of distanceList[[", i,
           "]] do not match cell types ",
           "of interest",
+          sep = ""
+        ))
+      }
+    }
+
     object@distances <- distanceList
     return(object)
   }
