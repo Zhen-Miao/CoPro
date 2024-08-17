@@ -199,13 +199,17 @@ getCorrTwoTypes <- function(object, cellTypeA, cellTypeB,
 
   ## load the cellScores and kernel matrix
   sigma_name <- paste("sigma", sigmaSquaredChoice, sep = "_")
-  x1 <- t(object@cellScores[[cellTypeA]][, sigma_name, drop = FALSE])
-  x2 <- object@cellScores[[cellTypeB]][, sigma_name, drop = TRUE]
-  kt <- object@kernelMatrices[[sigma_name]][[cellTypeA]][[cellTypeB]]
-  k <- ifelse(length(kt) == 0, t(kt),
-    object@kernelMatrices[[sigma_name]][[cellTypeB]][[cellTypeA]]
-  )
+  cell_score_sigma_name <- paste("cellScore_sigma",
+                                 sigmaSquaredChoice, sep = "_")
+  x1 <- t(object@cellScores[[cellTypeA]][, cell_score_sigma_name, drop = FALSE])
+  x2 <- object@cellScores[[cellTypeB]][, cell_score_sigma_name, drop = TRUE]
+  ktemp <- object@kernelMatrices[[sigma_name]][[cellTypeA]][[cellTypeB]]
+  if (length(ktemp) != 0) {
+    k <- ktemp
+  }else{
+    k <- t(object@kernelMatrices[[sigma_name]][[cellTypeB]][[cellTypeA]])
+  }
 
-  df <- data.frame(AK = x1 %*% k, B = x2)
+  df <- data.frame(AK = (x1 %*% k)[1,,drop = TRUE], B = x2)
   return(df)
 }
