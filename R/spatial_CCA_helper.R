@@ -146,7 +146,6 @@ getCellScoresInSitu <- function(object, sigmaSquaredChoice,
 #' @export
 getCorrTwoTypes <- function(object, cellTypeA, cellTypeB,
                             sigmaSquaredChoice) {
-
   ## check input
   if (length(cellTypeA) != 1) {
     stop("Must give a single cellTypeA for correlation plot")
@@ -168,9 +167,11 @@ getCorrTwoTypes <- function(object, cellTypeA, cellTypeB,
 
   ## check cell type A and B in cts
   if (!(cellTypeA %in% cts) || !(cellTypeB %in% cts)) {
-    stop(paste("cellTypeA or cellTypeB not in cellTypesSub,",
-               "so the correlation plot cannot",
-               "be generated."))
+    stop(paste(
+      "cellTypeA or cellTypeB not in cellTypesSub,",
+      "so the correlation plot cannot",
+      "be generated."
+    ))
   }
 
   ## set sigmaSquaredChoice
@@ -189,7 +190,7 @@ getCorrTwoTypes <- function(object, cellTypeA, cellTypeB,
 
   ## make sure normalizedCorrelation exists
   if (length(object@cellScores) == 0 ||
-        length(object@geneScores) == 0) {
+    length(object@geneScores) == 0) {
     stop(paste(
       "cellScores slot does not exist,",
       "run computeGeneAndCellScores first"
@@ -202,7 +203,8 @@ getCorrTwoTypes <- function(object, cellTypeA, cellTypeB,
   x2 <- object@cellScores[[cellTypeB]][, sigma_name, drop = TRUE]
   kt <- object@kernelMatrices[[sigma_name]][[cellTypeA]][[cellTypeB]]
   k <- ifelse(length(kt) == 0, t(kt),
-              object@kernelMatrices[[sigma_name]][[cellTypeB]][[cellTypeA]])
+    object@kernelMatrices[[sigma_name]][[cellTypeB]][[cellTypeA]]
+  )
 
   df <- data.frame(AK = x1 %*% k, B = x2)
   return(df)

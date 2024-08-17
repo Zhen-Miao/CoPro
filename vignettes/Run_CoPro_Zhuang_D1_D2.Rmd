@@ -17,8 +17,10 @@ This Vignette contains an example to run CoPro on a brain MERFISH data. The data
 
 ```{r message=FALSE, warning=FALSE, results="hide"}
 library("CoPro")
-library_paths <- c("fields", "ggplot2", "tictoc", "irlba", 
-                   "Matrix", "ggsci", "ape")
+library_paths <- c(
+  "fields", "ggplot2", "tictoc", "irlba",
+  "Matrix", "ggsci", "ape"
+)
 # Load required libraries
 lapply(library_paths, library, character.only = TRUE)
 ```
@@ -48,12 +50,12 @@ meta <- readRDS("/Users/zhenmiao/Dropbox/Zhuang-ABCA-1.054_1/Zhuang_ABCA_1.054_s
 ## subset data
 
 ```{r}
-subset_cells <- meta$subclass %in% cell_types 
-  
+subset_cells <- meta$subclass %in% cell_types
+
 ra <- ra[subset_cells, ]
 meta <- meta[subset_cells, ]
 rownames(meta) <- meta$cell_label
-## make sure coordinates are numeric 
+## make sure coordinates are numeric
 meta$x <- as.numeric(meta$x)
 meta$y <- as.numeric(meta$y)
 ```
@@ -61,21 +63,23 @@ meta$y <- as.numeric(meta$y)
 ## show the in situ plot
 
 ```{r}
-ggplot(data = meta)+
-  geom_point(aes(x = x, y = y, color = subclass))+
-  theme_minimal()+
+ggplot(data = meta) +
+  geom_point(aes(x = x, y = y, color = subclass)) +
+  theme_minimal() +
   coord_fixed(ratio = 1)
 ```
 
 # load data into object
 
 ```{r}
-location_data <- meta[,c("x","y")]
-cell_type_data <- meta[,"subclass"]
-br <- newCoPro(normalizedData = ra,
-               locationData = location_data,
-               metaData = meta,
-               cellTypes = cell_type_data)
+location_data <- meta[, c("x", "y")]
+cell_type_data <- meta[, "subclass"]
+br <- newCoPro(
+  normalizedData = ra,
+  locationData = location_data,
+  metaData = meta,
+  cellTypes = cell_type_data
+)
 br <- subsetData(br, cellTypesOfInterest = cell_types)
 ```
 
@@ -108,15 +112,17 @@ Here, we hope to pick the sigma value with the highest normalized correlation va
 ```{r}
 ncorr <- getNormCorr(br)
 
-ggplot(data = ncorr, aes(x = sigmaSquares, 
-                         y = normalizedCorrelation, group = 1)) +
-      geom_point()+
-      geom_line() +
-      facet_wrap(vars(ct12)) +
-      xlab("Sigma squared") +
-      ylab("Norm. Corr.") +
-      ggtitle(label = "Norm. Corr. across sigma squared values") +
-      theme_minimal()
+ggplot(data = ncorr, aes(
+  x = sigmaSquares,
+  y = normalizedCorrelation, group = 1
+)) +
+  geom_point() +
+  geom_line() +
+  facet_wrap(vars(ct12)) +
+  xlab("Sigma squared") +
+  ylab("Norm. Corr.") +
+  ggtitle(label = "Norm. Corr. across sigma squared values") +
+  theme_minimal()
 ```
 
 From the figure above, the highest correlation is when sigma\^2 = 0.02, so we use this sigma value for the downstream analyses
@@ -126,34 +132,40 @@ From the figure above, the highest correlation is when sigma\^2 = 0.02, so we us
 We can retrive the `data.frame` that contains the cell scores using the following function: 
 
 ```{r}
-br_cs <- getCellScoresInSitu(br, sigmaSquaredChoice = 0.02,
-                             scoreColorType = "binary")
-
+br_cs <- getCellScoresInSitu(br,
+  sigmaSquaredChoice = 0.02,
+  scoreColorType = "binary"
+)
 ```
 
 We can visualize the cell scores in situ using ggplot.
 
 ```{r}
-ggplot(data = br_cs)+
-      geom_point(aes(x = x,
-                     y = y,
-                     color = cellScores_b), size = 0.8)+
-      scale_color_discrete(type = 
-                             c("darkgreen", "#d4f8d4", "darkred", "#ffd8d8"))+
-      coord_fixed()+
-      theme_minimal()
-
+ggplot(data = br_cs) +
+  geom_point(aes(
+    x = x,
+    y = y,
+    color = cellScores_b
+  ), size = 0.8) +
+  scale_color_discrete(
+    type =
+      c("darkgreen", "#d4f8d4", "darkred", "#ffd8d8")
+  ) +
+  coord_fixed() +
+  theme_minimal()
 ```
 
 We can also visualize the continuous scores 
 
 ```{r}
-ggplot(data = br_cs)+
-      geom_point(aes(x = x,
-                     y = y,
-                     color = cellScores), size = 0.8)+
-      coord_fixed()+
-      theme_minimal()
+ggplot(data = br_cs) +
+  geom_point(aes(
+    x = x,
+    y = y,
+    color = cellScores
+  ), size = 0.8) +
+  coord_fixed() +
+  theme_minimal()
 ```
 
 # References:

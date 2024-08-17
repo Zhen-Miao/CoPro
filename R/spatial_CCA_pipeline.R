@@ -2,7 +2,8 @@
 library(Matrix)
 
 setClassUnion("matrixOrSparseMatrix", c(
-  "matrix", "dgCMatrix", "dgTMatrix"))
+  "matrix", "dgCMatrix", "dgTMatrix"
+))
 
 setClassUnion("factorOrCharacter", c("factor", "character"))
 setClassUnion("matrixOrDataFrame", c("matrix", "data.frame"))
@@ -353,16 +354,20 @@ setMethod(
     if (length(object@cellTypesOfInterest) != 0) {
       cts <- object@cellTypesOfInterest
     } else {
-      warning(paste("no cell type of interest specified,",
-        "using all cell types to run the analysis"))
+      warning(paste(
+        "no cell type of interest specified,",
+        "using all cell types to run the analysis"
+      ))
       cts <- unique(object@cellTypesSub)
     }
 
     ## check dist
     if (distType == "Euclidean3D") {
       if (!all(c("x", "y", "z") %in% object@locationDataSub)) {
-        stop(paste("please make sure x, y, z are all available to run",
-          "3D Euclidean distance calcuation"))
+        stop(paste(
+          "please make sure x, y, z are all available to run",
+          "3D Euclidean distance calcuation"
+        ))
       }
     }
 
@@ -960,37 +965,40 @@ setGeneric("assignDistanceManually",
 #' @rdname assignDistanceManually
 #' @aliases assignDistanceManually,CoPro-method
 #' @export
-setMethod("assignDistanceManually", "CoPro",
-          function(object, distanceList) {
+setMethod(
+  "assignDistanceManually", "CoPro",
+  function(object, distanceList) {
+    if (!is.list(distanceList)) {
+      stop(paste(
+        "distanceList must be a nested list object with names",
+        "specified by cell types"
+      ))
+    }
 
-            if (!is.list(distanceList)) {
-              stop(paste("distanceList must be a nested list object with names",
-                         "specified by cell types"))
-            }
+    ## choose cell types
+    if (length(object@cellTypesOfInterest) != 0) {
+      cts <- object@cellTypesOfInterest
+    } else {
+      warning(paste(
+        "no cell type of interest specified,",
+        "using all cell types to run the analysis"
+      ))
+      cts <- unique(object@cellTypesSub)
+    }
 
-            ## choose cell types
-            if (length(object@cellTypesOfInterest) != 0) {
-              cts <- object@cellTypesOfInterest
-            } else {
-              warning(paste("no cell type of interest specified,",
-                            "using all cell types to run the analysis"))
-              cts <- unique(object@cellTypesSub)
-            }
+    if (names(distanceList) != cts) {
+      stop(paste(
+        "The names of distanceList do not match cell types",
+        "of interest"
+      ))
+    }
 
-            if (names(distanceList) != cts) {
-              stop(paste("The names of distanceList do not match cell types",
-                         "of interest"))
-            }
-
-            for (i in cts) {
-              if (names(distanceList[[i]]) != cts) {
-                stop(paste("The names of distanceList[[", i,
-                           "]] do not match cell types ",
-                           "of interest", sep = ""))
-              }
-            }
-
-            object@distances <- distanceList
-            return(object)
-          }
+    for (i in cts) {
+      if (names(distanceList[[i]]) != cts) {
+        stop(paste("The names of distanceList[[", i,
+          "]] do not match cell types ",
+          "of interest",
+    object@distances <- distanceList
+    return(object)
+  }
 )
