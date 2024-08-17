@@ -216,7 +216,6 @@ optimize_bilinear_multi_w <- function(X_list, K_list, w_list, max_iter = 1000,
         if (j == i) {
           next
         }
-        # w1 <- w_list[[i]]
         w2 <- w_list[[j]]
         Y <- Y_resi[[i]][[j]]
         w_i_left[, j] <- Y %*% w2

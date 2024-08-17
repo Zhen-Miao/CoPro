@@ -2,7 +2,7 @@
 library(Matrix)
 
 setClassUnion("matrixOrSparseMatrix", c(
-  "matrix", "dgCMatrix", "dgTMatrix" ))
+  "matrix", "dgCMatrix", "dgTMatrix"))
 
 setClassUnion("factorOrCharacter", c("factor", "character"))
 setClassUnion("matrixOrDataFrame", c("matrix", "data.frame"))
@@ -373,8 +373,6 @@ setMethod(
       distances[[i]] <- setNames(rep(list(), length = length(cts)), cts)
     }
 
-    # n_mat <- length(cts)
-
     pair_cell_types <- combn(cts, 2)
     ct_ind_sub <- object@cellTypesSub
 
@@ -450,8 +448,7 @@ setMethod(
 setGeneric(
   "computeKernelMatrix",
   function(object, sigmaSquares, lowerLimit = 0.05, upperQuantile = 0.8,
-           verbose = TRUE) standardGeneric("computeKernelMatrix")
-)
+           verbose = TRUE) standardGeneric("computeKernelMatrix"))
 
 
 #' @rdname computeKernelMatrix
@@ -552,8 +549,7 @@ setMethod(
 setGeneric(
   "runSkrCCA",
   function(object, scalePCs = TRUE,
-           maxIter = 200) standardGeneric("runSkrCCA")
-)
+           maxIter = 200) standardGeneric("runSkrCCA"))
 
 #' @rdname runSkrCCA
 #' @aliases runSkrCCA,CoPro-method
@@ -640,8 +636,8 @@ setMethod(
 #' Compute Normalized Correlation for CoPro
 #'
 #' This method calculates the normalized correlation between pairs of cell types
-#' based on CCA weights and the respective kernel matrix. It uses the spectral norm
-#' of the kernel matrix for normalization.
+#' based on CCA weights and the respective kernel matrix. It uses
+#' the spectral norm of the kernel matrix for normalization.
 #'
 #' @param object A `CoPro` object containing CCA results and kernel matrices.
 #' @return The `CoPro` object with the normalized correlation value
@@ -809,7 +805,8 @@ setMethod(
       stop("CCA results are not available. Please run CCA first.")
     }
     if (length(object@kernelMatrices) == 0) {
-      stop("Kernel matrices are not available. Please compute the kernel matrices first.")
+      stop(paste("Kernel matrices are not available." ,
+           "Please compute the kernel matrices first."))
     }
     ## choose cell types
     if (length(object@cellTypesOfInterest) != 0) {
@@ -857,8 +854,6 @@ setMethod(
         PCmats[[i]] <- allPCs[[i]]$x
       }
     }
-
-    # pair_cell_types <- combn(cts, 2)
 
     sigma_names <- paste("sigma", sigmaSquares, sep = "_")
 
@@ -941,4 +936,61 @@ setMethod(
 
     return(object)
   }
+)
+
+
+
+#' Assign distance matrix manually
+#'
+#' @param object A `CoPro` object
+#' @param distanceList A list object that contains all pairwise distances
+#' between any two pairs of cells.
+#'
+#' @return A `CoPro` object with specified
+#' @rdname assignDistanceManually
+#' @aliases assignDistanceManually,CoPro-method
+#' @export
+#'
+setGeneric("assignDistanceManually",
+           function(object,
+                    distanceList) standardGeneric("assignDistanceManually")
+)
+
+
+#' @rdname assignDistanceManually
+#' @aliases assignDistanceManually,CoPro-method
+#' @export
+setMethod("assignDistanceManually", "CoPro",
+          function(object, distanceList) {
+
+            if (!is.list(distanceList)) {
+              stop(paste("distanceList must be a nested list object with names",
+                         "specified by cell types"))
+            }
+
+            ## choose cell types
+            if (length(object@cellTypesOfInterest) != 0) {
+              cts <- object@cellTypesOfInterest
+            } else {
+              warning(paste("no cell type of interest specified,",
+                            "using all cell types to run the analysis"))
+              cts <- unique(object@cellTypesSub)
+            }
+
+            if (names(distanceList) != cts) {
+              stop(paste("The names of distanceList do not match cell types",
+                         "of interest"))
+            }
+
+            for (i in cts) {
+              if (names(distanceList[[i]]) != cts) {
+                stop(paste("The names of distanceList[[", i,
+                           "]] do not match cell types ",
+                           "of interest", sep = ""))
+              }
+            }
+
+            object@distances <- distanceList
+            return(object)
+          }
 )
