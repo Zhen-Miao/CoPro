@@ -314,7 +314,7 @@ setMethod(
 #'
 #' @importFrom fields rdist
 #' @importFrom utils combn
-#' @importFrom stats setNames
+#' @importFrom stats setNames quantile
 #' @param object A `CoPro` object
 #' @param distType Type of distance to compute: "Euclidean2D",
 #'  "Euclidean3D", or "Morphology-Aware"
@@ -336,7 +336,7 @@ setGeneric(
 #' @rdname computeDistance
 #' @aliases computeDistance,CoPro-method
 #' @importFrom utils combn
-#' @importFrom stats setNames
+#' @importFrom stats setNames quantile
 #' @importFrom fields rdist
 #' @export
 setMethod(
@@ -464,7 +464,7 @@ setGeneric(
 setMethod(
   "computeKernelMatrix", "CoPro",
   function(object, sigmaSquares,
-           lowerLimit = 0.05, upperQuantile = 0.8, verbose = TRUE) {
+           lowerLimit = 0.01, upperQuantile = 0.85, verbose = TRUE) {
     ## make sure distance matrix exist
     if (length(object@distances) == 0) {
       stop("Please run computeDistance before computing kernel")
@@ -500,6 +500,11 @@ setMethod(
       }
     }
 
+    ## sigma_squared values to leave out
+    sigmaSquaresToRemove <- vector(mode = "logical",
+                                   length = length(sigmaSquares))
+    names(sigmaSquaresToRemove) <- sigma_names
+
     pair_cell_types <- combn(cts, 2)
 
     for (tt in seq_along(sigmaSquares)) {
@@ -516,24 +521,52 @@ setMethod(
           lower_limit = lowerLimit
         )
 
+        if (all(kernel_current <= 0.005)) {
+          warning(paste("Kernel matrix for cell types", i, "and", j,
+                        "with sigma_squared =", sigma_square_choose,
+                        "contains all zeros."))
+          if (length(object@sigmaSquares) == 1) {
+            stop(paste("Only one sigma_squared is specified,",
+                       "which resulted in all Gaussian kernel being small.",
+                       "Please provide a larger sigma_squared value"))
+          }else{
+            warning(paste("Dropping sigma_squared value of ",
+                          sigma_square_choose,
+                          "because all Gaussian kernel values are too small,",
+                          "which will not produce meaningful results."))
+
+            sigmaSquaresToRemove[t] <- TRUE
+
+          }
+        }
+
         ## print info
         if (verbose) {
-          cat(paste("Current Sigma value is ", sigma_square_choose))
-          cat(paste("Quantiles of N_neighbors for cell type", i, "\n"))
-          print(quantile(rowSums(kernel_current != 0)))
-          cat(paste("Quantiles of N_neighbors for cell type", j, "\n"))
-          print(quantile(colSums(kernel_current != 0)))
+          cat("Current Sigma value is ", sigma_square_choose)
+          cat("Quantiles of N_neighbors for cell type", i, "\n")
+          cat(quantile(rowSums(kernel_current != 0)))
+          cat("Quantiles of N_neighbors for cell type", j, "\n")
+          cat(quantile(colSums(kernel_current != 0)))
           cat("\n")
         }
 
 
         ## Clipping large values
-        upper_clip <- quantile(kernel_current[kernel_current != 0], upperQuantile)
+        upper_clip <- quantile(kernel_current[kernel_current <= 0.005],
+                               upperQuantile)
         kernel_current[kernel_current >= upper_clip] <- upper_clip
 
         kernel_mat[[t]][[i]][[j]] <- kernel_current
       }
     }
+
+    ## Remove kernel matrices and sigmaSquares that were marked for removal
+    if (any(sigmaSquaresToRemove)) {
+      cat("removing", sum(sigmaSquaresToRemove), "sigmaSquares values","\n")
+      kernel_mat <- kernel_mat[!sigmaSquaresToRemove]
+      object@sigmaSquares <- object@sigmaSquares[!sigmaSquaresToRemove]
+    }
+
 
     object@kernelMatrices <- kernel_mat
     return(object)
