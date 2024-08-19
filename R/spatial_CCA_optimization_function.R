@@ -1,4 +1,17 @@
-## function from distance to kernel matrix
+
+#' Calculate kernel matrix from distance matrix
+#' The function runs the following calculation:
+#' \deqn{K(x, y) = \frac{\exp\left(-\frac{\|x-y\|^2}{2 \sigma^2}\right)}{2\pi\sigma^2}}
+#'
+#' @param sigma_square The variance parameter \eqn{\sigma^2}, a positive number.
+#' @param dist_mat A numeric matrix representing the squared distances
+#'  between cells
+#' @param lower_limit A lower limit value below which the kernel value will
+#'  be set to zero
+#'
+#' @return a matrix of the same dimensions as \code{dist_mat},
+#'  containing the calculated Gaussian kernel values.
+#' @noRd
 kernel_from_distance <- function(
     sigma_square, dist_mat, lower_limit = 0.001) {
   kernel_mat <- exp(-1 * dist_mat^2 / (2 * sigma_square)) / (2 * pi * sigma_square)
@@ -46,6 +59,7 @@ normalize_vec <- function(v) {
 #' @param tol tolerance of accuracy
 #'
 #' @return `w_list`, a list of weight vectors for each cell type
+#' @noRd
 optimize_bilinear_multi <- function(X_list, K_list, max_iter = 1000,
                                     tol = 1e-5) {
   n_mat <- length(X_list)
@@ -192,9 +206,6 @@ optimize_bilinear_multi_w <- function(X_list, K_list, w_list, max_iter = 1000,
       Y_resi[[i]][[j]] <- Y - ((t(w1) %*% Y %*% w2)[1, 1] * (w1 %*% t(w2)))
     }
   }
-
-
-
 
   ## initialize w_list_new
   w_list_new <- rep(list(), length = n_mat)

@@ -16,8 +16,8 @@ computeKernelMatrix(
 \S4method{computeKernelMatrix}{CoPro}(
   object,
   sigmaSquares,
-  lowerLimit = 0.05,
-  upperQuantile = 0.8,
+  lowerLimit = 0.01,
+  upperQuantile = 0.85,
   verbose = TRUE
 )
 }

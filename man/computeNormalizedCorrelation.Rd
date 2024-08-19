@@ -19,6 +19,6 @@ added as a new slot, \code{normalizedCorrelation}.
 }
 \description{
 This method calculates the normalized correlation between pairs of cell types
-based on CCA weights and the respective kernel matrix. It uses the spectral norm
-of the kernel matrix for normalization.
+based on CCA weights and the respective kernel matrix. It uses
+the spectral norm of the kernel matrix for normalization.
 }
