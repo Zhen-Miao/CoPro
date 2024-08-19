@@ -11,6 +11,7 @@ License: MIT + file LICENSE
 Encoding: UTF-8
 Imports:
     methods,
+    Matrix,
     stats,
     utils,
     irlba,

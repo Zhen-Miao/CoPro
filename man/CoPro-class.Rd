@@ -3,9 +3,9 @@
 \docType{class}
 \name{CoPro-class}
 \alias{CoPro-class}
-\title{S4 object}
+\title{CoPro object of spatial transcriptomics data}
 \description{
-S4 object
+CoPro object of spatial transcriptomics data
 }
 \section{Slots}{
 

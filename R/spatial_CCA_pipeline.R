@@ -1,5 +1,4 @@
 # Define a virtual class that is a union of 'matrix' and 'sparseMatrix'
-library(Matrix)
 
 setClassUnion("matrixOrSparseMatrix", c(
   "matrix", "dgCMatrix", "dgTMatrix"
@@ -9,7 +8,8 @@ setClassUnion("factorOrCharacter", c("factor", "character"))
 setClassUnion("matrixOrDataFrame", c("matrix", "data.frame"))
 
 
-#' S4 object
+#' CoPro object of spatial transcriptomics data
+#' @import Matrix
 #'
 #' @slot normalizedData A `matrix` object to store normalized data.
 #' @slot normalizedDataSub A `matrix` object to store the subset of
@@ -321,6 +321,7 @@ setMethod(
 #' @param xDistScale Scale for x distance
 #' @param yDistScale Scale for y distance
 #' @param zDistScale Scale for z distance
+#' @param verbose Whether to print info about the quantile of the distance
 #'
 #' @return `CoPro` object with distance matrix computed
 #' @export
@@ -330,7 +331,7 @@ setGeneric(
   function(object, distType =
              c("Euclidean2D", "Euclidean3D", "Morphology-Aware"),
            xDistScale = 1, yDistScale = 1,
-           zDistScale = 1) standardGeneric("computeDistance")
+           zDistScale = 1, verbose = TRUE) standardGeneric("computeDistance")
 )
 
 #' @rdname computeDistance
@@ -346,7 +347,7 @@ setMethod(
              "Morphology-Aware"
            ),
            xDistScale = 1,
-           yDistScale = 1, zDistScale = 1) {
+           yDistScale = 1, zDistScale = 1, verbose = TRUE) {
     ## match arg
     distType <- match.arg(distType)
 
@@ -414,7 +415,7 @@ setMethod(
         warning(paste("Zero distances detected, replacing with",
           "the smallest non-zero distances, please",
           "consider checking the location of cells",
-          sep = " "
+          "for potential errors"
         ))
         distances_ij[distances_ij == 0] <-
           min(distances_ij[distances_ij != 0])
@@ -422,6 +423,10 @@ setMethod(
 
       ## save the distances
       distances[[i]][[j]] <- distances_ij
+      if (verbose) {
+        cat("quantile of the distances between", i, "and", j, "is: \n")
+        print(quantile(distances_ij))
+      }
     }
 
 
