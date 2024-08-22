@@ -322,6 +322,11 @@ setMethod(
 #' @param yDistScale Scale for y distance
 #' @param zDistScale Scale for z distance
 #' @param verbose Whether to print info about the quantile of the distance
+#' @param normalizeDistance Whether to normalize distance? The normalization
+#'  will make sure that the 1% cell-cell distance will become 0.01, thus ensuring
+#'  no matter which input scale is used for the distance matrix, the output
+#'  will roughly be in mm^3. This ensures that the kernel sizes
+#'  from 0.001 to 0.1 will make sense. Default = TRUE
 #'
 #' @return `CoPro` object with distance matrix computed
 #' @export
@@ -331,7 +336,8 @@ setGeneric(
   function(object, distType =
              c("Euclidean2D", "Euclidean3D", "Morphology-Aware"),
            xDistScale = 1, yDistScale = 1,
-           zDistScale = 1, verbose = TRUE) standardGeneric("computeDistance")
+           zDistScale = 1, normalizeDistance = TRUE,
+           verbose = TRUE) standardGeneric("computeDistance")
 )
 
 #' @rdname computeDistance
@@ -347,7 +353,8 @@ setMethod(
              "Morphology-Aware"
            ),
            xDistScale = 1,
-           yDistScale = 1, zDistScale = 1, verbose = TRUE) {
+           yDistScale = 1, zDistScale = 1, normalizeDistance = TRUE,
+           verbose = TRUE) {
     ## match arg
     distType <- match.arg(distType)
 
@@ -373,7 +380,6 @@ setMethod(
     }
 
     ## distances are between any two cell types
-
     distances <- setNames(rep(list(), length = length(cts)), cts)
     for (i in cts) {
       distances[[i]] <- setNames(rep(list(), length = length(cts)), cts)
@@ -382,6 +388,16 @@ setMethod(
     pair_cell_types <- combn(cts, 2)
     ct_ind_sub <- object@cellTypesSub
 
+    ## notify users if normalizeDistance = TRUE
+    if (normalizeDistance) {
+      cat("normalizeDistance is set to TRUE, so distance will be",
+          "normalized, so that 1 percentile distance will be scaled",
+          "to 0.01")
+    }
+    dist_5percentile <- vector(mode = "numeric",
+                               length = ncol(pair_cell_types))
+
+    ## calculate the distances
     for (pp in seq_len(ncol(pair_cell_types))) {
       i <- pair_cell_types[1, pp]
       j <- pair_cell_types[2, pp]
@@ -421,11 +437,28 @@ setMethod(
           min(distances_ij[distances_ij != 0])
       }
 
+      dist_1percentile[pp] <- quantile(distances_ij[distances_ij != 0], 0.01)
+
       ## save the distances
       distances[[i]][[j]] <- distances_ij
       if (verbose) {
         cat("quantile of the distances between", i, "and", j, "is: \n")
         print(quantile(distances_ij))
+      }
+    }
+
+    min_1percentile <- min(dist_1percentile)
+
+    if(normalizeDistance){
+      cat("The scaling factor for normalizing distance is",
+          0.01 / min_1percentile)
+      for (pp in seq_len(ncol(pair_cell_types))) {
+        i <- pair_cell_types[1, pp]
+        j <- pair_cell_types[2, pp]
+
+        distances_ij <- distances[[i]][[j]]
+        distances_ij <- distances_ij / min_1percentile * 0.01
+        distances[[i]][[j]] <- distances_ij
       }
     }
 
@@ -450,14 +483,19 @@ setMethod(
 #' @param upperQuantile The quantile used for clipping the kernel values,
 #' default is 0.8.
 #' @param verbose Whether to output the progress and related information
+#' @param normalizeKernel Whether to normalize the kernel matrix?
+#' Default = TRUE. Note that normalization will not affect any downstream
+#' analyses, it is for numerical stability and easier interpretation only.
 #' @return The `CoPro` object with computed kernel matrices added. The kernel
 #' matrices are organized into a three-layer nested list object. The first layer
 #' is indexed by the sigma value, and the second and the third layers are cell
 #' types
 #' @export
+#' @note To-do: Shall we include row or column normalization of the kernel?
 setGeneric(
   "computeKernelMatrix",
   function(object, sigmaSquares, lowerLimit = 0.05, upperQuantile = 0.8,
+           normalizeKernel = TRUE,
            verbose = TRUE) standardGeneric("computeKernelMatrix"))
 
 
@@ -469,7 +507,8 @@ setGeneric(
 setMethod(
   "computeKernelMatrix", "CoPro",
   function(object, sigmaSquares,
-           lowerLimit = 0.01, upperQuantile = 0.85, verbose = TRUE) {
+           lowerLimit = 0.01, upperQuantile = 0.85, normalizeKernel = TRUE,
+           verbose = TRUE) {
     ## make sure distance matrix exist
     if (length(object@distances) == 0) {
       stop("Please run computeDistance before computing kernel")
@@ -489,6 +528,13 @@ setMethod(
 
     if (!is.numeric(sigmaSquares)) {
       stop("SigmaSquares must be numeric values or a vector")
+    }
+
+    ## notify users if normalizeDistance = TRUE
+    if (normalizeKernel) {
+      cat("normalizeKernel is set to TRUE. Kernel matrix will be",
+          "normalized so that median row sums of kernel will be",
+          "1")
     }
 
     ## save the sigmaSquares
@@ -561,6 +607,11 @@ setMethod(
                                upperQuantile)
         kernel_current[kernel_current >= upper_clip] <- upper_clip
 
+        if (normalizeKernel) {
+          rs_kernel <- rowSums(kernel_current)
+          kernel_current <- kernel_current / median(rs_kernel)
+        }
+
         kernel_mat[[t]][[i]][[j]] <- kernel_current
       }
     }
@@ -571,7 +622,6 @@ setMethod(
       kernel_mat <- kernel_mat[!sigmaSquaresToRemove]
       object@sigmaSquares <- object@sigmaSquares[!sigmaSquaresToRemove]
     }
-
 
     object@kernelMatrices <- kernel_mat
     return(object)

@@ -10,6 +10,7 @@ computeKernelMatrix(
   sigmaSquares,
   lowerLimit = 0.05,
   upperQuantile = 0.8,
+  normalizeKernel = TRUE,
   verbose = TRUE
 )
 
@@ -18,6 +19,7 @@ computeKernelMatrix(
   sigmaSquares,
   lowerLimit = 0.01,
   upperQuantile = 0.85,
+  normalizeKernel = TRUE,
   verbose = TRUE
 )
 }
@@ -30,6 +32,10 @@ computeKernelMatrix(
 
 \item{upperQuantile}{The quantile used for clipping the kernel values,
 default is 0.8.}
+
+\item{normalizeKernel}{Whether to normalize the kernel matrix?
+Default = TRUE. Note that normalization will not affect any downstream
+analyses, it is for numerical stability and easier interpretation only.}
 
 \item{verbose}{Whether to output the progress and related information}
 }
@@ -45,4 +51,7 @@ their distances and a range of sigma square values.
 The matrices are adjusted by clipping the upper quantile of
 the values to reduce the effect of outliers.
 The results are stored within the object.
+}
+\note{
+To-do: Shall we include row or column normalization of the kernel?
 }

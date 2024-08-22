@@ -10,7 +10,9 @@ computeDistance(
   distType = c("Euclidean2D", "Euclidean3D", "Morphology-Aware"),
   xDistScale = 1,
   yDistScale = 1,
-  zDistScale = 1
+  zDistScale = 1,
+  normalizeDistance = TRUE,
+  verbose = TRUE
 )
 
 \S4method{computeDistance}{CoPro}(
@@ -18,7 +20,9 @@ computeDistance(
   distType = c("Euclidean2D", "Euclidean3D", "Morphology-Aware"),
   xDistScale = 1,
   yDistScale = 1,
-  zDistScale = 1
+  zDistScale = 1,
+  normalizeDistance = TRUE,
+  verbose = TRUE
 )
 }
 \arguments{
@@ -32,6 +36,14 @@ computeDistance(
 \item{yDistScale}{Scale for y distance}
 
 \item{zDistScale}{Scale for z distance}
+
+\item{normalizeDistance}{Whether to normalize distance? The normalization
+will make sure that the 1\% cell-cell distance will become 0.01, thus ensuring
+no matter which input scale is used for the distance matrix, the output
+will roughly be in mm^3. This ensures that the kernel sizes
+from 0.001 to 0.1 will make sense. Default = TRUE}
+
+\item{verbose}{Whether to print info about the quantile of the distance}
 }
 \value{
 \code{CoPro} object with distance matrix computed
