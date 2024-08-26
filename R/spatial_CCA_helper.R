@@ -116,7 +116,8 @@ getCellScoresInSitu <- function(object, sigmaSquaredChoice,
   }
 
   combinations <- expand.grid(c("high", "low"), cts)
-  all_binary_scores <- apply(combinations, 1, function(x) paste(x[1], x[2], sep = "_"))
+  all_binary_scores <- apply(combinations, 1, function(x) paste(x[1], x[2],
+                                                                sep = "_"))
 
   names(loc_t) <- NULL
   loc_all <- do.call(rbind, loc_t)[rownames(object@locationDataSub), ]

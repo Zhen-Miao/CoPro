@@ -1,7 +1,7 @@
 
 #' Calculate kernel matrix from distance matrix
 #' The function runs the following calculation:
-#' \deqn{K(x, y) = \frac{\exp\left(-\frac{\|x-y\|^2}{2 \sigma^2}\right)}{2\pi\sigma^2}}
+#' \deqn{K(x, y) = \exp\left(-\frac{\|x-y\|^2}{2 \sigma^2}\right)}
 #'
 #' @param sigma_square The variance parameter \eqn{\sigma^2}, a positive number.
 #' @param dist_mat A numeric matrix representing the squared distances
@@ -13,8 +13,8 @@
 #'  containing the calculated Gaussian kernel values.
 #' @noRd
 kernel_from_distance <- function(
-    sigma_square, dist_mat, lower_limit = 0.001) {
-  kernel_mat <- exp(-1 * dist_mat^2 / (2 * sigma_square)) / (2 * pi * sigma_square)
+    sigma_square, dist_mat, lower_limit = 5e-5) {
+  kernel_mat <- exp(-1 * dist_mat^2 / (2 * sigma_square))
   kernel_mat[kernel_mat < lower_limit] <- 0
   return(kernel_mat)
 }

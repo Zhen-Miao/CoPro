@@ -392,9 +392,9 @@ setMethod(
     if (normalizeDistance) {
       cat("normalizeDistance is set to TRUE, so distance will be",
           "normalized, so that 1 percentile distance will be scaled",
-          "to 0.01")
+          "to 0.01\n")
     }
-    dist_5percentile <- vector(mode = "numeric",
+    dist_1percentile <- vector(mode = "numeric",
                                length = ncol(pair_cell_types))
 
     ## calculate the distances
@@ -449,9 +449,9 @@ setMethod(
 
     min_1percentile <- min(dist_1percentile)
 
-    if(normalizeDistance){
+    if (normalizeDistance) {
       cat("The scaling factor for normalizing distance is",
-          0.01 / min_1percentile)
+          0.01 / min_1percentile, "\n")
       for (pp in seq_len(ncol(pair_cell_types))) {
         i <- pair_cell_types[1, pp]
         j <- pair_cell_types[2, pp]
@@ -472,9 +472,11 @@ setMethod(
 #'
 #' This method calculates the kernel matrices for pairs of cell types based on
 #' their distances and a range of sigma square values.
+#' The formula of calculating kernel matrix is:
+#' \deqn{K(x, y) = \exp\left(-\frac{\|x-y\|^2}{2 \sigma^2}\right)}
 #' The matrices are adjusted by clipping the upper quantile of
-#'  the values to reduce the effect of outliers.
-#' The results are stored within the object.
+#'  the values to reduce the effect of outliers. The results are stored
+#'  within the object.
 #'
 #' @importFrom utils combn
 #' @param object A `CoPro` object.
@@ -494,7 +496,7 @@ setMethod(
 #' @note To-do: Shall we include row or column normalization of the kernel?
 setGeneric(
   "computeKernelMatrix",
-  function(object, sigmaSquares, lowerLimit = 0.05, upperQuantile = 0.8,
+  function(object, sigmaSquares, lowerLimit = 5e-10, upperQuantile = 0.85,
            normalizeKernel = TRUE,
            verbose = TRUE) standardGeneric("computeKernelMatrix"))
 
@@ -507,7 +509,7 @@ setGeneric(
 setMethod(
   "computeKernelMatrix", "CoPro",
   function(object, sigmaSquares,
-           lowerLimit = 0.01, upperQuantile = 0.85, normalizeKernel = TRUE,
+           lowerLimit = 5e-10, upperQuantile = 0.85, normalizeKernel = TRUE,
            verbose = TRUE) {
     ## make sure distance matrix exist
     if (length(object@distances) == 0) {
@@ -534,7 +536,7 @@ setMethod(
     if (normalizeKernel) {
       cat("normalizeKernel is set to TRUE. Kernel matrix will be",
           "normalized so that median row sums of kernel will be",
-          "1")
+          "1 \n")
     }
 
     ## save the sigmaSquares
@@ -580,7 +582,7 @@ setMethod(
             stop(paste("Only one sigma_squared is specified,",
                        "which resulted in all Gaussian kernel being small.",
                        "Please provide a larger sigma_squared value"))
-          }else{
+          }else {
             warning(paste("Dropping sigma_squared value of ",
                           sigma_square_choose,
                           "because all Gaussian kernel values are too small,",
@@ -589,21 +591,35 @@ setMethod(
             sigmaSquaresToRemove[t] <- TRUE
 
           }
+        }else if (all(is.na(kernel_current))) {
+          warning(paste("Kernel matrix for cell types", i, "and", j,
+                        "with sigma_squared =", sigma_square_choose,
+                        "contains all NA."))
+          if (length(object@sigmaSquares) == 1) {
+            stop(paste("Only one sigma_squared is specified,",
+                       "which resulted in all Gaussian kernel being NA."))
+          }else {
+            warning(paste("Dropping sigma_squared value of ",
+                          sigma_square_choose,
+                          "because all Gaussian kernel values are NA."))
+
+            sigmaSquaresToRemove[t] <- TRUE
+          }
         }
 
         ## print info
         if (verbose) {
-          cat("Current Sigma value is ", sigma_square_choose)
+          cat("Current Sigma value is \n", sigma_square_choose)
           cat("Quantiles of N_neighbors for cell type", i, "\n")
           cat(quantile(rowSums(kernel_current != 0)))
+          cat("\n")
           cat("Quantiles of N_neighbors for cell type", j, "\n")
           cat(quantile(colSums(kernel_current != 0)))
           cat("\n")
         }
 
-
         ## Clipping large values
-        upper_clip <- quantile(kernel_current[kernel_current <= 0.005],
+        upper_clip <- quantile(kernel_current[kernel_current >= 0.005],
                                upperQuantile)
         kernel_current[kernel_current >= upper_clip] <- upper_clip
 
@@ -618,7 +634,7 @@ setMethod(
 
     ## Remove kernel matrices and sigmaSquares that were marked for removal
     if (any(sigmaSquaresToRemove)) {
-      cat("removing", sum(sigmaSquaresToRemove), "sigmaSquares values","\n")
+      cat("removing", sum(sigmaSquaresToRemove), "sigmaSquares values", "\n")
       kernel_mat <- kernel_mat[!sigmaSquaresToRemove]
       object@sigmaSquares <- object@sigmaSquares[!sigmaSquaresToRemove]
     }
@@ -898,7 +914,7 @@ setMethod(
       stop("CCA results are not available. Please run CCA first.")
     }
     if (length(object@kernelMatrices) == 0) {
-      stop(paste("Kernel matrices are not available." ,
+      stop(paste("Kernel matrices are not available.",
            "Please compute the kernel matrices first."))
     }
     ## choose cell types

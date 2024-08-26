@@ -8,8 +8,8 @@
 computeKernelMatrix(
   object,
   sigmaSquares,
-  lowerLimit = 0.05,
-  upperQuantile = 0.8,
+  lowerLimit = 5e-10,
+  upperQuantile = 0.85,
   normalizeKernel = TRUE,
   verbose = TRUE
 )
@@ -17,7 +17,7 @@ computeKernelMatrix(
 \S4method{computeKernelMatrix}{CoPro}(
   object,
   sigmaSquares,
-  lowerLimit = 0.01,
+  lowerLimit = 5e-10,
   upperQuantile = 0.85,
   normalizeKernel = TRUE,
   verbose = TRUE
@@ -48,9 +48,11 @@ types
 \description{
 This method calculates the kernel matrices for pairs of cell types based on
 their distances and a range of sigma square values.
+The formula of calculating kernel matrix is:
+\deqn{K(x, y) = \exp\left(-\frac{\|x-y\|^2}{2 \sigma^2}\right)}
 The matrices are adjusted by clipping the upper quantile of
-the values to reduce the effect of outliers.
-The results are stored within the object.
+the values to reduce the effect of outliers. The results are stored
+within the object.
 }
 \note{
 To-do: Shall we include row or column normalization of the kernel?
