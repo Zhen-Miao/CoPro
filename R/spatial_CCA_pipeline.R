@@ -323,11 +323,13 @@ setMethod(
 #' @param zDistScale Scale for z distance
 #' @param verbose Whether to print info about the quantile of the distance
 #' @param normalizeDistance Whether to normalize distance? The normalization
-#'  will make sure that the 1% cell-cell distance will become 0.01, thus ensuring
-#'  no matter which input scale is used for the distance matrix, the output
-#'  will roughly be in mm^3. This ensures that the kernel sizes
+#'  will make sure that the 0.01% cell-cell distance will become 0.01, thus
+#'  ensuring no matter which input scale is used for the distance matrix,
+#'  the output will roughly be in mm^3. This ensures that the kernel sizes
 #'  from 0.001 to 0.1 will make sense. Default = TRUE
-#'
+#'  @param truncateLowDist Whether to truncate small distances so that the cells
+#'  that are nearly overlapping with each other do not have a super small
+#'  distance. Default = TRUE.
 #' @return `CoPro` object with distance matrix computed
 #' @export
 #' @note To-do: add morphology-aware kernel
@@ -336,7 +338,7 @@ setGeneric(
   function(object, distType =
              c("Euclidean2D", "Euclidean3D", "Morphology-Aware"),
            xDistScale = 1, yDistScale = 1,
-           zDistScale = 1, normalizeDistance = TRUE,
+           zDistScale = 1, normalizeDistance = TRUE, truncateLowDist = TRUE,
            verbose = TRUE) standardGeneric("computeDistance")
 )
 
@@ -352,8 +354,8 @@ setMethod(
              "Euclidean2D", "Euclidean3D",
              "Morphology-Aware"
            ),
-           xDistScale = 1,
-           yDistScale = 1, zDistScale = 1, normalizeDistance = TRUE,
+           xDistScale = 1, yDistScale = 1, zDistScale = 1,
+           normalizeDistance = TRUE, truncateLowDist = TRUE,
            verbose = TRUE) {
     ## match arg
     distType <- match.arg(distType)
@@ -391,7 +393,7 @@ setMethod(
     ## notify users if normalizeDistance = TRUE
     if (normalizeDistance) {
       cat("normalizeDistance is set to TRUE, so distance will be",
-          "normalized, so that 1 percentile distance will be scaled",
+          "normalized, so that 0.01 percentile distance will be scaled",
           "to 0.01\n")
     }
     dist_1percentile <- vector(mode = "numeric",
@@ -437,7 +439,11 @@ setMethod(
           min(distances_ij[distances_ij != 0])
       }
 
-      dist_1percentile[pp] <- quantile(distances_ij[distances_ij != 0], 0.01)
+      dist_1percentile[pp] <- quantile(distances_ij[distances_ij != 0], 1e-4)
+
+      if (truncateLowDist) {
+        distances_ij[distances_ij < dist_1percentile[pp]] <- dist_1percentile[pp]
+      }
 
       ## save the distances
       distances[[i]][[j]] <- distances_ij
@@ -483,7 +489,7 @@ setMethod(
 #' @param sigmaSquares A vector of sigma square values used for kernel calculation.
 #' @param lowerLimit The lower limit for the kernel function, default is 0.05.
 #' @param upperQuantile The quantile used for clipping the kernel values,
-#' default is 0.8.
+#' default is 0.95.
 #' @param verbose Whether to output the progress and related information
 #' @param normalizeKernel Whether to normalize the kernel matrix?
 #' Default = TRUE. Note that normalization will not affect any downstream
@@ -496,7 +502,7 @@ setMethod(
 #' @note To-do: Shall we include row or column normalization of the kernel?
 setGeneric(
   "computeKernelMatrix",
-  function(object, sigmaSquares, lowerLimit = 5e-10, upperQuantile = 0.85,
+  function(object, sigmaSquares, lowerLimit = 5e-10, upperQuantile = 0.95,
            normalizeKernel = TRUE,
            verbose = TRUE) standardGeneric("computeKernelMatrix"))
 
@@ -509,7 +515,7 @@ setGeneric(
 setMethod(
   "computeKernelMatrix", "CoPro",
   function(object, sigmaSquares,
-           lowerLimit = 5e-10, upperQuantile = 0.85, normalizeKernel = TRUE,
+           lowerLimit = 5e-10, upperQuantile = 0.95, normalizeKernel = TRUE,
            verbose = TRUE) {
     ## make sure distance matrix exist
     if (length(object@distances) == 0) {
