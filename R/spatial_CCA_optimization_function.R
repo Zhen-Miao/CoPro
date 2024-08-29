@@ -13,8 +13,8 @@
 #'  containing the calculated Gaussian kernel values.
 #' @noRd
 kernel_from_distance <- function(
-    sigma_square, dist_mat, lower_limit = 5e-5) {
-  kernel_mat <- exp(-1 * dist_mat^2 / (2 * sigma_square))
+    sigma_square, dist_mat, lower_limit = 5e-10) {
+  kernel_mat <- exp(-0.5 * dist_mat^2 / sigma_square)
   kernel_mat[kernel_mat < lower_limit] <- 0
   return(kernel_mat)
 }

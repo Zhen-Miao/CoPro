@@ -580,7 +580,7 @@ setMethod(
           lower_limit = lowerLimit
         )
 
-        if (all(kernel_current <= 0.005)) {
+        if (all(kernel_current <= lowerLimit)) {
           warning(paste("Kernel matrix for cell types", i, "and", j,
                         "with sigma_squared =", sigma_square_choose,
                         "contains all zeros."))
@@ -613,25 +613,26 @@ setMethod(
           }
         }
 
-        ## print info
-        if (verbose) {
-          cat("Current Sigma value is \n", sigma_square_choose)
-          cat("Quantiles of N_neighbors for cell type", i, "\n")
-          cat(quantile(rowSums(kernel_current != 0)))
-          cat("\n")
-          cat("Quantiles of N_neighbors for cell type", j, "\n")
-          cat(quantile(colSums(kernel_current != 0)))
-          cat("\n")
-        }
-
         ## Clipping large values
-        upper_clip <- quantile(kernel_current[kernel_current >= 0.005],
+        upper_clip <- quantile(kernel_current[kernel_current >= lowerLimit],
                                upperQuantile)
         kernel_current[kernel_current >= upper_clip] <- upper_clip
 
         if (normalizeKernel) {
           rs_kernel <- rowSums(kernel_current)
           kernel_current <- kernel_current / median(rs_kernel)
+        }
+
+        ## print info
+        if (verbose) {
+          cat("Current Sigma value is", sigma_square_choose)
+          cat("\n")
+          cat("Quantiles of N_neighbors for cell type", i, "\n")
+          cat(quantile(rowSums(kernel_current >= 5e-5)))
+          cat("\n")
+          cat("Quantiles of N_neighbors for cell type", j, "\n")
+          cat(quantile(colSums(kernel_current >= 5e-5)))
+          cat("\n")
         }
 
         kernel_mat[[t]][[i]][[j]] <- kernel_current
