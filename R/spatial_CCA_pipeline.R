@@ -87,6 +87,7 @@ setClass("CoPro",
     sigmaSquares = "numeric",
     nPCA = "numeric",
     scalePCs = "logical",
+    nCC = "numeric",
 
     ## skr CCA output
     skrCCAOut = "list",
@@ -657,6 +658,8 @@ setMethod(
 #' @param object A CoPro object
 #' @param scalePCs Whether to scale each PCs to a uniform variance before
 #' running the program
+#' @param nCC Number of canonical vectors to compute, default = 2
+#' @param tol Tolerance for termination, default = 1e-5
 #' @param maxIter Maximum iterations
 #'
 #' @return CoPro object with distnace matrix computed
@@ -664,7 +667,7 @@ setMethod(
 #'
 setGeneric(
   "runSkrCCA",
-  function(object, scalePCs = TRUE,
+  function(object, scalePCs = TRUE, nCC = 2, tol = 1e-5,
            maxIter = 200) standardGeneric("runSkrCCA"))
 
 #' @rdname runSkrCCA
@@ -674,7 +677,7 @@ setGeneric(
 setMethod(
   "runSkrCCA", "CoPro",
   function(object,
-           scalePCs = TRUE,
+           scalePCs = TRUE, nCC = 2, tol = 1e-5,
            maxIter = 200) {
     ## check whether the kernel matrix is available
     if (length(object@kernelMatrices) == 0) {
@@ -737,13 +740,26 @@ setMethod(
       cca_result <- optimize_bilinear_multi(
         X_list = PCmats,
         K_list = object@kernelMatrices[[t]],
-        max_iter = maxIter
+        max_iter = maxIter, tol = tol
       )
       names(cca_result) <- cts
-      cca_out[[t]] <- cca_result
+
+      if(nCC == 1){
+        cca_out[[t]] <- cca_result
+      }else{
+        cca_result_n <- optimize_bilinear_multi_n(
+          X_list = PCmats, K_list = object@kernelMatrices[[t]],
+          w_list = cca_result,
+          cellTypesOfInterest = cts, nCC = nCC,
+          max_iter = maxIter, tol = tol
+        )
+        cca_out[[t]] <- cca_result_n
+      }
+
     }
 
     object@skrCCAOut <- cca_out
+    object@nCC <- nCC
     return(object)
   }
 )
@@ -838,37 +854,69 @@ setMethod(
     sigma_names <- paste("sigma", sigmaSquares, sep = "_")
     names(correlation_value) <- sigma_names
 
+    nCC <- object@nCC
+
+    ## calculate all spectral norms
+    cat("Calculating spectral norms, ",
+        "depending on the data size, this may take a while. \n")
+    norm_K12 <- setNames(vector(mode = "list", length = length(sigma_names)),
+                         sigma_names)
+
+    for(t in sigma_names){
+      norm_K12[[t]] <- setNames(vector(mode = "list", length = length(cts)),
+                           cts)
+      for(i in cts){
+        norm_K12[[t]][[i]] <- setNames(vector(mode = "list",
+                                              length = length(cts)), cts)
+      }
+    }
+
+    for (t in sigma_names) {
+      for (pp in seq_len(ncol(pair_cell_types))) {
+        cellType1 <- pair_cell_types[1, pp]
+        cellType2 <- pair_cell_types[2, pp]
+        K <- object@kernelMatrices[[t]][[cellType1]][[cellType2]]
+        ## Calculate the spectral norm of the kernel matrix
+        norm_K12[[t]][[cellType1]][[cellType2]] <- norm(K, type = "2")
+      }}
+
+    cat("Finished calculating spectral norms \n")
+
 
     for (tt in seq_along(sigmaSquares)) {
       t <- sigma_names[tt]
       correlation_value[[t]] <- data.frame(
         sigmaSquares = sigmaSquares[tt],
-        cellType1 = pair_cell_types[1, ],
-        cellType2 = pair_cell_types[2, ],
-        normalizedCorrelation = numeric(length = ncol(pair_cell_types)),
+        cellType1 = rep(pair_cell_types[1, ], times = nCC),
+        cellType2 = rep(pair_cell_types[2, ], times = nCC),
+        CC_index = rep(x = 1:nCC, each = ncol(pair_cell_types)),
+        normalizedCorrelation = numeric(length = ncol(pair_cell_types) * nCC),
         stringsAsFactors = FALSE
       )
       for (pp in seq_len(ncol(pair_cell_types))) {
-        cellType1 <- pair_cell_types[1, pp]
-        cellType2 <- pair_cell_types[2, pp]
+        for(cc_index in seq_len(nCC)){
+          cellType1 <- pair_cell_types[1, pp]
+          cellType2 <- pair_cell_types[2, pp]
 
-        w_1 <- object@skrCCAOut[[t]][[cellType1]]
-        w_2 <- object@skrCCAOut[[t]][[cellType2]]
+          w_1 <- object@skrCCAOut[[t]][[cellType1]][,cc_index, drop = FALSE]
+          w_2 <- object@skrCCAOut[[t]][[cellType2]][,cc_index, drop = FALSE]
 
-        A <- PCmats[[cellType1]]
-        B <- PCmats[[cellType2]]
-        K <- object@kernelMatrices[[t]][[cellType1]][[cellType2]]
+          A <- PCmats[[cellType1]]
+          B <- PCmats[[cellType2]]
 
-        A_w1 <- A %*% w_1
-        B_w2 <- B %*% w_2
+          A_w1 <- A %*% w_1
+          B_w2 <- B %*% w_2
 
-        ## Calculate the spectral norm of the kernel matrix
-        norm_K12 <- norm(K, type = "2")
+          ## get pre-calculated spectral norm
+          K <- object@kernelMatrices[[t]][[cellType1]][[cellType2]]
+          norm_K12_sel <- norm_K12[[t]][[cellType1]][[cellType2]]
 
-        ## Calculate normalized correlation
-        correlation_value[[t]]$normalizedCorrelation[pp] <-
-          (t(A_w1) %*% K %*% B_w2) /
-            (sqrt(sum(A_w1^2)) * sqrt(sum(B_w2^2)) * norm_K12)
+          ## Calculate normalized correlation
+          correlation_value[[t]]$"normalizedCorrelation"[
+            pp + (cc_index - 1) * ncol(pair_cell_types)] <-
+            (t(A_w1) %*% K %*% B_w2) /
+            (sqrt(sum(A_w1^2)) * sqrt(sum(B_w2^2)) * norm_K12_sel)
+        }
       }
     }
 
@@ -881,9 +929,10 @@ setMethod(
     ncorr$ct12 <- paste(ncorr$cellType1, ncorr$cellType2, sep = "-")
 
     # Calculate the mean of column 2 for each unique value in column 1
+    ## only for cc_index == 1
     meanCorr <- tapply(
-      ncorr$normalizedCorrelation,
-      ncorr$sigmaSquares, mean
+      ncorr$"normalizedCorrelation"[ncorr$"CC_index" == 1],
+      ncorr$"sigmaSquares"[ncorr$"CC_index" == 1], mean
     )
 
     # Find the value of column 1 with the highest mean in column 2
@@ -898,7 +947,7 @@ setMethod(
 
 
 #' computeGeneAndCellScores
-#'
+#' @importFrom stats setNames
 #' @param object A `CoPro` object containing CCA results
 #' and kernel matrices.
 #'
@@ -941,6 +990,7 @@ setMethod(
     }
 
     sigmaSquares <- object@sigmaSquares
+    nCC <- object@nCC
 
     ## load whether the PCs are being scaled prior to CCA
 
@@ -975,60 +1025,78 @@ setMethod(
 
     ## cell scores and gene scores are both by cell types
     cellScores <- setNames(
-      vector(mode = "list", length = length(cts)),
-      cts
+      vector(mode = "list", length = length(sigmaSquares)),
+      sigma_names
     )
-    for (i in cts) {
-      cellScores[[i]] <- matrix(
-        nrow = sum(object@cellTypesSub == i),
-        ncol = length(sigmaSquares)
+    for (t in sigma_names) {
+      cellScores[[t]] <- setNames(
+        vector(mode = "list", length = length(cts)),
+        cts
       )
-      colnames(cellScores[[i]]) <- sigma_names
-      rownames(cellScores[[i]]) <- rownames(object@normalizedDataSub)[
-        object@cellTypesSub == i
-      ]
+    }
+
+
+    for (t in sigma_names) {
+      for(i in cts){
+        cellScores[[t]][[i]] <- matrix(
+          nrow = sum(object@cellTypesSub == i),
+          ncol = nCC
+        )
+        colnames(cellScores[[t]][[i]]) <- paste0("CC_", 1:nCC)
+        rownames(cellScores[[t]][[i]]) <- rownames(object@normalizedDataSub)[
+          object@cellTypesSub == i
+        ]
+      }
+
     }
 
     ## gene scores
+
     geneScores <- setNames(
-      vector(mode = "list", length = length(cts)),
-      cts
+      vector(mode = "list", length = length(sigmaSquares)),
+      sigma_names
     )
-    for (i in cts) {
-      geneScores[[i]] <- matrix(
-        nrow = ncol(object@normalizedDataSub),
-        ncol = length(sigmaSquares)
+    for (t in sigma_names) {
+      geneScores[[t]] <- setNames(
+        vector(mode = "list", length = length(cts)),
+        cts
       )
-      colnames(geneScores[[i]]) <- sigma_names
-      rownames(geneScores[[i]]) <- colnames(object@normalizedDataSub)
     }
+
+    for (t in sigma_names) {
+      for (i in cts) {
+        geneScores[[t]][[i]] <- matrix(
+          nrow = ncol(object@normalizedDataSub),
+          ncol = nCC
+        )
+        colnames(geneScores[[t]][[i]]) <- paste0("CC_", 1:nCC)
+        rownames(geneScores[[t]][[i]]) <- colnames(object@normalizedDataSub)
+      }
+    }
+
 
     ## go over all cell types, then over all sigma values
     for (tt in seq_along(sigmaSquares)) {
       t <- sigma_names[tt]
       for (i in cts) {
-        w_1 <- object@skrCCAOut[[t]][[i]]
-        if (scalePCs) {
-          geneScores[[i]][, t] <- as.vector(
-            matrix(w_1 * allPCs[[i]]$sdev, nrow = 1) %*%
-              t(allPCs[[i]]$rotation)
-          )
-        } else {
-          geneScores[[i]][, t] <- as.vector(
-            matrix(w_1, nrow = 1) %*%
-              t(allPCs[[i]]$rotation)
-          )
+        for(cc_index in seq_len(nCC)){
+          cc_name <- paste0("CC_", cc_index)
+          w_1 <- object@skrCCAOut[[t]][[i]][,cc_index, drop = FALSE]
+          if (scalePCs) {
+            geneScores[[t]][[i]][, cc_name] <- as.vector(
+              matrix(w_1 * allPCs[[i]]$sdev, nrow = 1) %*%
+                t(allPCs[[i]]$rotation)
+            )
+          } else {
+            geneScores[[t]][[i]][, cc_name] <- as.vector(
+              matrix(w_1, nrow = 1) %*%
+                t(allPCs[[i]]$rotation)
+            )
+          }
+          cellScores[[t]][[i]][, cc_name] <- as.vector(PCmats[[i]] %*% w_1)
         }
-        cellScores[[i]][, t] <- as.vector(PCmats[[i]] %*% w_1)
-      }
-    }
 
-    ## change the column names to make it more informative
-    for (i in cts) {
-      colnames(cellScores[[i]]) <-
-        paste0("cellScore_", colnames(cellScores[[i]]))
-      colnames(geneScores[[i]]) <-
-        paste0("geneScore_", colnames(geneScores[[i]]))
+      }
     }
 
     ## save cellscores and gene scores
@@ -1040,9 +1108,18 @@ setMethod(
       vector(mode = "list", length = length(cts)),
       cts
     )
-    for (t in cts) {
-      meta_t[[t]] <- object@metaDataSub[object@cellTypesSub == t, ]
-      meta_t[[t]] <- cbind(meta_t[[t]], cellScores[[t]][rownames(meta_t[[t]]), ])
+    for (i in cts) {
+      meta_t[[i]] <- object@metaDataSub[object@cellTypesSub == i, ]
+      for (t in sigma_names){
+        for(cc_index in seq_len(nCC)){
+          cc_name <- paste0("CC_", cc_index)
+          cellScoreColName <- paste0("cellScore_", t, "_cc_index_", cc_index)
+          meta_t[[i]][,cellScoreColName] <-
+            cellScores[[t]][[i]][rownames(meta_t[[i]]),cc_name]
+        }
+
+      }
+
     }
 
     ## combine each cell type meta.data back

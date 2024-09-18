@@ -22,7 +22,7 @@ getNormCorr <- function(object) {
   if (length(object@normalizedCorrelation) == 0) {
     stop(paste(
       "normalizedCorrelation slot does not exist,",
-      "run computeNormalizedCorrelation first"
+      "run `computeNormalizedCorrelation()` first"
     ))
   }
 
@@ -46,11 +46,12 @@ getNormCorr <- function(object) {
 #' @param sigmaSquaredChoice A value to specify the sigma squared to
 #' use for selecting the particular cell score information
 #' @param scoreColorType Should the color be in binary scale or
-#' continuous scale?
+#' continuous scale? Need to be either "binary" or "continuous"
+#' @param ccIndex Canonical vector index, default = 1
 #'
 #' @return A data.frame object with cell scores and their locations
 #' @export
-getCellScoresInSitu <- function(object, sigmaSquaredChoice,
+getCellScoresInSitu <- function(object, sigmaSquaredChoice, ccIndex = 1,
                                 scoreColorType = c("binary", "continuous")) {
   ## check input
   if (!is(object, "CoPro")) {
@@ -65,7 +66,7 @@ getCellScoresInSitu <- function(object, sigmaSquaredChoice,
     length(object@geneScores) == 0) {
     stop(paste(
       "cellScores slot does not exist,",
-      "run computeGeneAndCellScores first"
+      "run `computeGeneAndCellScores()` first"
     ))
   }
 
@@ -93,7 +94,7 @@ getCellScoresInSitu <- function(object, sigmaSquaredChoice,
     cts <- unique(object@cellTypesSub)
   }
 
-  sigma_name_choice <- paste("cellScore_sigma", sigmaSquaredChoice, sep = "_")
+  sigma_name_choice <- paste("sigma", sigmaSquaredChoice, sep = "_")
 
   loc_t <- stats::setNames(
     vector(mode = "list", length = length(cts)),
@@ -104,13 +105,13 @@ getCellScoresInSitu <- function(object, sigmaSquaredChoice,
 
   for (t in cts) {
     loc_t[[t]] <- object@locationDataSub[object@cellTypesSub == t, ]
-    loc_t[[t]]$cellScores <- object@cellScores[[t]][
+    loc_t[[t]]$"cellScores" <- object@cellScores[[sigma_name_choice]][[t]][
       rownames(loc_t[[t]]),
-      sigma_name_choice
+      ccIndex
     ]
-    loc_t[[t]]$cellTypesSub <- t
-    median_score_t[t] <- median(object@cellScores[[t]][, sigma_name_choice])
-    loc_t[[t]]$cellScores_b <- ifelse(loc_t[[t]]$cellScores > median_score_t[t],
+    loc_t[[t]]$"cellTypesSub" <- t
+    median_score_t[t] <- median(loc_t[[t]]$"cellScores")
+    loc_t[[t]]$"cellScores_b" <- ifelse(loc_t[[t]]$"cellScores" > median_score_t[t],
       paste0("high_", t), paste0("low_", t)
     )
   }
@@ -140,12 +141,13 @@ getCellScoresInSitu <- function(object, sigmaSquaredChoice,
 #' @param cellTypeB Cell type label for another cell type
 #' @param sigmaSquaredChoice A particular sigma squared value
 #' for the correlation
+#' @param ccIndex Canonical vector index, default = 1
 #'
 #' @return A data.frame with two columns, AK and B, where AK represents the
 #' cell score of cell type A times the kernel matrix, and B represents the
 #' cell score of cell type B.
 #' @export
-getCorrTwoTypes <- function(object, cellTypeA, cellTypeB,
+getCorrTwoTypes <- function(object, cellTypeA, cellTypeB, ccIndex = 1,
                             sigmaSquaredChoice) {
   ## check input
   if (length(cellTypeA) != 1) {
@@ -200,10 +202,9 @@ getCorrTwoTypes <- function(object, cellTypeA, cellTypeB,
 
   ## load the cellScores and kernel matrix
   sigma_name <- paste("sigma", sigmaSquaredChoice, sep = "_")
-  cell_score_sigma_name <- paste("cellScore_sigma",
-                                 sigmaSquaredChoice, sep = "_")
-  x1 <- t(object@cellScores[[cellTypeA]][, cell_score_sigma_name, drop = FALSE])
-  x2 <- object@cellScores[[cellTypeB]][, cell_score_sigma_name, drop = TRUE]
+
+  x1 <- t(object@cellScores[[sigma_name]][[cellTypeA]][, ccIndex, drop = FALSE])
+  x2 <- object@cellScores[[sigma_name]][[cellTypeB]][, ccIndex, drop = TRUE]
   ktemp <- object@kernelMatrices[[sigma_name]][[cellTypeA]][[cellTypeB]]
   if (length(ktemp) != 0) {
     k <- ktemp
