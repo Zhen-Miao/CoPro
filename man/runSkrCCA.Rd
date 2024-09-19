@@ -5,15 +5,19 @@
 \alias{runSkrCCA,CoPro-method}
 \title{runSkrCCA}
 \usage{
-runSkrCCA(object, scalePCs = TRUE, maxIter = 200)
+runSkrCCA(object, scalePCs = TRUE, nCC = 2, tol = 1e-05, maxIter = 200)
 
-\S4method{runSkrCCA}{CoPro}(object, scalePCs = TRUE, maxIter = 200)
+\S4method{runSkrCCA}{CoPro}(object, scalePCs = TRUE, nCC = 2, tol = 1e-05, maxIter = 200)
 }
 \arguments{
 \item{object}{A CoPro object}
 
 \item{scalePCs}{Whether to scale each PCs to a uniform variance before
 running the program}
+
+\item{nCC}{Number of canonical vectors to compute, default = 2}
+
+\item{tol}{Tolerance for termination, default = 1e-5}
 
 \item{maxIter}{Maximum iterations}
 }

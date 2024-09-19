@@ -29,8 +29,8 @@ getNormCorr <- function(object) {
   ## organize into a data.frame
   ncorr <- do.call(rbind, slot(object, "normalizedCorrelation"))
   ncorr$"ct12" <- paste(ncorr$"cellType1", ncorr$"cellType2", sep = "-")
-  ncorr$"sigmaSquares" <- factor(ncorr$"sigmaSquares",
-    levels = sort(unique(ncorr$"sigmaSquares"),
+  ncorr$"sigmaValues" <- factor(ncorr$"sigmaValues",
+    levels = sort(unique(ncorr$"sigmaValues"),
       decreasing = FALSE
     )
   )
@@ -43,7 +43,7 @@ getNormCorr <- function(object) {
 #'
 #' @importFrom stats median
 #' @param object A `CoPro` object
-#' @param sigmaSquaredChoice A value to specify the sigma squared to
+#' @param sigmaValueChoice A value to specify the sigma squared to
 #' use for selecting the particular cell score information
 #' @param scoreColorType Should the color be in binary scale or
 #' continuous scale? Need to be either "binary" or "continuous"
@@ -51,7 +51,7 @@ getNormCorr <- function(object) {
 #'
 #' @return A data.frame object with cell scores and their locations
 #' @export
-getCellScoresInSitu <- function(object, sigmaSquaredChoice, ccIndex = 1,
+getCellScoresInSitu <- function(object, sigmaValueChoice, ccIndex = 1,
                                 scoreColorType = c("binary", "continuous")) {
   ## check input
   if (!is(object, "CoPro")) {
@@ -70,17 +70,17 @@ getCellScoresInSitu <- function(object, sigmaSquaredChoice, ccIndex = 1,
     ))
   }
 
-  if (is.null(sigmaSquaredChoice)) {
+  if (is.null(sigmaValueChoice)) {
     stop(paste(
-      "sigmaSquaredChoice is not given",
+      "sigmaValueChoice is not given",
       "default set to the value with highest",
       "normalized correlation."
     ))
-    sigmaSquaredChoice <- object@sigmaSquaredChoice
+    sigmaValueChoice <- object@sigmaValueChoice
   }
 
-  if (!(sigmaSquaredChoice %in% object@sigmaSquares)) {
-    stop("sigmaSquaredChoice does not exist in the list of sigmaSquares")
+  if (!(sigmaValueChoice %in% object@sigmaValues)) {
+    stop("sigmaValueChoice does not exist in the list of sigmaValues")
   }
 
   ## choose cell types
@@ -94,7 +94,7 @@ getCellScoresInSitu <- function(object, sigmaSquaredChoice, ccIndex = 1,
     cts <- unique(object@cellTypesSub)
   }
 
-  sigma_name_choice <- paste("sigma", sigmaSquaredChoice, sep = "_")
+  sigma_name_choice <- paste("sigma", sigmaValueChoice, sep = "_")
 
   loc_t <- stats::setNames(
     vector(mode = "list", length = length(cts)),
@@ -139,7 +139,7 @@ getCellScoresInSitu <- function(object, sigmaSquaredChoice, ccIndex = 1,
 #' @param object A `CoPro` object
 #' @param cellTypeA Cell type label for one cell type
 #' @param cellTypeB Cell type label for another cell type
-#' @param sigmaSquaredChoice A particular sigma squared value
+#' @param sigmaValueChoice A particular sigma squared value
 #' for the correlation
 #' @param ccIndex Canonical vector index, default = 1
 #'
@@ -148,7 +148,7 @@ getCellScoresInSitu <- function(object, sigmaSquaredChoice, ccIndex = 1,
 #' cell score of cell type B.
 #' @export
 getCorrTwoTypes <- function(object, cellTypeA, cellTypeB, ccIndex = 1,
-                            sigmaSquaredChoice) {
+                            sigmaValueChoice) {
   ## check input
   if (length(cellTypeA) != 1) {
     stop("Must give a single cellTypeA for correlation plot")
@@ -177,18 +177,18 @@ getCorrTwoTypes <- function(object, cellTypeA, cellTypeB, ccIndex = 1,
     ))
   }
 
-  ## set sigmaSquaredChoice
-  if (is.null(sigmaSquaredChoice)) {
+  ## set sigmaValueChoice
+  if (is.null(sigmaValueChoice)) {
     stop(paste(
-      "sigmaSquaredChoice is not given",
+      "sigmaValueChoice is not given",
       "default set to the value with highest",
       "normalized correlation."
     ))
-    sigmaSquaredChoice <- object@sigmaSquaredChoice
+    sigmaValueChoice <- object@sigmaValueChoice
   }
 
-  if (!(sigmaSquaredChoice %in% object@sigmaSquares)) {
-    stop("sigmaSquaredChoice does not exist in the list of sigmaSquares")
+  if (!(sigmaValueChoice %in% object@sigmaValues)) {
+    stop("sigmaValueChoice does not exist in the list of sigmaValues")
   }
 
   ## make sure normalizedCorrelation exists
@@ -201,7 +201,7 @@ getCorrTwoTypes <- function(object, cellTypeA, cellTypeB, ccIndex = 1,
   }
 
   ## load the cellScores and kernel matrix
-  sigma_name <- paste("sigma", sigmaSquaredChoice, sep = "_")
+  sigma_name <- paste("sigma", sigmaValueChoice, sep = "_")
 
   x1 <- t(object@cellScores[[sigma_name]][[cellTypeA]][, ccIndex, drop = FALSE])
   x2 <- object@cellScores[[sigma_name]][[cellTypeB]][, ccIndex, drop = TRUE]

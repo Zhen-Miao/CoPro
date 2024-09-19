@@ -1,9 +1,11 @@
 
 #' Calculate kernel matrix from distance matrix
 #' The function runs the following calculation:
-#' \deqn{K(x, y) = \exp\left(-\frac{\|x-y\|^2}{2 \sigma^2}\right)}
+#' \deqn{K(x, y) = \exp\left(-\frac{\|x-y\|^2}{2 \sigma^2}\right)}. We notice
+#' that the normalization factor does not affect the final results as it is
+#' scale invariant, so here for easy computation we omit the scaling factor.
 #'
-#' @param sigma_square The variance parameter \eqn{\sigma^2}, a positive number.
+#' @param sigma The variance parameter \eqn{\sigma}, a positive number.
 #' @param dist_mat A numeric matrix representing the squared distances
 #'  between cells
 #' @param lower_limit A lower limit value below which the kernel value will
@@ -13,8 +15,8 @@
 #'  containing the calculated Gaussian kernel values.
 #' @noRd
 kernel_from_distance <- function(
-    sigma_square, dist_mat, lower_limit = 5e-10) {
-  kernel_mat <- exp(-0.5 * dist_mat^2 / sigma_square)
+    sigma, dist_mat, lower_limit = 5e-10) {
+  kernel_mat <- exp(-0.5 * dist_mat^2 / sigma^2)
   kernel_mat[kernel_mat < lower_limit] <- 0
   return(kernel_mat)
 }

@@ -37,10 +37,12 @@ setClassUnion("matrixOrDataFrame", c("matrix", "data.frame"))
 #' gene names.
 #' @slot kernelMatrices A `list` object. To store the kernel matrix generated
 #' from the distance matrices.
-#' @slot sigmaSquares A `vector` object with elements being numeric. To store
+#' @slot sigmaValues A `vector` object with elements being numeric. To store
 #' a set of sigma values used for generating the kernel matrix.
-#' @slot nPCA A single numeric value. Number of PCs in to retain for downstream
+#' @slot nPCA A single numeric value. Number of PCs to retain for downstream
 #' analyses.
+#' @slot nCC A single numeric value. Number of canonical components to retain
+#' for downstream analyses.
 #' @slot scalePCs A `logical` value. Whether to scale each PC before computing
 #'  skrCCA
 #' @slot skrCCAOut A `list` object. Output from the skrCCA.
@@ -48,7 +50,7 @@ setClassUnion("matrixOrDataFrame", c("matrix", "data.frame"))
 #' @slot geneScores A `matrix` object. Gene scores for each cell type.
 #' @slot normalizedCorrelation A `list` object. Normalized correlation values
 #' for each sigma value.
-#' @slot sigmaSquaredChoice A `numeric` value. The optimal sigma squared based
+#' @slot sigmaValueChoice A `numeric` value. The optimal sigma squared based
 #' on the median normalized correlation value.
 #'
 #' @export
@@ -84,7 +86,7 @@ setClass("CoPro",
     ## geneList
     geneList = "character",
     kernelMatrices = "list",
-    sigmaSquares = "numeric",
+    sigmaValues = "numeric",
     nPCA = "numeric",
     scalePCs = "logical",
     nCC = "numeric",
@@ -94,7 +96,7 @@ setClass("CoPro",
     cellScores = "list",
     geneScores = "list",
     normalizedCorrelation = "list",
-    sigmaSquaredChoice = "numeric"
+    sigmaValueChoice = "numeric"
   )
 )
 
@@ -328,7 +330,7 @@ setMethod(
 #'  ensuring no matter which input scale is used for the distance matrix,
 #'  the output will roughly be in mm^3. This ensures that the kernel sizes
 #'  from 0.001 to 0.1 will make sense. Default = TRUE
-#'  @param truncateLowDist Whether to truncate small distances so that the cells
+#' @param truncateLowDist Whether to truncate small distances so that the cells
 #'  that are nearly overlapping with each other do not have a super small
 #'  distance. Default = TRUE.
 #' @return `CoPro` object with distance matrix computed
@@ -478,7 +480,7 @@ setMethod(
 #' Compute Kernel Matrix for CoPro
 #'
 #' This method calculates the kernel matrices for pairs of cell types based on
-#' their distances and a range of sigma square values.
+#' their distances and a range of sigma values.
 #' The formula of calculating kernel matrix is:
 #' \deqn{K(x, y) = \exp\left(-\frac{\|x-y\|^2}{2 \sigma^2}\right)}
 #' The matrices are adjusted by clipping the upper quantile of
@@ -487,7 +489,7 @@ setMethod(
 #'
 #' @importFrom utils combn
 #' @param object A `CoPro` object.
-#' @param sigmaSquares A vector of sigma square values used for kernel calculation.
+#' @param sigmaValues A vector of sigma values used for kernel calculation.
 #' @param lowerLimit The lower limit for the kernel function, default is 0.05.
 #' @param upperQuantile The quantile used for clipping the kernel values,
 #' default is 0.95.
@@ -503,7 +505,7 @@ setMethod(
 #' @note To-do: Shall we include row or column normalization of the kernel?
 setGeneric(
   "computeKernelMatrix",
-  function(object, sigmaSquares, lowerLimit = 5e-10, upperQuantile = 0.95,
+  function(object, sigmaValues, lowerLimit = 5e-10, upperQuantile = 0.95,
            normalizeKernel = TRUE,
            verbose = TRUE) standardGeneric("computeKernelMatrix"))
 
@@ -515,7 +517,7 @@ setGeneric(
 #' @export
 setMethod(
   "computeKernelMatrix", "CoPro",
-  function(object, sigmaSquares,
+  function(object, sigmaValues,
            lowerLimit = 5e-10, upperQuantile = 0.95, normalizeKernel = TRUE,
            verbose = TRUE) {
     ## make sure distance matrix exist
@@ -529,14 +531,14 @@ setMethod(
       stop("At least two cell types are needed to compute kernel matrices.")
     }
 
-    if (length(sigmaSquares) == 0) {
+    if (length(sigmaValues) == 0) {
       warning("No Sigma specified, setting to the 5% quantile of cell distance")
       dist12 <- object@distances[[1]][[2]]
-      sigmaSquares <- quantile(dist12[dist12 > 0], 0.05)
+      sigmaValues <- quantile(dist12[dist12 > 0], 0.05)
     }
 
-    if (!is.numeric(sigmaSquares)) {
-      stop("SigmaSquares must be numeric values or a vector")
+    if (!is.numeric(sigmaValues)) {
+      stop("sigmaValues must be numeric values or a vector")
     }
 
     ## notify users if normalizeDistance = TRUE
@@ -546,12 +548,12 @@ setMethod(
           "1 \n")
     }
 
-    ## save the sigmaSquares
-    object@sigmaSquares <- sigmaSquares
+    ## save the sigmaValues
+    object@sigmaValues <- sigmaValues
 
     ## Initialize the list of kernel matrices
-    kernel_mat <- vector("list", length(sigmaSquares))
-    sigma_names <- paste("sigma", sigmaSquares, sep = "_")
+    kernel_mat <- vector("list", length(sigmaValues))
+    sigma_names <- paste("sigma", sigmaValues, sep = "_")
     names(kernel_mat) <- sigma_names
     for (t in sigma_names) {
       kernel_mat[[t]] <- setNames(vector("list", n_mat), cts)
@@ -560,57 +562,57 @@ setMethod(
       }
     }
 
-    ## sigma_squared values to leave out
-    sigmaSquaresToRemove <- vector(mode = "logical",
-                                   length = length(sigmaSquares))
-    names(sigmaSquaresToRemove) <- sigma_names
+    ## sigma values to leave out
+    sigmaValuesToRemove <- vector(mode = "logical",
+                                   length = length(sigmaValues))
+    names(sigmaValuesToRemove) <- sigma_names
 
     pair_cell_types <- combn(cts, 2)
 
-    for (tt in seq_along(sigmaSquares)) {
+    for (tt in seq_along(sigmaValues)) {
       t <- sigma_names[tt]
-      sigma_square_choose <- sigmaSquares[tt]
+      sigma_choose <- sigmaValues[tt]
 
       for (pp in seq_len(ncol(pair_cell_types))) {
         i <- pair_cell_types[1, pp]
         j <- pair_cell_types[2, pp]
 
         kernel_current <- kernel_from_distance(
-          sigma_square = sigma_square_choose,
+          sigma = sigma_choose,
           dist_mat = object@distances[[i]][[j]],
           lower_limit = lowerLimit
         )
 
         if (all(kernel_current <= lowerLimit)) {
           warning(paste("Kernel matrix for cell types", i, "and", j,
-                        "with sigma_squared =", sigma_square_choose,
+                        "with sigma =", sigma_choose,
                         "contains all zeros."))
-          if (length(object@sigmaSquares) == 1) {
-            stop(paste("Only one sigma_squared is specified,",
+          if (length(object@sigmaValues) == 1) {
+            stop(paste("Only one sigma value is specified,",
                        "which resulted in all Gaussian kernel being small.",
-                       "Please provide a larger sigma_squared value"))
+                       "Please provide a larger sigma value"))
           }else {
-            warning(paste("Dropping sigma_squared value of ",
-                          sigma_square_choose,
+            warning(paste("Dropping sigma value of ",
+                          sigma_choose,
                           "because all Gaussian kernel values are too small,",
                           "which will not produce meaningful results."))
 
-            sigmaSquaresToRemove[t] <- TRUE
+            sigmaValuesToRemove[t] <- TRUE
 
           }
         }else if (all(is.na(kernel_current))) {
           warning(paste("Kernel matrix for cell types", i, "and", j,
-                        "with sigma_squared =", sigma_square_choose,
+                        "with sigma =", sigma_choose,
                         "contains all NA."))
-          if (length(object@sigmaSquares) == 1) {
-            stop(paste("Only one sigma_squared is specified,",
+          if (length(object@sigmaValues) == 1) {
+            stop(paste("Only one sigma value is specified,",
                        "which resulted in all Gaussian kernel being NA."))
           }else {
-            warning(paste("Dropping sigma_squared value of ",
-                          sigma_square_choose,
+            warning(paste("Dropping sigma value of ",
+                          sigma_choose,
                           "because all Gaussian kernel values are NA."))
 
-            sigmaSquaresToRemove[t] <- TRUE
+            sigmaValuesToRemove[t] <- TRUE
           }
         }
 
@@ -626,7 +628,7 @@ setMethod(
 
         ## print info
         if (verbose) {
-          cat("Current Sigma value is", sigma_square_choose)
+          cat("Current Sigma value is", sigma_choose)
           cat("\n")
           cat("Quantiles of N_neighbors for cell type", i, "\n")
           cat(quantile(rowSums(kernel_current >= 5e-5)))
@@ -640,11 +642,11 @@ setMethod(
       }
     }
 
-    ## Remove kernel matrices and sigmaSquares that were marked for removal
-    if (any(sigmaSquaresToRemove)) {
-      cat("removing", sum(sigmaSquaresToRemove), "sigmaSquares values", "\n")
-      kernel_mat <- kernel_mat[!sigmaSquaresToRemove]
-      object@sigmaSquares <- object@sigmaSquares[!sigmaSquaresToRemove]
+    ## Remove kernel matrices and sigmaValues that were marked for removal
+    if (any(sigmaValuesToRemove)) {
+      cat("removing", sum(sigmaValuesToRemove), "sigmaValues values", "\n")
+      kernel_mat <- kernel_mat[!sigmaValuesToRemove]
+      object@sigmaValues <- object@sigmaValues[!sigmaValuesToRemove]
     }
 
     object@kernelMatrices <- kernel_mat
@@ -691,11 +693,11 @@ setMethod(
       stop("Previously set scalePCs was different from the function input")
     }
 
-    ## check sigmaSquares
-    if (length(object@sigmaSquares) == 0) {
-      stop("sigmaSquares is empty, please specify")
+    ## check sigmaValues
+    if (length(object@sigmaValues) == 0) {
+      stop("sigmaValues is empty, please specify")
     } else {
-      sigmaSquares <- object@sigmaSquares
+      sigmaValues <- object@sigmaValues
     }
 
     ## choose cell types
@@ -730,12 +732,12 @@ setMethod(
     }
 
     ## run across different sigma values
-    cca_out <- vector("list", length = length(sigmaSquares))
-    sigma_names <- paste("sigma", sigmaSquares, sep = "_")
+    cca_out <- vector("list", length = length(sigmaValues))
+    sigma_names <- paste("sigma", sigmaValues, sep = "_")
     names(cca_out) <- sigma_names
 
     ## for loop to run the analysis
-    for (tt in seq_along(sigmaSquares)) {
+    for (tt in seq_along(sigmaValues)) {
       t <- sigma_names[tt]
       cca_result <- optimize_bilinear_multi(
         X_list = PCmats,
@@ -818,12 +820,12 @@ setMethod(
     }
     scalePCs <- object@scalePCs
 
-    ## check sigmaSquares
-    if (length(object@sigmaSquares) == 0) {
-      stop("sigmaSquares is empty, please specify")
+    ## check sigmaValues
+    if (length(object@sigmaValues) == 0) {
+      stop("`sigmaValues` is empty, please specify")
     }
 
-    sigmaSquares <- object@sigmaSquares
+    sigmaValues <- object@sigmaValues
 
     ## get PC matrices
     allPCs <- object@pcaResults
@@ -850,8 +852,8 @@ setMethod(
 
     pair_cell_types <- combn(cts, 2)
 
-    correlation_value <- vector("list", length = length(sigmaSquares))
-    sigma_names <- paste("sigma", sigmaSquares, sep = "_")
+    correlation_value <- vector("list", length = length(sigmaValues))
+    sigma_names <- paste("sigma", sigmaValues, sep = "_")
     names(correlation_value) <- sigma_names
 
     nCC <- object@nCC
@@ -883,10 +885,10 @@ setMethod(
     cat("Finished calculating spectral norms \n")
 
 
-    for (tt in seq_along(sigmaSquares)) {
+    for (tt in seq_along(sigmaValues)) {
       t <- sigma_names[tt]
       correlation_value[[t]] <- data.frame(
-        sigmaSquares = sigmaSquares[tt],
+        sigmaValues = sigmaValues[tt],
         cellType1 = rep(pair_cell_types[1, ], times = nCC),
         cellType2 = rep(pair_cell_types[2, ], times = nCC),
         CC_index = rep(x = 1:nCC, each = ncol(pair_cell_types)),
@@ -923,7 +925,7 @@ setMethod(
     ## Store the result in the object
     object@normalizedCorrelation <- correlation_value
 
-    ## obtain the sigmaSqured value with the highest
+    ## obtain the sigma value with the highest
     ## normalized correlation
     ncorr <- do.call(rbind, correlation_value)
     ncorr$ct12 <- paste(ncorr$cellType1, ncorr$cellType2, sep = "-")
@@ -932,12 +934,12 @@ setMethod(
     ## only for cc_index == 1
     meanCorr <- tapply(
       ncorr$"normalizedCorrelation"[ncorr$"CC_index" == 1],
-      ncorr$"sigmaSquares"[ncorr$"CC_index" == 1], mean
+      ncorr$"sigmaValues"[ncorr$"CC_index" == 1], mean
     )
 
     # Find the value of column 1 with the highest mean in column 2
-    sigmaSquaredChoice <- as.numeric(names(which.max(meanCorr)))
-    object@sigmaSquaredChoice <- sigmaSquaredChoice
+    sigmaValueChoice <- as.numeric(names(which.max(meanCorr)))
+    object@sigmaValueChoice <- sigmaValueChoice
 
     ## Return the modified object
     return(object)
@@ -984,12 +986,12 @@ setMethod(
       cts <- unique(object@cellTypesSub)
     }
 
-    ## check sigmaSquares
-    if (length(object@sigmaSquares) == 0) {
-      stop("sigmaSquares is empty, please specify")
+    ## check sigmaValues
+    if (length(object@sigmaValues) == 0) {
+      stop("sigmaValues is empty, please specify")
     }
 
-    sigmaSquares <- object@sigmaSquares
+    sigmaValues <- object@sigmaValues
     nCC <- object@nCC
 
     ## load whether the PCs are being scaled prior to CCA
@@ -1021,11 +1023,11 @@ setMethod(
       }
     }
 
-    sigma_names <- paste("sigma", sigmaSquares, sep = "_")
+    sigma_names <- paste("sigma", sigmaValues, sep = "_")
 
     ## cell scores and gene scores are both by cell types
     cellScores <- setNames(
-      vector(mode = "list", length = length(sigmaSquares)),
+      vector(mode = "list", length = length(sigmaValues)),
       sigma_names
     )
     for (t in sigma_names) {
@@ -1053,7 +1055,7 @@ setMethod(
     ## gene scores
 
     geneScores <- setNames(
-      vector(mode = "list", length = length(sigmaSquares)),
+      vector(mode = "list", length = length(sigmaValues)),
       sigma_names
     )
     for (t in sigma_names) {
@@ -1076,7 +1078,7 @@ setMethod(
 
 
     ## go over all cell types, then over all sigma values
-    for (tt in seq_along(sigmaSquares)) {
+    for (tt in seq_along(sigmaValues)) {
       t <- sigma_names[tt]
       for (i in cts) {
         for(cc_index in seq_len(nCC)){

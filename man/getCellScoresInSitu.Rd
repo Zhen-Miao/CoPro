@@ -6,18 +6,21 @@
 \usage{
 getCellScoresInSitu(
   object,
-  sigmaSquaredChoice,
+  sigmaValueChoice,
+  ccIndex = 1,
   scoreColorType = c("binary", "continuous")
 )
 }
 \arguments{
 \item{object}{A \code{CoPro} object}
 
-\item{sigmaSquaredChoice}{A value to specify the sigma squared to
+\item{sigmaValueChoice}{A value to specify the sigma squared to
 use for selecting the particular cell score information}
 
+\item{ccIndex}{Canonical vector index, default = 1}
+
 \item{scoreColorType}{Should the color be in binary scale or
-continuous scale?}
+continuous scale? Need to be either "binary" or "continuous"}
 }
 \value{
 A data.frame object with cell scores and their locations

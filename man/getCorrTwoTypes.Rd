@@ -4,7 +4,7 @@
 \alias{getCorrTwoTypes}
 \title{Retrieve the Correlation between two cell types}
 \usage{
-getCorrTwoTypes(object, cellTypeA, cellTypeB, sigmaSquaredChoice)
+getCorrTwoTypes(object, cellTypeA, cellTypeB, ccIndex = 1, sigmaValueChoice)
 }
 \arguments{
 \item{object}{A \code{CoPro} object}
@@ -13,7 +13,9 @@ getCorrTwoTypes(object, cellTypeA, cellTypeB, sigmaSquaredChoice)
 
 \item{cellTypeB}{Cell type label for another cell type}
 
-\item{sigmaSquaredChoice}{A particular sigma squared value
+\item{ccIndex}{Canonical vector index, default = 1}
+
+\item{sigmaValueChoice}{A particular sigma squared value
 for the correlation}
 }
 \value{
