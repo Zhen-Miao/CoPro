@@ -63,12 +63,20 @@ skrCCA}
 
 \item{\code{skrCCAOut}}{A \code{list} object. Output from the skrCCA.}
 
+\item{\code{skrCCAPermuOut}}{A \code{list} object. Output from the skrCCA after
+permutation. This helps establish the null distribution}
+
+\item{\code{cellPermu}}{A \code{list} object that stores the cell permutation labels}
+
 \item{\code{cellScores}}{A \code{matrix} object. Cell scores for each cell type.}
 
 \item{\code{geneScores}}{A \code{matrix} object. Gene scores for each cell type.}
 
 \item{\code{normalizedCorrelation}}{A \code{list} object. Normalized correlation values
 for each sigma value.}
+
+\item{\code{normalizedCorrelationPermu}}{A \code{list} object. Normalized correlation values
+for each sigma value after permutation}
 
 \item{\code{sigmaValueChoice}}{A \code{numeric} value. The optimal sigma squared based
 on the median normalized correlation value.}

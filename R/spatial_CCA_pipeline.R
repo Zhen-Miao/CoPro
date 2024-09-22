@@ -46,13 +46,19 @@ setClassUnion("matrixOrDataFrame", c("matrix", "data.frame"))
 #' @slot scalePCs A `logical` value. Whether to scale each PC before computing
 #'  skrCCA
 #' @slot skrCCAOut A `list` object. Output from the skrCCA.
+#' @slot skrCCAPermuOut A `list` object. Output from the skrCCA after
+#' permutation. This helps establish the null distribution
+#' @slot cellPermu A `list` object that stores the cell permutation labels
+#'
 #' @slot cellScores A `matrix` object. Cell scores for each cell type.
 #' @slot geneScores A `matrix` object. Gene scores for each cell type.
 #' @slot normalizedCorrelation A `list` object. Normalized correlation values
 #' for each sigma value.
+#' @slot normalizedCorrelationPermu A `list` object. Normalized correlation values
+#' for each sigma value after permutation
 #' @slot sigmaValueChoice A `numeric` value. The optimal sigma squared based
 #' on the median normalized correlation value.
-#'
+#' @name CoPro
 #' @export
 #'
 setClass("CoPro",
@@ -96,7 +102,12 @@ setClass("CoPro",
     cellScores = "list",
     geneScores = "list",
     normalizedCorrelation = "list",
-    sigmaValueChoice = "numeric"
+    sigmaValueChoice = "numeric",
+
+    ## permutation output
+    skrCCAPermuOut = "list",
+    cellPermu = "list",
+    normalizedCorrelationPermu = "list"
   )
 )
 
@@ -297,7 +308,8 @@ setMethod(
         scaledData <- t(t(subD) - colMeans(subD))
       } else {
         warning(paste("It is not recommended to skip both centering,",
-          "and scaling of the data",
+          "and scaling of the data, unless the data has been centered and",
+          "scaled when creating the CoPro object.",
           sep = " "
         ))
         scaledData <- subD
@@ -667,26 +679,8 @@ setMethod(
   }
 )
 
-
-#' runSkrCCA
-#' @importFrom stats setNames
-#' @param object A CoPro object
-#' @param scalePCs Whether to scale each PCs to a uniform variance before
-#' running the program
-#' @param nCC Number of canonical vectors to compute, default = 2
-#' @param tol Tolerance for termination, default = 1e-5
-#' @param maxIter Maximum iterations
-#'
-#' @return CoPro object with distnace matrix computed
-#' @export
-#'
-setGeneric(
-  "runSkrCCA",
-  function(object, scalePCs = TRUE, nCC = 2, tol = 1e-5,
-           maxIter = 200) standardGeneric("runSkrCCA"))
-
 ## get PC matrices
-.getAllPCs <- function (allPCs, scalePCs) {
+.getAllPCMats <- function (allPCs, scalePCs) {
 
   if (length(allPCs) == 0) {
     stop("PCA results do not exist, run computePCA() first.")
@@ -714,6 +708,24 @@ setGeneric(
   return(PCmats)
 }
 
+#' runSkrCCA
+#' @importFrom stats setNames
+#' @param object A CoPro object
+#' @param scalePCs Whether to scale each PCs to a uniform variance before
+#' running the program
+#' @param nCC Number of canonical vectors to compute, default = 2
+#' @param tol Tolerance for termination, default = 1e-5
+#' @param maxIter Maximum iterations
+#'
+#' @return CoPro object with distnace matrix computed
+#' @export
+#'
+setGeneric(
+  "runSkrCCA",
+  function(object, scalePCs = TRUE, nCC = 2, tol = 1e-5,
+           maxIter = 200) standardGeneric("runSkrCCA"))
+
+
 #' @rdname runSkrCCA
 #' @aliases runSkrCCA,CoPro-method
 #' @importFrom stats setNames
@@ -728,11 +740,9 @@ setMethod(
       stop("Kernel matrix is empty, please run computeKernelMatrix first")
     }
 
-    ## record whether PCs have been scaled
+    ## record whether each PC will been rescaled
     if (length(object@scalePCs) == 0) {
       object@scalePCs <- scalePCs
-    } else if (object@scalePCs != scalePCs) {
-      stop("Previously set scalePCs was different from the function input")
     }
 
     ## check sigmaValues
@@ -751,7 +761,7 @@ setMethod(
       cts <- unique(object@cellTypesSub)
     }
 
-    PCmats <- .getAllPCs(allPCs = object@pcaResults, scalePCs = scalePCs)
+    PCmats <- .getAllPCMats(allPCs = object@pcaResults, scalePCs = scalePCs)
 
     ## run across different sigma values
     cca_out <- vector("list", length = length(sigmaValues))
@@ -852,7 +862,7 @@ setMethod(
 
     sigmaValues <- object@sigmaValues
 
-    PCmats <- .getAllPCs(allPCs = object@pcaResults, scalePCs = scalePCs)
+    PCmats <- .getAllPCMats(allPCs = object@pcaResults, scalePCs = scalePCs)
 
     pair_cell_types <- combn(cts, 2)
 
@@ -1006,7 +1016,7 @@ setMethod(
     }
     scalePCs <- object@scalePCs
 
-    PCmats <- .getAllPCs(allPCs = object@pcaResults, scalePCs = scalePCs)
+    PCmats <- .getAllPCMats(allPCs = object@pcaResults, scalePCs = scalePCs)
 
     sigma_names <- paste("sigma", sigmaValues, sep = "_")
 

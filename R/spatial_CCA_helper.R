@@ -180,12 +180,21 @@ getCorrTwoTypes <- function(object, cellTypeA, cellTypeB, ccIndex = 1,
 
   ## set sigmaValueChoice
   if (is.null(sigmaValueChoice)) {
-    stop(paste(
-      "sigmaValueChoice is not given",
-      "default set to the value with highest",
-      "normalized correlation."
-    ))
-    sigmaValueChoice <- object@sigmaValueChoice
+    if (length(object@sigmaValueChoice) == 0) {
+      stop(paste(
+        "sigmaValueChoice is not given,",
+        "and NormalizedCorrelation not computed,",
+        "please either specify a particular sigmaValueChoice or",
+        "run computeNormalizedCorrelation()"
+      ))
+    }else{
+      warning(paste(
+        "sigmaValueChoice is not given",
+        "default set to the value with highest",
+        "normalized correlation."
+      ))
+      sigmaValueChoice <- object@sigmaValueChoice
+    }
   }
 
   if (!(sigmaValueChoice %in% object@sigmaValues)) {
