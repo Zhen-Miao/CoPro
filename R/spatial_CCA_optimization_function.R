@@ -16,10 +16,12 @@
 #' @noRd
 kernel_from_distance <- function(
     sigma, dist_mat, lower_limit = 5e-10) {
-  kernel_mat <- exp(-0.5 * dist_mat^2 / sigma^2)
+  kernel_mat <- exp(-0.5 * (dist_mat / sigma)^2)
   kernel_mat[kernel_mat < lower_limit] <- 0
   return(kernel_mat)
 }
+
+
 
 
 #' centering and scaling the matrix
@@ -67,9 +69,6 @@ optimize_bilinear_multi <- function(X_list, K_list, max_iter = 1000,
   n_mat <- length(X_list)
   n_features <- ncol(X_list[[1]])
 
-  ## computations are between all pairs
-  ij_pairs <- combn(n_mat, 2)
-
   # Initialize w1 and w2 by their right singular vector
   w_list <- rep(list(), length = length(X_list))
   for (i in 1:n_mat) {
@@ -98,8 +97,6 @@ optimize_bilinear_multi <- function(X_list, K_list, max_iter = 1000,
         X1 <- X_list[[i]]
         X2 <- X_list[[j]]
         Y <- t(X1) %*% K12 %*% X2
-
-        # w1 <- w_list[[i]]
         w2 <- w_list[[j]]
 
         w_i_left[, j] <- Y %*% w2
@@ -129,8 +126,8 @@ optimize_bilinear_multi <- function(X_list, K_list, max_iter = 1000,
 }
 
 
-bilinear_w_from_Y_resi <- function(w_list_new, Y_resi,
-                                   n_mat, n_features, max_iter, tol){
+bilinear_w_from_Y_resi <- function (w_list_new, Y_resi,
+                                   n_mat, n_features, max_iter, tol) {
   # Iterative refinement
   iter <- 0
   while (iter < max_iter) {
@@ -188,7 +185,7 @@ optimize_bilinear_multi_n <- function(X_list, K_list, w_list,
                                       max_iter = 1000,
                                       tol = 1e-5) {
 
-  if(nCC < 2){
+  if (nCC < 2) {
     stop("nCC must be an integer greater than 1.")
   }
   n_mat <- length(X_list)
@@ -196,11 +193,12 @@ optimize_bilinear_multi_n <- function(X_list, K_list, w_list,
 
   ## check if w_list has the same length of x_list
   if (n_mat != length(w_list) || n_mat != length(cellTypesOfInterest) ) {
-    stop("the input X_list, w_list, cellTypesOfInterest are of different length!")
+    stop(paste("the input X_list, w_list, cellTypesOfInterest",
+               "are of different length!"))
   }
 
   ## check the dimension of the w_list
-  if(length(dim(w_list[[1]])) == 0){
+  if (length(dim(w_list[[1]])) == 0) {
     stop("the input w_list must be a matrix after Zhen updated the function!")
   }
 
@@ -218,7 +216,7 @@ optimize_bilinear_multi_n <- function(X_list, K_list, w_list,
   ## Y is between any two cell types, and each time, we update the Y_resi
   ## to regress out all previous canonical vectors
 
-  for(qq in 1:(nCC-1)){ ## qq: existing w_qq to be regressed out
+  for (qq in 1:(nCC - 1)) { ## qq: existing w_qq to be regressed out
 
     ## step 1: obtain or update Y_resi
     for (pp in seq_len(ncol(pair_cell_types))) {
@@ -230,12 +228,12 @@ optimize_bilinear_multi_n <- function(X_list, K_list, w_list,
       X1 <- X_list[[i]]
       X2 <- X_list[[j]]
 
-      w1 <- w_list[[i]][ , qq, drop = FALSE]
-      w2 <- w_list[[j]][ , qq, drop = FALSE]
+      w1 <- w_list[[i]][, qq, drop = FALSE]
+      w2 <- w_list[[j]][, qq, drop = FALSE]
 
-      if(qq == 1){
+      if (qq == 1) {
         Y1 <- t(X1) %*% K12 %*% X2
-      }else{
+      }else {
         Y1 <- Y_resi[[i]][[j]]
       }
 
@@ -260,7 +258,7 @@ optimize_bilinear_multi_n <- function(X_list, K_list, w_list,
                                         max_iter = max_iter, tol = tol)
 
     ## step 4: add w_list_qq to columns in w_list
-    for(ii in seq_len(n_mat)){
+    for (ii in seq_len(n_mat)) {
       w_list[[ii]] <- cbind(w_list[[ii]], w_list_qq[[ii]])
     }
   }
@@ -268,6 +266,3 @@ optimize_bilinear_multi_n <- function(X_list, K_list, w_list,
   ## return results
   return(w_list)
 }
-
-
-

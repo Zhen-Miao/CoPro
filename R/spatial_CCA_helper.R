@@ -111,14 +111,15 @@ getCellScoresInSitu <- function(object, sigmaValueChoice, ccIndex = 1,
     ]
     loc_t[[t]]$"cellTypesSub" <- t
     median_score_t[t] <- median(loc_t[[t]]$"cellScores")
-    loc_t[[t]]$"cellScores_b" <- ifelse(loc_t[[t]]$"cellScores" > median_score_t[t],
-      paste0("high_", t), paste0("low_", t)
+    loc_t[[t]]$"cellScores_b" <-
+      ifelse(loc_t[[t]]$"cellScores" > median_score_t[t],
+             paste0("high_", t), paste0("low_", t)
     )
   }
 
   combinations <- expand.grid(c("high", "low"), cts)
-  all_binary_scores <- apply(combinations, 1, function(x) paste(x[1], x[2],
-                                                                sep = "_"))
+  all_binary_scores <- apply(combinations, 1,
+                             function(x) paste(x[1], x[2], sep = "_"))
 
   names(loc_t) <- NULL
   loc_all <- do.call(rbind, loc_t)[rownames(object@locationDataSub), ]
@@ -193,7 +194,7 @@ getCorrTwoTypes <- function(object, cellTypeA, cellTypeB, ccIndex = 1,
 
   ## make sure normalizedCorrelation exists
   if (length(object@cellScores) == 0 ||
-    length(object@geneScores) == 0) {
+        length(object@geneScores) == 0) {
     stop(paste(
       "cellScores slot does not exist,",
       "run computeGeneAndCellScores first"
@@ -212,6 +213,6 @@ getCorrTwoTypes <- function(object, cellTypeA, cellTypeB, ccIndex = 1,
     k <- t(object@kernelMatrices[[sigma_name]][[cellTypeB]][[cellTypeA]])
   }
 
-  df <- data.frame(AK = (x1 %*% k)[1,,drop = TRUE], B = x2)
+  df <- data.frame(AK = (x1 %*% k)[1, , drop = TRUE], B = x2)
   return(df)
 }

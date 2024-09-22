@@ -3,14 +3,17 @@
 \name{computeNormalizedCorrelation}
 \alias{computeNormalizedCorrelation}
 \alias{computeNormalizedCorrelation,CoPro-method}
-\title{Compute Normalized Correlation for CoPro}
+\alias{computeNormalizedCorrelationApprox,CoPro-method}
+\title{Compute Normalized Correlation for CoPro (approximation)}
 \usage{
-computeNormalizedCorrelation(object)
+computeNormalizedCorrelation(object, tol = 1e-04)
 
-\S4method{computeNormalizedCorrelation}{CoPro}(object)
+\S4method{computeNormalizedCorrelation}{CoPro}(object, tol = 1e-04)
 }
 \arguments{
 \item{object}{A \code{CoPro} object containing CCA results and kernel matrices.}
+
+\item{tol}{tolerance for approximate SVD calculation}
 }
 \value{
 The \code{CoPro} object with the normalized correlation value

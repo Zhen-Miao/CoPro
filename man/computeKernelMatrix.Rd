@@ -28,7 +28,7 @@ computeKernelMatrix(
 
 \item{sigmaValues}{A vector of sigma values used for kernel calculation.}
 
-\item{lowerLimit}{The lower limit for the kernel function, default is 0.05.}
+\item{lowerLimit}{The lower limit for the kernel function, default is 5e-10.}
 
 \item{upperQuantile}{The quantile used for clipping the kernel values,
 default is 0.95.}

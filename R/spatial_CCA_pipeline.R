@@ -445,7 +445,8 @@ setMethod(
       dist_1percentile[pp] <- quantile(distances_ij[distances_ij != 0], 1e-4)
 
       if (truncateLowDist) {
-        distances_ij[distances_ij < dist_1percentile[pp]] <- dist_1percentile[pp]
+        distances_ij[distances_ij < dist_1percentile[pp]] <-
+          dist_1percentile[pp]
       }
 
       ## save the distances
@@ -477,6 +478,43 @@ setMethod(
   }
 )
 
+
+.CheckSigmaValuesToRemove <- function(kernel_current, lowerLimit,
+                                      sigma_choose, sigmaValues, i, j) {
+  if (all(kernel_current <= lowerLimit)) {
+    warning(paste("Kernel matrix for cell types", i, "and", j,
+                  "with sigma =", sigma_choose,
+                  "contains all zeros."))
+    if (length(sigmaValues) == 1) {
+      stop(paste("Only one sigma value is specified,",
+                 "which resulted in all Gaussian kernel being small.",
+                 "Please provide a larger sigma value"))
+    }else {
+      warning(paste("Dropping sigma value of ",
+                    sigma_choose,
+                    "because all Gaussian kernel values are too small,",
+                    "which will not produce meaningful results."))
+      return(TRUE)
+    }
+  }else if (all(is.na(kernel_current))) {
+    warning(paste("Kernel matrix for cell types", i, "and", j,
+                  "with sigma =", sigma_choose,
+                  "contains all NA."))
+    if (length(sigmaValues) == 1) {
+      stop(paste("Only one sigma value is specified,",
+                 "which resulted in all Gaussian kernel being NA."))
+    }else {
+      warning(paste("Dropping sigma value of ",
+                    sigma_choose,
+                    "because all Gaussian kernel values are NA."))
+      return(TRUE)
+    }
+  }
+
+  return(FALSE)
+}
+
+
 #' Compute Kernel Matrix for CoPro
 #'
 #' This method calculates the kernel matrices for pairs of cell types based on
@@ -490,7 +528,7 @@ setMethod(
 #' @importFrom utils combn
 #' @param object A `CoPro` object.
 #' @param sigmaValues A vector of sigma values used for kernel calculation.
-#' @param lowerLimit The lower limit for the kernel function, default is 0.05.
+#' @param lowerLimit The lower limit for the kernel function, default is 5e-10.
 #' @param upperQuantile The quantile used for clipping the kernel values,
 #' default is 0.95.
 #' @param verbose Whether to output the progress and related information
@@ -508,7 +546,6 @@ setGeneric(
   function(object, sigmaValues, lowerLimit = 5e-10, upperQuantile = 0.95,
            normalizeKernel = TRUE,
            verbose = TRUE) standardGeneric("computeKernelMatrix"))
-
 
 #' @rdname computeKernelMatrix
 #' @aliases computeKernelMatrix,CoPro-method
@@ -562,12 +599,12 @@ setMethod(
       }
     }
 
+    pair_cell_types <- combn(cts, 2)
+
     ## sigma values to leave out
     sigmaValuesToRemove <- vector(mode = "logical",
-                                   length = length(sigmaValues))
+                                  length = length(sigmaValues))
     names(sigmaValuesToRemove) <- sigma_names
-
-    pair_cell_types <- combn(cts, 2)
 
     for (tt in seq_along(sigmaValues)) {
       t <- sigma_names[tt]
@@ -583,38 +620,9 @@ setMethod(
           lower_limit = lowerLimit
         )
 
-        if (all(kernel_current <= lowerLimit)) {
-          warning(paste("Kernel matrix for cell types", i, "and", j,
-                        "with sigma =", sigma_choose,
-                        "contains all zeros."))
-          if (length(object@sigmaValues) == 1) {
-            stop(paste("Only one sigma value is specified,",
-                       "which resulted in all Gaussian kernel being small.",
-                       "Please provide a larger sigma value"))
-          }else {
-            warning(paste("Dropping sigma value of ",
-                          sigma_choose,
-                          "because all Gaussian kernel values are too small,",
-                          "which will not produce meaningful results."))
-
-            sigmaValuesToRemove[t] <- TRUE
-
-          }
-        }else if (all(is.na(kernel_current))) {
-          warning(paste("Kernel matrix for cell types", i, "and", j,
-                        "with sigma =", sigma_choose,
-                        "contains all NA."))
-          if (length(object@sigmaValues) == 1) {
-            stop(paste("Only one sigma value is specified,",
-                       "which resulted in all Gaussian kernel being NA."))
-          }else {
-            warning(paste("Dropping sigma value of ",
-                          sigma_choose,
-                          "because all Gaussian kernel values are NA."))
-
-            sigmaValuesToRemove[t] <- TRUE
-          }
-        }
+        sigmaValuesToRemove[t] <- .CheckSigmaValuesToRemove(
+          kernel_current = kernel_current, lowerLimit = lowerLimit,
+          sigma_choose = sigma_choose, sigmaValues = sigmaValues, i = i, j = j)
 
         ## Clipping large values
         upper_clip <- quantile(kernel_current[kernel_current >= lowerLimit],
@@ -636,8 +644,13 @@ setMethod(
           cat("Quantiles of N_neighbors for cell type", j, "\n")
           cat(quantile(colSums(kernel_current >= 5e-5)))
           cat("\n")
+          cat("quantile of row sums of kernel matrix", "\n")
+          cat(quantile(rs_kernel))
+          cat("\n")
         }
 
+        # ## remove small values
+        kernel_current[kernel_current < lowerLimit] <- 0
         kernel_mat[[t]][[i]][[j]] <- kernel_current
       }
     }
@@ -671,6 +684,35 @@ setGeneric(
   "runSkrCCA",
   function(object, scalePCs = TRUE, nCC = 2, tol = 1e-5,
            maxIter = 200) standardGeneric("runSkrCCA"))
+
+## get PC matrices
+.getAllPCs <- function (allPCs, scalePCs) {
+
+  if (length(allPCs) == 0) {
+    stop("PCA results do not exist, run computePCA() first.")
+  }
+
+  PCmats <- setNames(
+    vector("list", length = length(allPCs)),
+    names(allPCs)
+  )
+
+  ## optionally, scale the PCs before running CCA
+  if (scalePCs) {
+    for (i in names(allPCs)) {
+      pca_A_sd <- allPCs[[i]]$sdev
+      PCmats[[i]] <- scale(allPCs[[i]]$x,
+                           center = FALSE,
+                           scale = pca_A_sd
+      )
+    }
+  } else {
+    for (i in names(allPCs)) {
+      PCmats[[i]] <- allPCs[[i]]$x
+    }
+  }
+  return(PCmats)
+}
 
 #' @rdname runSkrCCA
 #' @aliases runSkrCCA,CoPro-method
@@ -709,27 +751,7 @@ setMethod(
       cts <- unique(object@cellTypesSub)
     }
 
-    ## get PC matrices
-    allPCs <- object@pcaResults
-    PCmats <- setNames(
-      vector("list", length = length(allPCs)),
-      names(allPCs)
-    )
-
-    ## optionally, scale the PCs before running CCA
-    if (scalePCs) {
-      for (i in names(allPCs)) {
-        pca_A_sd <- allPCs[[i]]$sdev
-        PCmats[[i]] <- scale(allPCs[[i]]$x,
-          center = FALSE,
-          scale = pca_A_sd
-        )
-      }
-    } else {
-      for (i in names(allPCs)) {
-        PCmats[[i]] <- allPCs[[i]]$x
-      }
-    }
+    PCmats <- .getAllPCs(allPCs = object@pcaResults, scalePCs = scalePCs)
 
     ## run across different sigma values
     cca_out <- vector("list", length = length(sigmaValues))
@@ -746,9 +768,9 @@ setMethod(
       )
       names(cca_result) <- cts
 
-      if(nCC == 1){
+      if (nCC == 1) {
         cca_out[[t]] <- cca_result
-      }else{
+      }else {
         cca_result_n <- optimize_bilinear_multi_n(
           X_list = PCmats, K_list = object@kernelMatrices[[t]],
           w_list = cca_result,
@@ -767,13 +789,15 @@ setMethod(
 )
 
 
-#' Compute Normalized Correlation for CoPro
+
+#' Compute Normalized Correlation for CoPro (approximation)
 #'
 #' This method calculates the normalized correlation between pairs of cell types
 #' based on CCA weights and the respective kernel matrix. It uses
 #' the spectral norm of the kernel matrix for normalization.
 #'
 #' @param object A `CoPro` object containing CCA results and kernel matrices.
+#' @param tol tolerance for approximate SVD calculation
 #' @return The `CoPro` object with the normalized correlation value
 #' between any pair of cell types
 #' added as a new slot, `normalizedCorrelation`.
@@ -781,17 +805,18 @@ setMethod(
 #'
 setGeneric(
   "computeNormalizedCorrelation",
-  function(object) standardGeneric("computeNormalizedCorrelation")
+  function(object, tol = 1e-4) standardGeneric("computeNormalizedCorrelation")
 )
 
 
 #' @rdname computeNormalizedCorrelation
-#' @aliases computeNormalizedCorrelation,CoPro-method
+#' @aliases computeNormalizedCorrelationApprox,CoPro-method
 #' @importFrom utils combn
+#' @importFrom irlba irlba
 #' @export
 setMethod(
   "computeNormalizedCorrelation", "CoPro",
-  function(object) {
+  function(object, tol = 1e-4) {
     ## Check for required components
     if (length(object@skrCCAOut) == 0) {
       stop("CCA results are not available. Please run CCA first.")
@@ -827,28 +852,7 @@ setMethod(
 
     sigmaValues <- object@sigmaValues
 
-    ## get PC matrices
-    allPCs <- object@pcaResults
-    PCmats <- setNames(
-      vector("list", length = length(allPCs)),
-      names(allPCs)
-    )
-
-    ## optionally, scale the PCs before running CCA
-    if (scalePCs) {
-      for (i in names(allPCs)) {
-        pca_A_sd <- allPCs[[i]]$sdev
-        PCmats[[i]] <- scale(allPCs[[i]]$x,
-          center = FALSE,
-          scale = pca_A_sd
-        )
-      }
-    } else {
-      for (i in names(allPCs)) {
-        PCmats[[i]] <- allPCs[[i]]$x
-      }
-    }
-
+    PCmats <- .getAllPCs(allPCs = object@pcaResults, scalePCs = scalePCs)
 
     pair_cell_types <- combn(cts, 2)
 
@@ -864,10 +868,10 @@ setMethod(
     norm_K12 <- setNames(vector(mode = "list", length = length(sigma_names)),
                          sigma_names)
 
-    for(t in sigma_names){
+    for (t in sigma_names) {
       norm_K12[[t]] <- setNames(vector(mode = "list", length = length(cts)),
-                           cts)
-      for(i in cts){
+                                cts)
+      for (i in cts) {
         norm_K12[[t]][[i]] <- setNames(vector(mode = "list",
                                               length = length(cts)), cts)
       }
@@ -879,8 +883,10 @@ setMethod(
         cellType2 <- pair_cell_types[2, pp]
         K <- object@kernelMatrices[[t]][[cellType1]][[cellType2]]
         ## Calculate the spectral norm of the kernel matrix
-        norm_K12[[t]][[cellType1]][[cellType2]] <- norm(K, type = "2")
-      }}
+        svd_result <- irlba::irlba(K, nv = 1, tol = tol)
+        norm_K12[[t]][[cellType1]][[cellType2]] <- svd_result$d[1]
+        }
+      }
 
     cat("Finished calculating spectral norms \n")
 
@@ -896,12 +902,12 @@ setMethod(
         stringsAsFactors = FALSE
       )
       for (pp in seq_len(ncol(pair_cell_types))) {
-        for(cc_index in seq_len(nCC)){
+        for (cc_index in seq_len(nCC)) {
           cellType1 <- pair_cell_types[1, pp]
           cellType2 <- pair_cell_types[2, pp]
 
-          w_1 <- object@skrCCAOut[[t]][[cellType1]][,cc_index, drop = FALSE]
-          w_2 <- object@skrCCAOut[[t]][[cellType2]][,cc_index, drop = FALSE]
+          w_1 <- object@skrCCAOut[[t]][[cellType1]][, cc_index, drop = FALSE]
+          w_2 <- object@skrCCAOut[[t]][[cellType2]][, cc_index, drop = FALSE]
 
           A <- PCmats[[cellType1]]
           B <- PCmats[[cellType2]]
@@ -945,7 +951,6 @@ setMethod(
     return(object)
   }
 )
-
 
 
 #' computeGeneAndCellScores
@@ -1001,27 +1006,7 @@ setMethod(
     }
     scalePCs <- object@scalePCs
 
-    ## get PC matrices
-    allPCs <- object@pcaResults
-    PCmats <- setNames(
-      vector("list", length = length(allPCs)),
-      names(allPCs)
-    )
-
-    ## optionally, scale the PCs before running CCA
-    if (scalePCs) {
-      for (i in names(allPCs)) {
-        pca_A_sd <- allPCs[[i]]$sdev
-        PCmats[[i]] <- scale(allPCs[[i]]$x,
-          center = FALSE,
-          scale = pca_A_sd
-        )
-      }
-    } else {
-      for (i in names(allPCs)) {
-        PCmats[[i]] <- allPCs[[i]]$x
-      }
-    }
+    PCmats <- .getAllPCs(allPCs = object@pcaResults, scalePCs = scalePCs)
 
     sigma_names <- paste("sigma", sigmaValues, sep = "_")
 
@@ -1039,7 +1024,7 @@ setMethod(
 
 
     for (t in sigma_names) {
-      for(i in cts){
+      for (i in cts) {
         cellScores[[t]][[i]] <- matrix(
           nrow = sum(object@cellTypesSub == i),
           ncol = nCC
@@ -1081,18 +1066,18 @@ setMethod(
     for (tt in seq_along(sigmaValues)) {
       t <- sigma_names[tt]
       for (i in cts) {
-        for(cc_index in seq_len(nCC)){
+        for (cc_index in seq_len(nCC)) {
           cc_name <- paste0("CC_", cc_index)
-          w_1 <- object@skrCCAOut[[t]][[i]][,cc_index, drop = FALSE]
+          w_1 <- object@skrCCAOut[[t]][[i]][, cc_index, drop = FALSE]
           if (scalePCs) {
             geneScores[[t]][[i]][, cc_name] <- as.vector(
-              matrix(w_1 * allPCs[[i]]$sdev, nrow = 1) %*%
-                t(allPCs[[i]]$rotation)
+              matrix(w_1 * object@pcaResults[[i]]$sdev, nrow = 1) %*%
+                t(object@pcaResults[[i]]$rotation)
             )
           } else {
             geneScores[[t]][[i]][, cc_name] <- as.vector(
               matrix(w_1, nrow = 1) %*%
-                t(allPCs[[i]]$rotation)
+                t(object@pcaResults[[i]]$rotation)
             )
           }
           cellScores[[t]][[i]][, cc_name] <- as.vector(PCmats[[i]] %*% w_1)
@@ -1113,11 +1098,11 @@ setMethod(
     for (i in cts) {
       meta_t[[i]] <- object@metaDataSub[object@cellTypesSub == i, ]
       for (t in sigma_names){
-        for(cc_index in seq_len(nCC)){
+        for (cc_index in seq_len(nCC)) {
           cc_name <- paste0("CC_", cc_index)
           cellScoreColName <- paste0("cellScore_", t, "_cc_index_", cc_index)
-          meta_t[[i]][,cellScoreColName] <-
-            cellScores[[t]][[i]][rownames(meta_t[[i]]),cc_name]
+          meta_t[[i]][, cellScoreColName] <-
+            cellScores[[t]][[i]][rownames(meta_t[[i]]), cc_name]
         }
 
       }
