@@ -49,7 +49,8 @@ setClassUnion("matrixOrDataFrame", c("matrix", "data.frame"))
 #' @slot skrCCAPermuOut A `list` object. Output from the skrCCA after
 #' permutation. This helps establish the null distribution
 #' @slot cellPermu A `list` object that stores the cell permutation labels
-#'
+#' @slot nPermu A `numeric` value specifying the number of permutations
+#'  conducted.
 #' @slot cellScores A `matrix` object. Cell scores for each cell type.
 #' @slot geneScores A `matrix` object. Gene scores for each cell type.
 #' @slot normalizedCorrelation A `list` object. Normalized correlation values
@@ -58,9 +59,8 @@ setClassUnion("matrixOrDataFrame", c("matrix", "data.frame"))
 #' for each sigma value after permutation
 #' @slot sigmaValueChoice A `numeric` value. The optimal sigma squared based
 #' on the median normalized correlation value.
-#' @name CoPro
+#' @name CoPro-class
 #' @export
-#'
 setClass("CoPro",
   slots = list(
 
@@ -105,6 +105,7 @@ setClass("CoPro",
     sigmaValueChoice = "numeric",
 
     ## permutation output
+    nPermu = "numeric",
     skrCCAPermuOut = "list",
     cellPermu = "list",
     normalizedCorrelationPermu = "list"
@@ -800,7 +801,7 @@ setMethod(
 
 
 
-#' Compute Normalized Correlation for CoPro (approximation)
+#' Compute Normalized Correlation (approximation)
 #'
 #' This method calculates the normalized correlation between pairs of cell types
 #' based on CCA weights and the respective kernel matrix. It uses
@@ -820,7 +821,7 @@ setGeneric(
 
 
 #' @rdname computeNormalizedCorrelation
-#' @aliases computeNormalizedCorrelationApprox,CoPro-method
+#' @aliases computeNormalizedCorrelation,CoPro-method
 #' @importFrom utils combn
 #' @importFrom irlba irlba
 #' @export
