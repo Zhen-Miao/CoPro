@@ -1,40 +1,40 @@
 
 
 .getCellPermu <- function(object, permu_method, nPermu, cts,
-                          num_bins_x = 10, num_bins_y = 10){
+                          num_bins_x = 10, num_bins_y = 10) {
 
   cell_permu <- setNames(vector("list", length = length(cts)), cts)
 
-  if(permu_method == "global"){
+  if(permu_method == "global")  {
     for(i in cts){
       n_cell <- sum(object@cellTypesSub == i)
-      if(i == cts[1]){
+      if (i == cts[1]) {
         cell_permu[[i]] <- replicate(nPermu, 1:n_cell)
-      }else{
+      }else {
         cell_permu[[i]] <- replicate(nPermu,
                                      sample.int(n = n_cell, replace = FALSE))
       }
     }
-  }else if(permu_method == "bin"){
+  }else if (permu_method == "bin") {
 
     location_full <- object@locationData
     location_full$"cell_ID" <- rownames(location_full)
     location_full$x_bin <- cut(location_full$x, breaks = num_bins_x, labels = FALSE)
     location_full$y_bin <- cut(location_full$y, breaks = num_bins_y, labels = FALSE)
 
-    for(i in cts){
+    for (i in cts){
       n_cell <- sum(object@cellTypesSub == i)
-      if(i == cts[1]){
+      if (i == cts[1]) {
         cell_permu[[i]] <- replicate(nPermu, 1:n_cell)
-      }else{
-        cell_loc <- location_full[object@cellTypesSub == i,]
+      }else {
+        cell_loc <- location_full[object@cellTypesSub == i, ]
         cell_permu[[i]] <- matrix(ncol = nPermu, nrow = nrow(cell_loc))
 
-        for(j in seq_len(nPermu)){
+        for (j in seq_len(nPermu)){
           cell_loc_resample <- resample_spatial(location_data = cell_loc,
                                                 num_bins_x = num_bins_x,
                                                 num_bins_y = num_bins_y)
-          cell_permu[[i]][,j] <- match(cell_loc_resample$"cell_ID",
+          cell_permu[[i]][, j] <- match(cell_loc_resample$"cell_ID",
                                        cell_loc$"cell_ID")
         }
 
@@ -65,14 +65,14 @@
 #'
 runSkrCCAPermu <- function(object, tol = 1e-5, nPermu = 20,
                            maxIter = 200, permu_method = "bin",
-                           num_bins_x = 10, num_bins_y = 10){
+                           num_bins_x = 10, num_bins_y = 10, verbose = TRUE) {
 
   ## check input
   if (!is(object, "CoPro")) {
     stop("Input object must be a CoPro object")
   }
 
-  if(c(permu_method %in% c("bin", "global"))){
+  if (!(permu_method %in% c("bin", "global"))) {
     stop("permu_method must be 'bin' or 'global'. ")
   }
 
@@ -105,7 +105,7 @@ runSkrCCAPermu <- function(object, tol = 1e-5, nPermu = 20,
         "please either specify a particular sigmaValueChoice or",
         "run computeNormalizedCorrelation()"
       ))
-    }else{
+    }else {
       warning(paste(
         "sigmaValueChoice is not given",
         "default set to the value with highest",
@@ -130,6 +130,9 @@ runSkrCCAPermu <- function(object, tol = 1e-5, nPermu = 20,
   cell_permu <- .getCellPermu(object = object, permu_method = permu_method,
                               nPermu = nPermu, cts = cts,
                               num_bins_x = num_bins_x, num_bins_y = num_bins_y)
+  if (verbose) {
+    cat("Cell permutation finished", "\n")
+  }
   object@cellPermu <- cell_permu
 
   ## get PCA matrices and permute
@@ -269,8 +272,8 @@ computeNormalizedCorrelationPermu <- function(object, tol = 1e-4) {
         w_1 <- object@skrCCAPermuOut[[t]][[cellType1]][, cc_index, drop = FALSE]
         w_2 <- object@skrCCAPermuOut[[t]][[cellType2]][, cc_index, drop = FALSE]
 
-        A <- PCmats[[cellType1]][object@cellPermu[[cellType1]][,tt],]
-        B <- PCmats[[cellType2]][object@cellPermu[[cellType2]][,tt],]
+        A <- PCmats[[cellType1]][object@cellPermu[[cellType1]][, tt], ]
+        B <- PCmats[[cellType2]][object@cellPermu[[cellType2]][, tt], ]
 
         A_w1 <- A %*% w_1
         B_w2 <- B %*% w_2

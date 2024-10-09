@@ -1,6 +1,7 @@
 
 # Function to find neighboring bins
-.get_neighbor_bins <- function(location_data, tar_bin_id, num_bins_x, num_bins_y) {
+.get_neighbor_bins <- function(location_data, tar_bin_id,
+                               num_bins_x, num_bins_y) {
   x_bin <- location_data[tar_bin_id, "x_bin"]
   y_bin <- location_data[tar_bin_id, "y_bin"]
   neighbor_coords <- expand.grid(
@@ -37,7 +38,7 @@ resample_spatial <- function(location_data,
   rownames(location_data) <- original_cell_loc_order
 
   # Create bins for x and y coordinates
-  if(!all(c("x_bin", "y_bin") %in% colnames(location_data))){
+  if (!all(c("x_bin", "y_bin") %in% colnames(location_data))) {
     location_data$x_bin <- cut(location_data$x, breaks = num_bins_x, labels = FALSE)
     location_data$y_bin <- cut(location_data$y, breaks = num_bins_y, labels = FALSE)
   }
@@ -102,8 +103,8 @@ resample_spatial <- function(location_data,
     }
 
     # Replace the coordinates in the original points
-    orig_points$"cell_ID" <- candidate_points[sampled_indices,"cell_ID"]
-    orig_points$"bin_id" <- candidate_points[sampled_indices,"bin_id"]
+    orig_points$"cell_ID" <- candidate_points[sampled_indices, "cell_ID"]
+    orig_points$"bin_id" <- candidate_points[sampled_indices, "bin_id"]
 
     # Store the resampled points
     resampled_list[[i]] <- orig_points
@@ -116,7 +117,7 @@ resample_spatial <- function(location_data,
   rownames(resampled_location_data) <- paste(resampled_location_data$x,
                                              resampled_location_data$y,
                                              sep = "_")
-  resampled_location_data <- resampled_location_data[original_cell_loc_order,]
+  resampled_location_data <- resampled_location_data[original_cell_loc_order, ]
 
   # # Remove auxiliary columns
   # resampled_location_data$bin_id <- NULL

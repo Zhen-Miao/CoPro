@@ -55,7 +55,8 @@ setClassUnion("matrixOrDataFrame", c("matrix", "data.frame"))
 #' @slot geneScores A `matrix` object. Gene scores for each cell type.
 #' @slot normalizedCorrelation A `list` object. Normalized correlation values
 #' for each sigma value.
-#' @slot normalizedCorrelationPermu A `list` object. Normalized correlation values
+#' @slot normalizedCorrelationPermu A `list` object.
+#'  Normalized correlation values
 #' for each sigma value after permutation
 #' @slot sigmaValueChoice A `numeric` value. The optimal sigma squared based
 #' on the median normalized correlation value.
@@ -151,12 +152,12 @@ setMethod(
     }
 
     ## check the format of location data
-    if (!all(tolower(colnames(locationData)) %in% c("x", "y", "z"))) {
-      stop(paste("locationData should only contain x, y, (or z)",
-        "axis info and colnames should be named accordingly",
-        sep = " "
+    if (!all(c("x", "y") %in% tolower(colnames(locationData)))) {
+      stop(paste("locationData should contain x, y, (or z)",
+                 "axis info and colnames should be named accordingly"
       ))
     }
+    colnames(locationData) <- tolower(colnames(locationData))
 
     ## convert cellTypes to characters
     if (!is.character(cellTypes)) {
@@ -167,8 +168,6 @@ setMethod(
     if (is.matrix(locationData)) {
       locationData <- as.data.frame(locationData)
     }
-
-    colnames(locationData) <- tolower(colnames(locationData))
 
     ## check cell id and gene names
     if (is.null(rownames(metaData)) | is.null(rownames(normalizedData)) |
@@ -681,7 +680,7 @@ setMethod(
 )
 
 ## get PC matrices
-.getAllPCMats <- function (allPCs, scalePCs) {
+.getAllPCMats <- function(allPCs, scalePCs) {
 
   if (length(allPCs) == 0) {
     stop("PCA results do not exist, run computePCA() first.")

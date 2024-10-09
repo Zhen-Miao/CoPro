@@ -126,7 +126,7 @@ optimize_bilinear_multi <- function(X_list, K_list, max_iter = 1000,
 }
 
 
-bilinear_w_from_Y_resi <- function (w_list_new, Y_resi,
+bilinear_w_from_Y_resi <- function(w_list_new, Y_resi,
                                    n_mat, n_features, max_iter, tol) {
   # Iterative refinement
   iter <- 0

@@ -114,7 +114,7 @@ getCellScoresInSitu <- function(object, sigmaValueChoice, ccIndex = 1,
     loc_t[[t]]$"cellScores_b" <-
       ifelse(loc_t[[t]]$"cellScores" > median_score_t[t],
              paste0("high_", t), paste0("low_", t)
-    )
+             )
   }
 
   combinations <- expand.grid(c("high", "low"), cts)
@@ -187,7 +187,7 @@ getCorrTwoTypes <- function(object, cellTypeA, cellTypeB, ccIndex = 1,
         "please either specify a particular sigmaValueChoice or",
         "run computeNormalizedCorrelation()"
       ))
-    }else{
+    }else {
       warning(paste(
         "sigmaValueChoice is not given",
         "default set to the value with highest",
@@ -218,7 +218,7 @@ getCorrTwoTypes <- function(object, cellTypeA, cellTypeB, ccIndex = 1,
   ktemp <- object@kernelMatrices[[sigma_name]][[cellTypeA]][[cellTypeB]]
   if (length(ktemp) != 0) {
     k <- ktemp
-  }else{
+  }else {
     k <- t(object@kernelMatrices[[sigma_name]][[cellTypeB]][[cellTypeA]])
   }
 
