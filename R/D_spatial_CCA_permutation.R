@@ -59,6 +59,7 @@
 #'  will be maintained
 #' @param num_bins_x Number of bins in x for bin-wise permutation, default = 10
 #' @param num_bins_y Number of bins in y for bin-wise permutation, default = 10
+#' @param verbose Whether to output the progress and related information
 #'
 #' @return CoPro object with distnace matrix computed
 #' @export

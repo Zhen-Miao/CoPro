@@ -492,11 +492,17 @@ setMethod(
 
 
 .CheckSigmaValuesToRemove <- function(kernel_current, lowerLimit,
-                                      sigma_choose, sigmaValues, i, j) {
-  if (all(kernel_current <= lowerLimit)) {
+                                      sigma_choose, sigmaValues, i, j,
+                                      minAveCellNeighor) {
+  n_cell1 <- nrow(kernel_current)
+  n_cell2 <- ncol(kernel_current)
+
+  minPropZero <- minAveCellNeighor * min(n_cell1, n_cell2) / (n_cell1 * n_cell2)
+  if (mean(kernel_current <= lowerLimit) < minPropZero) {
     warning(paste("Kernel matrix for cell types", i, "and", j,
                   "with sigma =", sigma_choose,
-                  "contains all zeros."))
+                  "contains almost all zeros. Specifically, more than",
+                  minPropZero*100,"% total counts are zero" ))
     if (length(sigmaValues) == 1) {
       stop(paste("Only one sigma value is specified,",
                  "which resulted in all Gaussian kernel being small.",
@@ -542,11 +548,17 @@ setMethod(
 #' @param sigmaValues A vector of sigma values used for kernel calculation.
 #' @param lowerLimit The lower limit for the kernel function, default is 5e-10.
 #' @param upperQuantile The quantile used for clipping the kernel values,
-#' default is 0.95.
+#' default is 0.85.
 #' @param verbose Whether to output the progress and related information
 #' @param normalizeKernel Whether to normalize the kernel matrix?
-#' Default = TRUE. Note that normalization will not affect any downstream
+#' Default = FALSE. Note that normalization will not affect any downstream
 #' analyses, it is for numerical stability and easier interpretation only.
+#' @param minAveCellNeighor What is the minimum average number of cell in the
+#'  neighbor? This step is to help set up the expected sparsity of the
+#'  kernel matrix. If a kernel sigma value is too small, this result in too
+#'  few neighbors for most cells, resulting in an overly-sparse matrix that
+#'  makes the parameter estimation hard. Thus, the sigma values that results in
+#'  an overly-sparse matrix will be removed for later analysis.
 #' @return The `CoPro` object with computed kernel matrices added. The kernel
 #' matrices are organized into a three-layer nested list object. The first layer
 #' is indexed by the sigma value, and the second and the third layers are cell
@@ -555,8 +567,8 @@ setMethod(
 #' @note To-do: Shall we include row or column normalization of the kernel?
 setGeneric(
   "computeKernelMatrix",
-  function(object, sigmaValues, lowerLimit = 5e-10, upperQuantile = 0.95,
-           normalizeKernel = TRUE,
+  function(object, sigmaValues, lowerLimit = 5e-10, upperQuantile = 0.85,
+           normalizeKernel = FALSE, minAveCellNeighor = 2,
            verbose = TRUE) standardGeneric("computeKernelMatrix"))
 
 #' @rdname computeKernelMatrix
@@ -567,8 +579,8 @@ setGeneric(
 setMethod(
   "computeKernelMatrix", "CoPro",
   function(object, sigmaValues,
-           lowerLimit = 5e-10, upperQuantile = 0.95, normalizeKernel = TRUE,
-           verbose = TRUE) {
+           lowerLimit = 5e-10, upperQuantile = 0.85, normalizeKernel = FALSE,
+           minAveCellNeighor = 2, verbose = TRUE) {
     ## make sure distance matrix exist
     if (length(object@distances) == 0) {
       stop("Please run computeDistance before computing kernel")
@@ -634,7 +646,13 @@ setMethod(
 
         sigmaValuesToRemove[t] <- .CheckSigmaValuesToRemove(
           kernel_current = kernel_current, lowerLimit = lowerLimit,
-          sigma_choose = sigma_choose, sigmaValues = sigmaValues, i = i, j = j)
+          minAveCellNeighor = minAveCellNeighor, sigma_choose = sigma_choose,
+          sigmaValues = sigmaValues, i = i, j = j)
+
+        if (sigmaValuesToRemove[t]) {
+          kernel_mat[[t]][[i]][[j]] <- kernel_current
+          next
+        }
 
         ## Clipping large values
         upper_clip <- quantile(kernel_current[kernel_current >= lowerLimit],
@@ -643,7 +661,7 @@ setMethod(
 
         if (normalizeKernel) {
           rs_kernel <- rowSums(kernel_current)
-          kernel_current <- kernel_current / median(rs_kernel)
+          kernel_current <- kernel_current / median(rs_kernel[rs_kernel != 0])
         }
 
         ## print info
@@ -655,9 +673,6 @@ setMethod(
           cat("\n")
           cat("Quantiles of N_neighbors for cell type", j, "\n")
           cat(quantile(colSums(kernel_current >= 5e-5)))
-          cat("\n")
-          cat("quantile of row sums of kernel matrix", "\n")
-          cat(quantile(rs_kernel))
           cat("\n")
         }
 

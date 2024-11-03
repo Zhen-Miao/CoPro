@@ -9,8 +9,9 @@ computeKernelMatrix(
   object,
   sigmaValues,
   lowerLimit = 5e-10,
-  upperQuantile = 0.95,
-  normalizeKernel = TRUE,
+  upperQuantile = 0.85,
+  normalizeKernel = FALSE,
+  minAveCellNeighor = 2,
   verbose = TRUE
 )
 
@@ -18,8 +19,9 @@ computeKernelMatrix(
   object,
   sigmaValues,
   lowerLimit = 5e-10,
-  upperQuantile = 0.95,
-  normalizeKernel = TRUE,
+  upperQuantile = 0.85,
+  normalizeKernel = FALSE,
+  minAveCellNeighor = 2,
   verbose = TRUE
 )
 }
@@ -31,11 +33,18 @@ computeKernelMatrix(
 \item{lowerLimit}{The lower limit for the kernel function, default is 5e-10.}
 
 \item{upperQuantile}{The quantile used for clipping the kernel values,
-default is 0.95.}
+default is 0.85.}
 
 \item{normalizeKernel}{Whether to normalize the kernel matrix?
-Default = TRUE. Note that normalization will not affect any downstream
+Default = FALSE. Note that normalization will not affect any downstream
 analyses, it is for numerical stability and easier interpretation only.}
+
+\item{minAveCellNeighor}{What is the minimum average number of cell in the
+neighbor? This step is to help set up the expected sparsity of the
+kernel matrix. If a kernel sigma value is too small, this result in too
+few neighbors for most cells, resulting in an overly-sparse matrix that
+makes the parameter estimation hard. Thus, the sigma values that results in
+an overly-sparse matrix will be removed for later analysis.}
 
 \item{verbose}{Whether to output the progress and related information}
 }

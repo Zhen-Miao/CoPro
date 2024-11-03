@@ -11,7 +11,8 @@ runSkrCCAPermu(
   maxIter = 200,
   permu_method = "bin",
   num_bins_x = 10,
-  num_bins_y = 10
+  num_bins_y = 10,
+  verbose = TRUE
 )
 }
 \arguments{
@@ -31,6 +32,8 @@ will be maintained}
 \item{num_bins_x}{Number of bins in x for bin-wise permutation, default = 10}
 
 \item{num_bins_y}{Number of bins in y for bin-wise permutation, default = 10}
+
+\item{verbose}{Whether to output the progress and related information}
 }
 \value{
 CoPro object with distnace matrix computed
