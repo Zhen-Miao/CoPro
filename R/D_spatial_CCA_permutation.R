@@ -17,7 +17,7 @@
     }
   }else if (permu_method == "bin") {
 
-    location_full <- object@locationData
+    location_full <- object@locationDataSub
     location_full$"cell_ID" <- rownames(location_full)
     location_full$x_bin <- cut(location_full$x, breaks = num_bins_x, labels = FALSE)
     location_full$y_bin <- cut(location_full$y, breaks = num_bins_y, labels = FALSE)
@@ -38,9 +38,11 @@
                                        cell_loc$"cell_ID")
         }
 
-
       }
     }
+  }else{
+    stop(paste("the function currently only support global resampling",
+         "or bin-wise resampling"))
   }
 
 
