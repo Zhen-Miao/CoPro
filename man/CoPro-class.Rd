@@ -75,6 +75,8 @@ conducted.}
 
 \item{\code{geneScores}}{A \code{matrix} object. Gene scores for each cell type.}
 
+\item{\code{geneScoresTest}}{A \code{list} object. Tested gene scores}
+
 \item{\code{normalizedCorrelation}}{A \code{list} object. Normalized correlation values
 for each sigma value.}
 

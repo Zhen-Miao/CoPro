@@ -8,7 +8,7 @@
 computeKernelMatrix(
   object,
   sigmaValues,
-  lowerLimit = 5e-10,
+  lowerLimit = 1e-07,
   upperQuantile = 0.85,
   normalizeKernel = FALSE,
   minAveCellNeighor = 2,
@@ -18,7 +18,7 @@ computeKernelMatrix(
 \S4method{computeKernelMatrix}{CoPro}(
   object,
   sigmaValues,
-  lowerLimit = 5e-10,
+  lowerLimit = 1e-07,
   upperQuantile = 0.85,
   normalizeKernel = FALSE,
   minAveCellNeighor = 2,
@@ -30,7 +30,7 @@ computeKernelMatrix(
 
 \item{sigmaValues}{A vector of sigma values used for kernel calculation.}
 
-\item{lowerLimit}{The lower limit for the kernel function, default is 5e-10.}
+\item{lowerLimit}{The lower limit for the kernel function, default is 1e-7.}
 
 \item{upperQuantile}{The quantile used for clipping the kernel values,
 default is 0.85.}

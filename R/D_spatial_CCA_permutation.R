@@ -230,7 +230,6 @@ computeNormalizedCorrelationPermu <- function(object, tol = 1e-4) {
   names(correlation_value) <- permu_names
   s_name <- paste("sigma", sigmaValueChoice, sep = "_")
 
-
   ## calculate all spectral norms
   cat("Calculating spectral norms, ",
       "depending on the data size, this may take a while. \n")

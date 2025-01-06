@@ -53,6 +53,7 @@ setClassUnion("matrixOrDataFrame", c("matrix", "data.frame"))
 #'  conducted.
 #' @slot cellScores A `matrix` object. Cell scores for each cell type.
 #' @slot geneScores A `matrix` object. Gene scores for each cell type.
+#' @slot geneScoresTest A `list` object. Tested gene scores
 #' @slot normalizedCorrelation A `list` object. Normalized correlation values
 #' for each sigma value.
 #' @slot normalizedCorrelationPermu A `list` object.
@@ -102,6 +103,7 @@ setClass("CoPro",
     skrCCAOut = "list",
     cellScores = "list",
     geneScores = "list",
+    geneScoresTest = "list",
     normalizedCorrelation = "list",
     sigmaValueChoice = "numeric",
 
@@ -546,7 +548,7 @@ setMethod(
 #' @importFrom utils combn
 #' @param object A `CoPro` object.
 #' @param sigmaValues A vector of sigma values used for kernel calculation.
-#' @param lowerLimit The lower limit for the kernel function, default is 5e-10.
+#' @param lowerLimit The lower limit for the kernel function, default is 1e-7.
 #' @param upperQuantile The quantile used for clipping the kernel values,
 #' default is 0.85.
 #' @param verbose Whether to output the progress and related information
@@ -567,7 +569,7 @@ setMethod(
 #' @note To-do: Shall we include row or column normalization of the kernel?
 setGeneric(
   "computeKernelMatrix",
-  function(object, sigmaValues, lowerLimit = 5e-10, upperQuantile = 0.85,
+  function(object, sigmaValues, lowerLimit = 1e-7, upperQuantile = 0.85,
            normalizeKernel = FALSE, minAveCellNeighor = 2,
            verbose = TRUE) standardGeneric("computeKernelMatrix"))
 
@@ -579,7 +581,7 @@ setGeneric(
 setMethod(
   "computeKernelMatrix", "CoPro",
   function(object, sigmaValues,
-           lowerLimit = 5e-10, upperQuantile = 0.85, normalizeKernel = FALSE,
+           lowerLimit = 1e-7, upperQuantile = 0.85, normalizeKernel = FALSE,
            minAveCellNeighor = 2, verbose = TRUE) {
     ## make sure distance matrix exist
     if (length(object@distances) == 0) {
@@ -669,10 +671,10 @@ setMethod(
           cat("Current Sigma value is", sigma_choose)
           cat("\n")
           cat("Quantiles of N_neighbors for cell type", i, "\n")
-          cat(quantile(rowSums(kernel_current >= 5e-5)))
+          cat(quantile(rowSums(kernel_current >= lowerLimit)))
           cat("\n")
           cat("Quantiles of N_neighbors for cell type", j, "\n")
-          cat(quantile(colSums(kernel_current >= 5e-5)))
+          cat(quantile(colSums(kernel_current >= lowerLimit)))
           cat("\n")
         }
 

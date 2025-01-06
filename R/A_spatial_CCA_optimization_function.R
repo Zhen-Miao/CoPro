@@ -9,13 +9,13 @@
 #' @param dist_mat A numeric matrix representing the squared distances
 #'  between cells
 #' @param lower_limit A lower limit value below which the kernel value will
-#'  be set to zero
+#'  be set to zero, default = 1e-7
 #'
 #' @return a matrix of the same dimensions as \code{dist_mat},
 #'  containing the calculated Gaussian kernel values.
 #' @noRd
 kernel_from_distance <- function(
-    sigma, dist_mat, lower_limit = 5e-10) {
+    sigma, dist_mat, lower_limit = 1e-7) {
   kernel_mat <- exp(-0.5 * (dist_mat / sigma)^2)
   kernel_mat[kernel_mat < lower_limit] <- 0
   return(kernel_mat)
