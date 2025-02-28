@@ -137,14 +137,25 @@ testGeneScores <- function(object, sigmaChoice,
 
   }else{
     results <- testGeneMixedEffect(object = object,
-                                   sigmaChoice = sigmaChoice,
-
-                                   CCChoice = CCChoice, frm = frm)
+                                   sigmaName = sigmaName,
+                                   CCChoice = cci, frm = frm)
   }
   object@geneScoreTest = results
 
 }
 
+#' testGeneGLM
+#'
+#' @param object CoPro object
+#' @param sigmaName sigmaName
+#' @param cellTypeChoice cellTypeChoice
+#' @param covariates covariates
+#' @param CCChoice CCChoice
+#' @param frm formula
+#'
+#' @returns lm.fit results
+#' @export
+#' @importFrom stats lm.fit
 testGeneGLM <- function(
     object, sigmaName,cellTypeChoice,covariates,
     CCChoice,
@@ -178,7 +189,33 @@ testGeneMixedEffect <- function(
 
 }
 
+get.onesided.p.value<-function(c,p){
+  p[p==0] = min(p[p>0],na.rm = T)
+  p.one.side <- p
+  p.one.side[] <- NA
+  b<-c>0&!is.na(c)
+  p.one.side[b]=p[b]/2
+  b<-c<=0&!is.na(c)
+  p.one.side[b]=1-(p[b]/2)
+  return(p.one.side)
+}
 
+get.p.zscores<-function(p){
+  b<-p[,1]>0.5
+  b[is.na(b)]<-F
+  zscores<-(-log10(p[,1]))
+  zscores[b]<-log10(p[b,2])
+  # signficiant in p[,1] will be positive
+  # signficiant in p[,2] will be negative
+  return(zscores)
+}
+
+
+get.cor.zscores<-function(c,p){
+  v<-cbind(get.onesided.p.value(c,p),get.onesided.p.value(-c,p))
+  z<-get.p.zscores(v)
+  return(z)
+}
 
 apply.formula.HLM<-function(meta,X,Y,MARGIN = 1,formula = "y ~ (1 | samples) + x"){
 
@@ -190,6 +227,16 @@ apply.formula.HLM<-function(meta,X,Y,MARGIN = 1,formula = "y ~ (1 | samples) + x
   return(m)
 }
 
+#' Regression based on a formula
+#'
+#' @param y y in regression
+#' @param x x in regression
+#' @param meta meta.data
+#' @param formula formula
+#' @param val value
+#' @param return.all whether to return all
+#'
+#' @noRd
 formula.HLM<-function(y,x,meta, formula = "y ~ (1 | samples) + x",
                       val = ifelse(is.numeric(x),"","TRUE"),return.all = F){
   meta$x<-x

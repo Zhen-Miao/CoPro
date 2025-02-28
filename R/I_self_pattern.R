@@ -203,7 +203,7 @@ computeKernelMatrixOne <- function(object, sigmaValues,
         sigmaValues = sigmaValues, i = cts, j = cts)
 
     if (sigmaValuesToRemove[t]) {
-        kernel_mat[[t]][[i]][[j]] <- kernel_current
+        kernel_mat[[t]][[cts]][[cts]] <- kernel_current
         next
       }
 

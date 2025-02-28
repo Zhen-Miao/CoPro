@@ -1,4 +1,15 @@
 
+#' quantile normalize data
+#'
+#' @param A The reference cell by feature matrix
+#' @param B The cell by feature matrix we want to normalize to A
+#' @param save_Sparse whether to save as a sparse matrix
+#' @param ties_method If there are ties, which method to choose
+#'
+#' @returns The normalized B matrix
+#' @export
+#'
+#' @importFrom stats approx
 quantile_normalize <- function(A, B, save_Sparse = FALSE,
                                ties_method = "min") {
   # Number of features (columns)

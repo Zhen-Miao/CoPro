@@ -69,22 +69,7 @@ AnnoyBuildIndex <- function(data, metric = "euclidean", n.trees = 50) {
   return(a)
 }
 
-# Search an Annoy approximate nearest neighbor index
-#
-# @param Annoy index, built with AnnoyBuildIndex
-# @param query A set of data to be queried against the index
-# @param k Number of neighbors
-# @param search.k During the query it will inspect up to search_k nodes which
-# gives you a run-time trade off between better accuracy and speed.
-# @param include.distance Include the corresponding distances in the result
-#
-# @return A list with 'nn.idx' (for each element in 'query', the index of the
-# nearest k elements in the index) and 'nn.dists' (the distances of the nearest
-# k elements)
-#
-#' @importFrom future plan
-#' @importFrom future.apply future_lapply
-#
+
 AnnoySearch <- function(index, query, k, search.k = -1, include.distance = TRUE) {
   n <- nrow(x = query)
   idx <- matrix(nrow = n,  ncol = k)
@@ -111,95 +96,52 @@ AnnoySearch <- function(index, query, k, search.k = -1, include.distance = TRUE)
   return(list(nn.idx = idx, nn.dists = dist))
 }
 
-
-########################## modified ##########################
-#' Create an Annoy index
-#'
-#' @note Function exists because it's not exported from \pkg{uwot}
-#'
-#' @param name Distance metric name
-#' @param ndim Number of dimensions
-#'
-#' @return An nn index object
-#'
+########################## original ##########################
 CreateAnn <- function(name, ndim) {
-  # Check if RcppAnnoy is available
-  if (!requireNamespace("RcppAnnoy", quietly = TRUE)) {
-    stop(paste("Package 'RcppAnnoy' is needed for this function to work.",
-         "Please install it."), call. = FALSE)
-  }
-
   return(switch(
     EXPR = name,
-    cosine = methods::new(Class = RcppAnnoy::AnnoyAngular, ndim),
-    manhattan = methods::new(Class = RcppAnnoy::AnnoyManhattan, ndim),
-    euclidean = methods::new(Class = RcppAnnoy::AnnoyEuclidean, ndim),
-    hamming = methods::new(Class = RcppAnnoy::AnnoyHamming, ndim),
+    cosine = new(Class = AnnoyAngular, ndim),
+    manhattan = new(Class = AnnoyManhattan, ndim),
+    euclidean = new(Class = AnnoyEuclidean, ndim),
+    hamming = new(Class = AnnoyHamming, ndim),
     stop("BUG: unknown Annoy metric '", name, "'")
   ))
 }
 
 
-########################## modified ##########################
-#' Internal helper function to dispatch to various neighbor finding methods
-#'
-#' @param data Input data
-#' @param query Data to query against data
-#' @param k Number of nearest neighbors to compute
-#' @param method Nearest neighbor method to use: "rann", "annoy"
-#' @param cache.index Store algorithm index with results for reuse
-#' @param ... additional parameters to specific neighbor finding method
+# Internal helper function to dispatch to various neighbor finding methods
+#
+# @param data Input data
+# @param query Data to query against data
+# @param k Number of nearest neighbors to compute
+# @param method Nearest neighbor method to use: "rann", "annoy"
+# @param cache.index Store algorithm index with results for reuse
+# @param ... additional parameters to specific neighbor finding method
+#
+#' @importFrom methods new
+#' @importClassesFrom SeuratObject Neighbor
 #
 NNHelper <- function(data, query = data, k, method, cache.index = FALSE, ...) {
-  # Check if SeuratObject is available
-  if (!requireNamespace("SeuratObject", quietly = TRUE)) {
-    stop( paste("Package 'SeuratObject' is needed for this function to work.",
-         "Please install it."), call. = FALSE)
-  }
-
   args <- as.list(x = sys.frame(which = sys.nframe()))
   args <- c(args, list(...))
   args <- args[intersect(x = names(x = args), y = names(x = formals(fun = AnnoyNN)))]
   results <- do.call(what = 'AnnoyNN', args = args)
-
-  # Use getClass to access the class definition from SeuratObject
-  n.ob <- methods::new(
-    Class = methods::getClass("Neighbor", where = asNamespace("SeuratObject")),
+  n.ob <- new(
+    Class = 'Neighbor',
     nn.idx = results$nn.idx,
     nn.dist = results$nn.dists,
     alg.info = results$alg.info %||% list(),
     cell.names = rownames(x = query)
   )
-
   if (isTRUE(x = cache.index) && !is.null(x = results$idx)) {
-    methods::slot(object = n.ob, name = "alg.idx") <- results$idx
+    slot(object = n.ob, name = "alg.idx") <- results$idx
   }
   return(n.ob)
 }
 
 
-#' Main function to compute KNN matrix
-#' @param data Matrix of data to query against object.
-#' @param query query
-#' @param search.k search.k
-#' @param k number of neighbors
-#' @param nn.method Method for nearest neighbor finding. Options include: rann,
-#' annoy
-#' @param annoy.metric Distance metric for annoy. Options include: euclidean,
-#' cosine, manhattan, and hamming
-#' @param n.trees More trees gives higher precision when using annoy approximate
-#' nearest neighbor search
-#' @param nn.eps Error bound when performing nearest neighbor search using RANN;
-#' default of 0.0 implies exact nearest neighbor search
-#' @param cache.index Include cached index in returned Neighbor object
-#' (only relevant if return.neighbor = TRUE)
-#' @param index Precomputed index. Useful if querying new data against existing
-#' index to avoid recomputing.
-#'
-#' @importFrom RANN nn2
-#' @importFrom methods as
-#'
-#' @export
+
+# Main function to compute KNN matrix
 find_neighbor_mat <- function(data, k = 20, nn.method = "annoy", query = NULL,
                            annoy.metric = "euclidean", nn.eps = 0,
                            cache.index = FALSE, index = NULL,
@@ -228,13 +170,7 @@ find_neighbor_mat <- function(data, k = 20, nn.method = "annoy", query = NULL,
     index = index
   )
 
-  # Check if SeuratObject is available
-  if (!requireNamespace("SeuratObject", quietly = TRUE)) {
-    stop( paste("Package 'SeuratObject' is needed for this function to work.",
-                "Please install it."), call. = FALSE)
-  }
-
-  nn.ranked <- SeuratObject::Indices(object = nn.ranked)
+  nn.ranked <- Indices(object = nn.ranked)
   # convert nn.ranked into a Graph
   j <- as.numeric(x = t(x = nn.ranked))
   i <- ((1:length(x = j)) - 1) %/% k.param + 1

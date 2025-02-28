@@ -561,6 +561,12 @@ setMethod(
 #'  few neighbors for most cells, resulting in an overly-sparse matrix that
 #'  makes the parameter estimation hard. Thus, the sigma values that results in
 #'  an overly-sparse matrix will be removed for later analysis.
+#' @param rowNormalizeKernel Whether the kernel matrix will be row-wise
+#' normalized? Note that row or column wise normalization will result in an
+#' asymmetric result in skrCCA inference.
+#' @param colNormalizeKernel Whether the kernel matrix will be column-wise
+#' normalized? Note that row or column wise normalization will result in an
+#' asymmetric result in skrCCA inference.
 #' @return The `CoPro` object with computed kernel matrices added. The kernel
 #' matrices are organized into a three-layer nested list object. The first layer
 #' is indexed by the sigma value, and the second and the third layers are cell
@@ -571,6 +577,7 @@ setGeneric(
   "computeKernelMatrix",
   function(object, sigmaValues, lowerLimit = 1e-7, upperQuantile = 0.85,
            normalizeKernel = FALSE, minAveCellNeighor = 2,
+           rowNormalizeKernel = FALSE, colNormalizeKernel = FALSE,
            verbose = TRUE) standardGeneric("computeKernelMatrix"))
 
 #' @rdname computeKernelMatrix
@@ -582,10 +589,16 @@ setMethod(
   "computeKernelMatrix", "CoPro",
   function(object, sigmaValues,
            lowerLimit = 1e-7, upperQuantile = 0.85, normalizeKernel = FALSE,
-           minAveCellNeighor = 2, verbose = TRUE) {
+           minAveCellNeighor = 2,
+           rowNormalizeKernel = FALSE, colNormalizeKernel = FALSE,
+           verbose = TRUE) {
     ## make sure distance matrix exist
     if (length(object@distances) == 0) {
       stop("Please run computeDistance before computing kernel")
+    }
+
+    if (rowNormalizeKernel && colNormalizeKernel){
+      stop("Cannot do both row-wise and column-wise normalization.")
     }
 
     cts <- object@cellTypesOfInterest
@@ -635,6 +648,7 @@ setMethod(
     for (tt in seq_along(sigmaValues)) {
       t <- sigma_names[tt]
       sigma_choose <- sigmaValues[tt]
+      cat("current sigma value is\n", sigma_choose)
 
       for (pp in seq_len(ncol(pair_cell_types))) {
         i <- pair_cell_types[1, pp]
@@ -661,9 +675,30 @@ setMethod(
                                upperQuantile)
         kernel_current[kernel_current >= upper_clip] <- upper_clip
 
-        if (normalizeKernel) {
+
+        if ((normalizeKernel && !rowNormalizeKernel) && !colNormalizeKernel) {
+          ## calculate row sum
           rs_kernel <- rowSums(kernel_current)
-          kernel_current <- kernel_current / median(rs_kernel[rs_kernel != 0])
+          kernel_current <- kernel_current / median(rs_kernel[rs_kernel > 1e-5])
+
+        }else if (rowNormalizeKernel) {
+          ## calculate row sum
+          rs_kernel <- rowSums(kernel_current)
+          cat("quantile of kernel matrix rowSums \n")
+          cat(quantile(rs_kernel))
+          cat("\n")
+          nz_ind <- rs_kernel > 1e-4
+          kernel_current[nz_ind,] <- kernel_current[nz_ind,] / rs_kernel[nz_ind]
+        }else if (colNormalizeKernel) {
+          kernel_current <- t(kernel_current)
+          ## calculate col sum
+          rs_kernel <- rowSums(kernel_current)
+          cat("quantile of kernel matrix colSums \n")
+          cat(quantile(rs_kernel))
+          cat("\n")
+          nz_ind <- rs_kernel > 1e-4
+          kernel_current[nz_ind,] <- kernel_current[nz_ind,] / rs_kernel[nz_ind]
+          kernel_current <- t(kernel_current)
         }
 
         ## print info
@@ -1208,4 +1243,32 @@ setMethod(
     object@distances <- distanceList
     return(object)
   }
+)
+
+
+
+setMethod("show", "CoPro",
+          function(object) {
+            # Header
+            cat("'CoPro' object for spatial coordinated progression detection\n")
+            cat("------------------------\n")
+
+            # Main metrics
+            cat(sprintf("Number of cells: %d\n", nrow(object@normalizedData)))
+            cat(sprintf("Number of genes: %d\n", ncol(object@normalizedData)))
+
+            # Processing status
+            cat("\nProcessing steps completed:\n")
+            if(!is.null(object@pcaResults)) cat("- PCA\n")
+            if(!is.null(object@skrCCAOut)) cat("- skrCCA\n")
+
+            # Additional information
+            if(length(object@metaData) > 0) {
+              cat("\nAvailable metadata fields:\n")
+              cat(paste("-", names(object@metaData), collapse = "\n"))
+              cat("\n")
+            }
+
+            invisible(x = object)
+          }
 )

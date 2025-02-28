@@ -12,6 +12,8 @@ computeKernelMatrix(
   upperQuantile = 0.85,
   normalizeKernel = FALSE,
   minAveCellNeighor = 2,
+  rowNormalizeKernel = FALSE,
+  colNormalizeKernel = FALSE,
   verbose = TRUE
 )
 
@@ -22,6 +24,8 @@ computeKernelMatrix(
   upperQuantile = 0.85,
   normalizeKernel = FALSE,
   minAveCellNeighor = 2,
+  rowNormalizeKernel = FALSE,
+  colNormalizeKernel = FALSE,
   verbose = TRUE
 )
 }
@@ -45,6 +49,14 @@ kernel matrix. If a kernel sigma value is too small, this result in too
 few neighbors for most cells, resulting in an overly-sparse matrix that
 makes the parameter estimation hard. Thus, the sigma values that results in
 an overly-sparse matrix will be removed for later analysis.}
+
+\item{rowNormalizeKernel}{Whether the kernel matrix will be row-wise
+normalized? Note that row or column wise normalization will result in an
+asymmetric result in skrCCA inference.}
+
+\item{colNormalizeKernel}{Whether the kernel matrix will be column-wise
+normalized? Note that row or column wise normalization will result in an
+asymmetric result in skrCCA inference.}
 
 \item{verbose}{Whether to output the progress and related information}
 }
