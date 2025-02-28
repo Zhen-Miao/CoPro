@@ -90,20 +90,47 @@ simulate_smooth_points <- function(n_points,
 
 
 ## calculate norm corr for the data
-norm_corr_sim <- function(points, ntypes = NULL){
+norm_corr_sim <- function(points, label_name = "label",
+                          score_name = "smoothed_score",
+                          bandwidth, rm_diag = FALSE,
+                          ct1, ct2, row_norm_kernel = TRUE){
+
+  if(length(points[[label_name]]) == 0){
+    stop("the label does not exist, check label_name input")
+  }else{
+    lb <- points[[label_name]]
+  }
+
+  if(rm_diag && (length(unique(lb)) != 1 || ct1 != ct2 ) ){
+    stop("please set rm_diag to TRUE only when there are one cell type")
+  }
 
   # distance matrix
-  dist_matrix <- as.matrix(dist(points[, c("x", "y")]))
+  dist_matrix <- fields::rdist( x1 = as.matrix(points[lb == ct1, c("x", "y")]),
+                 x2 = as.matrix(points[lb == ct2, c("x", "y")]))
 
   # Gaussian kernel matrix
   kernel_matrix <- exp(-0.5 * (dist_matrix / bandwidth)^2)
-  kernel_matrix <- kernel_matrix / rowSums(kernel_matrix)
 
-  if(lenght(points$)){
-
+  if(rm_diag){
+    diag(kernel_matrix) <- 0
   }
 
+  if(row_norm_kernel){
+    rs_kernel <- rowSums(kernel_matrix)
+    nz_ind <- rs_kernel > 1e-4
+    kernel_matrix[nz_ind,] <- kernel_matrix[nz_ind,] / rs_kernel[nz_ind]
+  }
 
+  s1T = matrix(normalize_vec(points[[score_name]][lb == ct1]), nrow = 1)
+  s2 = matrix(normalize_vec(points[[score_name]][lb == ct2]), ncol = 1)
+
+  svd_result <- irlba::irlba(kernel_matrix, nv = 1, tol = 1e-5)
+  norm_K12 <- svd_result$d[1]
+
+  norm_corr <- (s1T %*% kernel_matrix %*% s2 ) / norm_K12
+
+  return(norm_corr)
 }
 
 
