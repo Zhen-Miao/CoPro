@@ -1,0 +1,276 @@
+---
+title: "Run CoPro on Organoid data"
+output: html_document
+date: "`r Sys.Date()`"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+devtools::install("/Users/zhenmiao/Documents/GitHub/CoPro/")
+```
+
+# Content
+
+This Vignette contains an example to run CoPro on an organoid data.  Here, we focus on detecting the spatial pattern of the intestinal organoid. Here, we aim to show the unsupervised detection of cell self-organizations.
+
+# load packages
+
+```{r message=FALSE, warning=FALSE, results="hide"}
+library("CoPro")
+library_paths <- c(
+  "fields", "ggplot2", "tictoc", "irlba",
+  "Matrix", "ggsci", "ape", "DESeq2","SummarizedExperiment"
+)
+# Load required libraries
+lapply(library_paths, library, character.only = TRUE)
+```
+
+# set some parameters
+
+We can change the number of PCs. For this dataset, this parameter does not affect the results much.
+
+```{r set_parameters}
+n_pca = 30
+cell_types = c('Epithelial')
+n_cell_types = length(cell_types)
+num_bins_x = 10
+num_bins_y = 10
+
+```
+
+# Load data
+
+Here we load the normalized gene matrix as well as the meta data. The cell type label as well as cell location information are in the meta data.
+
+```{r load_data}
+loc <- "/Users/zhenmiao/Library/CloudStorage/Dropbox/DIALOGUE_plus project/Raj_lab_data/72hr/roi1/"
+
+ra <- read.csv(paste0(loc, 'output/cell_by_gene/cell_by_gene.csv'))
+ra <- ra[,2:ncol(ra)]
+meta_cell <- read.csv(paste0(loc,'output/attributes/cell_attributes.csv'))
+
+meta_cell$label = paste0("cell_", meta_cell$label)
+rownames(ra) <- meta_cell$label
+rownames(meta_cell) <- meta_cell$label
+
+```
+
+# preprocess data
+
+## filter expression values 
+
+Here, we filter outliers by capping at 95% persentiles 
+
+```{r filter}
+## filter expression outliers
+filter_out <- function(x){
+  upper <- quantile(x, 0.95)
+  x[x>upper] <- upper
+  return(x)
+}
+ra <- apply(ra, MARGIN = 2, FUN = filter_out)
+```
+
+## Normalize data
+
+We then normalize the data by DEseq2. The reasons that we choose DEseq2 instead of total read counts are: (1) All cells can be considered as the same cell type, then we assume that the median gene expression values should be similar across all cells. (2) The number of genes measured are limited (~150), so the total read count is not a good proxy of actual depth of the cells.  
+
+```{r normalize}
+## normalize data by DEseq2
+counts_matrix <- t(ra) +1 ## count +1, as DEseq2 will need to take log
+mode(counts_matrix) <- "integer"
+
+condition <- factor(rep("condition", ncol(counts_matrix)))
+colData <- data.frame(row.names = colnames(counts_matrix),
+                      condition = condition)
+
+# Create DESeqDataSet object
+dds <- DESeqDataSetFromMatrix(countData = counts_matrix,
+                              colData = colData,
+                              design = ~ 1)
+dds <- estimateSizeFactors(dds)
+normalized_counts2 <- t(ra) / sizeFactors(dds)
+ra_norm <- t(log1p(normalized_counts2))
+
+```
+
+
+## show the in situ plot
+
+```{r show_in_situ}
+ggplot(meta_cell)+
+  geom_point(aes(x = center_x, y = center_y), color = "steelblue", size = 0.8)+
+  ggtitle("72h culture, ROI-1")+
+  theme_classic()
+```
+
+
+# load data into object
+
+Here, we prepare the four inputs for our pipeline: 
+\item `normalizedData`, the normalized expression matrix.
+\item `locationData`, a matrix or data.frame with two columns, x and y to mark the location of each cell.
+\item `metaData`, a data.frame that stores the metadata for each cell.
+\item `cellTypes`, a vector of character including the cell type label for each cell.
+
+```{r create_object}
+location_data <- meta_cell[, c("center_x", "center_y")]
+location_data$x <- location_data$center_x / 5000
+location_data$y <- location_data$center_y / 5000
+
+location_data$x_bin <- cut(location_data$x, breaks = num_bins_x, labels = FALSE)
+location_data$y_bin <- cut(location_data$y, breaks = num_bins_y, labels = FALSE)
+meta_cell$"Celltype" <- "Epithelial"
+
+cell_type_data <- meta_cell[, "Celltype"]
+
+etr <- newCoPro(
+  normalizedData = ra_norm,
+  locationData = location_data,
+  metaData = meta_cell,
+  cellTypes = cell_type_data
+) ## etr stands for enteroid
+cell_types_single <- "Epithelial"
+etr <- subsetDataOne(etr, cellTypesOfInterest = cell_types_single)
+```
+
+# run CoPro pipeline
+## compute PCA and distances
+
+```{r distCompute}
+etr <- computePCA(etr, nPCA = n_pca, center = TRUE, scale. = TRUE)
+## By default, we normalize the distance
+etr <- computeDistanceOne(etr, distType = "Euclidean2D", normalizeDistance = FALSE)
+
+sigma_choice <- c(0.01, 0.02,0.05, 0.1,0.15, 0.2)
+
+## compute kernel. Note that it is a different function for one cell type model.
+etr <- computeKernelMatrixOne(etr, sigmaValues = sigma_choice,
+                          upperQuantile = 0.85,
+                          normalizeKernel = FALSE, lowerLimit = 5e-7)
+```
+
+## run skrCCA and obtain correlations
+
+```{r skrCCA}
+etr <- runSkrCCAOne(etr, scalePCs = TRUE, maxIter = 500, nCC = 4)
+etr <- computeNormalizedCorrelationOne(etr, tol = 1e-3)
+
+
+```
+
+## compute gene and cell scores
+
+```{r geneCellScores}
+etr <- computeGeneAndCellScoresOne(etr)
+```
+
+## Look across different sigma values
+
+Here, we hope to pick the sigma value with the highest normalized correlation value. We visualize the trend using ggplot2
+
+```{r sigma_choice}
+ncorr <- getNormCorr(etr)
+
+ggplot(data = ncorr, aes(
+  x = sigmaValues,
+  y = normalizedCorrelation, group = 1
+)) +
+  geom_point() +
+  geom_line() +
+  facet_wrap(facets = ~ ct12 + CC_index,
+             labeller = purrr::partial(label_both, sep = " = ")) +
+  xlab("sigmaValues") +
+  ylab("Norm. Corr.") +
+  ggtitle(label = "Norm. Corr. across sigma values", subtitle = "Epi-Epi") +
+  theme_minimal()
+
+```
+
+From the figure above, the highest correlation is when sigma^2^ = 0.02, so we use this sigma value for the downstream analyses
+
+## Cell scores correlation
+
+We can visualize the cell scores with respect to one another by plotting X~A~K~AB~ against X~B~, where X~A~ represents the cell scores of each cell in cell type A, and X~B~ represents the cell scores of each cell in cell type B, and K~AB~ represents the Kernel matrix between cell type A and B.
+
+```{r }
+cell_A <- cell_types_single
+df_crtt <- getCorrOneType(etr,
+                           sigmaValueChoice = 0.1,
+                           cellTypeA = cell_A, ccIndex = 1)
+
+ggplot(df_crtt) +
+  geom_point(aes(x = AK, y = B), size = 0.5) +
+  ggtitle(paste("Correlation plot between", cell_A, "and", cell_A),
+          subtitle = paste("sigma_value = ", 0.1)) +
+  xlab(paste(cell_A, "%*% Kernal_AB")) +
+  ylab(cell_A) +
+  theme_minimal()
+
+```
+
+## Look at the subset of second-round sprinked-on cells
+
+```{r}
+## get the subset of second round cells. These are the cells with positive GFP
+## expression values
+df_crtt$GFP <- ra[,"GFP"]
+df_crtt_sub = df_crtt[df_crtt$GFP > 0,]
+
+ggplot(df_crtt_sub) +
+  geom_point(aes(x = AK, y = B, color = GFP), size = 0.5) +
+  ggtitle(paste("Correlation plot between", cell_A, "and", cell_A),
+          subtitle = paste("sigma_value = ", 0.1)) +
+  xlab(paste(cell_A, "%*% Kernal_AB")) +
+  ylab(cell_A) +
+  theme_minimal()
+```
+
+
+## Cell scores in situ
+
+We can retrieve the `data.frame` that contains the cell scores using the following function:
+
+```{r}
+
+etr_cs <- getCellScoresInSitu(etr,
+                             sigmaValueChoice = 0.1,
+                             scoreColorType = "binary"
+)
+
+```
+
+We can visualize the cell scores in situ using ggplot.
+
+```{r}
+ggplot(data = etr_cs) +
+  geom_point(aes(
+    x = x,
+    y = y,
+    color = cellScores_b
+  ), size = 0.8) +
+  scale_color_discrete(
+    type =
+      c( "darkred", "#ffd8d8","#1e17a4", "#5b79ff")
+  ) +
+  ggtitle("Raj Lab Epi one cell type score")+
+  coord_fixed() +
+  theme_minimal()
+```
+
+We can also visualize the continuous scores
+
+```{r}
+ggplot(data = etr_cs) +
+  geom_point(aes(
+    x = x,
+    y = y,
+    color = cellScores
+  ), size = 0.8) +
+  coord_fixed() +
+  theme_minimal()
+```
+
+
+# References:
+

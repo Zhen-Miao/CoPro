@@ -1,5 +1,13 @@
 
 
+#' subsetDataOne
+#'
+#' @param object A `CoPro` object
+#' @param cellTypesOfInterest Input cell types of interest as a vector of
+#' characters for subsetting the data
+#'
+#' @returns The CoPro object
+#' @export
 subsetDataOne <- function(object, cellTypesOfInterest) {
 
   if (!all(cellTypesOfInterest %in% object@cellTypes)) {
@@ -24,6 +32,29 @@ subsetDataOne <- function(object, cellTypesOfInterest) {
   return(object)
 }
 
+#' computeDistance for one cell type
+#'
+#' @importFrom fields rdist
+#' @importFrom utils combn
+#' @importFrom stats setNames quantile
+#' @param object A `CoPro` object
+#' @param distType Type of distance to compute: "Euclidean2D",
+#'  "Euclidean3D", or "Morphology-Aware"
+#' @param xDistScale Scale for x distance
+#' @param yDistScale Scale for y distance
+#' @param zDistScale Scale for z distance
+#' @param verbose Whether to print info about the quantile of the distance
+#' @param normalizeDistance Whether to normalize distance? The normalization
+#'  will make sure that the 0.01% cell-cell distance will become 0.01, thus
+#'  ensuring no matter which input scale is used for the distance matrix,
+#'  the output will roughly be in mm^3. This ensures that the kernel sizes
+#'  from 0.001 to 0.1 will make sense. Default = TRUE
+#' @param truncateLowDist Whether to truncate small distances so that the cells
+#'  that are nearly overlapping with each other do not have a super small
+#'  distance. Default = TRUE.
+#' @return `CoPro` object with distance matrix computed
+#' @export
+#' @note To-do: add morphology-aware kernel
 computeDistanceOne <- function(
     object,
     distType = c("Euclidean2D", "Euclidean3D","Morphology-Aware"),
@@ -138,7 +169,38 @@ computeDistanceOne <- function(
 
 }
 
-
+#' Compute Kernel Matrix for one cell type
+#'
+#' This method calculates the kernel matrices for pairs of cell types based on
+#' their distances and a range of sigma values.
+#' The formula of calculating kernel matrix is:
+#' \deqn{K(x, y) = \exp\left(-\frac{\|x-y\|^2}{2 \sigma^2}\right)}
+#' The matrices are adjusted by clipping the upper quantile of
+#'  the values to reduce the effect of outliers. The results are stored
+#'  within the object.
+#'
+#' @importFrom utils combn
+#' @param object A `CoPro` object.
+#' @param sigmaValues A vector of sigma values used for kernel calculation.
+#' @param lowerLimit The lower limit for the kernel function, default is 1e-7.
+#' @param upperQuantile The quantile used for clipping the kernel values,
+#' default is 0.85.
+#' @param verbose Whether to output the progress and related information
+#' @param normalizeKernel Whether to normalize the kernel matrix?
+#' Default = FALSE. Note that normalization will not affect any downstream
+#' analyses, it is for numerical stability and easier interpretation only.
+#' @param minAveCellNeighor What is the minimum average number of cell in the
+#'  neighbor? This step is to help set up the expected sparsity of the
+#'  kernel matrix. If a kernel sigma value is too small, this result in too
+#'  few neighbors for most cells, resulting in an overly-sparse matrix that
+#'  makes the parameter estimation hard. Thus, the sigma values that results in
+#'  an overly-sparse matrix will be removed for later analysis.
+#' @return The `CoPro` object with computed kernel matrices added. The kernel
+#' matrices are organized into a three-layer nested list object. The first layer
+#' is indexed by the sigma value, and the second and the third layers are cell
+#' types
+#' @export
+#' @note To-do: Shall we include row or column normalization of the kernel?
 computeKernelMatrixOne <- function(object, sigmaValues,
          lowerLimit = 1e-7, upperQuantile = 0.85, normalizeKernel = FALSE,
          minAveCellNeighor = 2, verbose = TRUE) {
@@ -423,7 +485,17 @@ optimize_bilinear_multi_n_One <- function(X_list, K_list, w_list,
   return(w_list)
 }
 
-
+#' runSkrCCA for one cell type
+#' @importFrom stats setNames
+#' @param object A CoPro object
+#' @param scalePCs Whether to scale each PCs to a uniform variance before
+#' running the program
+#' @param nCC Number of canonical vectors to compute, default = 2
+#' @param tol Tolerance for termination, default = 1e-5
+#' @param maxIter Maximum iterations
+#'
+#' @return CoPro object with distnace matrix computed
+#' @export
 runSkrCCAOne <- function(object,
          scalePCs = TRUE, nCC = 2, tol = 1e-5,
          maxIter = 200) {
@@ -489,7 +561,19 @@ runSkrCCAOne <- function(object,
   return(object)
 }
 
-
+#' Compute Normalized Correlation for one type
+#'
+#' This method calculates the normalized correlation between pairs of cell types
+#' based on CCA weights and the respective kernel matrix. It uses
+#' the spectral norm of the kernel matrix for normalization.
+#'
+#' @param object A `CoPro` object containing CCA results and kernel matrices.
+#' @param tol tolerance for approximate SVD calculation
+#' @return The `CoPro` object with the normalized correlation value
+#' between any pair of cell types
+#' added as a new slot, `normalizedCorrelation`.
+#' @export
+#'
 computeNormalizedCorrelationOne <- function(object, tol = 1e-4) {
   ## Check for required components
   if (length(object@skrCCAOut) == 0) {
@@ -597,6 +681,14 @@ computeNormalizedCorrelationOne <- function(object, tol = 1e-4) {
   return(object)
 }
 
+#' computeGeneAndCellScores for one cell type
+#' @importFrom stats setNames
+#' @param object A `CoPro` object containing CCA results
+#' and kernel matrices.
+#'
+#' @return A `CoPro` object with gene and cell score computed
+#' @export
+#'
 computeGeneAndCellScoresOne <- function(object) {
   ## Check for required components
   if (length(object@skrCCAOut) == 0) {
