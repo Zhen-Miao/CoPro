@@ -6,6 +6,8 @@
 <!-- badges: start -->
 <!-- badges: end -->
 
+<img src="man/figures/copro-refined-logo-final.jpg" width="400" />
+
 The goal of CoPro is to identify co-progression between cell types, in
 either supervised or unsupervised manner. In the presence of tissue
 structures, CoPro will also be able to identify tissue
