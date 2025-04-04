@@ -701,6 +701,9 @@ computeGeneAndCellScoresOne <- function(object) {
 
   ## choose cell types
   cts <- object@cellTypesOfInterest
+  if(length(cts) != 1){
+    stop("Only run this function when there is exactly one cell type")
+  }
 
   ## check sigmaValues
   if (length(object@sigmaValues) == 0) {
@@ -798,10 +801,6 @@ computeGeneAndCellScoresOne <- function(object) {
   object@geneScores <- geneScores
 
   ## add cell score information to the cell metadata
-  meta_t <- stats::setNames(
-    vector(mode = "list", length = length(cts)),
-    cts
-  )
 
   meta_t <- object@metaDataSub[object@cellTypesSub == cts, ]
   for (t in sigma_names){
@@ -810,7 +809,7 @@ computeGeneAndCellScoresOne <- function(object) {
         cellScoreColName <- paste0("cellScore_", t, "_cc_index_", cc_index)
 
         meta_t[, cellScoreColName] <-
-          cellScores[[t]][[cts]][rownames(meta_t[[cts]]), cc_name]
+          cellScores[[t]][[cts]][rownames(meta_t), cc_name]
       }
     }
 
@@ -894,5 +893,89 @@ getCorrOneType <- function(object, cellTypeA, ccIndex = 1,
 
 
 
+#' Get cell score and location information as a data.frame (one cell type)
+#'
+#' @importFrom stats median
+#' @param object A `CoPro` object
+#' @param sigmaValueChoice A value to specify the sigma squared to
+#' use for selecting the particular cell score information
+#' @param scoreColorType Should the color be in binary scale or
+#' continuous scale? Need to be either "binary" or "continuous"
+#' @param ccIndex Canonical vector index, default = 1
+#'
+#' @return A data.frame object with cell scores and their locations
+#' @export
+getCellScoresInSituOne <- function(object, sigmaValueChoice, ccIndex = 1,
+                                scoreColorType = c("binary", "continuous")) {
+  ## check input
+  if (!is(object, "CoPro")) {
+    stop("Input must be a CoPro object")
+  }
+
+  ## match arg
+  scoreColorType <- match.arg(scoreColorType)
+
+  ## make sure normalizedCorrelation exists
+  if (length(object@cellScores) == 0 ||
+      length(object@geneScores) == 0) {
+    stop(paste(
+      "cellScores slot does not exist,",
+      "run `computeGeneAndCellScores()` first"
+    ))
+  }
+
+  if (is.null(sigmaValueChoice)) {
+    stop(paste(
+      "sigmaValueChoice is not given",
+      "default set to the value with highest",
+      "normalized correlation."
+    ))
+    sigmaValueChoice <- object@sigmaValueChoice
+  }
+
+  if (!(sigmaValueChoice %in% object@sigmaValues)) {
+    stop("sigmaValueChoice does not exist in the list of sigmaValues")
+  }
+
+  ## choose cell types
+  cts <- object@cellTypesOfInterest
+  if(length(cts) != 1){
+    stop("Only run this function when there is exactly one cell type")
+  }
+
+  sigma_name_choice <- paste("sigma", sigmaValueChoice, sep = "_")
+
+  loc_t <- stats::setNames(
+    vector(mode = "list", length = length(cts)),
+    cts
+  )
+  # median_score_t <- vector("numeric", length = length(cts))
+  # names(median_score_t) <- cts
+
+  loc_t <- object@locationDataSub[object@cellTypesSub == t, ]
+  loc_t$"cellScores" <- object@cellScores[[sigma_name_choice]][[t]][
+      rownames(loc_t),ccIndex]
+  loc_t$"cellTypesSub" <- cts
+
+  median_score_t <- median(loc_t$"cellScores")
+
+  loc_t$"cellScores_b" <-
+      ifelse(loc_t$"cellScores" > median_score_t,
+             paste0("high_", cts), paste0("low_", cts)
+      )
+
+
+  combinations <- expand.grid(c("high", "low"), cts)
+  all_binary_scores <- apply(combinations, 1,
+                             function(x) paste(x[1], x[2], sep = "_"))
+
+  loc_all <- loc_t[rownames(object@locationDataSub), ]
+
+  loc_all$cellScores_b <- factor(loc_all$cellScores_b,
+                                 levels = all_binary_scores
+  )
+
+  return(loc_all)
+}
 
 
