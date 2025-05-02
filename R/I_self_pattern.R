@@ -952,8 +952,8 @@ getCellScoresInSituOne <- function(object, sigmaValueChoice, ccIndex = 1,
   # median_score_t <- vector("numeric", length = length(cts))
   # names(median_score_t) <- cts
 
-  loc_t <- object@locationDataSub[object@cellTypesSub == t, ]
-  loc_t$"cellScores" <- object@cellScores[[sigma_name_choice]][[t]][
+  loc_t <- object@locationDataSub[object@cellTypesSub == cts, ]
+  loc_t$"cellScores" <- object@cellScores[[sigma_name_choice]][[cts]][
       rownames(loc_t),ccIndex]
   loc_t$"cellTypesSub" <- cts
 

@@ -413,7 +413,7 @@ setMethod(
           "normalized, so that 0.01 percentile distance will be scaled",
           "to 0.01\n")
     }
-    dist_1percentile <- vector(mode = "numeric",
+    dist_01percentile <- vector(mode = "numeric",
                                length = ncol(pair_cell_types))
 
     ## calculate the distances
@@ -456,11 +456,12 @@ setMethod(
           min(distances_ij[distances_ij != 0])
       }
 
-      dist_1percentile[pp] <- quantile(distances_ij[distances_ij != 0], 1e-4)
+      percentile_choice <- min(1e-3, 2/(max(nrow(distances_ij), ncol(distances_ij))))
+      dist_01percentile[pp] <- quantile(distances_ij[distances_ij != 0], percentile_choice)
 
       if (truncateLowDist) {
-        distances_ij[distances_ij < dist_1percentile[pp]] <-
-          dist_1percentile[pp]
+        distances_ij[distances_ij < dist_01percentile[pp]] <-
+          dist_01percentile[pp]
       }
 
       ## save the distances
@@ -471,17 +472,18 @@ setMethod(
       }
     }
 
-    min_1percentile <- min(dist_1percentile)
+    min_1percentile <- min(dist_01percentile)
 
     if (normalizeDistance) {
       cat("The scaling factor for normalizing distance is",
           0.01 / min_1percentile, "\n")
+      scaling_factor <- 0.01 / min_1percentile
       for (pp in seq_len(ncol(pair_cell_types))) {
         i <- pair_cell_types[1, pp]
         j <- pair_cell_types[2, pp]
 
         distances_ij <- distances[[i]][[j]]
-        distances_ij <- distances_ij / min_1percentile * 0.01
+        distances_ij <- distances_ij * scaling_factor
         distances[[i]][[j]] <- distances_ij
       }
     }
