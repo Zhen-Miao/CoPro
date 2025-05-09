@@ -164,6 +164,14 @@ setMethod(
       warning("CoProm object created with only one unique slide ID. Multi-slide functions may not be appropriate.")
     }
 
+    # add slideID to metadata, if not already in it
+    if("slideID" %in% metaData) {
+      if(any(metaData[,"slideID"] != slideID)) stop(
+        "metaData contains slideID column, but it does not match slideID")
+    }else {
+      metaData["slideID"] <- slideID
+    }
+
     # --- Create CoProm Object ---
     methods::new("CoProm",
                  normalizedData = normalizedData,

@@ -41,7 +41,7 @@ setMethod("computeDistanceMultiOne", "CoProm", function(
 
   distType <- match.arg(distType)
   cts <- object@cellTypesOfInterest
-  if (length(cts) > 1) {
+  if (length(cts) != 1) {
     stop(paste("Only run this function when there is one cell type.",
                "Please run computeDistanceMulti() instead."))
   }
