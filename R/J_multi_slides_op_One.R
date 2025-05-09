@@ -1,5 +1,4 @@
 
-
 #' SkrCCA optimization for One Cell Type, Multiple Slides - First Component
 #'
 #' Adapts the multi-slide logic for a single cell type.
@@ -23,6 +22,61 @@
 #'   as a single-column matrix.
 #' @noRd
 optimize_bilinear_multi_slides_one <- function(X_list_all, K_list_all,
+                                                    max_iter = 1000, tol = 1e-5,
+                                                    n_cores = 1) {
+
+  n_slides <- length(X_list_all)
+  if (n_slides < 2) {
+    stop("Use optimize_bilinear_multi_One for a single slide.")
+  }
+  if (length(K_list_all) != n_slides) {
+    stop("X_list_all and K_list_all must have the same length (N of slides).")
+  }
+
+  # Calculate update contribution from each slide q: t(Xq) %*% Kq %*% Xq %*% w1_old
+  # This is equivalent to Yq %*% w1_old where Yq = t(Xq) %*% Kq %*% Xq
+  update_Y_q <- mclapply(1:n_slides, function(q) {
+      Xq <- X_list_all[[q]][[1]]
+      Kq <- K_list_all[[q]][[1]][[1]]
+      Yq <- crossprod(Xq, Kq %*% Xq) # Efficient calculation t(Xq) %*% (Kq %*% (Xq %*% w1_old))
+      return(Yq)
+    }, mc.cores = n_cores)
+
+    # Aggregate contributions across slides
+    sum_Y_mat <- Reduce("+", update_Y_q)
+
+    # numerical solution by taking the right sigular vector
+    w1 <- irlba(sum_Y_mat, nv = 1, maxit = max_iter)$v[, 1, drop = FALSE]
+
+  # Return result as a list containing the single weight matrix
+  w_list <- list()
+  w_list[[1]] <- matrix(w1, ncol = 1) # Ensure matrix format
+  return(w_list)
+}
+
+#' SkrCCA optimization for One Cell Type, Multiple Slides - First Component
+#'
+#' Adapts the multi-slide logic for a single cell type.
+#' Assumes X_list_all and K_list_all are lists of lists, where the inner list
+#' contains data/kernel for only ONE cell type per slide.
+#'
+#' @importFrom parallel mclapply
+#' @importFrom irlba irlba
+#'
+#' @param X_list_all List over slides, each element is a list containing one
+#'   data matrix (cell by PC) for the single cell type.
+#'   Example: X_list_all[[slide_q]][[1]]
+#' @param K_list_all List over slides, each element is a list containing a list
+#'   with one kernel matrix (cell by cell) for the single cell type.
+#'   Example: K_list_all[[slide_q]][[1]][[1]]
+#' @param max_iter Maximum number of iterations.
+#' @param tol Tolerance for convergence check.
+#' @param n_cores Number of cores for potential parallel computation via mclapply.
+#'
+#' @return A list containing one element: the first weight vector component (w1)
+#'   as a single-column matrix.
+#' @noRd
+optimize_bilinear_multi_slides_one_iter <- function(X_list_all, K_list_all,
                                          max_iter = 1000, tol = 1e-5,
                                          n_cores = 1) {
 
