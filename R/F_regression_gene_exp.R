@@ -169,6 +169,7 @@ testGeneGLM <- function(
   m<-t(apply(X, MARGIN = 1,
              function(x){
                lm.fit(data = cbind(meta,x,y = Y),formula = frm)}))
+  return(m)
 }
 
 testGeneMixedEffect <- function(

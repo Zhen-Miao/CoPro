@@ -2,6 +2,7 @@
 #' Multi-slide optimization function for CoPro
 #'
 #' @importFrom parallel mclapply
+#' @importFrom irlba irlba
 #'
 #' @param X_list_all List of lists of data matrices (cell by PC matrix), outer list for slides, inner list for cell types
 #' @param K_list_all List of lists of kernel matrices, outer list for slides, inner list for cell type pairs
@@ -46,7 +47,7 @@ optimize_bilinear_multi_slides <- function(X_list_all, K_list_all,
   # Initialize w1 and w2 by their right singular vector from the first slide
   w_list <- rep(list(), length = n_mat)
   for (i in 1:n_mat) {
-    w_list[[i]] <- svd(X_list_all[[1]][[i]])$v[, 1, drop = FALSE]
+    w_list[[i]] <- irlba(X_list_all[[1]][[i]], nv = 1, right_only = 1)$v[, 1, drop = FALSE]
   }
 
   # Iterative refinement
@@ -114,6 +115,7 @@ optimize_bilinear_multi_slides <- function(X_list_all, K_list_all,
 #' Run multi-slide version of bilinear optimization to detect the third to n_th component
 #'
 #' @importFrom stats setNames
+#' @importFrom irlba irlba
 #'
 #' @param X_list_all List of lists of data matrices (cell by PC matrix), outer list for slides, inner list for cell types
 #' @param K_list_all List of lists of kernel matrices, outer list for slides, inner list for cell type pairs
@@ -166,7 +168,7 @@ optimize_bilinear_multi_n_slides <- function(X_list_all, K_list_all, w_list,
 
     # Step 1: obtain or update Y_resi for all slides
     for (q in 1:n_slides) {
-      for (pp in 1:ncol(combn(cts, 2))) {
+      for (pp in seq_len(ncol(combn(cts, 2)))) {
         i <- combn(cts, 2)[1, pp]
         j <- combn(cts, 2)[2, pp]
         K12 <- K_list_all[[q]][[i]][[j]]
@@ -195,11 +197,13 @@ optimize_bilinear_multi_n_slides <- function(X_list_all, K_list_all, w_list,
     w_list_new <- rep(list(), length = n_mat)
 
     Y_sum_12 = Reduce("+", lapply(Y_resi_all, function(y) y[[1]][[2]]))
-    w_list_new[[1]] <- svd(t(Y_sum_12))$v[, 1, drop = FALSE]
+    w_list_new[[1]] <- irlba(t(Y_sum_12), nv = 1,
+                             right_only = TRUE)$v[, 1, drop = FALSE]
 
     for (i in 2:n_mat) {
       Y_sum_1i = Reduce("+", lapply(Y_resi_all, function(y) y[[1]][[i]]))
-      w_list_new[[i]] <- svd(Y_sum_1i)$v[, 1, drop = FALSE]
+      w_list_new[[i]] <- irlba(Y_sum_1i, nv = 1,
+                               right_only = TRUE)$v[, 1, drop = FALSE]
     }
 
     # Step 3: Iterative refinement

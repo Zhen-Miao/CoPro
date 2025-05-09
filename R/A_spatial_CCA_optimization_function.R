@@ -7,13 +7,13 @@
 #'
 #' @return centered and scaled matrix
 #' @noRd
-center_scale_matrix_opt <- function(input_matrix) {
+center_scale_matrix_opt <- function(input_matrix, zero_sd_threshold = 1e-4) {
   # Calculate column standard deviations
   col_means <- colMeans(input_matrix)
   col_sds <- apply(input_matrix, 2, sd)
 
   # Identify columns that are not full of zeros (to avoid division by zero)
-  zero_sd_threshold <- 1e-4
+
   zero_sd_cols <- which(col_sds < zero_sd_threshold)
 
   ## do not scale if the sd is too small
@@ -34,10 +34,10 @@ center_scale_matrix_opt <- function(input_matrix) {
 normalize_vec <- function(v) {
   norm_v <- sqrt(sum(v^2))
   # Check if norm is near zero to avoid division by zero
-  if (norm_v < .Machine$double.eps) {
-    # Return the zero vector or a vector of appropriate length
-    # Depending on desired behavior for zero input
-    return(rep(0, length(v)))
+  if (norm_v < 1e-7) {
+    # If close to zero, return itself, trigger warning
+    warning("vector is close to a zero vector, check potential issue")
+    return(v)
   } else {
     return(v / norm_v)
   }
@@ -54,9 +54,9 @@ normalize_vec <- function(v) {
 get_kernel_matrix <- function(K_list, ct_i, ct_j) {
   K12 <- NULL
   # Try accessing K_ij directly
-  if (!is.null(K_list[[ct_i]][[ct_j]])) {
+  if (length(K_list[[ct_i]][[ct_j]]) != 0) {
     K12 <- K_list[[ct_i]][[ct_j]]
-  } else if (!is.null(K_list[[ct_j]][[ct_i]])) {
+  } else {
     # If K_ij is missing, try getting K_ji and transposing it
     K21 <- K_list[[ct_j]][[ct_i]]
     K12 <- t(K21)
@@ -122,14 +122,15 @@ optimize_bilinear_multi <- function(X_list, K_list, max_iter = 1000,
   # Initialize w_list (named list) using SVD
   w_list <- setNames(vector("list", length = n_mat), cell_types)
   for (ct in cell_types) {
-    if(is.null(X_list[[ct]]) || !is.matrix(X_list[[ct]]) || ncol(X_list[[ct]]) != n_features) {
+    if(is.null(X_list[[ct]]) || !is.matrix(X_list[[ct]]) ||
+       ncol(X_list[[ct]]) != n_features) {
       stop(paste("Invalid or inconsistent matrix in X_list for cell type:", ct))
     }
-    svd_result <- tryCatch(svd(X_list[[ct]]), error = function(e) {
+    svd_result <- tryCatch(irlba(X_list[[ct]], nv = 1, right_only = TRUE),
+                           error = function(e) {
       stop(paste("SVD failed for cell type:", ct, "Error:", e$message))})
     if(ncol(svd_result$v) < 1) stop(paste("SVD resulted in zero singular vectors for cell type:", ct))
-    w_list[[ct]] <- svd_result$v[, 1, drop = FALSE]
-    w_list[[ct]] <- normalize_vec(w_list[[ct]]) # Ensure initial is normalized
+    w_list[[ct]] <- svd_result$v[, 1, drop = FALSE] ## orthonormal
   }
 
   # Iterative refinement
@@ -220,10 +221,10 @@ bilinear_w_from_Y_resi <- function(w_list_new, Y_resi,
                                    n_features, max_iter, tol) {
 
   cell_types <- names(w_list_new)
-  if (is.null(cell_types)) stop("Input w_list_new must be a named list.")
+  if (length(cell_types) == 0) stop("Input w_list_new must be a named list.")
   n_mat <- length(cell_types)
 
-  if (is.null(names(Y_resi)) || !all(cell_types %in% names(Y_resi))) {
+  if (length(names(Y_resi)) == 0 || !all(cell_types %in% names(Y_resi))) {
     stop("Y_resi must be a named list containing entries for all cell types in w_list_new.")
   }
 
@@ -242,7 +243,8 @@ bilinear_w_from_Y_resi <- function(w_list_new, Y_resi,
           next
         }
         w2 <- w_list_new[[ct_j]]
-        # Y_resi should be fully populated (Y_ij and Y_ji = t(Y_ij)) by the calling function
+        # Y_resi should be fully populated (Y_ij and Y_ji = t(Y_ij))
+        # by the calling function
         Y <- Y_resi[[ct_i]][[ct_j]]
         if(is.null(Y)) stop(paste("Missing Y_resi matrix for pair:", ct_i, ct_j))
 
@@ -313,7 +315,8 @@ optimize_bilinear_multi_n <- function(X_list, K_list, w_list,
   n_features <- ncol(X_list[[cts[1]]])
 
   # Check input w_list dimensions
-  k_start <- ncol(w_list[[cts[1]]])
+  k_start <- ncol(w_list[[cts[1]]]) ## we expect this value to be one
+                                    ## based on the structure of our function
   if (k_start < 1) stop("Input w_list must contain at least the first component.")
   for(ct in cts) {
     if(!is.matrix(w_list[[ct]]) || ncol(w_list[[ct]]) != k_start) {
@@ -338,6 +341,9 @@ optimize_bilinear_multi_n <- function(X_list, K_list, w_list,
   # qq iterates through the component index *to be used for deflation*
   for (qq in k_start:(nCC - 1)) {
 
+    ## qq == 1 means we have the weight vector of 1st component,
+    ## so the residual is calculated based on the 1st weight
+
     # Step 1: Update Y_resi using component qq for deflation
     for (pp in seq_len(ncol(pair_cell_types))) {
       i <- pair_cell_types[1, pp] # Name ct1
@@ -348,6 +354,7 @@ optimize_bilinear_multi_n <- function(X_list, K_list, w_list,
       X2 <- X_list[[j]]
 
       # Get the qq-th weight vectors
+      ## initially, we should have the first component ready (qq == 1)
       w1 <- w_list[[i]][, qq, drop = FALSE]
       w2 <- w_list[[j]][, qq, drop = FALSE]
 
@@ -358,7 +365,9 @@ optimize_bilinear_multi_n <- function(X_list, K_list, w_list,
         K12 <- get_kernel_matrix(K_list, i, j)
         Y1 <- t(X1) %*% K12 %*% X2
       } else {
-        # Use the Y deflated by component qq-1
+        # Use the Y deflated by previous component
+        ## say that qq == 2, then Y_resi is already calculated for 1st component
+        ## Then, we start from there to further regress out the residual
         Y1 <- Y_resi[[i]][[j]]
         if(is.null(Y1)) stop(paste("Y_resi missing for pair", i, j, "before deflating with component", qq))
       }
@@ -376,9 +385,11 @@ optimize_bilinear_multi_n <- function(X_list, K_list, w_list,
     # Step 2: Initialize w_list_new for component qq+1 (using names)
     # Using SVD initialization
     w_list_new <- setNames(vector("list", length = n_mat), cts)
-    w_list_new[[cts[1]]] <- svd(t(Y_resi[[cts[1]]][[cts[2]]]))$v[, 1, drop = FALSE]
+    w_list_new[[cts[1]]] <- irlba(t(Y_resi[[cts[1]]][[cts[2]]]),
+                                  nv = 1, right_only = TRUE)$v[, 1, drop = FALSE]
     for (i in cts[2:n_mat]) {
-      w_list_new[[i]] <- svd(Y_resi[[cts[1]]][[i]])$v[, 1, drop = FALSE]
+      w_list_new[[i]] <- irlba(Y_resi[[cts[1]]][[i]],
+                               nv = 1, right_only = TRUE)$v[, 1, drop = FALSE]
     }
 
     # Step 3: Iterative refinement using the helper function

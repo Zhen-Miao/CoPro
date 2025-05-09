@@ -31,10 +31,10 @@ We can change the number of PCs. For this dataset, this parameter does not affec
 
 ```{r set_parameters}
 n_pca = 30
-cell_types = c('Epithelial')
-n_cell_types = length(cell_types)
-num_bins_x = 10
-num_bins_y = 10
+cell_types <- c('Epithelial')
+n_cell_types <- length(cell_types)
+num_bins_x <- 10
+num_bins_y <- 10
 
 ```
 
@@ -49,7 +49,7 @@ ra <- read.csv(paste0(loc, 'output/cell_by_gene/cell_by_gene.csv'))
 ra <- ra[,2:ncol(ra)]
 meta_cell <- read.csv(paste0(loc,'output/attributes/cell_attributes.csv'))
 
-meta_cell$label = paste0("cell_", meta_cell$label)
+meta_cell$label <- paste0("cell_", meta_cell$label)
 rownames(ra) <- meta_cell$label
 rownames(meta_cell) <- meta_cell$label
 
@@ -63,9 +63,9 @@ Here, we filter outliers by capping at 95% persentiles
 
 ```{r filter}
 ## filter expression outliers
-filter_out <- function(x){
+filter_out <- function(x) {
   upper <- quantile(x, 0.95)
-  x[x>upper] <- upper
+  x[x > upper] <- upper
   return(x)
 }
 ra <- apply(ra, MARGIN = 2, FUN = filter_out)
@@ -98,9 +98,9 @@ ra_norm <- t(log1p(normalized_counts2))
 ## show the in situ plot
 
 ```{r show_in_situ}
-ggplot(meta_cell)+
-  geom_point(aes(x = center_x, y = center_y), color = "steelblue", size = 0.8)+
-  ggtitle("72h culture, ROI-1")+
+ggplot(meta_cell) +
+  geom_point(aes(x = center_x, y = center_y), color = "steelblue", size = 0.8) +
+  ggtitle("72h culture, ROI-1") +
   theme_classic()
 ```
 
@@ -142,12 +142,12 @@ etr <- computePCA(etr, nPCA = n_pca, center = TRUE, scale. = TRUE)
 ## By default, we normalize the distance
 etr <- computeDistanceOne(etr, distType = "Euclidean2D", normalizeDistance = FALSE)
 
-sigma_choice <- c(0.01, 0.02,0.05, 0.1,0.15, 0.2)
+sigma_choice <- c(0.01, 0.02,0.05, 0.1, 0.15, 0.2)
 
 ## compute kernel. Note that it is a different function for one cell type model.
 etr <- computeKernelMatrixOne(etr, sigmaValues = sigma_choice,
-                          upperQuantile = 0.85,
-                          normalizeKernel = FALSE, lowerLimit = 5e-7)
+                              upperQuantile = 0.85,
+                              normalizeKernel = FALSE, lowerLimit = 5e-7)
 ```
 
 ## run skrCCA and obtain correlations
@@ -214,8 +214,8 @@ ggplot(df_crtt) +
 ```{r}
 ## get the subset of second round cells. These are the cells with positive GFP
 ## expression values
-df_crtt$GFP <- ra[,"GFP"]
-df_crtt_sub = df_crtt[df_crtt$GFP > 0,]
+df_crtt$GFP <- ra[, "GFP"]
+df_crtt_sub <- df_crtt[df_crtt$GFP > 0, ]
 
 ggplot(df_crtt_sub) +
   geom_point(aes(x = AK, y = B, color = GFP), size = 0.5) +
@@ -234,8 +234,8 @@ We can retrieve the `data.frame` that contains the cell scores using the followi
 ```{r}
 
 etr_cs <- getCellScoresInSitu(etr,
-                             sigmaValueChoice = 0.1,
-                             scoreColorType = "binary"
+                              sigmaValueChoice = 0.1,
+                              scoreColorType = "binary"
 )
 
 ```
@@ -251,9 +251,9 @@ ggplot(data = etr_cs) +
   ), size = 0.8) +
   scale_color_discrete(
     type =
-      c( "darkred", "#ffd8d8","#1e17a4", "#5b79ff")
+      c("darkred", "#ffd8d8", "#1e17a4", "#5b79ff")
   ) +
-  ggtitle("Raj Lab Epi one cell type score")+
+  ggtitle("Raj Lab Epi one cell type score") +
   coord_fixed() +
   theme_minimal()
 ```

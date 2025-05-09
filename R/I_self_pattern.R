@@ -311,6 +311,7 @@ computeKernelMatrixOne <- function(object, sigmaValues,
 
 #' SkrCCA optimization function for multiple groups
 #'
+#' @importFrom irlba irlba
 #' @param X_list List of data matrices (cell by PC matrix)
 #' @param K_list Kernel matrices between any two pairs of matrices
 #' @param max_iter Maximum number of iterations
@@ -325,8 +326,8 @@ optimize_bilinear_multi_One <- function(X_list, K_list, max_iter = 1000,
 
   # Initialize w1 by its right singular vector
   w_list <- list()
-  w_list[[1]] <- svd(X_list[[1]])$v[, 1, drop = FALSE]
-
+  w_list[[1]] <- irlba::irlba(X_list[[1]], nv = 1,
+                              right_only = TRUE)$v[, 1, drop = FALSE]
 
   # Iterative refinement
   iter <- 0
@@ -348,8 +349,8 @@ optimize_bilinear_multi_One <- function(X_list, K_list, max_iter = 1000,
       diff_i[1] <- max(abs(w_i_new - w_list[[1]]))
       w_list[[1]] <- w_i_new
 
-    if (mean(diff_i) <= tol) {
-      print(paste("convergence reached at", iter, "iterations", sep = " "))
+    if (max(diff_i) <= tol) {
+      print(paste("convergence reached at", iter, "iterations"))
       break
     }
     iter <- iter + 1
@@ -468,7 +469,8 @@ optimize_bilinear_multi_n_One <- function(X_list, K_list, w_list,
 
     ## step 2: initialize w_list_new by SVD
     w_list_new <- rep(list(), length = n_mat)
-    w_list_new[[1]] <- svd(t(Y_resi[[cts]][[cts]]))$v[, 1, drop = FALSE]
+    w_list_new[[1]] <- irlba::irlba(t(Y_resi[[cts]][[cts]]),
+                                    nv = 1, right_only = TRUE)$v[, 1, drop = FALSE]
 
     ## step 3: Iterative refinement
     w_list_qq <- bilinear_w_from_Y_resi_One(w_list_new = w_list_new,
