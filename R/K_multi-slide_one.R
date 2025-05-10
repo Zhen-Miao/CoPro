@@ -445,7 +445,7 @@ setMethod("runSkrCCAMultiOne", "CoProm", function(
 #' @rdname computeNormalizedCorrelationMultiOne
 #' @aliases computeNormalizedCorrelationMultiOne,CoProm-method
 setGeneric("computeNormalizedCorrelationMultiOne", function(
-    object, tol = 1e-4, calculationMode = c("aggregate", "perSlide")
+    object, tol = 1e-4, calculationMode = c("perSlide","aggregate")
 ) standardGeneric("computeNormalizedCorrelationMultiOne"))
 
 #' @rdname computeNormalizedCorrelationMultiOne
@@ -454,7 +454,7 @@ setGeneric("computeNormalizedCorrelationMultiOne", function(
 #' @importFrom irlba irlba
 #' @export
 setMethod("computeNormalizedCorrelationMultiOne", "CoProm", function(
-    object, tol = 1e-4, calculationMode = c("aggregate", "perSlide")) {
+    object, tol = 1e-4, calculationMode = c("perSlide","aggregate")) {
 
   calculationMode <- match.arg(calculationMode)
 
@@ -574,7 +574,7 @@ setMethod("computeNormalizedCorrelationMultiOne", "CoProm", function(
 
       message("Aggregate correlation calculation needs precise definition. Placeholder implementation.")
       # Placeholder: Calculate mean per-slide correlation
-      temp_res <- computeNormalizedCorrelationMulti(object, tol=tol, calculationMode="perSlide")
+      temp_res <- computeNormalizedCorrelationMultiOne(object, tol=tol, calculationMode="perSlide")
       df_per_slide <- temp_res@normalizedCorrelation[[sig_name]]
       if(!is.null(df_per_slide) && nrow(df_per_slide) > 0){
         df_agg <- aggregate(normalizedCorrelation ~ sigmaValue + cellType1 + cellType2 + CC_index,
@@ -778,3 +778,181 @@ setMethod("computeGeneAndCellScoresMultiOne", "CoProm", function(
   }
   return(object)
 })
+
+
+#' Retrieve the Correlation within one cell types
+#'
+#' @param object A `CoPro` object
+#' @param cellTypeA Cell type label for the cell type of interest
+#' @param sigmaValueChoice A particular sigma squared value
+#' for the correlation
+#' @param ccIndex Canonical vector index, default = 1
+#'
+#' @return A data.frame with two columns, AK and B, where AK represents the
+#' cell score of cell type A times the kernel matrix, and B represents the
+#' cell score of cell type B.
+#' @export
+getCorrMultiOne <- function(object, cellTypeA, ccIndex = 1,
+                           sigmaValueChoice) {
+  ## check input
+  if (length(cellTypeA) != 1) {
+    stop("Must give a single cellTypeA for correlation plot")
+  }
+
+  ## choose cell types
+
+  cts <- object@cellTypesOfInterest
+  if (cellTypeA != cts){
+    stop("cellTypeA must be in cellTypesSub.")
+  }
+
+
+  ## set sigmaValueChoice
+  if (is.null(sigmaValueChoice)) {
+    if (length(object@sigmaValueChoice) == 0) {
+      stop(paste(
+        "sigmaValueChoice is not given,",
+        "and NormalizedCorrelation not computed,",
+        "please either specify a particular sigmaValueChoice or",
+        "run computeNormalizedCorrelation()"
+      ))
+    }else {
+      warning(paste(
+        "sigmaValueChoice is not given",
+        "default set to the value with highest",
+        "normalized correlation."
+      ))
+      sigmaValueChoice <- object@sigmaValueChoice
+    }
+  }
+
+  if (!(sigmaValueChoice %in% object@sigmaValues)) {
+    stop("sigmaValueChoice does not exist in the list of sigmaValues")
+  }
+
+  ## make sure normalizedCorrelation exists
+  if (length(object@cellScores) == 0 ||
+      length(object@geneScores) == 0) {
+    stop(paste(
+      "cellScores slot does not exist,",
+      "run computeGeneAndCellScores first"
+    ))
+  }
+
+  ## load the cellScores and kernel matrix
+  sigma_name <- paste("sigma", sigmaValueChoice, sep = "_")
+
+  all_slides <- unique(liveryoung@slideID)
+  df <- rep(list(), length = length(all_slides))
+  names(df) <- all_slides
+
+  for(q in all_slides){
+    x1 <- t(object@cellScores[[sigma_name]][[q]][[cellTypeA]][, ccIndex, drop = FALSE])
+    x2 <- object@cellScores[[sigma_name]][[q]][[cellTypeA]][, ccIndex, drop = TRUE]
+    ktemp <- object@kernelMatrices[[sigma_name]][[q]][[cellTypeA]][[cellTypeA]]
+
+    df[[q]] <- data.frame(AK = (x1 %*% ktemp)[1, , drop = TRUE], B = x2, slideID = q)
+  }
+  combined_df <- do.call(rbind, df)
+
+  return(combined_df)
+}
+
+
+#' Get cell score and location information as a data.frame (one cell type)
+#'
+#' @importFrom stats median
+#' @param object A `CoPro` object
+#' @param sigmaValueChoice A value to specify the sigma squared to
+#' use for selecting the particular cell score information
+#' @param scoreColorType Should the color be in binary scale or
+#' continuous scale? Need to be either "binary" or "continuous"
+#' @param ccIndex Canonical vector index, default = 1
+#'
+#' @return A data.frame object with cell scores and their locations
+#' @export
+getCellScoresInSituMultiOne <- function(object, sigmaValueChoice, ccIndex = 1,
+                                   scoreColorType = c("binary", "continuous")) {
+  ## check input
+  if (!is(object, "CoProm")) {
+    stop("Input must be a CoProm object")
+  }
+
+  ## match arg
+  scoreColorType <- match.arg(scoreColorType)
+
+  ## make sure normalizedCorrelation exists
+  if (length(object@cellScores) == 0 ||
+      length(object@geneScores) == 0) {
+    stop(paste(
+      "cellScores slot does not exist,",
+      "run `computeGeneAndCellScores()` first"
+    ))
+  }
+
+  if (is.null(sigmaValueChoice)) {
+    stop(paste(
+      "sigmaValueChoice is not given",
+      "default set to the value with highest",
+      "normalized correlation."
+    ))
+    sigmaValueChoice <- object@sigmaValueChoice
+  }
+
+  if (!(sigmaValueChoice %in% object@sigmaValues)) {
+    stop("sigmaValueChoice does not exist in the list of sigmaValues")
+  }
+
+  ## choose cell types
+  cts <- object@cellTypesOfInterest
+  if(length(cts) != 1){
+    stop("Only run this function when there is exactly one cell type")
+  }
+
+  sigma_name_choice <- paste("sigma", sigmaValueChoice, sep = "_")
+
+  loc_t <- stats::setNames(
+    vector(mode = "list", length = length(cts)),
+    cts
+  )
+  # median_score_t <- vector("numeric", length = length(cts))
+  # names(median_score_t) <- cts
+
+  all_slides <- unique(object@slideID)
+  df <- rep(list(), length = length(all_slides))
+  names(df) <- all_slides
+
+  for(q in all_slides){
+    loc_t <- object@locationDataSub[object@cellTypesSub == cts &
+                                      object@slideID == q, ]
+
+    loc_t$"cellScores" <- object@cellScores[[sigma_name_choice]][[q]][[cts]][
+      rownames(loc_t),ccIndex]
+    loc_t$"cellTypesSub" <- cts
+    loc_t$"slideID" <- q
+    df[[q]] <- loc_t
+  }
+
+  combined_loc_t <- do.call(rbind, unname(df))
+  ## make sure the cell order matches
+  combined_loc_t <- combined_loc_t[rownames(object@locationDataSub),]
+  median_score_t <- median(combined_loc_t$"cellScores")
+
+  combined_loc_t$"cellScores_b" <-
+    ifelse(combined_loc_t$"cellScores" > median_score_t,
+           paste0("high_", cts), paste0("low_", cts)
+    )
+
+
+  combinations <- expand.grid(c("high", "low"), cts)
+  all_binary_scores <- apply(combinations, 1,
+                             function(x) paste(x[1], x[2], sep = "_"))
+
+  combined_loc_t$cellScores_b <- factor(combined_loc_t$cellScores_b,
+                                 levels = all_binary_scores
+  )
+
+  return(combined_loc_t)
+}
+
+

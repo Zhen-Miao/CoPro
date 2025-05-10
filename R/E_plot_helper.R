@@ -14,8 +14,8 @@
 #' @export
 getNormCorr <- function(object) {
   ## check input
-  if (!is(object, "CoPro")) {
-    stop("Input must be a CoPro object")
+  if ( !( is(object, "CoPro") || is(object, "CoProm") ) ) {
+    stop("Input must be a CoPro or CoProm object")
   }
 
   ## make sure normalizedCorrelation exists

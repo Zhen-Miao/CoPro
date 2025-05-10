@@ -137,7 +137,7 @@ optimize_bilinear_multi <- function(X_list, K_list, max_iter = 1000,
   iter <- 0
   while (iter <= max_iter) {
     w_list_old <- w_list
-    max_diff_iter <- 0 # Track max change in this iteration
+    # max_diff_iter <- 0 # Track max change in this iteration
 
     for (ct_i in cell_types) {
       # Initialize the w_i_left matrix to store contributions column-wise
@@ -158,8 +158,8 @@ optimize_bilinear_multi <- function(X_list, K_list, max_iter = 1000,
         w2 <- w_list[[ct_j]] # Use current w_j from this iteration's w_list
 
         # Efficient calculation: t(X1) %*% (K12 %*% (X2 %*% w2))
-        v2 = X2 %*% w2
-        kv2 = K12 %*% v2
+        v2 <- X2 %*% w2
+        kv2 <- K12 %*% v2
         update_contribution <- crossprod(X1, kv2) # This is Y_ij %*% w_j
 
         # update weight vector
@@ -177,10 +177,10 @@ optimize_bilinear_multi <- function(X_list, K_list, max_iter = 1000,
 
     # Check convergence after updating all w_i
     current_max_diff <- 0
-    for(ct in cell_types){
+    for (ct in cell_types) {
       diff_val <- max(abs(w_list[[ct]] - w_list_old[[ct]]))
       if(is.nan(diff_val)) diff_val <- 0
-      if(diff_val > current_max_diff){
+      if(diff_val > current_max_diff) {
         current_max_diff <- diff_val
       }
     }
@@ -231,7 +231,7 @@ bilinear_w_from_Y_resi <- function(w_list_new, Y_resi,
   iter <- 0
   while (iter < max_iter) {
     w_list_old <- w_list_new
-    max_diff_iter <- 0
+    # max_diff_iter <- 0
 
     for (ct_i in cell_types) {
       # Use w_i_left structure for accumulation
@@ -316,10 +316,10 @@ optimize_bilinear_multi_n <- function(X_list, K_list, w_list,
 
   # Check input w_list dimensions
   k_start <- ncol(w_list[[cts[1]]]) ## we expect this value to be one
-                                    ## based on the structure of our function
+  ## based on the structure of our function
   if (k_start < 1) stop("Input w_list must contain at least the first component.")
-  for(ct in cts) {
-    if(!is.matrix(w_list[[ct]]) || ncol(w_list[[ct]]) != k_start) {
+  for (ct in cts) {
+    if (!is.matrix(w_list[[ct]]) || ncol(w_list[[ct]]) != k_start) {
       stop(paste("w_list for", ct, "is not a matrix or has inconsistent component count."))
     }
   }
@@ -369,7 +369,7 @@ optimize_bilinear_multi_n <- function(X_list, K_list, w_list,
         ## say that qq == 2, then Y_resi is already calculated for 1st component
         ## Then, we start from there to further regress out the residual
         Y1 <- Y_resi[[i]][[j]]
-        if(is.null(Y1)) stop(paste("Y_resi missing for pair", i, j, "before deflating with component", qq))
+        if (is.null(Y1)) stop(paste("Y_resi missing for pair", i, j, "before deflating with component", qq))
       }
 
       # Apply deflation formula

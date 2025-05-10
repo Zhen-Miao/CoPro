@@ -414,7 +414,7 @@ setMethod(
           "to 0.01\n")
     }
     dist_01percentile <- vector(mode = "numeric",
-                               length = ncol(pair_cell_types))
+                                length = ncol(pair_cell_types))
 
     ## calculate the distances
     for (pp in seq_len(ncol(pair_cell_types))) {
@@ -506,7 +506,7 @@ setMethod(
     warning(paste("Kernel matrix for cell types", i, "and", j,
                   "with sigma =", sigma_choose,
                   "contains almost all zeros. Specifically, more than",
-                  minPropZero*100,"% total counts are zero" ))
+                  minPropZero * 100, "% total counts are zero" ))
     if (length(sigmaValues) == 1) {
       stop(paste("Only one sigma value is specified,",
                  "which resulted in all Gaussian kernel being small.",
@@ -599,7 +599,7 @@ setMethod(
       stop("Please run computeDistance before computing kernel")
     }
 
-    if (rowNormalizeKernel && colNormalizeKernel){
+    if (rowNormalizeKernel && colNormalizeKernel) {
       stop("Cannot do both row-wise and column-wise normalization.")
     }
 
@@ -690,7 +690,7 @@ setMethod(
           cat(quantile(rs_kernel))
           cat("\n")
           nz_ind <- rs_kernel > 1e-4
-          kernel_current[nz_ind,] <- kernel_current[nz_ind,] / rs_kernel[nz_ind]
+          kernel_current[nz_ind, ] <- kernel_current[nz_ind, ] / rs_kernel[nz_ind]
         }else if (colNormalizeKernel) {
           kernel_current <- t(kernel_current)
           ## calculate col sum
@@ -699,7 +699,7 @@ setMethod(
           cat(quantile(rs_kernel))
           cat("\n")
           nz_ind <- rs_kernel > 1e-4
-          kernel_current[nz_ind,] <- kernel_current[nz_ind,] / rs_kernel[nz_ind]
+          kernel_current[nz_ind, ] <- kernel_current[nz_ind, ] / rs_kernel[nz_ind]
           kernel_current <- t(kernel_current)
         }
 
@@ -949,8 +949,8 @@ setMethod(
         ## Calculate the spectral norm of the kernel matrix
         svd_result <- irlba::irlba(K, nv = 1, tol = tol)
         norm_K12[[t]][[cellType1]][[cellType2]] <- svd_result$d[1]
-        }
       }
+    }
 
     cat("Finished calculating spectral norms \n")
 
@@ -1261,8 +1261,8 @@ setMethod("show", "CoPro",
 
             # Processing status
             cat("\nProcessing steps completed:\n")
-            if(!is.null(object@pcaResults)) cat("- PCA\n")
-            if(!is.null(object@skrCCAOut)) cat("- skrCCA\n")
+            if(length(object@pcaResults) != 0) cat("- PCA\n")
+            if(length(object@skrCCAOut) != 0) cat("- skrCCA\n")
 
             # Additional information
             if(length(object@metaData) > 0) {
@@ -1271,6 +1271,6 @@ setMethod("show", "CoPro",
               cat("\n")
             }
 
-            invisible(x = object)
+      invisible(x = object)
           }
 )
