@@ -1,6 +1,6 @@
 Package: CoPro
 Title: Detecting co-progression between cell types in spatial transcriptomics data
-Version: 0.3.3
+Version: 0.3.4
 Authors@R: 
     person("Zhen", "Miao", , "zhenmiao@sas.upenn.edu", role = c("aut", "cre"),
            comment = c(ORCID = "https://orcid.org/0000-0002-3255-9517"))
