@@ -11,6 +11,7 @@ runSkrCCAMultiOne(
   sigmaChoice = NULL,
   tol = 1e-05,
   scalePCs,
+  transferred_weight_1 = NULL,
   maxIter = 200,
   n_cores = 1
 )
@@ -21,6 +22,7 @@ runSkrCCAMultiOne(
   sigmaChoice = NULL,
   tol = 1e-05,
   scalePCs,
+  transferred_weight_1 = NULL,
   maxIter = 200,
   n_cores = 1
 )
@@ -35,6 +37,9 @@ runSkrCCAMultiOne(
 \item{tol}{Tolerance for optimization convergence.}
 
 \item{scalePCs}{Whether to scale each PC before computing skrCCA}
+
+\item{transferred_weight_1}{If we use cross-slide weight transfer function,
+the transferred weight on each PC. Otherwise, the value should be set to NULL.}
 
 \item{maxIter}{Maximum iterations for optimization.}
 

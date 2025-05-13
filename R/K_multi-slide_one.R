@@ -311,6 +311,28 @@ setMethod("computeKernelMatrixMultiOne", "CoProm", function(
   return(X_list_scaled)
 }
 
+.check_input_transferred_weight_1 <- function(transferred_weight_1, cts, nPCA){
+  ## make sure it is a list object
+  if(any(names(transferred_weight_1) != cts)){
+    stop("transferred_weight_1 must be a list object with cell type names")
+  }
+  ## check within each element
+  for(ct in cts){
+    if(!is.matrix(transferred_weight_1[[ct]])){
+      stop(paste0("transferred_weight_1[[", ct, "]] must be a matrix"))
+    }
+    if(ncol(transferred_weight_1[[ct]]) != 1){
+      stop(paste0("transferred_weight_1[[", ct, "]] must have one column"))
+    }
+    if(nrow(transferred_weight_1[[ct]]) != nPCA){
+      stop()
+    }
+
+  }
+
+  return(0)
+}
+
 #' Run Multi-Slide Spatially Kernel Restricted CCA (skrCCA)
 #'
 #' Performs skrCCA on the `CoProm` object using data integrated across slides.
@@ -321,6 +343,8 @@ setMethod("computeKernelMatrixMultiOne", "CoProm", function(
 #' @param nCC Number of canonical components to compute.
 #' @param sigmaChoice A specific sigma value to use. If NULL (default), uses all valid sigma values from `object@sigmaValues`.
 #' @param tol Tolerance for optimization convergence.
+#' @param transferred_weight_1 If we use cross-slide weight transfer function,
+#'  the transferred weight on each PC. Otherwise, the value should be set to NULL.
 #' @param maxIter Maximum iterations for optimization.
 #' @param n_cores Number of cores for parallel computation within optimization.
 #' @param scalePCs Whether to scale each PC before computing skrCCA
@@ -332,6 +356,7 @@ setMethod("computeKernelMatrixMultiOne", "CoProm", function(
 #' @aliases runSkrCCAMultiOne,CoProm-method
 setGeneric("runSkrCCAMultiOne", function(
     object, nCC = 2, sigmaChoice = NULL, tol = 1e-5, scalePCs,
+    transferred_weight_1 = NULL,
     maxIter = 200, n_cores = 1) standardGeneric("runSkrCCAMultiOne"))
 
 #' @rdname runSkrCCAMultiOne
@@ -340,6 +365,7 @@ setGeneric("runSkrCCAMultiOne", function(
 #' @export
 setMethod("runSkrCCAMultiOne", "CoProm", function(
     object, nCC = 2, sigmaChoice = NULL, tol = 1e-5, scalePCs,
+    transferred_weight_1 = NULL,
     maxIter = 200, n_cores = 1) {
 
   # --- Input Checks ---
@@ -348,6 +374,13 @@ setMethod("runSkrCCAMultiOne", "CoProm", function(
   cts <- object@cellTypesOfInterest
   if (length(cts) != 1) stop("Only one cellTypesOfInterest needed for skrCCA.")
   slides <- object@slideList
+
+  # check transferred_weight_1
+  if(!is.null(transferred_weight_1)){
+    .check_input_transferred_weight_1(
+      transferred_weight_1 = transferred_weight_1,
+      cts = cts, nPCA = object@nPCA)
+  }
 
   # Determine which sigma values to use
   if (is.null(sigmaChoice)) {
@@ -394,14 +427,18 @@ setMethod("runSkrCCAMultiOne", "CoProm", function(
 
     # Run optimization for the first component
     # Ensure optimize_bilinear_multi_slides is loaded/available
-    cca_result_1 <- optimize_bilinear_multi_slides_one(
-      X_list_all = X_list_all,
-      K_list_all = K_list_all_sigma,
-      max_iter = maxIter, tol = tol, n_cores = n_cores
-    )
-    # Name the result list using cell types
-    names(cca_result_1) <- cts # Uses implicit order, assumes optimization returns unnamed list
-
+    if(is.null(transferred_weight_1)){
+      cca_result_1 <- optimize_bilinear_multi_slides_one(
+        X_list_all = X_list_all,
+        K_list_all = K_list_all_sigma,
+        max_iter = maxIter, tol = tol, n_cores = n_cores
+      )
+      # Name the result list using cell types
+      names(cca_result_1) <- cts
+      # Uses implicit order, assumes optimization returns unnamed list
+    }else { ## check the structure of the transferred_weight
+      cca_result_1 <- transferred_weight_1
+    }
 
     if (nCC == 1) {
       cca_out_all_sigmas[[sig_name]] <- cca_result_1
@@ -842,7 +879,7 @@ getCorrMultiOne <- function(object, cellTypeA, ccIndex = 1,
   ## load the cellScores and kernel matrix
   sigma_name <- paste("sigma", sigmaValueChoice, sep = "_")
 
-  all_slides <- unique(liveryoung@slideID)
+  all_slides <- unique(object@slideID)
   df <- rep(list(), length = length(all_slides))
   names(df) <- all_slides
 

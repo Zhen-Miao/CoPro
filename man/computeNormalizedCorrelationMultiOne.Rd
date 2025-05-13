@@ -8,13 +8,13 @@
 computeNormalizedCorrelationMultiOne(
   object,
   tol = 1e-04,
-  calculationMode = c("aggregate", "perSlide")
+  calculationMode = c("perSlide", "aggregate")
 )
 
 \S4method{computeNormalizedCorrelationMultiOne}{CoProm}(
   object,
   tol = 1e-04,
-  calculationMode = c("aggregate", "perSlide")
+  calculationMode = c("perSlide", "aggregate")
 )
 }
 \arguments{

@@ -4,16 +4,25 @@
 \alias{quantile_normalize}
 \title{quantile normalize data}
 \usage{
-quantile_normalize(A, B, save_Sparse = FALSE, ties_method = "min")
+quantile_normalize(
+  A,
+  B,
+  save_Sparse = FALSE,
+  ties_method = "min",
+  verbose = TRUE
+)
 }
 \arguments{
-\item{A}{The reference cell by feature matrix}
+\item{A}{The reference cell-by-feature matrix Values in this matrix define
+the target distribution for each feature.}
 
-\item{B}{The cell by feature matrix we want to normalize to A}
+\item{B}{The cell-by-feature matrix we want to normalize to A}
 
 \item{save_Sparse}{whether to save as a sparse matrix}
 
 \item{ties_method}{If there are ties, which method to choose}
+
+\item{verbose}{whether to print progress updates (default TRUE)}
 }
 \value{
 The normalized B matrix
