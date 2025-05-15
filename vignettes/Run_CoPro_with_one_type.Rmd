@@ -142,7 +142,7 @@ etr <- computePCA(etr, nPCA = n_pca, center = TRUE, scale. = TRUE)
 ## By default, we normalize the distance
 etr <- computeDistanceOne(etr, distType = "Euclidean2D", normalizeDistance = FALSE)
 
-sigma_choice <- c(0.01, 0.02,0.05, 0.1, 0.15, 0.2)
+sigma_choice <- c(0.01, 0.02, 0.05, 0.1, 0.15, 0.2)
 
 ## compute kernel. Note that it is a different function for one cell type model.
 etr <- computeKernelMatrixOne(etr, sigmaValues = sigma_choice,
@@ -196,8 +196,8 @@ We can visualize the cell scores with respect to one another by plotting X~A~K~A
 ```{r }
 cell_A <- cell_types_single
 df_crtt <- getCorrOneType(etr,
-                           sigmaValueChoice = 0.1,
-                           cellTypeA = cell_A, ccIndex = 1)
+                          sigmaValueChoice = 0.1,
+                          cellTypeA = cell_A, ccIndex = 1)
 
 ggplot(df_crtt) +
   geom_point(aes(x = AK, y = B), size = 0.5) +

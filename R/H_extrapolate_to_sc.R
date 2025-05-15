@@ -134,6 +134,15 @@ transfer_scores <- function(mat_A, mat_B, gs_ct, verbose = TRUE){
   return(B_cell_score)
 }
 
+#' Get cell score by transferring gene weights from another slide
+#' By default, quantile normalization is used to ensure distribution match
+#' @param ref_obj Reference object (where the gene weights will be obtained)
+#' @param tar_obj Target object (where the cell scores will be obtained)
+#' @param sigma_choice Sigma value to be used
+#' @param verbose verbose
+#'
+#' @returns cell scores as a matrix
+#' @export
 getTransferCellScores <- function(ref_obj, tar_obj, sigma_choice,
                             verbose = TRUE){
   ## check object

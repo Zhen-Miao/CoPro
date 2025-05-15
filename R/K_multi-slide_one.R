@@ -318,14 +318,19 @@ setMethod("computeKernelMatrixMultiOne", "CoProm", function(
   }
   ## check within each element
   for(ct in cts){
-    if(!is.matrix(transferred_weight_1[[ct]])){
+    tw <- transferred_weight_1[[ct]]
+    if(!is.matrix(tw)){
       stop(paste0("transferred_weight_1[[", ct, "]] must be a matrix"))
     }
-    if(ncol(transferred_weight_1[[ct]]) != 1){
+    if(ncol(tw) != 1){
       stop(paste0("transferred_weight_1[[", ct, "]] must have one column"))
     }
-    if(nrow(transferred_weight_1[[ct]]) != nPCA){
-      stop()
+    if(nrow(tw) != nPCA){
+      stop(paste0("transferred_weight_1[[", ct, "]] must have nrow=nPCA"))
+    }
+    tws <- sum(as.vector(tw)^2)
+    if(abs(tws-1) > 1e-3){
+      stop(paste0("transferred_weight_1[[", ct, "]][,1] must be a unit vector"))
     }
 
   }
@@ -341,7 +346,8 @@ setMethod("computeKernelMatrixMultiOne", "CoProm", function(
 #' @importFrom stats setNames
 #' @param object A `CoProm` object with `pcaResults` and `kernelMatrices` populated.
 #' @param nCC Number of canonical components to compute.
-#' @param sigmaChoice A specific sigma value to use. If NULL (default), uses all valid sigma values from `object@sigmaValues`.
+#' @param sigmaChoice A specific sigma value to use. If NULL (default),
+#'  uses all valid sigma values from `object@sigmaValues`.
 #' @param tol Tolerance for optimization convergence.
 #' @param transferred_weight_1 If we use cross-slide weight transfer function,
 #'  the transferred weight on each PC. Otherwise, the value should be set to NULL.
@@ -576,7 +582,7 @@ setMethod("computeNormalizedCorrelationMultiOne", "CoProm", function(
              nrow(X_i)==0 || nrow(X_j)==0) next # Skip if data missing/invalid
 
           for (cc in 1:nCC) {
-            w_i <- w_j <- W_list_sigma[[ct_j]][, cc, drop = FALSE]
+            w_j <- W_list_sigma[[ct_j]][, cc, drop = FALSE]
             Xiw <- Xjw <- X_j %*% w_j
 
             numerator <- (t(Xiw) %*% K_ij %*% Xjw)[1, 1]
