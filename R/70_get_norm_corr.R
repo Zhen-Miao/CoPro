@@ -1,4 +1,4 @@
-## get nomralized correlation (all cells and any pair of cell types)
+## get nomralized correlation (all cells and any pair of cell types) for ploting
 
 #' Get normalized correlation vs Sigma squared values
 #'
@@ -12,8 +12,8 @@
 #'
 #' @return A `data.frame` with correlation information
 #' @rdname getNormalizedCorrelation
-#' @aliases getNormalizedCorrelation,CoPro-method
-#' @aliases getNormalizedCorrelation,CoProm-method
+#' @aliases getNormCorr,CoProSingle-method
+#' @aliases getNormCorr,CoProMulti-method
 #' @export
 setGeneric("getNormCorr",
            function(object) standardGeneric("getNormCorr")
@@ -49,14 +49,14 @@ setGeneric("getNormCorr",
 }
 
 
-#' @noRd
+#' @rdname getNormalizedCorrelation
 setMethod("getNormCorr", "CoProSingle", function(object) {
   .checkInputNormCorr(object)
   .getNormCorrCore(object = object)
 })
 
 
-#' @noRd
+#' @rdname getNormalizedCorrelation
 setMethod("getNormCorr", "CoProMulti", function(object) {
   .checkInputNormCorr(object)
   .getNormCorrCore(object = object)
@@ -309,7 +309,7 @@ setGeneric("getCorrOneType",
                             sigmaValueChoice) {
   df_q <- rep(list(), length = length(object@slideList))
   names(df_q) <- object@slideList
-
+  sigma_name <- paste("sigma", sigmaValueChoice, sep = "_")
   for (q in object@slideList) {
     x1 <- t(object@cellScores[[sigma_name]][[q]][[cellTypeA]][, ccIndex, drop = FALSE])
     x2 <- object@cellScores[[sigma_name]][[q]][[cellTypeA]][, ccIndex, drop = TRUE]

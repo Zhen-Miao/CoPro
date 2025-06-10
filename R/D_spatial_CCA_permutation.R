@@ -139,7 +139,7 @@ runSkrCCAPermu <- function(object, tol = 1e-5, nPermu = 20,
   object@cellPermu <- cell_permu
 
   ## get PCA matrices and permute
-  PCmats <- .getAllPCMats(allPCs = object@pcaResults, scalePCs = scalePCs)
+  PCmats <- .getAllPCMats(allPCs = object@pcaGlobal, scalePCs = scalePCs)
   PCmats2 <- PCmats
 
 
@@ -151,7 +151,7 @@ runSkrCCAPermu <- function(object, tol = 1e-5, nPermu = 20,
       PCmats2[[i]] <- PCmats[[i]][cell_permu[[i]][,tt],]
     }
 
-    cca_result <- optimize_bilinear_multi(
+    cca_result <- optimize_bilinear(
       X_list = PCmats2,
       K_list = object@kernelMatrices[[s_name]],
       max_iter = maxIter, tol = tol
@@ -161,7 +161,7 @@ runSkrCCAPermu <- function(object, tol = 1e-5, nPermu = 20,
     if (nCC == 1) {
       cca_permu_out[[t]] <- cca_result
     }else {
-      cca_result_n <- optimize_bilinear_multi_n(
+      cca_result_n <- optimize_bilinear_n(
         X_list = PCmats2,
         K_list = object@kernelMatrices[[s_name]],
         w_list = cca_result,
@@ -219,7 +219,7 @@ computeNormalizedCorrelationPermu <- function(object, tol = 1e-4) {
 
   ## check sigmaValues
   sigmaValueChoice <- object@sigmaValueChoice
-  PCmats <- .getAllPCMats(allPCs = object@pcaResults, scalePCs = scalePCs)
+  PCmats <- .getAllPCMats(allPCs = object@pcaGlobal, scalePCs = scalePCs)
   nCC <- object@nCC
 
   pair_cell_types <- combn(cts, 2)

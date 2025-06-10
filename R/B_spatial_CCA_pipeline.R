@@ -38,7 +38,7 @@ setMethod(
     }
 
     ## PCA results will be saved under the name of cell types
-    object@pcaResults <- setNames(
+    object@pcaGlobal <- setNames(
       rep(list(), length = length(cts)),
       cts
     )
@@ -67,369 +67,10 @@ setMethod(
 
       ## PCA, on the matrix that is already centered and scaled
       pca <- prcomp_irlba(scaledData, center = FALSE, scale. = FALSE, n = nPCA)
-      object@pcaResults[[i]] <- pca
+      object@pcaGlobal[[i]] <- pca
     }
 
     ## return
-    return(object)
-  }
-)
-
-
-
-.CheckSigmaValuesToRemove <- function(kernel_current, lowerLimit,
-                                      sigma_choose, sigmaValues, i, j,
-                                      minAveCellNeighor) {
-  n_cell1 <- nrow(kernel_current)
-  n_cell2 <- ncol(kernel_current)
-
-  minPropZero <- minAveCellNeighor * min(n_cell1, n_cell2) / (n_cell1 * n_cell2)
-  if (mean(kernel_current <= lowerLimit) < minPropZero) {
-    warning(paste("Kernel matrix for cell types", i, "and", j,
-                  "with sigma =", sigma_choose,
-                  "contains almost all zeros. Specifically, more than",
-                  minPropZero * 100, "% total counts are zero" ))
-    if (length(sigmaValues) == 1) {
-      stop(paste("Only one sigma value is specified,",
-                 "which resulted in all Gaussian kernel being small.",
-                 "Please provide a larger sigma value"))
-    }else {
-      warning(paste("Dropping sigma value of ",
-                    sigma_choose,
-                    "because all Gaussian kernel values are too small,",
-                    "which will not produce meaningful results."))
-      return(TRUE)
-    }
-  }else if (all(is.na(kernel_current))) {
-    warning(paste("Kernel matrix for cell types", i, "and", j,
-                  "with sigma =", sigma_choose,
-                  "contains all NA."))
-    if (length(sigmaValues) == 1) {
-      stop(paste("Only one sigma value is specified,",
-                 "which resulted in all Gaussian kernel being NA."))
-    }else {
-      warning(paste("Dropping sigma value of ",
-                    sigma_choose,
-                    "because all Gaussian kernel values are NA."))
-      return(TRUE)
-    }
-  }
-
-  return(FALSE)
-}
-
-
-#' Compute Kernel Matrix for CoPro
-#'
-#' This method calculates the kernel matrices for pairs of cell types based on
-#' their distances and a range of sigma values.
-#' The formula of calculating kernel matrix is:
-#' \deqn{K(x, y) = \exp\left(-\frac{\|x-y\|^2}{2 \sigma^2}\right)}
-#' The matrices are adjusted by clipping the upper quantile of
-#'  the values to reduce the effect of outliers. The results are stored
-#'  within the object.
-#'
-#' @importFrom utils combn
-#' @param object A `CoPro` object.
-#' @param sigmaValues A vector of sigma values used for kernel calculation.
-#' @param lowerLimit The lower limit for the kernel function, default is 1e-7.
-#' @param upperQuantile The quantile used for clipping the kernel values,
-#' default is 0.85.
-#' @param verbose Whether to output the progress and related information
-#' @param normalizeKernel Whether to normalize the kernel matrix?
-#' Default = FALSE. Note that normalization will not affect any downstream
-#' analyses, it is for numerical stability and easier interpretation only.
-#' @param minAveCellNeighor What is the minimum average number of cell in the
-#'  neighbor? This step is to help set up the expected sparsity of the
-#'  kernel matrix. If a kernel sigma value is too small, this result in too
-#'  few neighbors for most cells, resulting in an overly-sparse matrix that
-#'  makes the parameter estimation hard. Thus, the sigma values that results in
-#'  an overly-sparse matrix will be removed for later analysis.
-#' @param rowNormalizeKernel Whether the kernel matrix will be row-wise
-#' normalized? Note that row or column wise normalization will result in an
-#' asymmetric result in skrCCA inference.
-#' @param colNormalizeKernel Whether the kernel matrix will be column-wise
-#' normalized? Note that row or column wise normalization will result in an
-#' asymmetric result in skrCCA inference.
-#' @return The `CoPro` object with computed kernel matrices added. The kernel
-#' matrices are organized into a three-layer nested list object. The first layer
-#' is indexed by the sigma value, and the second and the third layers are cell
-#' types
-#' @export
-#' @note To-do: Shall we include row or column normalization of the kernel?
-setGeneric(
-  "computeKernelMatrix",
-  function(object, sigmaValues, lowerLimit = 1e-7, upperQuantile = 0.85,
-           normalizeKernel = FALSE, minAveCellNeighor = 2,
-           rowNormalizeKernel = FALSE, colNormalizeKernel = FALSE,
-           verbose = TRUE) standardGeneric("computeKernelMatrix"))
-
-#' @rdname computeKernelMatrix
-#' @aliases computeKernelMatrix,CoPro-method
-#' @importFrom utils combn
-#' @importFrom stats setNames quantile
-#' @export
-setMethod(
-  "computeKernelMatrix", "CoPro",
-  function(object, sigmaValues,
-           lowerLimit = 1e-7, upperQuantile = 0.85, normalizeKernel = FALSE,
-           minAveCellNeighor = 2,
-           rowNormalizeKernel = FALSE, colNormalizeKernel = FALSE,
-           verbose = TRUE) {
-    ## make sure distance matrix exist
-    if (length(object@distances) == 0) {
-      stop("Please run computeDistance before computing kernel")
-    }
-
-    if (rowNormalizeKernel && colNormalizeKernel) {
-      stop("Cannot do both row-wise and column-wise normalization.")
-    }
-
-    cts <- object@cellTypesOfInterest
-    n_mat <- length(cts)
-    if (n_mat < 2) {
-      stop("At least two cell types are needed to compute kernel matrices.")
-    }
-
-    if (length(sigmaValues) == 0) {
-      warning("No Sigma specified, setting to the 5% quantile of cell distance")
-      dist12 <- object@distances[[1]][[2]]
-      sigmaValues <- quantile(dist12[dist12 > 0], 0.05)
-    }
-
-    if (!is.numeric(sigmaValues)) {
-      stop("sigmaValues must be numeric values or a vector")
-    }
-
-    ## notify users if normalizeDistance = TRUE
-    if (normalizeKernel) {
-      cat("normalizeKernel is set to TRUE. Kernel matrix will be",
-          "normalized so that median row sums of kernel will be",
-          "1 \n")
-    }
-
-    ## save the sigmaValues
-    object@sigmaValues <- sigmaValues
-
-    ## Initialize the list of kernel matrices
-    kernel_mat <- vector("list", length(sigmaValues))
-    sigma_names <- paste("sigma", sigmaValues, sep = "_")
-    names(kernel_mat) <- sigma_names
-    for (t in sigma_names) {
-      kernel_mat[[t]] <- setNames(vector("list", n_mat), cts)
-      for (i in cts) {
-        kernel_mat[[t]][[i]] <- setNames(vector("list", n_mat), cts)
-      }
-    }
-
-    pair_cell_types <- combn(cts, 2)
-
-    ## sigma values to leave out
-    sigmaValuesToRemove <- vector(mode = "logical",
-                                  length = length(sigmaValues))
-    names(sigmaValuesToRemove) <- sigma_names
-
-    for (tt in seq_along(sigmaValues)) {
-      t <- sigma_names[tt]
-      sigma_choose <- sigmaValues[tt]
-      cat("current sigma value is\n", sigma_choose)
-
-      for (pp in seq_len(ncol(pair_cell_types))) {
-        i <- pair_cell_types[1, pp]
-        j <- pair_cell_types[2, pp]
-
-        kernel_current <- kernel_from_distance(
-          sigma = sigma_choose,
-          dist_mat = object@distances[[i]][[j]],
-          lower_limit = lowerLimit
-        )
-
-        sigmaValuesToRemove[t] <- .CheckSigmaValuesToRemove(
-          kernel_current = kernel_current, lowerLimit = lowerLimit,
-          minAveCellNeighor = minAveCellNeighor, sigma_choose = sigma_choose,
-          sigmaValues = sigmaValues, i = i, j = j)
-
-        if (sigmaValuesToRemove[t]) {
-          kernel_mat[[t]][[i]][[j]] <- kernel_current
-          next
-        }
-
-        ## Clipping large values
-        upper_clip <- quantile(kernel_current[kernel_current >= lowerLimit],
-                               upperQuantile)
-        kernel_current[kernel_current >= upper_clip] <- upper_clip
-
-
-        if ((normalizeKernel && !rowNormalizeKernel) && !colNormalizeKernel) {
-          ## calculate row sum
-          rs_kernel <- rowSums(kernel_current)
-          kernel_current <- kernel_current / median(rs_kernel[rs_kernel > 1e-5])
-
-        }else if (rowNormalizeKernel) {
-          ## calculate row sum
-          rs_kernel <- rowSums(kernel_current)
-          cat("quantile of kernel matrix rowSums \n")
-          cat(quantile(rs_kernel))
-          cat("\n")
-          nz_ind <- rs_kernel > 1e-4
-          kernel_current[nz_ind, ] <- kernel_current[nz_ind, ] / rs_kernel[nz_ind]
-        }else if (colNormalizeKernel) {
-          kernel_current <- t(kernel_current)
-          ## calculate col sum
-          rs_kernel <- rowSums(kernel_current)
-          cat("quantile of kernel matrix colSums \n")
-          cat(quantile(rs_kernel))
-          cat("\n")
-          nz_ind <- rs_kernel > 1e-4
-          kernel_current[nz_ind, ] <- kernel_current[nz_ind, ] / rs_kernel[nz_ind]
-          kernel_current <- t(kernel_current)
-        }
-
-        ## print info
-        if (verbose) {
-          cat("Current Sigma value is", sigma_choose)
-          cat("\n")
-          cat("Quantiles of N_neighbors for cell type", i, "\n")
-          cat(quantile(rowSums(kernel_current >= lowerLimit)))
-          cat("\n")
-          cat("Quantiles of N_neighbors for cell type", j, "\n")
-          cat(quantile(colSums(kernel_current >= lowerLimit)))
-          cat("\n")
-        }
-
-        # ## remove small values
-        kernel_current[kernel_current < lowerLimit] <- 0
-        kernel_mat[[t]][[i]][[j]] <- kernel_current
-      }
-    }
-
-    ## Remove kernel matrices and sigmaValues that were marked for removal
-    if (any(sigmaValuesToRemove)) {
-      cat("removing", sum(sigmaValuesToRemove), "sigmaValues values", "\n")
-      kernel_mat <- kernel_mat[!sigmaValuesToRemove]
-      object@sigmaValues <- object@sigmaValues[!sigmaValuesToRemove]
-    }
-
-    object@kernelMatrices <- kernel_mat
-    return(object)
-  }
-)
-
-## get PC matrices
-.getAllPCMats <- function(allPCs, scalePCs) {
-
-  if (length(allPCs) == 0) {
-    stop("PCA results do not exist, run computePCA() first.")
-  }
-
-  PCmats <- setNames(
-    vector("list", length = length(allPCs)),
-    names(allPCs)
-  )
-
-  ## optionally, scale the PCs before running CCA
-  if (scalePCs) {
-    for (i in names(allPCs)) {
-      pca_A_sd <- allPCs[[i]]$sdev
-      PCmats[[i]] <- scale(allPCs[[i]]$x,
-                           center = FALSE,
-                           scale = pca_A_sd
-      )
-    }
-  } else {
-    for (i in names(allPCs)) {
-      PCmats[[i]] <- allPCs[[i]]$x
-    }
-  }
-  return(PCmats)
-}
-
-#' runSkrCCA
-#' @importFrom stats setNames
-#' @param object A CoPro object
-#' @param scalePCs Whether to scale each PCs to a uniform variance before
-#' running the program
-#' @param nCC Number of canonical vectors to compute, default = 2
-#' @param tol Tolerance for termination, default = 1e-5
-#' @param maxIter Maximum iterations
-#'
-#' @return CoPro object with distnace matrix computed
-#' @export
-#'
-setGeneric(
-  "runSkrCCA",
-  function(object, scalePCs = TRUE, nCC = 2, tol = 1e-5,
-           maxIter = 200) standardGeneric("runSkrCCA"))
-
-
-#' @rdname runSkrCCA
-#' @aliases runSkrCCA,CoPro-method
-#' @importFrom stats setNames
-#' @export
-setMethod(
-  "runSkrCCA", "CoPro",
-  function(object,
-           scalePCs = TRUE, nCC = 2, tol = 1e-5,
-           maxIter = 200) {
-    ## check whether the kernel matrix is available
-    if (length(object@kernelMatrices) == 0) {
-      stop("Kernel matrix is empty, please run computeKernelMatrix first")
-    }
-
-    ## record whether each PC will been rescaled
-    if (length(object@scalePCs) == 0) {
-      object@scalePCs <- scalePCs
-    }
-
-    ## check sigmaValues
-    if (length(object@sigmaValues) == 0) {
-      stop("sigmaValues is empty, please specify")
-    } else {
-      sigmaValues <- object@sigmaValues
-    }
-
-    ## choose cell types
-    if (length(object@cellTypesOfInterest) != 0) {
-      cts <- object@cellTypesOfInterest
-    } else {
-      warning("no cell type of interest specified,
-                      using all cell types to run the analysis")
-      cts <- unique(object@cellTypesSub)
-    }
-
-    PCmats <- .getAllPCMats(allPCs = object@pcaResults, scalePCs = scalePCs)
-
-    ## run across different sigma values
-    cca_out <- vector("list", length = length(sigmaValues))
-    sigma_names <- paste("sigma", sigmaValues, sep = "_")
-    names(cca_out) <- sigma_names
-
-    ## for loop to run the analysis
-    for (tt in seq_along(sigmaValues)) {
-      t <- sigma_names[tt]
-      cca_result <- optimize_bilinear_multi(
-        X_list = PCmats,
-        K_list = object@kernelMatrices[[t]],
-        max_iter = maxIter, tol = tol
-      )
-      names(cca_result) <- cts
-
-      if (nCC == 1) {
-        cca_out[[t]] <- cca_result
-      }else {
-        cca_result_n <- optimize_bilinear_multi_n(
-          X_list = PCmats, K_list = object@kernelMatrices[[t]],
-          w_list = cca_result,
-          cellTypesOfInterest = cts, nCC = nCC,
-          max_iter = maxIter, tol = tol
-        )
-        cca_out[[t]] <- cca_result_n
-      }
-
-    }
-
-    object@skrCCAOut <- cca_out
-    object@nCC <- nCC
     return(object)
   }
 )
@@ -498,7 +139,7 @@ setMethod(
 
     sigmaValues <- object@sigmaValues
 
-    PCmats <- .getAllPCMats(allPCs = object@pcaResults, scalePCs = scalePCs)
+    PCmats <- .getAllPCMats(allPCs = object@pcaGlobal, scalePCs = scalePCs)
 
     pair_cell_types <- combn(cts, 2)
 
@@ -652,7 +293,7 @@ setMethod(
     }
     scalePCs <- object@scalePCs
 
-    PCmats <- .getAllPCMats(allPCs = object@pcaResults, scalePCs = scalePCs)
+    PCmats <- .getAllPCMats(allPCs = object@pcaGlobal, scalePCs = scalePCs)
 
     sigma_names <- paste("sigma", sigmaValues, sep = "_")
 
@@ -717,13 +358,13 @@ setMethod(
           w_1 <- object@skrCCAOut[[t]][[i]][, cc_index, drop = FALSE]
           if (scalePCs) {
             geneScores[[t]][[i]][, cc_name] <- as.vector(
-              matrix(w_1 * object@pcaResults[[i]]$sdev, nrow = 1) %*%
-                t(object@pcaResults[[i]]$rotation)
+              matrix(w_1 * object@pcaGlobal[[i]]$sdev, nrow = 1) %*%
+                t(object@pcaGlobal[[i]]$rotation)
             )
           } else {
             geneScores[[t]][[i]][, cc_name] <- as.vector(
               matrix(w_1, nrow = 1) %*%
-                t(object@pcaResults[[i]]$rotation)
+                t(object@pcaGlobal[[i]]$rotation)
             )
           }
           cellScores[[t]][[i]][, cc_name] <- as.vector(PCmats[[i]] %*% w_1)
@@ -843,7 +484,7 @@ setMethod("show", "CoPro",
 
             # Processing status
             cat("\nProcessing steps completed:\n")
-            if(length(object@pcaResults) != 0) cat("- PCA\n")
+            if(length(object@pcaGlobal) != 0) cat("- PCA\n")
             if(length(object@skrCCAOut) != 0) cat("- skrCCA\n")
 
             # Additional information

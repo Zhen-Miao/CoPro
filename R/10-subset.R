@@ -18,10 +18,11 @@
 #'
 setGeneric("subsetData",
            function(object,
-                    cellTypesOfInterest, saveOriginal = FALSE) standardGeneric("subsetData")
+                    cellTypesOfInterest, 
+                    saveOriginal = FALSE) standardGeneric("subsetData")
 )
 
-.subset_core <- function(object, ctoi, min_n = 10) {
+.subset_core <- function(object, ctoi, min_n = 10, saveOriginal = FALSE) {
   if (length(ctoi) < 1) {
     stop("Please specify at least one cell type of interest.")
   }
@@ -51,11 +52,11 @@ setGeneric("subsetData",
 }
 
 
-setMethod("subsetData", "CoProSingle", function(object, cellTypesOfInterest) {
-  .subset_core(object = object, ctoi = cellTypesOfInterest, min_n = 10)
+setMethod("subsetData", "CoProSingle", function(object, cellTypesOfInterest, saveOriginal = FALSE) {
+  .subset_core(object = object, ctoi = cellTypesOfInterest, min_n = 10, saveOriginal = saveOriginal)
 })
 
-setMethod("subsetData", "CoProMulti", function(object, cellTypesOfInterest) {
+setMethod("subsetData", "CoProMulti", function(object, cellTypesOfInterest, saveOriginal = FALSE) {
   n_slide = length(object@slideList)
-  .subset_core(object, cellTypesOfInterest, min_n = 10 * n_slide)
+  .subset_core(object, cellTypesOfInterest, min_n = 10 * n_slide, saveOriginal = saveOriginal)
 })

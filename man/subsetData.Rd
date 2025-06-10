@@ -6,13 +6,16 @@
 \alias{subsetData,CoProMulti-method}
 \title{subsetData}
 \usage{
-subsetData(object, cellTypesOfInterest)
+subsetData(object, cellTypesOfInterest, saveOriginal = FALSE)
 }
 \arguments{
 \item{object}{A \code{CoPro} object}
 
 \item{cellTypesOfInterest}{Input cell types of interest as a vector of
 characters for subsetting the data}
+
+\item{saveOriginal}{Logical, whether to save the original data in the
+subsetted object. Default is FALSE.}
 }
 \value{
 A \code{CoPro} object with subset slots

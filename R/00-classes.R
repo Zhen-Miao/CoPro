@@ -94,7 +94,9 @@ setClass("CoPro",
            pcaResults = "list",
            pcaGlobal = "list",      # Stores list(cellType = pc_result)
            ## pcaGlobal is only used in multi-slide setting
-           ## pcaResults are also defined differently
+           ## pcaResults are also defined differently  --> let us fix this
+           ## In single slide setting, let us just use pcaGlobal for consistency
+           ## there is no need to have pcaResults in single slide setting
 
            ## geneList
            geneList = "character",
