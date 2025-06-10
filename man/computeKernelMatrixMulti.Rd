@@ -3,6 +3,7 @@
 \name{computeKernelMatrixMulti}
 \alias{computeKernelMatrixMulti}
 \alias{computeKernelMatrixMulti,CoProm-method}
+\alias{computeKernelMatrixMulti,CoProMulti-method}
 \title{Compute Kernel Matrices for Multi-Slide Data}
 \usage{
 computeKernelMatrixMulti(
@@ -15,7 +16,7 @@ computeKernelMatrixMulti(
   verbose = TRUE
 )
 
-\S4method{computeKernelMatrixMulti}{CoProm}(
+\S4method{computeKernelMatrixMulti}{CoProMulti}(
   object,
   sigmaValues,
   lowerLimit = 1e-07,

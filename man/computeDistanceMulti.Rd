@@ -3,6 +3,7 @@
 \name{computeDistanceMulti}
 \alias{computeDistanceMulti}
 \alias{computeDistanceMulti,CoProm-method}
+\alias{computeDistanceMulti,CoProMulti-method}
 \title{Compute Distances within each Slide}
 \usage{
 computeDistanceMulti(
@@ -16,7 +17,7 @@ computeDistanceMulti(
   verbose = TRUE
 )
 
-\S4method{computeDistanceMulti}{CoProm}(
+\S4method{computeDistanceMulti}{CoProMulti}(
   object,
   distType = c("Euclidean2D", "Euclidean3D"),
   xDistScale = 1,

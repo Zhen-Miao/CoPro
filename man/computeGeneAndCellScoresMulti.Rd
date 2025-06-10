@@ -3,11 +3,12 @@
 \name{computeGeneAndCellScoresMulti}
 \alias{computeGeneAndCellScoresMulti}
 \alias{computeGeneAndCellScoresMulti,CoProm-method}
+\alias{computeGeneAndCellScoresMulti,CoProMulti-method}
 \title{Compute Gene and Cell Scores for Multi-Slide Data}
 \usage{
 computeGeneAndCellScoresMulti(object, sigmaChoice = NULL)
 
-\S4method{computeGeneAndCellScoresMulti}{CoProm}(object, sigmaChoice = NULL)
+\S4method{computeGeneAndCellScoresMulti}{CoProMulti}(object, sigmaChoice = NULL)
 }
 \arguments{
 \item{object}{A \code{CoProm} object with skrCCA results.}

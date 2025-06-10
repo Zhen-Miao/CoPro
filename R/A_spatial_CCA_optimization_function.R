@@ -7,16 +7,23 @@
 #'
 #' @return centered and scaled matrix
 #' @noRd
-center_scale_matrix_opt <- function(input_matrix, zero_sd_threshold = 1e-4) {
+center_scale_matrix_opt <- function(input_matrix,
+                                    zero_sd_threshold = 1e-3,
+                                    nz_propion_threshold = 0.01) {
   # Calculate column standard deviations
   col_means <- colMeans(input_matrix)
   col_sds <- apply(input_matrix, 2, sd)
 
+  # non-zero proportion
+  col_nz <- colSums(input_matrix != 0) / nrow(input_matrix)
+
   # Identify columns that are not full of zeros (to avoid division by zero)
 
-  zero_sd_cols <- which(col_sds < zero_sd_threshold)
+  zero_sd_cols <- which(col_sds < zero_sd_threshold |
+                        col_nz < nz_propion_threshold)
 
-  ## do not scale if the sd is too small
+  ## do not scale if the sd is too small, or if the proportion of non-zero
+  # values is too low
   col_sds_safe <- col_sds
   if (length(zero_sd_cols) > 0) {
     col_sds_safe[zero_sd_cols] <- 1.0

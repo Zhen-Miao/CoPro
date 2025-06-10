@@ -3,6 +3,7 @@
 \name{runSkrCCAMulti}
 \alias{runSkrCCAMulti}
 \alias{runSkrCCAMulti,CoProm-method}
+\alias{runSkrCCAMulti,CoProMulti-method}
 \title{Run Multi-Slide Spatially Kernel Restricted CCA (skrCCA)}
 \usage{
 runSkrCCAMulti(
@@ -15,7 +16,7 @@ runSkrCCAMulti(
   n_cores = 1
 )
 
-\S4method{runSkrCCAMulti}{CoProm}(
+\S4method{runSkrCCAMulti}{CoProMulti}(
   object,
   nCC = 2,
   sigmaChoice = NULL,

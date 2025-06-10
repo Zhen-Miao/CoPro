@@ -3,6 +3,7 @@
 \name{computeNormalizedCorrelationMulti}
 \alias{computeNormalizedCorrelationMulti}
 \alias{computeNormalizedCorrelationMulti,CoProm-method}
+\alias{computeNormalizedCorrelationMulti,CoProMulti-method}
 \title{Compute Normalized Correlation for Multi-Slide Data}
 \usage{
 computeNormalizedCorrelationMulti(
@@ -11,7 +12,7 @@ computeNormalizedCorrelationMulti(
   calculationMode = c("aggregate", "perSlide")
 )
 
-\S4method{computeNormalizedCorrelationMulti}{CoProm}(
+\S4method{computeNormalizedCorrelationMulti}{CoProMulti}(
   object,
   tol = 1e-04,
   calculationMode = c("aggregate", "perSlide")

@@ -3,11 +3,12 @@
 \name{subsetDataMulti}
 \alias{subsetDataMulti}
 \alias{subsetDataMulti,CoProm-method}
+\alias{subsetDataMulti,CoProMulti-method}
 \title{Subset Data for Multi-Slide Analysis}
 \usage{
 subsetDataMulti(object, cellTypesOfInterest)
 
-\S4method{subsetDataMulti}{CoProm}(object, cellTypesOfInterest)
+\S4method{subsetDataMulti}{CoProMulti}(object, cellTypesOfInterest)
 }
 \arguments{
 \item{object}{A \code{CoProm} object.}

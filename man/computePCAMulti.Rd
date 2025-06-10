@@ -3,6 +3,7 @@
 \name{computePCAMulti}
 \alias{computePCAMulti}
 \alias{computePCAMulti,CoProm-method}
+\alias{computePCAMulti,CoProMulti-method}
 \title{Compute PCA on Integrated Multi-Slide Data}
 \usage{
 computePCAMulti(
@@ -11,18 +12,16 @@ computePCAMulti(
   center = TRUE,
   scale. = TRUE,
   dataUse = "raw",
-  center_per_slide = FALSE,
-  use_irlba = TRUE
+  center_per_slide = FALSE
 )
 
-\S4method{computePCAMulti}{CoProm}(
+\S4method{computePCAMulti}{CoProMulti}(
   object,
   nPCA = 40,
   center = TRUE,
   scale. = TRUE,
   dataUse = "raw",
-  center_per_slide = FALSE,
-  use_irlba = TRUE
+  center_per_slide = FALSE
 )
 }
 \arguments{
@@ -39,8 +38,6 @@ Default is "raw"}
 
 \item{center_per_slide}{After the global PCA, do we do center per slide
 again? By default this is set to FALSE}
-
-\item{use_irlba}{Logical, whether to use irlba for faster computation.}
 }
 \value{
 A \code{CoProm} object with the \code{pcaResults} slot populated.

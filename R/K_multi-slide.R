@@ -1,257 +1,5 @@
-#' @import Matrix
-#' @import methods
-# Define necessary class unions from the original CoPro object
-setClassUnion("matrixOrSparseMatrix", c("matrix", "dgCMatrix", "dgTMatrix"))
-setClassUnion("factorOrCharacter", c("factor", "character"))
-setClassUnion("matrixOrDataFrame", c("matrix", "data.frame"))
-
-#' CoProm object for Multi-Slide Spatial Transcriptomics Analysis
-#'
-#' An S4 class to store and manage data for multi-slide spatial transcriptomics
-#' analysis using the CoPro methodology.
-#'
-#' @slot slideID A `factorOrCharacter` vector indicating the slide/sample origin for each cell.
-#' @slot slideList A `character` vector storing the unique slide identifiers present.
-#' @slot normalizedData A `matrixOrSparseMatrix` object storing the combined normalized data for all cells across slides.
-#' @slot locationData A `matrixOrDataFrame` object storing the combined location data.
-#' @slot metaData A `data.frame` object storing the combined metadata. Must include columns matching cell barcodes in rows.
-#' @slot cellTypes A `factorOrCharacter` vector storing cell type labels for all cells.
-#' @slot geneList A `character` vector storing gene names (colnames of `normalizedData`).
-#'
-#' @slot cellTypesOfInterest A `character` vector specifying the cell types to include in the analysis.
-#' @slot normalizedDataSub A `matrixOrSparseMatrix` storing the subset of `normalizedData` for cells matching `cellTypesOfInterest`.
-#' @slot locationDataSub A `matrixOrDataFrame` storing the subset of `locationData`.
-#' @slot metaDataSub A `data.frame` storing the subset of `metaData`, including the `slideID` column.
-#' @slot cellTypesSub A `factorOrCharacter` storing the subset of `cellTypes`.
-#'
-#' @slot integratedData A `list` object to store the output from data integration (e.g., Seurat integrated assay or corrected values), typically structured by cell type. Format depends on integration method output.
-#' @slot pcaResults A `list` object storing PCA results after integration.
-#'  Recommended structure: `list(slideID = list(cellType = pc_matrix))`.
-#' @slot pcaGlobal A `list` object storing PCA results for each cell type.
-#' @slot nPCA A `numeric` value specifying the number of PCs used.
-#' @slot scalePCs A `logical` value indicating if PCs were scaled before skrCCA (usually FALSE if PCA done on integrated data).
-#'
-#' @slot distances A `list` object storing pairwise distances, structured by slide: `list(slideID = list(cellType1 = list(cellType2 = dist_matrix)))`.
-#' @slot kernelMatrices A `list` object storing kernel matrices: `list(sigma = list(slideID = list(cellType1 = list(cellType2 = kernel_matrix))))`.
-#' @slot sigmaValues A `numeric` vector storing the sigma values used for kernel generation.
-#' @slot sigmaValueChoice A `numeric` value storing the chosen sigma based on correlation analysis.
-#'
-#' @slot nCC A `numeric` value specifying the number of canonical components computed.
-#' @slot skrCCAOut A `list` object storing the shared weight vectors from multi-slide skrCCA: `list(sigma = list(cellType = weight_matrix))`.
-#' @slot normalizedCorrelation A `list` object storing normalized correlation results. Structure depends on calculation (e.g., `list(sigma = list(slideID = correlation_df))` or `list(sigma = aggregate_correlation_df)`).
-#' @slot cellScores A `list` object storing slide-specific cell scores: `list(sigma = list(slideID = list(cellType = cell_score_matrix)))`.
-#' @slot geneScores A `list` object storing gene scores (potentially shared): `list(sigma = list(cellType = gene_score_matrix))`.
-#'
-#' @slot nPermu A `numeric` value specifying the number of permutations (if performed).
-#' @slot skrCCAPermuOut A `list` storing permutation results for weights.
-#' @slot normalizedCorrelationPermu A `list` storing permutation results for correlation.
-#'
-#' @export
-setClass("CoProm",
-         slots = list(
-           # Input Data (Combined)
-           slideID = "factorOrCharacter",
-           slideList = "character",
-           normalizedData = "matrixOrSparseMatrix",
-           locationData = "matrixOrDataFrame",
-           metaData = "data.frame",
-           cellTypes = "factorOrCharacter",
-           geneList = "character",
-
-           # Subsets based on cellTypesOfInterest
-           cellTypesOfInterest = "character",
-           normalizedDataSub = "matrixOrSparseMatrix",
-           locationDataSub = "matrixOrDataFrame",
-           metaDataSub = "data.frame",
-           cellTypesSub = "factorOrCharacter",
-
-           # Integration & PCA
-           integratedData = "list", # Stores output of integrateSlidesMulti
-           pcaResults = "list",     # Stores list(slideID = list(cellType = pc_matrix))
-           pcaGlobal = "list",      # Stores list(cellType = pc_result)
-           nPCA = "numeric",        # number of PCs
-           scalePCs = "logical",    # Whether PCs were scaled before skrCCA
-
-           # Distance & Kernel (Slide-Specific)
-           distances = "list",      # Stores list(slideID = list(ct1 = list(ct2 = dist)))
-           kernelMatrices = "list", # Stores list(sigma = list(slideID = list(ct1 = list(ct2 = K))))
-           sigmaValues = "numeric",
-           sigmaValueChoice = "numeric",
-
-           # skrCCA Output (Shared Weights, Slide-Specific Scores)
-           nCC = "numeric",
-           skrCCAOut = "list",      # Stores list(sigma = list(cellType = W)) - Shared
-           normalizedCorrelation = "list", # Store per-slide or aggregate results
-           cellScores = "list",     # Stores list(sigma = list(slideID = list(cellType = Scores)))
-           geneScores = "list",     # Stores list(sigma = list(cellType = gene_scores)) - Potentially Shared
-
-           # Permutation Slots (Structure TBD based on implementation)
-           nPermu = "numeric",
-           skrCCAPermuOut = "list",
-           normalizedCorrelationPermu = "list"
-           # Potentially add cellPermuMulti if needed
-         )
-)
-
-#' Create a new CoProm object for Multi-Slide Analysis
-#'
-#' Initializes a `CoProm` object with combined data from multiple slides.
-#'
-#' @param normalizedData Combined normalized expression matrix (cells x genes) for all slides. Rownames should be unique cell identifiers.
-#' @param locationData Combined location data frame (cells x coordinates) for all slides. Rownames must match `normalizedData`. Columns 'x', 'y', (and optionally 'z') required.
-#' @param metaData Combined metadata data frame (cells x annotations) for all slides. Rownames must match `normalizedData`.
-#' @param cellTypes Combined cell type labels vector for all cells. Length must match `nrow(normalizedData)`.
-#' @param slideID Combined slide/sample identifier vector for all cells. Length must match `nrow(normalizedData)`.
-#'
-#' @return A `CoProm` object.
-#' @export
-#' @rdname newCoProm
-#' @aliases newCoProm,CoProm-method
-setGeneric(
-  "newCoProm",
-  function(normalizedData, locationData, metaData,
-           cellTypes, slideID) standardGeneric("newCoProm")
-)
-
-#' @rdname newCoProm
-#' @aliases newCoProm,CoProm-method
-#' @export
-setMethod(
-  "newCoProm", signature(
-    "matrixOrSparseMatrix", "matrixOrDataFrame", "data.frame",
-    "factorOrCharacter", "factorOrCharacter"
-  ),
-  function(normalizedData, locationData, metaData, cellTypes, slideID) {
-
-    # --- Input Validation ---
-    n_cells <- nrow(normalizedData)
-    if (length(cellTypes) != n_cells || nrow(metaData) != n_cells ||
-        nrow(locationData) != n_cells || length(slideID) != n_cells) {
-      stop("Input data dimensions do not match the number of cells.")
-    }
-
-    # Check required columns in locationData
-    if (!all(c("x", "y") %in% tolower(colnames(locationData)))) {
-      stop("locationData requires columns named 'x' and 'y'.")
-    }
-    colnames(locationData) <- tolower(colnames(locationData))
-
-    # Check rownames consistency
-    if (is.null(rownames(normalizedData)) || is.null(rownames(locationData)) || is.null(rownames(metaData))) {
-      stop("Rownames are missing from input data (should be unique cell IDs).")
-    }
-    if (any(rownames(normalizedData) != rownames(locationData)) || any(rownames(normalizedData) != rownames(metaData))) {
-      stop("Rownames mismatch between input data matrices/data frames.")
-    }
-    if(anyDuplicated(rownames(normalizedData))) {
-      stop("Cell IDs (rownames) must be unique across all slides.")
-    }
-
-    # Check gene names
-    if (is.null(colnames(normalizedData))) {
-      stop("colnames of normalizedData (gene names) are missing.")
-    }
-    geneList <- colnames(normalizedData)
-
-    # Convert factors to characters if necessary
-    if (!is.character(cellTypes)) cellTypes <- as.character(cellTypes)
-    if (!is.character(slideID)) slideID <- as.character(slideID)
-    if (is.matrix(locationData)) locationData <- as.data.frame(locationData) # Ensure data frame
-
-    # Get unique slide identifiers
-    unique_slides <- unique(slideID)
-    if(length(unique_slides) < 2) {
-      warning("CoProm object created with only one unique slide ID. Multi-slide functions may not be appropriate.")
-    }
-
-    # add slideID to metadata, if not already in it
-    if("slideID" %in% metaData) {
-      if(any(metaData[,"slideID"] != slideID)) stop(
-        "metaData contains slideID column, but it does not match slideID")
-    }else {
-      metaData["slideID"] <- slideID
-    }
-
-    # --- Create CoProm Object ---
-    methods::new("CoProm",
-                 normalizedData = normalizedData,
-                 locationData = locationData,
-                 metaData = metaData,
-                 cellTypes = cellTypes,
-                 slideID = slideID,
-                 slideList = unique_slides,
-                 geneList = geneList
-    )
-  }
-)
-
-#--- Helper Functions ---
-
-#' Normalize a vector to have unit norm
-#' @param v numeric vector
-#' @return normalized vector
-#' @noRd
-normalize_vec <- function(v) {
-  norm_v <- sqrt(sum(v^2))
-  if (norm_v < .Machine$double.eps) {
-    return(rep(0, length(v)))
-  } else {
-    return(v / norm_v)
-  }
-}
-
-
 #--- Pipeline Functions ---
 
-#' Subset Data for Multi-Slide Analysis
-#'
-#' Subsets the combined data in a `CoProm` object based on cell types of interest.
-#'
-#' @param object A `CoProm` object.
-#' @param cellTypesOfInterest A character vector of cell types to keep.
-#'
-#' @return A `CoProm` object with subset slots populated.
-#' @export
-#' @rdname subsetDataMulti
-#' @aliases subsetDataMulti,CoProm-method
-setGeneric("subsetDataMulti",
-           function(object,
-                    cellTypesOfInterest) standardGeneric("subsetDataMulti"))
-
-#' @rdname subsetDataMulti
-#' @aliases subsetDataMulti,CoProm-method
-#' @export
-setMethod("subsetDataMulti", "CoProm", function(object, cellTypesOfInterest) {
-  if (length(cellTypesOfInterest) < 1) { # Allow 1 for integration/PCA
-    stop("Please specify at least one cell type of interest.")
-  }
-  if (!all(cellTypesOfInterest %in% unique(object@cellTypes))) {
-    stop("Some cellTypesOfInterest are not present in the object's cellTypes.")
-  }
-
-  subsetIndices <- object@cellTypes %in% cellTypesOfInterest
-
-  if (sum(subsetIndices) < 10 * length(object@slideList)) {
-    warning("Fewer than 10 cells per slide on average exist in the subset. Check cellTypesOfInterest.")
-  }
-  if (sum(subsetIndices) == 0) {
-    stop("No cells selected with the given cellTypesOfInterest.")
-  }
-
-
-  object@cellTypesOfInterest <- cellTypesOfInterest
-  object@normalizedDataSub <- object@normalizedData[subsetIndices, , drop = FALSE]
-  object@locationDataSub <- object@locationData[subsetIndices, , drop = FALSE]
-  object@metaDataSub <- object@metaData[subsetIndices, , drop = FALSE]
-  object@cellTypesSub <- object@cellTypes[subsetIndices]
-  # Ensure slideID is retained in metaDataSub if not already there
-  if(!"slideID" %in% colnames(object@metaDataSub)) {
-    object@metaDataSub$slideID <- object@slideID[subsetIndices]
-  }
-
-
-  return(object)
-})
 
 #' Compute PCA on Integrated Multi-Slide Data
 #'
@@ -262,7 +10,6 @@ setMethod("subsetDataMulti", "CoProm", function(object, cellTypesOfInterest) {
 #' @importFrom irlba prcomp_irlba
 #' @param object A `CoProm` object with the `integratedData` slot populated.
 #' @param nPCA Number of principal components to compute for each cell type.
-#' @param use_irlba Logical, whether to use irlba for faster computation.
 #' @param dataUse What data to use, choices between "raw" and "integrated".
 #'  Default is "raw"
 #' @param center_per_slide After the global PCA, do we do center per slide
@@ -279,8 +26,7 @@ setGeneric("computePCAMulti",
            function(object, nPCA = 40,
                     center = TRUE, scale. = TRUE,
                     dataUse = "raw",
-                    center_per_slide = FALSE,
-                    use_irlba = TRUE) standardGeneric("computePCAMulti"))
+                    center_per_slide = FALSE) standardGeneric("computePCAMulti"))
 
 #' @rdname computePCAMulti
 #' @aliases computePCAMulti,CoProm-method
@@ -288,10 +34,10 @@ setGeneric("computePCAMulti",
 #' @importFrom irlba prcomp_irlba
 #' @export
 setMethod("computePCAMulti",
-          "CoProm",
+          "CoProMulti",
           function(object, nPCA = 40, center = TRUE, scale. = TRUE,
                    dataUse = "raw",
-                   center_per_slide = FALSE, use_irlba = TRUE) {
+                   center_per_slide = FALSE) {
   ## arg match
   if(!(dataUse %in% c("raw", "integrated"))) stop("dataUse must be raw or integrated")
   ## Check if integrated data exists
@@ -386,162 +132,6 @@ setMethod("computePCAMulti",
 })
 
 
-#' Compute Distances within each Slide
-#'
-#' Calculates pairwise cell distances for specified cell types within each slide.
-#'
-#' @importFrom fields rdist
-#' @importFrom utils combn
-#' @importFrom stats setNames quantile
-#' @param object A `CoProm` object.
-#' @param distType Type of distance ("Euclidean2D", "Euclidean3D").
-#' @param xDistScale Scaling factors for coordinates.
-#' @param yDistScale Scaling factors for coordinates.
-#' @param zDistScale Scaling factors for coordinates.
-#' @param normalizeDistance Normalize distances based on 0.01 percentile?
-#' @param truncateLowDist Truncate very small distances?
-#' @param verbose Print progress messages?
-#'
-#' @return `CoProm` object with the `distances` slot populated:
-#'         `list(slideID = list(cellType1 = list(cellType2 = dist_matrix)))`.
-#' @export
-#' @rdname computeDistanceMulti
-#' @aliases computeDistanceMulti,CoProm-method
-setGeneric("computeDistanceMulti", function(
-    object, distType = c("Euclidean2D", "Euclidean3D"),
-    xDistScale = 1, yDistScale = 1, zDistScale = 1,
-    normalizeDistance = TRUE, truncateLowDist = TRUE,
-    verbose = TRUE) standardGeneric("computeDistanceMulti"))
-
-#' @rdname computeDistanceMulti
-#' @aliases computeDistanceMulti,CoProm-method
-#' @importFrom utils combn
-#' @importFrom stats setNames quantile
-#' @importFrom fields rdist
-#' @export
-setMethod("computeDistanceMulti", "CoProm", function(
-    object, distType = c("Euclidean2D", "Euclidean3D"),
-    xDistScale = 1, yDistScale = 1, zDistScale = 1,
-    normalizeDistance = TRUE, truncateLowDist = TRUE,
-    verbose = TRUE) {
-
-  distType <- match.arg(distType)
-  cts <- object@cellTypesOfInterest
-  if (length(cts) < 2) {
-    stop("At least two cellTypesOfInterest are needed for distance calculations.")
-  }
-  slides <- object@slideList
-
-  distances_all <- setNames(vector("list", length = length(slides)), slides)
-  global_min_1percentile <- Inf # To normalize across slides
-
-  for (sID in slides) {
-    if (verbose) message(paste("Computing distances for slide:", sID))
-
-    # Initialize structure for this slide
-    distances_slide <- setNames(vector("list", length = length(cts)), cts)
-    for (i in cts) {
-      distances_slide[[i]] <- setNames(vector("list", length = length(cts)), cts)
-    }
-
-    # Get subset indices for the current slide
-    slide_indices <- which(object@metaDataSub$slideID == sID)
-    locationData_slide <- object@locationDataSub[slide_indices, , drop = FALSE]
-    cellTypes_slide <- object@cellTypesSub[slide_indices]
-    cellIDs_slide <- rownames(locationData_slide)
-
-    pair_cell_types <- combn(cts, 2)
-    dist_1percentile_slide <- vector(mode = "numeric", length = ncol(pair_cell_types))
-    all_zero_pairs <- c() # Track pairs with all zero distances
-
-    for (pp in seq_len(ncol(pair_cell_types))) {
-      ct_i <- pair_cell_types[1, pp]
-      ct_j <- pair_cell_types[2, pp]
-
-      # Indices for cell types within the current slide
-      idx_i <- which(cellTypes_slide == ct_i)
-      idx_j <- which(cellTypes_slide == ct_j)
-
-      if (length(idx_i) <= 5 || length(idx_j) <= 5) {
-        if (verbose) message(paste("Skipping pair", ct_i, "-", ct_j,
-                                   "in slide", sID, "(missing cells)"))
-        distances_slide[[ct_i]][[ct_j]] <- matrix(nrow=length(idx_i), ncol=length(idx_j)) # Empty/NA matrix
-        dist_1percentile_slide[pp] <- NA
-        next
-      }
-
-      loc_i <- locationData_slide[idx_i, , drop = FALSE]
-      loc_j <- locationData_slide[idx_j, , drop = FALSE]
-
-      if (distType == "Euclidean2D") {
-        mat1 <- cbind(loc_i$x * xDistScale, loc_i$y * yDistScale)
-        mat2 <- cbind(loc_j$x * xDistScale, loc_j$y * yDistScale)
-      } else { # Euclidean3D
-        if (!"z" %in% colnames(loc_i)) stop("z coordinate missing for 3D distance.")
-        mat1 <- cbind(loc_i$x * xDistScale, loc_i$y * yDistScale, loc_i$z * zDistScale)
-        mat2 <- cbind(loc_j$x * xDistScale, loc_j$y * yDistScale, loc_j$z * zDistScale)
-      }
-
-      distances_ij <- fields::rdist(mat1, mat2)
-      rownames(distances_ij) <- rownames(loc_i)
-      colnames(distances_ij) <- rownames(loc_j)
-
-      min_dist_nonzero <- min(distances_ij[distances_ij > 0], Inf)
-
-      if (any(distances_ij == 0)) {
-        warning(paste("Zero distances detected between", ct_i, "and", ct_j, "in slide", sID,
-                      ". Replacing with smallest non-zero distance:", min_dist_nonzero))
-        distances_ij[distances_ij == 0] <- min_dist_nonzero
-      }
-
-      if(is.infinite(min_dist_nonzero)){
-        warning(paste("All distances are zero or missing between",
-                      ct_i, "and", ct_j, "in slide", sID))
-        dist_1percentile_slide[pp] <- NA
-        all_zero_pairs <- c(all_zero_pairs, pp)
-      } else {
-        percentile_choice <- min(1e-3, 2/(max(nrow(distances_ij), ncol(distances_ij))))
-        dist_1percentile_slide[pp] <- quantile(distances_ij[distances_ij > 0], percentile_choice)
-        global_min_1percentile <- min(global_min_1percentile, dist_1percentile_slide[pp], na.rm = TRUE)
-
-        if (truncateLowDist) {
-          distances_ij[distances_ij < dist_1percentile_slide[pp]] <- dist_1percentile_slide[pp]
-        }
-      }
-      distances_slide[[ct_i]][[ct_j]] <- distances_ij
-      if (verbose && !is.infinite(min_dist_nonzero)) {
-        cat("Slide:", sID, ", Pair:", ct_i, "-", ct_j, "\n")
-        print(quantile(distances_ij))
-      }
-    } # End pair loop (pp)
-    distances_all[[sID]] <- distances_slide
-  } # End slide loop (sID)
-
-  # Normalize across slides if requested
-  if (normalizeDistance) {
-    if(is.infinite(global_min_1percentile)){
-      warning("Cannot normalize distances - no valid non-zero distances found across slides.")
-    } else {
-      scaling_factor <- 0.01 / global_min_1percentile
-      if (verbose) cat("Global distance scaling factor:", scaling_factor, "\n")
-
-      for (sID in slides) {
-        for (pp in seq_len(ncol(pair_cell_types))) {
-          ct_i <- pair_cell_types[1, pp]
-          ct_j <- pair_cell_types[2, pp]
-          # Avoid scaling if matrix is NA/empty or had all zeros
-          if(!is.null(distances_all[[sID]][[ct_i]][[ct_j]]) && !(pp %in% all_zero_pairs)){
-            distances_all[[sID]][[ct_i]][[ct_j]] <- distances_all[[sID]][[ct_i]][[ct_j]] * scaling_factor
-          }
-        }
-      }
-    }
-  }
-
-  object@distances <- distances_all
-  return(object)
-})
-
 
 #' Compute Kernel Matrices for Multi-Slide Data
 #'
@@ -572,7 +162,7 @@ setGeneric("computeKernelMatrixMulti", function(
 #' @importFrom utils combn
 #' @importFrom stats setNames quantile
 #' @export
-setMethod("computeKernelMatrixMulti", "CoProm", function(
+setMethod("computeKernelMatrixMulti", "CoProMulti", function(
     object, sigmaValues, lowerLimit = 1e-7, upperQuantile = 0.85,
     normalizeKernel = FALSE, minAveCellNeighor = 2,
     verbose = TRUE) {
@@ -705,19 +295,38 @@ setMethod("computeKernelMatrixMulti", "CoProm", function(
 })
 
 
-# X_list_all: list(slideID = list(cellType = pc_matrix))
+# the structure X_list_all: list(slideID = list(cellType = pc_matrix))
 .scalePCMatsMulti <- function(X_list_all, pca_object, slides, cts){
-
   # Initialize pcaResults structure
   X_list_scaled <- setNames(vector("list", length = length(slides)), slides)
   for(sID in slides) {
     X_list_scaled[[sID]] <- setNames(vector("list", length = length(cts)), cts)
   }
 
+  # Keep the important structural checks but remove verbose cat() statements
+  missing_cts <- cts[!cts %in% names(pca_object)]
+  if(length(missing_cts) > 0) {
+    stop(paste("PCA objects missing for cell types:", paste(missing_cts, collapse = ", ")))
+  }
+
   for(ct in cts){
-    pca_A_sd <- pca_object[[ct]]$sdev
+    pca_ct_obj <- pca_object[[ct]]
+    if(is.null(pca_ct_obj) || !"sdev" %in% names(pca_ct_obj)) {
+      stop(paste("Invalid PCA object for cell type:", ct))
+    }
+    
+    pca_A_sd <- pca_ct_obj$sdev
+    if(is.null(pca_A_sd) || length(pca_A_sd) == 0) {
+      stop(paste("Invalid sdev for cell type:", ct))
+    }
+    
     for(sID in slides){
-      X_list_scaled[[sID]][[ct]] <- scale(X_list_all[[sID]][[ct]],
+      if(!sID %in% names(X_list_all) || !ct %in% names(X_list_all[[sID]]) || 
+         is.null(X_list_all[[sID]][[ct]])) {
+        stop(paste("Missing data for slide:", sID, "cell type:", ct))
+      }
+      
+      X_list_scaled[[sID]][[ct]] <- scale(X_list_all[[sID]][[ct]], 
                                           center = FALSE, scale = pca_A_sd)
     }
   }
@@ -751,7 +360,7 @@ setGeneric("runSkrCCAMulti", function(
 #' @aliases runSkrCCAMulti,CoProm-method
 #' @importFrom stats setNames
 #' @export
-setMethod("runSkrCCAMulti", "CoProm", function(
+setMethod("runSkrCCAMulti", "CoProMulti", function(
     object, nCC = 2, sigmaChoice = NULL, tol = 1e-5, scalePCs,
     maxIter = 200, n_cores = 1) {
 
@@ -761,6 +370,23 @@ setMethod("runSkrCCAMulti", "CoProm", function(
   cts <- object@cellTypesOfInterest
   if (length(cts) < 2) stop("At least two cellTypesOfInterest needed for skrCCA.")
   slides <- object@slideList
+
+  # Validate that pcaGlobal has entries for all cell types if scalePCs is TRUE
+  if(scalePCs && length(object@pcaGlobal) > 0) {
+    cat("DEBUG: scalePCs is TRUE and pcaGlobal has length:", length(object@pcaGlobal), "\n")
+    cat("DEBUG: cellTypesOfInterest:", paste(cts, collapse = ", "), "\n")
+    cat("DEBUG: names in pcaGlobal:", paste(names(object@pcaGlobal), collapse = ", "), "\n")
+    
+    missing_pca_cts <- cts[!cts %in% names(object@pcaGlobal)]
+    if(length(missing_pca_cts) > 0) {
+      stop(paste("Cannot scale PCs: PCA objects missing for cell types:", 
+                 paste(missing_pca_cts, collapse = ", "), 
+                 ". Available in pcaGlobal:", paste(names(object@pcaGlobal), collapse = ", "),
+                 ". Check computePCAMulti output for warnings about skipped cell types."))
+    }
+  } else if(scalePCs && length(object@pcaGlobal) == 0) {
+    stop("Cannot scale PCs: pcaGlobal slot is empty. Ensure computePCAMulti was run successfully.")
+  }
 
   # Determine which sigma values to use
   if (is.null(sigmaChoice)) {
@@ -779,10 +405,16 @@ setMethod("runSkrCCAMulti", "CoProm", function(
   X_list_all <- object@pcaResults # Assumes correct structure from computePCAMulti
 
   if(scalePCs){
+    cat("DEBUG: About to call .scalePCMatsMulti\n")
+    cat("DEBUG: cts passed to function:", paste(cts, collapse = ", "), "\n")
+    cat("DEBUG: object@pcaGlobal length:", length(object@pcaGlobal), "\n")
+    cat("DEBUG: names(object@pcaGlobal):", paste(names(object@pcaGlobal), collapse = ", "), "\n")
+    
     X_list_all <- .scalePCMatsMulti(X_list_all = X_list_all,
                                     pca_object = object@pcaGlobal,
                                     slides = slides,
                                     cts = cts )
+    cat("DEBUG: .scalePCMatsMulti completed successfully\n")
   }
 
   # Check consistency
@@ -879,7 +511,7 @@ setGeneric("computeNormalizedCorrelationMulti", function(
 #' @importFrom utils combn
 #' @importFrom irlba irlba
 #' @export
-setMethod("computeNormalizedCorrelationMulti", "CoProm", function(
+setMethod("computeNormalizedCorrelationMulti", "CoProMulti", function(
     object, tol = 1e-4, calculationMode = c("aggregate", "perSlide")) {
 
   calculationMode <- match.arg(calculationMode)
@@ -1082,7 +714,7 @@ setGeneric("computeGeneAndCellScoresMulti", function(
 #' @aliases computeGeneAndCellScoresMulti,CoProm-method
 #' @importFrom stats setNames
 #' @export
-setMethod("computeGeneAndCellScoresMulti", "CoProm", function(
+setMethod("computeGeneAndCellScoresMulti", "CoProMulti", function(
     object, sigmaChoice = NULL) {
 
   # --- Input Checks ---

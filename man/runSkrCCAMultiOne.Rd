@@ -32,7 +32,8 @@ runSkrCCAMultiOne(
 
 \item{nCC}{Number of canonical components to compute.}
 
-\item{sigmaChoice}{A specific sigma value to use. If NULL (default), uses all valid sigma values from \code{object@sigmaValues}.}
+\item{sigmaChoice}{A specific sigma value to use. If NULL (default),
+uses all valid sigma values from \code{object@sigmaValues}.}
 
 \item{tol}{Tolerance for optimization convergence.}
 
