@@ -83,7 +83,7 @@ setGeneric("getCellScoresInSitu",
 
 .getCellScoresInSituCore <- function(object, sigmaValueChoice, ccIndex = 1){
   ## if slideID slot exists, use multi-slide approach, otherwise single slide
-  if(length(object@slideID) == 0){
+  if(length(object@slideID) == 0 || length(unique(object@slideID)) == 1){
     return(.csSingleSlide(object, sigmaValueChoice, ccIndex = ccIndex))
   } else {
     return(.csMultiSlide(object, sigmaValueChoice, ccIndex = ccIndex))

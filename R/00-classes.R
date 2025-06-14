@@ -130,8 +130,7 @@ setClass("CoPro",
 
 setClass(
   "CoProSingle",
-  contains = "CoPro",
-  prototype = prototype(slideID = factor("singleSlide"))
+  contains = "CoPro"
 )
 
 

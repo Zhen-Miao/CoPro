@@ -522,8 +522,10 @@ setMethod(
       cts = validation_result$cts, nPCA = object@nPCA)
     }
     # run skrCCA
-    .runSkrCCAUnified(object, validation_result, scalePCs,
+    object <- .runSkrCCAUnified(object, validation_result, scalePCs,
      nCC, tol, transferred_weight_1, maxIter)
+    object@scalePCs = scalePCs
+    return(object)
   }
 )
 
@@ -546,7 +548,9 @@ setMethod(
       cts = validation_result$cts, nPCA = object@nPCA)
     }
     # run skrCCA
-    .runSkrCCAUnified(object, validation_result, scalePCs,
+    object <- .runSkrCCAUnified(object, validation_result, scalePCs,
      nCC, tol, transferred_weight_1, maxIter)
+    object@scalePCs = scalePCs
+    return(object)
   }
 )
