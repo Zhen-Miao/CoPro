@@ -209,7 +209,6 @@ setGeneric("getCorrTwoTypes",
   names(df_q) <- object@slideList
 
   for (q in object@slideList) {
-    x1 <- t(object@cellScores[[sigma_name]][[q]][[cellTypeA]][, ccIndex, drop = FALSE])
     # Get the cell scores data for cellTypeA
     cell_score_data_a <- object@cellScores[[sigma_name]][[cellTypeA]][, ccIndex, drop = FALSE]
     # cell_score_data_a <- object@cellScores[[sigma_name]][[q]][[cellTypeA]][, ccIndex, drop = FALSE]
