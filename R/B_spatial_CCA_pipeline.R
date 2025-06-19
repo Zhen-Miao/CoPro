@@ -141,6 +141,15 @@ setMethod(
 
     PCmats <- .getAllPCMats(allPCs = object@pcaGlobal, scalePCs = scalePCs)
 
+    # Check if there are at least 2 cell types for pairwise analysis
+    if (length(cts) < 2) {
+      stop(paste(
+        "At least 2 cell types are required for normalized correlation analysis.",
+        "Found only", length(cts), "cell type(s):", 
+        paste(cts, collapse = ", ")
+      ))
+    }
+
     pair_cell_types <- combn(cts, 2)
 
     correlation_value <- vector("list", length = length(sigmaValues))

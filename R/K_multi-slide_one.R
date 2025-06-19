@@ -26,7 +26,7 @@ setGeneric("computeNormalizedCorrelationMultiOne", function(
 #' @importFrom utils combn
 #' @importFrom irlba irlba
 #' @export
-setMethod("computeNormalizedCorrelationMultiOne", "CoProm", function(
+setMethod("computeNormalizedCorrelationMultiOne", "CoProMulti", function(
     object, tol = 1e-4, calculationMode = c("perSlide","aggregate")) {
 
   calculationMode <- match.arg(calculationMode)

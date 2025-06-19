@@ -35,8 +35,25 @@ setGeneric("getNormCorr",
 
 .getNormCorrCore <- function(object) {
   .checkInputNormCorr(object)
-    ## organize into a data.frame
-  ncorr <- do.call(rbind, slot(object, "normalizedCorrelation"))
+  
+  # Check if normalizedCorrelation slot is properly populated
+  normCorr <- slot(object, "normalizedCorrelation")
+  if (length(normCorr) == 0) {
+    stop("normalizedCorrelation slot is empty. Please run computeNormalizedCorrelation() first.")
+  }
+  
+  # Check if the list contains valid data frames
+  if (!all(sapply(normCorr, is.data.frame))) {
+    stop("normalizedCorrelation slot contains invalid data. Please run computeNormalizedCorrelation() again.")
+  }
+  
+  # Check if any data frames are empty
+  if (any(sapply(normCorr, nrow) == 0)) {
+    stop("normalizedCorrelation slot contains empty data frames. Please run computeNormalizedCorrelation() again.")
+  }
+  
+  ## organize into a data.frame
+  ncorr <- do.call(rbind, normCorr)
   ncorr$"ct12" <- paste(ncorr$"cellType1", ncorr$"cellType2", sep = "-")
   ncorr$"sigmaValues" <- factor(ncorr$"sigmaValues",
     levels = sort(unique(ncorr$"sigmaValues"),
@@ -161,7 +178,15 @@ setGeneric("getCorrTwoTypes",
   ## load the cellScores and kernel matrix
   sigma_name <- paste("sigma", sigmaValueChoice, sep = "_")
 
-  x1 <- t(object@cellScores[[sigma_name]][[cellTypeA]][, ccIndex, drop = FALSE])
+  # Get the cell scores data for cellTypeA
+  cell_score_data_a <- object@cellScores[[sigma_name]][[cellTypeA]][, ccIndex, drop = FALSE]
+  
+  # Ensure it's a matrix before transposing
+  if (!is.matrix(cell_score_data_a)) {
+    cell_score_data_a <- as.matrix(cell_score_data_a)
+  }
+  
+  x1 <- t(cell_score_data_a)
   x2 <- object@cellScores[[sigma_name]][[cellTypeB]][, ccIndex, drop = TRUE]
   ktemp <- object@kernelMatrices[[sigma_name]][[cellTypeA]][[cellTypeB]]
   if (length(ktemp) != 0) {
@@ -185,6 +210,16 @@ setGeneric("getCorrTwoTypes",
 
   for (q in object@slideList) {
     x1 <- t(object@cellScores[[sigma_name]][[q]][[cellTypeA]][, ccIndex, drop = FALSE])
+    # Get the cell scores data for cellTypeA
+    cell_score_data_a <- object@cellScores[[sigma_name]][[cellTypeA]][, ccIndex, drop = FALSE]
+    # cell_score_data_a <- object@cellScores[[sigma_name]][[q]][[cellTypeA]][, ccIndex, drop = FALSE]
+    
+    # Ensure it's a matrix before transposing
+    if (!is.matrix(cell_score_data_a)) {
+      cell_score_data_a <- as.matrix(cell_score_data_a)
+    }
+    
+    x1 <- t(cell_score_data_a)
     x2 <- object@cellScores[[sigma_name]][[q]][[cellTypeB]][, ccIndex, drop = TRUE]
     ktemp <- object@kernelMatrices[[sigma_name]][[q]][[cellTypeA]][[cellTypeB]]
     if (length(ktemp) != 0) {
@@ -245,12 +280,21 @@ setGeneric("getCorrOneType",
   }
 
   ## choose cell types
-
   cts <- object@cellTypesOfInterest
-  if (cellTypeA != cts){
-    stop("cellTypeA must be in cellTypesSub.")
+  if (length(cts) == 0) {
+    warning(paste(
+      "no cell type of interest specified,",
+      "using all cell types to run the analysis"
+    ))
+    cts <- unique(object@cellTypesSub)
   }
-
+  
+  if (!(cellTypeA %in% cts)) {
+    stop(paste(
+      "cellTypeA not in cellTypesOfInterest,",
+      "so the correlation plot cannot be generated."
+    ))
+  }
 
   ## set sigmaValueChoice
   if (is.null(sigmaValueChoice)) {
@@ -275,7 +319,7 @@ setGeneric("getCorrOneType",
     stop("sigmaValueChoice does not exist in the list of sigmaValues")
   }
 
-  ## make sure normalizedCorrelation exists
+  ## make sure cellScores exists
   if (length(object@cellScores) == 0 ||
       length(object@geneScores) == 0) {
     stop(paste(
@@ -297,7 +341,15 @@ setGeneric("getCorrOneType",
   ## load the cellScores and kernel matrix
   sigma_name <- paste("sigma", sigmaValueChoice, sep = "_")
 
-  x1 <- t(object@cellScores[[sigma_name]][[cellTypeA]][, ccIndex, drop = FALSE])
+  # Get the cell scores data
+  cell_score_data <- object@cellScores[[sigma_name]][[cellTypeA]][, ccIndex, drop = FALSE]
+  
+  # Ensure it's a matrix before transposing
+  if (!is.matrix(cell_score_data)) {
+    cell_score_data <- as.matrix(cell_score_data)
+  }
+  
+  x1 <- t(cell_score_data)
   x2 <- object@cellScores[[sigma_name]][[cellTypeA]][, ccIndex, drop = TRUE]
   ktemp <- object@kernelMatrices[[sigma_name]][[cellTypeA]][[cellTypeA]]
 
@@ -311,8 +363,16 @@ setGeneric("getCorrOneType",
   names(df_q) <- object@slideList
   sigma_name <- paste("sigma", sigmaValueChoice, sep = "_")
   for (q in object@slideList) {
-    x1 <- t(object@cellScores[[sigma_name]][[q]][[cellTypeA]][, ccIndex, drop = FALSE])
-    x2 <- object@cellScores[[sigma_name]][[q]][[cellTypeA]][, ccIndex, drop = TRUE]
+    # Get the cell scores data
+    cell_score_data <- object@cellScores[[sigma_name]][[q]][[cellTypeA]][, ccIndex, drop = FALSE]
+    
+    # Ensure it's a matrix before transposing
+    if (!is.matrix(cell_score_data)) {
+      cell_score_data <- as.matrix(cell_score_data)
+    }
+    
+    x1 <- t(cell_score_data)
+    x2 <- cell_score_data
     ktemp <- object@kernelMatrices[[sigma_name]][[q]][[cellTypeA]][[cellTypeA]]
     df_q[[q]] <- data.frame(AK = (x1 %*% ktemp)[1, , drop = TRUE], B = x2, slideID = q)
   }
