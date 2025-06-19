@@ -204,10 +204,10 @@ setMethod("computeNormalizedCorrelationMultiOne", "CoProMulti", function(
 #' Calculates slide-specific cell scores and potentially shared gene scores.
 #'
 #' @importFrom stats setNames
-#' @param object A `CoProm` object with skrCCA results.
+#' @param object A `CoProMulti` object with skrCCA results.
 #' @param sigmaChoice A specific sigma value to use. If NULL (default), uses `object@sigmaValueChoice`. If that's also NULL, uses the first available sigma.
 #'
-#' @return `CoProm` object with `cellScores` and `geneScores` slots populated.
+#' @return `CoProMulti` object with `cellScores` and `geneScores` slots populated.
 #' @export
 #' @rdname computeGeneAndCellScoresMultiOne
 #' @aliases computeGeneAndCellScoresMultiOne,CoProm-method
@@ -218,7 +218,7 @@ setGeneric("computeGeneAndCellScoresMultiOne", function(
 #' @aliases computeGeneAndCellScoresMultiOne,CoProm-method
 #' @importFrom stats setNames
 #' @export
-setMethod("computeGeneAndCellScoresMultiOne", "CoProm", function(
+setMethod("computeGeneAndCellScoresMultiOne", "CoProMulti", function(
     object, sigmaChoice = NULL) {
 
   # --- Input Checks ---

@@ -229,6 +229,36 @@ setGeneric("getCorrTwoTypes",
     df_q[[q]] <- data.frame(AK = (x1 %*% k)[1, , drop = TRUE], B = x2, slideID = q)
   }
   df_q <- do.call(rbind, df_q)
+  
+  # Reorder the data frame to match the original order in metaDataSub
+  # Get the cell IDs for the specified cell types in the original order
+  cell_ids_meta <- rownames(object@metaDataSub)[object@cellTypesSub %in% c(cellTypeA, cellTypeB)]
+  
+  # Create a mapping from the combined data to the original order
+  # We need to match the rownames of the cell scores to the cell IDs in metaDataSub
+  all_cell_ids <- c()
+  for (q in object@slideList) {
+    # Get cell IDs for cellTypeA and cellTypeB from this slide
+    slide_cell_ids_a <- rownames(object@cellScores[[sigma_name]][[q]][[cellTypeA]])
+    slide_cell_ids_b <- rownames(object@cellScores[[sigma_name]][[q]][[cellTypeB]])
+    all_cell_ids <- c(all_cell_ids, slide_cell_ids_a, slide_cell_ids_b)
+  }
+  
+  # Create a data frame with the correct order
+  # For multi-slide data, we need to match the cell IDs from metaDataSub
+  # to the order they appear in the combined data frame
+  if (length(all_cell_ids) == nrow(df_q)) {
+    # Add rownames to the data frame for ordering
+    rownames(df_q) <- all_cell_ids
+    
+    # Reorder based on the original order in metaDataSub
+    common_cells <- intersect(cell_ids_meta, all_cell_ids)
+    if (length(common_cells) > 0) {
+      df_q <- df_q[common_cells, , drop = FALSE]
+      rownames(df_q) <- NULL  # Remove rownames from final output
+    }
+  }
+  
   return(df_q)
 }
 
@@ -376,6 +406,35 @@ setGeneric("getCorrOneType",
     df_q[[q]] <- data.frame(AK = (x1 %*% ktemp)[1, , drop = TRUE], B = x2, slideID = q)
   }
   df_q <- do.call(rbind, df_q)
+  
+  # Reorder the data frame to match the original order in metaDataSub
+  # Get the cell IDs for the specified cell type in the original order
+  cell_ids_meta <- rownames(object@metaDataSub)[object@cellTypesSub == cellTypeA]
+  
+  # Create a mapping from the combined data to the original order
+  # We need to match the rownames of the cell scores to the cell IDs in metaDataSub
+  all_cell_ids <- c()
+  for (q in object@slideList) {
+    # Get cell IDs for cellTypeA from this slide
+    slide_cell_ids <- rownames(object@cellScores[[sigma_name]][[q]][[cellTypeA]])
+    all_cell_ids <- c(all_cell_ids, slide_cell_ids)
+  }
+  
+  # Create a data frame with the correct order
+  # For multi-slide data, we need to match the cell IDs from metaDataSub
+  # to the order they appear in the combined data frame
+  if (length(all_cell_ids) == nrow(df_q)) {
+    # Add rownames to the data frame for ordering
+    rownames(df_q) <- all_cell_ids
+    
+    # Reorder based on the original order in metaDataSub
+    common_cells <- intersect(cell_ids_meta, all_cell_ids)
+    if (length(common_cells) > 0) {
+      df_q <- df_q[common_cells, , drop = FALSE]
+      rownames(df_q) <- NULL  # Remove rownames from final output
+    }
+  }
+  
   return(df_q)
 }
 

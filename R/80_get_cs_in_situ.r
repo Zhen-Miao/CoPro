@@ -194,7 +194,7 @@ setGeneric("getCellScoresInSitu",
   for (q in all_slides) {
     for (ct in cts) {
       # Get location data for this slide and cell type
-      slide_mask <- object@cellTypesSub == ct & object@slideID == q
+      slide_mask <- object@cellTypesSub == ct & object@metaDataSub$slideID == q
       loc_t <- object@locationDataSub[slide_mask, , drop = FALSE]
       
       # Check if there are cells for this slide and cell type
@@ -299,6 +299,22 @@ setGeneric("getCellScoresInSitu",
   combined_loc_t$cellScores_b <- factor(combined_loc_t$cellScores_b,
                                         levels = all_binary_scores
   )
+
+  # Reorder the data frame to match the original order in metaDataSub
+  if (is.null(rownames(combined_loc_t)) || length(rownames(combined_loc_t)) == 0) {
+    stop("combined_loc_t has no rownames. This indicates a problem with the data structure.")
+  }
+  
+  cell_ids_meta <- rownames(object@metaDataSub)
+  common_cells <- intersect(cell_ids_meta, rownames(combined_loc_t))
+  if (length(common_cells) > 0) {
+    # Reorder based on the original order in metaDataSub
+    combined_loc_t <- combined_loc_t[common_cells, , drop = FALSE]
+    # Ensure the order matches exactly with metaDataSub
+    combined_loc_t <- combined_loc_t[match(common_cells, cell_ids_meta), , drop = FALSE]
+  } else {
+    warning("No common cell IDs found between combined_loc_t and metaDataSub")
+  }
 
   return(combined_loc_t)
 }
