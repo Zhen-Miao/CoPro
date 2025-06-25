@@ -18,8 +18,6 @@ setClassUnion("matrixOrDataFrame", c("matrix", "data.frame"))
 #' "x", "y", and "z". No other names allowed
 #' @slot locationDataSub A `data.frame` object to store the subset of
 #' the location data.
-#' @slot slideID A `factorOrCharacter` vector indicating the slide/sample origin for each cell.
-#' @slot slideList A `character` vector storing the unique slide identifiers present.
 #' @slot metaData A `data.frame` object to store metadata for each cell.
 #' @slot metaDataSub A `data.frame` object to store the subset of
 #' the meta data.
@@ -72,8 +70,6 @@ setClass("CoPro",
            normalizedData = "matrixOrSparseMatrix",
            normalizedDataSub = "matrixOrSparseMatrix",
            integratedData = "list", # Stores output of integrateSlidesMulti
-           slideID = "factorOrCharacter",
-           slideList = "character",
 
            ## location data
            locationData = "matrixOrDataFrame",
@@ -124,6 +120,16 @@ setClass("CoPro",
            skrCCAPermuOut = "list",
            cellPermu = "list",
            normalizedCorrelationPermu = "list"
+         ),
+         prototype = list(
+           cellTypesOfInterest = character(0),
+           geneList = character(0),
+           sigmaValues = numeric(0),
+           nPCA = numeric(0),
+           nCC = numeric(0),
+           nPermu = numeric(0),
+           sigmaValueChoice = numeric(0),
+           scalePCs = logical(0)
          )
 )
 
@@ -136,7 +142,15 @@ setClass(
 
 setClass(
   "CoProMulti",
-  contains = "CoPro"
+  contains = "CoPro",
+  slots = list(
+    slideID = "factorOrCharacter",
+    slideList = "character"
+  ),
+  prototype = list(
+    slideID = character(0),
+    slideList = character(0)
+  )
 )
 
 setClass("CoProm", contains = "CoProMulti")    # alias for *old* CoProm

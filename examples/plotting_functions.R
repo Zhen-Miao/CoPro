@@ -65,7 +65,7 @@ plotSuperimposedCellScores <- function(object,
   sigma_name <- paste("sigma", sigmaValueChoice, sep = "_")
   
   # Check if multi-slide or single slide
-  if (length(object@slideID) == 0 || length(unique(object@slideID)) == 1) {
+  if (!isMultiSlide(object)) {
     plot_data_list <- .getSingleSlideDataForSuperimposed(object, sigma_name, ccIndex, cell_types)
   } else {
     plot_data_list <- .getMultiSlideDataForSuperimposed(object, sigma_name, ccIndex, cell_types)
@@ -189,7 +189,7 @@ plotSuperimposedWithLegends <- function(object,
     
     # Get data for creating legends
     sigma_name <- paste("sigma", sigmaValueChoice, sep = "_")
-    if (length(object@slideID) == 0 || length(unique(object@slideID)) == 1) {
+    if (!isMultiSlide(object)) {
       plot_data_list <- .getSingleSlideDataForSuperimposed(object, sigma_name, ccIndex, cell_types)
     } else {
       plot_data_list <- .getMultiSlideDataForSuperimposed(object, sigma_name, ccIndex, cell_types)
@@ -285,11 +285,28 @@ plotSuperimposedWithLegends <- function(object,
 #' Helper function to get multi-slide data for superimposed plotting
 #' @noRd
 .getMultiSlideDataForSuperimposed <- function(object, sigma_name, ccIndex, cell_types) {
-  all_slides <- unique(object@slideID)
+  all_slides <- unique(getSlideID(object))
   plot_data_list <- setNames(vector("list", length(cell_types)), cell_types)
   
   for (ct in cell_types) {
     ct_data_list <- list()
+    
+    # Check if cell scores exist for this cell type (now using aggregated structure)
+    if (!ct %in% names(object@cellScores[[sigma_name]])) {
+      warning(paste("Cell scores not found for cell type", ct))
+      next
+    }
+    
+    cell_scores_matrix <- object@cellScores[[sigma_name]][[ct]]
+    
+    if (is.null(cell_scores_matrix) || nrow(cell_scores_matrix) == 0) {
+      warning(paste("Empty cell scores matrix for cell type", ct))
+      next
+    }
+    
+    if (ccIndex > ncol(cell_scores_matrix)) {
+      stop(paste("ccIndex", ccIndex, "exceeds number of canonical components"))
+    }
     
     for (q in all_slides) {
       # Get location data for this slide and cell type
@@ -300,24 +317,13 @@ plotSuperimposedWithLegends <- function(object,
         next
       }
       
-      # Check if cell scores exist for this slide and cell type
-      if (!q %in% names(object@cellScores[[sigma_name]]) ||
-          !ct %in% names(object@cellScores[[sigma_name]][[q]])) {
-        warning(paste("Cell scores not found for slide", q, "and cell type", ct))
-        next
-      }
+      # Get cell IDs for this slide and cell type
+      slide_cell_ids <- rownames(object@metaDataSub)[slide_mask]
       
-      cell_scores_matrix <- object@cellScores[[sigma_name]][[q]][[ct]]
+      # Find common cells between location data and cell scores
+      common_cells <- intersect(rownames(loc_data), slide_cell_ids)
+      common_cells <- intersect(common_cells, rownames(cell_scores_matrix))
       
-      if (is.null(cell_scores_matrix) || nrow(cell_scores_matrix) == 0) {
-        next
-      }
-      
-      if (ccIndex > ncol(cell_scores_matrix)) {
-        stop(paste("ccIndex", ccIndex, "exceeds number of canonical components"))
-      }
-      
-      common_cells <- intersect(rownames(loc_data), rownames(cell_scores_matrix))
       if (length(common_cells) == 0) {
         next
       }
@@ -374,7 +380,7 @@ plotCellTypeComparison <- function(object,
   # Get data for all cell types
   sigma_name <- paste("sigma", sigmaValueChoice, sep = "_")
   
-  if (length(object@slideID) == 0 || length(unique(object@slideID)) == 1) {
+  if (!isMultiSlide(object)) {
     plot_data_list <- .getSingleSlideDataForSuperimposed(object, sigma_name, ccIndex, cell_types)
   } else {
     plot_data_list <- .getMultiSlideDataForSuperimposed(object, sigma_name, ccIndex, cell_types)

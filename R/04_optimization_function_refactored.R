@@ -466,6 +466,466 @@ optimize_bilinear_n <- function(X_list, K_list, w_list,
   return(w_list)
 }
 
-# Backward compatibility aliases -- to be removed in the future
-optimize_bilinear_multi <- optimize_bilinear
-optimize_bilinear_multi_n <- optimize_bilinear_n
+#' @importFrom parallel mclapply
+#' @importFrom irlba irlba
+#' @importFrom stats setNames
+NULL
+
+#' Multi-slide optimization functions for CoPro
+#' 
+#' These functions extend the CoPro formulation to handle multiple slides
+#' where weight vectors are shared across slides.
+#' 
+#' The objective is:
+#' \deqn{Maximize_{\{w_i,w_j\}} \sum_q w_i^T X_{i,q}^T K_{ij,q} X_{j,q} w_j}
+#' subject to \eqn{||w_i|| \leq 1} for all \eqn{i}, where \eqn{q} is the slide index.
+#' 
+#' @name multi_slide_optimization
+#' @keywords internal
+NULL
+
+# ============================================================================
+# Helper Functions Specific to Multi-Slide (shared functions are in 04_optimization_function_refactored.R)
+# ============================================================================
+
+#' Validate multi-slide input data structure
+#' @param X_list_all List of lists of data matrices
+#' @param K_list_all List of lists of kernel matrices
+#' @param expected_cell_types Expected cell types (NULL to auto-detect)
+#' @param check_single_type Whether to check for single cell type
+#' @return List with validated inputs and metadata
+#' @noRd
+validate_multi_slide_inputs <- function(X_list_all, K_list_all, 
+                                       expected_cell_types = NULL,
+                                       check_single_type = FALSE) {
+  n_slides <- length(X_list_all)
+  
+  if (n_slides < 1) {
+    stop("Need at least one slide.")
+  }
+  
+  if (length(K_list_all) != n_slides) {
+    stop("X_list_all and K_list_all must have the same length (number of slides).")
+  }
+  
+  # Get cell types from all slides
+  cell_types_all <- lapply(X_list_all, names)
+  
+  # Check consistency
+  if (n_slides > 1 && !all(sapply(cell_types_all[-1], function(x) identical(sort(x), sort(cell_types_all[[1]]))))) {
+    stop("All slides must have the same cell types.")
+  }
+  
+  cell_types <- cell_types_all[[1]]
+  n_cell_types <- length(cell_types)
+  
+  # Check if single cell type when required
+  if (check_single_type && n_cell_types != 1) {
+    stop("This function requires exactly one cell type.")
+  }
+  
+  # Check against expected cell types if provided
+  if (!is.null(expected_cell_types) && !identical(sort(cell_types), sort(expected_cell_types))) {
+    stop("Cell types in data do not match expected cell types.")
+  }
+  
+  # Get number of features from first slide, first cell type
+  n_features <- ncol(X_list_all[[1]][[cell_types[1]]])
+  
+  # Validate dimensions across all slides and cell types
+  for (q in seq_len(n_slides)) {
+    for (ct in cell_types) {
+      if (!ct %in% names(X_list_all[[q]])) {
+        stop(paste("Cell type", ct, "missing in slide", q))
+      }
+      if (!is.matrix(X_list_all[[q]][[ct]]) || ncol(X_list_all[[q]][[ct]]) != n_features) {
+        stop(paste("Invalid or inconsistent feature count in slide", q, "cell type", ct))
+      }
+    }
+  }
+  
+  return(list(
+    n_slides = n_slides,
+    cell_types = cell_types,
+    n_cell_types = n_cell_types,
+    n_features = n_features
+  ))
+}
+
+#' Initialize weights for multi-slide using SVD on aggregated data
+#' @param X_list_all List of lists of data matrices
+#' @param cell_types Vector of cell type names
+#' @param use_aggregation Whether to aggregate across slides for initialization
+#' @return Named list of initial weight vectors
+#' @noRd
+initialize_weights_multi_slide <- function(X_list_all, cell_types, use_aggregation = TRUE) {
+  w_list <- setNames(vector("list", length(cell_types)), cell_types)
+  
+  for (ct in cell_types) {
+    if (use_aggregation && length(X_list_all) > 1) {
+      # Stack data from all slides for better initialization
+      X_stacked <- do.call(rbind, lapply(X_list_all, function(slide) slide[[ct]]))
+    } else {
+      # Use first slide only
+      X_stacked <- X_list_all[[1]][[ct]]
+    }
+    
+    svd_result <- tryCatch(
+      irlba(X_stacked, nv = 1, right_only = TRUE),
+      error = function(e) {
+        stop(paste("SVD failed for cell type:", ct, "Error:", e$message))
+      }
+    )
+    
+    if (ncol(svd_result$v) < 1) {
+      stop(paste("SVD resulted in zero singular vectors for cell type:", ct))
+    }
+    
+    w_list[[ct]] <- svd_result$v[, 1, drop = FALSE]
+  }
+  
+  return(w_list)
+}
+
+#' Compute Y matrix for a single slide
+#' @param X_list Data matrices for one slide
+#' @param K_list Kernel matrices for one slide
+#' @param ct_i First cell type
+#' @param ct_j Second cell type
+#' @return Y_ij matrix
+#' @noRd
+compute_Y_slide <- function(X_list, K_list, ct_i, ct_j) {
+  if (ct_i == ct_j) {
+    # Within-cell-type case
+    X <- X_list[[ct_i]]
+    K <- K_list[[ct_i]][[ct_i]]
+    return(crossprod(X, K %*% X))
+  } else {
+    # Between-cell-type case
+    X1 <- X_list[[ct_i]]
+    X2 <- X_list[[ct_j]]
+    K12 <- get_kernel_matrix(K_list, ct_i, ct_j)
+    return(crossprod(X1, K12 %*% X2))
+  }
+}
+
+#' Aggregate Y matrices across slides
+#' @param X_list_all List of lists of data matrices
+#' @param K_list_all List of lists of kernel matrices
+#' @param cell_types Cell type names
+#' @param n_cores Number of cores for parallel computation
+#' @return Aggregated Y matrices structure
+#' @noRd
+compute_Y_multi_slide <- function(X_list_all, K_list_all, cell_types, n_cores = 1) {
+  n_slides <- length(X_list_all)
+  n_mat <- length(cell_types)
+  is_within <- (n_mat == 1)
+  
+  if (is_within) {
+    # Single cell type case
+    ct <- cell_types[1]
+    Y_list <- mclapply(seq_len(n_slides), function(q) {
+      compute_Y_slide(X_list_all[[q]], K_list_all[[q]], ct, ct)
+    }, mc.cores = n_cores)
+    
+    Y_sum <- Reduce("+", Y_list)
+    Y_aggregate <- setNames(list(setNames(list(Y_sum), ct)), ct)
+    
+  } else {
+    # Multiple cell types case
+    Y_aggregate <- setNames(vector("list", n_mat), cell_types)
+    for (ct in cell_types) {
+      Y_aggregate[[ct]] <- setNames(vector("list", n_mat), cell_types)
+    }
+    
+    # Process all pairs
+    pair_indices <- combn(n_mat, 2)
+    for (pp in seq_len(ncol(pair_indices))) {
+      i_idx <- pair_indices[1, pp]
+      j_idx <- pair_indices[2, pp]
+      ct_i <- cell_types[i_idx]
+      ct_j <- cell_types[j_idx]
+      
+      # Compute Y_ij for all slides in parallel
+      Y_ij_list <- mclapply(seq_len(n_slides), function(q) {
+        compute_Y_slide(X_list_all[[q]], K_list_all[[q]], ct_i, ct_j)
+      }, mc.cores = n_cores)
+      
+      Y_ij_sum <- Reduce("+", Y_ij_list)
+      Y_aggregate[[ct_i]][[ct_j]] <- Y_ij_sum
+      Y_aggregate[[ct_j]][[ct_i]] <- t(Y_ij_sum)
+    }
+  }
+  
+  return(Y_aggregate)
+}
+
+#' Compute update vector for multi-slide optimization
+#' @param ct_i Cell type to update
+#' @param cell_types All cell types
+#' @param X_list_all List of lists of data matrices
+#' @param K_list_all List of lists of kernel matrices
+#' @param w_list Current weights
+#' @param n_features Number of features
+#' @param n_cores Number of cores
+#' @return Update vector
+#' @noRd
+compute_update_vector_multi_slide <- function(ct_i, cell_types, X_list_all, K_list_all, 
+                                             w_list, n_features, n_cores = 1) {
+  n_slides <- length(X_list_all)
+  w_i_update_vec <- matrix(0, nrow = n_features, ncol = 1)
+  
+  for (ct_j in cell_types) {
+    if (ct_i == ct_j) next
+    
+    w_j <- w_list[[ct_j]]
+    
+    # Compute contribution from all slides in parallel
+    contributions <- mclapply(seq_len(n_slides), function(q) {
+      X_i <- X_list_all[[q]][[ct_i]]
+      X_j <- X_list_all[[q]][[ct_j]]
+      K_ij <- get_kernel_matrix(K_list_all[[q]], ct_i, ct_j)
+      
+      # Efficient computation: t(X_i) %*% K_ij %*% (X_j %*% w_j)
+      v_j <- X_j %*% w_j
+      kv_j <- K_ij %*% v_j
+      crossprod(X_i, kv_j)
+    }, mc.cores = n_cores)
+    
+    # Sum contributions from all slides
+    contribution_sum <- Reduce("+", contributions)
+    w_i_update_vec <- w_i_update_vec + contribution_sum
+  }
+  
+  return(w_i_update_vec)
+}
+
+# ============================================================================
+# Main Optimization Functions
+# ============================================================================
+
+#' Multi-slide SkrCCA optimization - First Component
+#' 
+#' Handles both standard (multiple cell types) and within (single cell type) cases
+#' 
+#' @param X_list_all List of lists of data matrices
+#' @param K_list_all List of lists of kernel matrices
+#' @param max_iter Maximum number of iterations
+#' @param tol Convergence tolerance
+#' @param n_cores Number of cores for parallel computation
+#' @param direct_solve For single cell type, use direct eigenvalue solution
+#' @return Named list of weight vectors (first component)
+#' @export
+optimize_bilinear_multi_slides <- function(X_list_all, K_list_all,
+                                          max_iter = 1000, tol = 1e-5,
+                                          n_cores = 1, direct_solve = TRUE) {
+  
+  # Validate inputs
+  validated <- validate_multi_slide_inputs(X_list_all, K_list_all)
+  n_slides <- validated$n_slides
+  cell_types <- validated$cell_types
+  n_cell_types <- validated$n_cell_types
+  n_features <- validated$n_features
+  
+  # Check if this is within-cell-type case
+  is_within <- (n_cell_types == 1)
+  
+  # For single slide, delegate to single-slide function
+  if (n_slides == 1) {
+    message("Single slide detected, using single-slide optimization")
+    return(optimize_bilinear(X_list_all[[1]], K_list_all[[1]], 
+                            max_iter = max_iter, tol = tol))
+  }
+  
+  # Handle within-cell-type case with direct solution
+  if (is_within && direct_solve) {
+    ct <- cell_types[1]
+    
+    # Aggregate Y matrices across slides
+    Y_aggregate <- compute_Y_multi_slide(X_list_all, K_list_all, cell_types, n_cores)
+    Y_sum <- Y_aggregate[[ct]][[ct]]
+    
+    # Direct eigenvalue solution
+    eigen_result <- tryCatch(
+      eigen(Y_sum, symmetric = TRUE),
+      error = function(e) {
+        warning(paste("Eigen decomposition failed:", e$message, 
+                     "\nFalling back to iterative method"))
+        return(NULL)
+      }
+    )
+    
+    if (!is.null(eigen_result)) {
+      w_list <- setNames(list(eigen_result$vectors[, 1, drop = FALSE]), ct)
+      message(paste("Direct solution found, largest eigenvalue:", 
+                   round(eigen_result$values[1], 6)))
+      return(w_list)
+    }
+  }
+  
+  # Initialize weights
+  w_list <- initialize_weights_multi_slide(X_list_all, cell_types, use_aggregation = TRUE)
+  
+  # Iterative optimization
+  iter <- 0
+  while (iter <= max_iter) {
+    w_list_old <- w_list
+    
+    if (is_within) {
+      # Within-cell-type optimization
+      ct <- cell_types[1]
+      
+      # Compute aggregated update
+      update_contributions <- mclapply(seq_len(n_slides), function(q) {
+        X <- X_list_all[[q]][[ct]]
+        K <- K_list_all[[q]][[ct]][[ct]]
+        w <- w_list[[ct]]
+        
+        # Compute: t(X) %*% K %*% X %*% w
+        Xw <- X %*% w
+        KXw <- K %*% Xw
+        crossprod(X, KXw)
+      }, mc.cores = n_cores)
+      
+      w_update <- Reduce("+", update_contributions)
+      w_list[[ct]] <- normalize_vec(w_update)
+      
+    } else {
+      # Standard multi-cell-type optimization
+      for (ct_i in cell_types) {
+        w_i_update_vec <- compute_update_vector_multi_slide(
+          ct_i, cell_types, X_list_all, K_list_all, w_list, n_features, n_cores
+        )
+        w_list[[ct_i]] <- normalize_vec(w_i_update_vec)
+      }
+    }
+    
+    # Check convergence
+    current_max_diff <- check_convergence(w_list, w_list_old, cell_types)
+    
+    if (current_max_diff <= tol) {
+      message(paste("Convergence reached at", iter, "iterations (Max diff =", 
+                   sprintf("%.3e", current_max_diff), ")"))
+      break
+    }
+    iter <- iter + 1
+  }
+  
+  if (iter > max_iter) {
+    warning("Maximum number of iterations reached without convergence")
+  }
+  
+  # Ensure proper matrix format
+  for (ct in cell_types) {
+    if (!is.matrix(w_list[[ct]]) || ncol(w_list[[ct]]) != 1) {
+      w_list[[ct]] <- matrix(w_list[[ct]], ncol = 1)
+    }
+  }
+  
+  return(w_list)
+}
+
+#' Multi-slide SkrCCA optimization - Multiple Components
+#' 
+#' Computes components 2 to nCC using deflation
+#' 
+#' @param X_list_all List of lists of data matrices
+#' @param K_list_all List of lists of kernel matrices
+#' @param w_list Initial weight list with first component(s)
+#' @param cellTypesOfInterest Cell types to process
+#' @param nCC Total number of components desired
+#' @param max_iter Maximum iterations for refinement
+#' @param tol Convergence tolerance
+#' @param n_cores Number of cores for parallel computation
+#' @return Updated weight list with all components
+#' @export
+optimize_bilinear_n_multi_slides <- function(X_list_all, K_list_all, w_list,
+                                            cellTypesOfInterest,
+                                            nCC = 2, max_iter = 1000, 
+                                            tol = 1e-5, n_cores = 1) {
+  
+  # Validate inputs
+  validated <- validate_multi_slide_inputs(X_list_all, K_list_all, 
+                                          expected_cell_types = cellTypesOfInterest)
+  n_slides <- validated$n_slides
+  cell_types <- cellTypesOfInterest
+  n_cell_types <- length(cell_types)
+  n_features <- validated$n_features
+  is_within <- (n_cell_types == 1)
+  
+  # Validate w_list
+  if (length(w_list) != n_cell_types || 
+      !all(cell_types %in% names(w_list))) {
+    stop("w_list structure does not match cellTypesOfInterest")
+  }
+  
+  # Check existing components
+  k_start <- ncol(w_list[[cell_types[1]]])
+  for (ct in cell_types) {
+    if (!is.matrix(w_list[[ct]]) || ncol(w_list[[ct]]) != k_start) {
+      stop(paste("Inconsistent component count in w_list for cell type:", ct))
+    }
+  }
+  
+  if (nCC <= k_start) {
+    stop(paste("nCC (", nCC, ") must be greater than existing components (", k_start, ")"))
+  }
+  
+  # Initialize Y_resi for all slides
+  Y_resi_all <- vector("list", n_slides)
+  for (q in seq_len(n_slides)) {
+    Y_resi_all[[q]] <- compute_Y_resi(X_list_all[[q]], K_list_all[[q]], cell_types)
+  }
+  
+  # Compute additional components
+  for (qq in k_start:(nCC - 1)) {
+    
+    # Step 1: Apply deflation across all slides
+    Y_resi_all <- mclapply(seq_len(n_slides), function(q) {
+      apply_deflation(Y_resi_all[[q]], w_list, qq, cell_types)
+    }, mc.cores = n_cores)
+    
+    # Step 2: Aggregate deflated Y matrices
+    if (is_within) {
+      ct <- cell_types[1]
+      Y_sum_list <- lapply(Y_resi_all, function(Y_resi) Y_resi[[ct]][[ct]])
+      Y_aggregate <- setNames(list(setNames(list(Reduce("+", Y_sum_list)), ct)), ct)
+    } else {
+      # Initialize aggregate structure
+      Y_aggregate <- setNames(vector("list", n_cell_types), cell_types)
+      for (ct in cell_types) {
+        Y_aggregate[[ct]] <- setNames(vector("list", n_cell_types), cell_types)
+      }
+      
+      # Sum across slides for each pair
+      for (ct_i in cell_types) {
+        for (ct_j in cell_types) {
+          if (ct_i == ct_j) next
+          Y_ij_list <- lapply(Y_resi_all, function(Y_resi) Y_resi[[ct_i]][[ct_j]])
+          Y_aggregate[[ct_i]][[ct_j]] <- Reduce("+", Y_ij_list)
+        }
+      }
+    }
+    
+    # Step 3: Initialize next component
+    w_list_new <- initialize_next_component(Y_aggregate, cell_types)
+    
+    # Step 4: Iterative refinement
+    w_list_qq_plus_1 <- bilinear_w_from_Y_resi(
+      w_list_new = w_list_new,
+      Y_resi = Y_aggregate,
+      n_features = n_features,
+      max_iter = max_iter,
+      tol = tol
+    )
+    
+    # Step 5: Append new component
+    for (ct in cell_types) {
+      w_list[[ct]] <- cbind(w_list[[ct]], w_list_qq_plus_1[[ct]])
+    }
+  }
+  
+  return(w_list)
+}
+
+

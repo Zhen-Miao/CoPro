@@ -1,5 +1,6 @@
 #' computeGeneAndCellScores
 #' @importFrom stats setNames
+#' @importFrom methods slotNames
 #' @param object A `CoPro` or `CoProMulti` object containing CCA results
 #' and kernel matrices.
 #'
@@ -75,44 +76,8 @@ setGeneric(
 
 }
 
-.initializeCSGS <- function(cts, sigma_names, nCC, 
-          cellTypesSub, cellNamesSub, geneNamesSub) {
-    ## cell scores and gene scores are both by cell types
-    cellScores <- setNames(
-      vector(mode = "list", length = length(sigma_names)),
-      sigma_names
-    )
-    for (t in sigma_names) {
-      cellScores[[t]] <- setNames(
-        vector(mode = "list", length = length(cts)),
-        cts
-      )
-    }
-
-    ## Initialize geneScores with same structure as cellScores (different dimensions will be set below)
-    geneScores <- cellScores
-
-    for (t in sigma_names) {
-      for (i in cts) {
-        cellScores[[t]][[i]] <- .createScoreMatrix(
-          nrows = sum(cellTypesSub == i),
-          ncols = nCC,
-          row_names = cellNamesSub[cellTypesSub == i]
-        )
-
-        geneScores[[t]][[i]] <- .createScoreMatrix(
-          nrows = length(geneNamesSub),
-          ncols = nCC,
-          row_names = geneNamesSub
-        )
-      }
-
-    }
-    return(list(cellScores = cellScores, geneScores = geneScores))
-}
-
-.initializeCSGSMulti <- function(cts, sigma_names, nCC, slides) {
-    ## Initialize structure for multi-slide data
+.initializeCSGS <- function(cts, sigma_names, nCC, object) {
+    ## Unified initialization for both single and multi-slide data
     cellScores <- setNames(
       vector(mode = "list", length = length(sigma_names)),
       sigma_names
@@ -120,98 +85,80 @@ setGeneric(
     
     for (t in sigma_names) {
       cellScores[[t]] <- setNames(
-        vector(mode = "list", length = length(slides)),
-        slides
-      )
-      for (sID in slides) {
-        cellScores[[t]][[sID]] <- setNames(
-          vector(mode = "list", length = length(cts)),
-          cts
-        )
-      }
-    }
-
-    geneScores <- setNames(
-      vector(mode = "list", length = length(sigma_names)),
-      sigma_names
-    )
-    for (t in sigma_names) {
-      geneScores[[t]] <- setNames(
         vector(mode = "list", length = length(cts)),
         cts
       )
+    }
+
+    ## Initialize geneScores with same structure as cellScores
+    geneScores <- cellScores
+
+    ## Unified approach: initialize matrices immediately for all cases
+    cellNamesSub <- rownames(object@metaDataSub)
+    cellTypesSub <- object@cellTypesSub
+    geneNamesSub <- if("geneList" %in% slotNames(object)) object@geneList else colnames(object@normalizedDataSub)
+    
+    for (t in sigma_names) {
+      for (ct in cts) {
+        cellScores[[t]][[ct]] <- .createScoreMatrix(
+          nrows = sum(cellTypesSub == ct),
+          ncols = nCC,
+          row_names = cellNamesSub[cellTypesSub == ct]
+        )
+
+        geneScores[[t]][[ct]] <- .createScoreMatrix(
+          nrows = length(geneNamesSub),
+          ncols = nCC,
+          row_names = geneNamesSub
+        )
+      }
     }
 
     return(list(cellScores = cellScores, geneScores = geneScores))
 }
 
 .CSToMeta <- function(object, cellScores, cts, sigma_names, nCC) {
-      ## add cell score information to the cell metadata
-    meta_t <- stats::setNames(
-      vector(mode = "list", length = length(cts)),
-      cts
-    )
-    for (i in cts) {
-      meta_t[[i]] <- object@metaDataSub[object@cellTypesSub == i, ]
-      for (t in sigma_names){
-        for (cc_index in seq_len(nCC)) {
-          cc_name <- paste0("CC_", cc_index)
-          cellScoreColName <- paste0("cellScore_", t, "_cc_index_", cc_index)
-          meta_t[[i]][, cellScoreColName] <-
-            cellScores[[t]][[i]][rownames(meta_t[[i]]), cc_name]
-        }
-      }
-    }
-
-    ## combine each cell type meta.data back
-    names(meta_t) <- NULL
-    meta_all <- do.call(rbind, meta_t)
-    cell_names <- rownames(object@metaDataSub)
-    row_names <- rownames(meta_all)
-
-    ## extensive checking on the rownames of meta_all
-    ## as this is a very common error
-    if(is.null(row_names)) {
-      stop("rownames of meta_all is null, code error")
-    } else if (!any(row_names %in% cell_names)) {
-      warning("rownames of meta_all are not in the rownames of metaDataSub, ",
-              "some cell scores will be lost")
-    } else {
-      meta_all <- meta_all[cell_names, ]
-    }
-
-    return(meta_all)
-}
-
-.CSToMetaMulti <- function(object, cellScores, cts, sigma_names, nCC, slides) {
-    ## Add cell score information to metadata for multi-slide data
+    ## Unified function to add cell score information to metadata for both single and multi-slide data
+    ## Both approaches essentially add columns to metadata - using the more efficient direct approach
+    
     for (t in sigma_names) {
-      for (sID in slides) {
-        scores_slide <- cellScores[[t]][[sID]]
+      for (ct in cts) {
+        scores_ct <- cellScores[[t]][[ct]]
         
-        for (ct in cts) {
-          scores_ct <- scores_slide[[ct]]
-          if (!is.null(scores_ct) && nrow(scores_ct) > 0) {
-            meta_indices_ct_slide <- object@metaDataSub$slideID == sID & object@cellTypesSub == ct
-            cells_ct_slide <- rownames(object@metaDataSub)[meta_indices_ct_slide]
+        if (!is.null(scores_ct) && nrow(scores_ct) > 0) {
+          # Get all cells of this cell type
+          meta_indices_ct <- object@cellTypesSub == ct
+          cells_ct <- rownames(object@metaDataSub)[meta_indices_ct]
 
-            # Ensure scores match metadata rows
-            if (all(rownames(scores_ct) %in% cells_ct_slide) && 
-                length(rownames(scores_ct)) == length(cells_ct_slide)) {
-              scores_ct_aligned <- scores_ct[cells_ct_slide, , drop = FALSE]
-              for (cc_index in seq_len(nCC)) {
-                cc_colname <- paste0("cellScore_", t, "_cc_index_", cc_index)
-                object@metaDataSub[cells_ct_slide, cc_colname] <- 
-                  scores_ct_aligned[, paste0("CC_", cc_index)]
-              }
-            } else {
-              warning(paste("Mismatch between cell score rownames and metadata for:", sID, ct))
+          # Ensure scores match metadata rows
+          if (all(rownames(scores_ct) %in% cells_ct) && 
+              length(rownames(scores_ct)) == length(cells_ct)) {
+            scores_ct_aligned <- scores_ct[cells_ct, , drop = FALSE]
+            
+            for (cc_index in seq_len(nCC)) {
+              cc_colname <- paste0("cellScore_", t, "_cc_index_", cc_index)
+              object@metaDataSub[cells_ct, cc_colname] <- 
+                scores_ct_aligned[, paste0("CC_", cc_index)]
             }
+          } else {
+            warning(paste("Mismatch between cell score rownames and metadata for cell type:", ct))
           }
         }
       }
     }
     return(object@metaDataSub)
+}
+
+.computeCellScores <- function(X_data, W_ct, cell_ids, nCC) {
+  ## Helper function to compute cell scores for a given X matrix and weight matrix
+  if (is.null(X_data) || is.null(W_ct) || length(cell_ids) == 0) {
+    return(.createScoreMatrix(length(cell_ids), nCC, row_names = cell_ids))
+  }
+  
+  scores_mat <- X_data %*% W_ct
+  colnames(scores_mat) <- paste0("CC_", 1:nCC)
+  rownames(scores_mat) <- cell_ids
+  return(scores_mat)
 }
 
 .computeGACCore <- function(object, cts, sigmaValues, scalePCs) {
@@ -221,10 +168,7 @@ setGeneric(
     PCmats <- .getAllPCMats(allPCs = object@pcaGlobal, scalePCs = scalePCs)
     sigma_names <- paste("sigma", sigmaValues, sep = "_")
 
-    csgs <- .initializeCSGS(cts, sigma_names, nCC, 
-           cellTypesSub = object@cellTypesSub, 
-           cellNamesSub = rownames(object@normalizedDataSub),
-           geneNamesSub = colnames(object@normalizedDataSub))
+    csgs <- .initializeCSGS(cts, sigma_names, nCC, object)
 
     cellScores <- csgs$cellScores
     geneScores <- csgs$geneScores
@@ -330,17 +274,17 @@ setGeneric(
   nCC <- object@nCC
   sigma_names <- paste("sigma", sigmaValues, sep = "_")
   
-  # Initialize data structures
-  csgs <- .initializeCSGSMulti(cts, sigma_names, nCC, slides)
-  cellScores <- csgs$cellScores
-  geneScores <- csgs$geneScores
-  
-  ## Iterate over all sigma values and slides
+      # Initialize data structures - now aggregated across slides
+    csgs <- .initializeCSGS(cts, sigma_names, nCC, object)
+    cellScores <- csgs$cellScores
+    geneScores <- csgs$geneScores
+
+  ## Iterate over all sigma values and slides to compute and aggregate scores
   for (tt in seq_along(sigmaValues)) {
     t <- sigma_names[tt]
     W_list <- object@skrCCAOut[[t]] # Shared weights for this sigma
     
-    # Calculate Cell Scores (Slide-Specific)
+    # Calculate Cell Scores (Slide-Specific, then aggregated)
     for (sID in slides) {
       X_list_slide <- object@pcaResults[[sID]]
       meta_slide <- object@metaDataSub[object@metaDataSub$slideID == sID, ]
@@ -352,16 +296,15 @@ setGeneric(
         check_XW <- .checkXW(X_ct, W_ct, sID, ct)
         cell_ids_ct_slide <- rownames(meta_slide)[celltype_slide == ct]
         
-        if (check_XW) {
-          scores_mat <- X_ct %*% W_ct
-          colnames(scores_mat) <- paste0("CC_", 1:nCC)
-          rownames(scores_mat) <- cell_ids_ct_slide
-        } else {
-          # Create empty matrix if no cells or data mismatch
-          scores_mat <- .createScoreMatrix(length(cell_ids_ct_slide), nCC, row_names = cell_ids_ct_slide)
+        if (check_XW && length(cell_ids_ct_slide) > 0) {
+          # Compute scores for this slide and cell type
+          scores_mat_slide <- X_ct %*% W_ct
+          colnames(scores_mat_slide) <- paste0("CC_", 1:nCC)
+          rownames(scores_mat_slide) <- cell_ids_ct_slide
+          
+          # Add these scores to the aggregated matrix
+          cellScores[[t]][[ct]][cell_ids_ct_slide, ] <- scores_mat_slide
         }
-        
-        cellScores[[t]][[sID]][[ct]] <- scores_mat
       }
     }
     
@@ -378,9 +321,9 @@ setGeneric(
   object@cellScores <- cellScores
   object@geneScores <- geneScores
   
-  ## Add cell scores to metadata
-  meta_all <- .CSToMetaMulti(object, cellScores, cts, sigma_names, nCC, slides)
-  object@metaDataSub <- meta_all
+      ## Add cell scores to metadata
+    meta_all <- .CSToMeta(object, cellScores, cts, sigma_names, nCC)
+    object@metaDataSub <- meta_all
   
   return(object)
 }

@@ -1,4 +1,3 @@
-
 ## get PC matrices
 .getAllPCMats <- function(allPCs, scalePCs) {
 
@@ -66,18 +65,30 @@ center_scale_matrix_opt <- function(input_matrix,
 
 
 
-# Function to normalize a vector to have unit norm
+#' Normalize a vector to unit length
+#' @param v Input vector or matrix (if matrix, treated as column vector)
+#' @return Normalized vector as column matrix
+#' @noRd
 normalize_vec <- function(v) {
-  norm_v <- sqrt(sum(v^2))
-  # Check if norm is near zero to avoid division by zero
-  if (norm_v < 1e-7) {
-    # If close to zero, return itself, trigger warning
-    warning("vector is close to a zero vector, check potential issue")
-    return(v)
+  if (is.matrix(v)) {
+    v_norm <- sqrt(sum(v^2))
   } else {
-    return(v / norm_v)
+    v_norm <- sqrt(sum(v^2))
+  }
+  
+  if (v_norm < 1e-12) {
+    warning("Vector has very small norm, may cause numerical issues")
+    return(matrix(0, nrow = length(v), ncol = 1))
+  }
+  
+  normalized <- v / v_norm
+  if (is.matrix(v)) {
+    return(normalized)
+  } else {
+    return(matrix(normalized, ncol = 1))
   }
 }
+
 
 
 #' Assign distance matrix manually
@@ -142,3 +153,57 @@ setMethod(
     return(object)
   }
 )
+
+#' Get slide IDs from CoPro object
+#'
+#' @param object A CoPro object (CoProSingle or CoProMulti)
+#' @return For CoProMulti: the slideID vector; For CoProSingle: character(0)
+#' @export
+#' @rdname getSlideID
+setGeneric("getSlideID", function(object) standardGeneric("getSlideID"))
+
+#' @rdname getSlideID
+setMethod("getSlideID", "CoProSingle", function(object) {
+  character(0)
+})
+
+#' @rdname getSlideID  
+setMethod("getSlideID", "CoProMulti", function(object) {
+  object@slideID
+})
+
+#' Get slide list from CoPro object
+#'
+#' @param object A CoPro object (CoProSingle or CoProMulti)
+#' @return For CoProMulti: the slideList vector; For CoProSingle: character(0)
+#' @export
+#' @rdname getSlideList
+setGeneric("getSlideList", function(object) standardGeneric("getSlideList"))
+
+#' @rdname getSlideList
+setMethod("getSlideList", "CoProSingle", function(object) {
+  character(0)
+})
+
+#' @rdname getSlideList
+setMethod("getSlideList", "CoProMulti", function(object) {
+  object@slideList
+})
+
+#' Check if object is multi-slide
+#'
+#' @param object A CoPro object (CoProSingle or CoProMulti)
+#' @return Logical indicating if object contains multiple slides
+#' @export
+#' @rdname isMultiSlide
+setGeneric("isMultiSlide", function(object) standardGeneric("isMultiSlide"))
+
+#' @rdname isMultiSlide
+setMethod("isMultiSlide", "CoProSingle", function(object) {
+  FALSE
+})
+
+#' @rdname isMultiSlide
+setMethod("isMultiSlide", "CoProMulti", function(object) {
+  TRUE
+})

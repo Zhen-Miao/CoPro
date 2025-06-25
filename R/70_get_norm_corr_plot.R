@@ -209,24 +209,36 @@ setGeneric("getCorrTwoTypes",
   names(df_q) <- object@slideList
 
   for (q in object@slideList) {
-    # Get the cell scores data for cellTypeA
+    # Get the cell scores data for cellTypeA - now using aggregated structure
     cell_score_data_a <- object@cellScores[[sigma_name]][[cellTypeA]][, ccIndex, drop = FALSE]
-    # cell_score_data_a <- object@cellScores[[sigma_name]][[q]][[cellTypeA]][, ccIndex, drop = FALSE]
     
     # Ensure it's a matrix before transposing
     if (!is.matrix(cell_score_data_a)) {
       cell_score_data_a <- as.matrix(cell_score_data_a)
     }
     
-    x1 <- t(cell_score_data_a)
-    x2 <- object@cellScores[[sigma_name]][[q]][[cellTypeB]][, ccIndex, drop = TRUE]
-    ktemp <- object@kernelMatrices[[sigma_name]][[q]][[cellTypeA]][[cellTypeB]]
-    if (length(ktemp) != 0) {
-      k <- ktemp
-    }else {
-      k <- t(object@kernelMatrices[[sigma_name]][[q]][[cellTypeB]][[cellTypeA]])
+    # Filter for cells from this specific slide
+    slide_cells_a <- rownames(object@metaDataSub)[object@metaDataSub$slideID == q & object@cellTypesSub == cellTypeA]
+    slide_cells_b <- rownames(object@metaDataSub)[object@metaDataSub$slideID == q & object@cellTypesSub == cellTypeB]
+    
+    if (length(slide_cells_a) > 0 && length(slide_cells_b) > 0) {
+      # Extract data for this slide only
+      cell_score_data_a_slide <- cell_score_data_a[slide_cells_a, , drop = FALSE]
+      cell_score_data_b_slide <- object@cellScores[[sigma_name]][[cellTypeB]][slide_cells_b, ccIndex, drop = TRUE]
+      
+      x1 <- t(cell_score_data_a_slide)
+      x2 <- cell_score_data_b_slide
+      ktemp <- object@kernelMatrices[[sigma_name]][[q]][[cellTypeA]][[cellTypeB]]
+      if (length(ktemp) != 0) {
+        k <- ktemp
+      } else {
+        k <- t(object@kernelMatrices[[sigma_name]][[q]][[cellTypeB]][[cellTypeA]])
+      }
+      df_q[[q]] <- data.frame(AK = (x1 %*% k)[1, , drop = TRUE], B = x2, slideID = q)
+    } else {
+      # Create empty data frame if no cells in this slide
+      df_q[[q]] <- data.frame(AK = numeric(0), B = numeric(0), slideID = character(0))
     }
-    df_q[[q]] <- data.frame(AK = (x1 %*% k)[1, , drop = TRUE], B = x2, slideID = q)
   }
   df_q <- do.call(rbind, df_q)
   
@@ -239,8 +251,8 @@ setGeneric("getCorrTwoTypes",
   all_cell_ids <- c()
   for (q in object@slideList) {
     # Get cell IDs for cellTypeA and cellTypeB from this slide
-    slide_cell_ids_a <- rownames(object@cellScores[[sigma_name]][[q]][[cellTypeA]])
-    slide_cell_ids_b <- rownames(object@cellScores[[sigma_name]][[q]][[cellTypeB]])
+    slide_cell_ids_a <- rownames(object@metaDataSub)[object@metaDataSub$slideID == q & object@cellTypesSub == cellTypeA]
+    slide_cell_ids_b <- rownames(object@metaDataSub)[object@metaDataSub$slideID == q & object@cellTypesSub == cellTypeB]
     all_cell_ids <- c(all_cell_ids, slide_cell_ids_a, slide_cell_ids_b)
   }
   
@@ -391,19 +403,28 @@ setGeneric("getCorrOneType",
   df_q <- rep(list(), length = length(object@slideList))
   names(df_q) <- object@slideList
   sigma_name <- paste("sigma", sigmaValueChoice, sep = "_")
+  
   for (q in object@slideList) {
-    # Get the cell scores data
-    cell_score_data <- object@cellScores[[sigma_name]][[q]][[cellTypeA]][, ccIndex, drop = FALSE]
+    # Get the cell scores data for this slide - now using aggregated structure
+    slide_cells <- rownames(object@metaDataSub)[object@metaDataSub$slideID == q & object@cellTypesSub == cellTypeA]
     
-    # Ensure it's a matrix before transposing
-    if (!is.matrix(cell_score_data)) {
-      cell_score_data <- as.matrix(cell_score_data)
+    if (length(slide_cells) > 0) {
+      # Extract data for this slide only
+      cell_score_data <- object@cellScores[[sigma_name]][[cellTypeA]][slide_cells, ccIndex, drop = FALSE]
+      
+      # Ensure it's a matrix before transposing
+      if (!is.matrix(cell_score_data)) {
+        cell_score_data <- as.matrix(cell_score_data)
+      }
+      
+      x1 <- t(cell_score_data)
+      x2 <- cell_score_data[,1, drop = TRUE]
+      ktemp <- object@kernelMatrices[[sigma_name]][[q]][[cellTypeA]][[cellTypeA]]
+      df_q[[q]] <- data.frame(AK = (x1 %*% ktemp)[1, , drop = TRUE], B = x2, slideID = q)
+    } else {
+      # Create empty data frame if no cells in this slide
+      df_q[[q]] <- data.frame(AK = numeric(0), B = numeric(0), slideID = character(0))
     }
-    
-    x1 <- t(cell_score_data)
-    x2 <- cell_score_data[,1, drop = TRUE]
-    ktemp <- object@kernelMatrices[[sigma_name]][[q]][[cellTypeA]][[cellTypeA]]
-    df_q[[q]] <- data.frame(AK = (x1 %*% ktemp)[1, , drop = TRUE], B = x2, slideID = q)
   }
   names(df_q) <- NULL
   df_q <- do.call(rbind, df_q)

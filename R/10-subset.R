@@ -1,4 +1,3 @@
-
 #' subsetData
 #'
 #' Take a subset of the original matrix based on cell types of interest. The
@@ -40,7 +39,12 @@ setGeneric("subsetData",
   object@metaDataSub <- object@metaData[idx, , drop = FALSE]
   object@locationDataSub <- object@locationData[idx, , drop = FALSE]
   object@cellTypesSub <- object@cellTypes[idx]
-  object@slideID <- object@slideID[idx]
+  
+  # Only subset slideID if this is a multi-slide object
+  if (isMultiSlide(object)) {
+    object@slideID <- object@slideID[idx]
+  }
+  
   if (!saveOriginal) {
     object@normalizedData <- matrix(0)
     object@metaData <- data.frame(0)
