@@ -78,3 +78,67 @@ normalize_vec <- function(v) {
     return(v / norm_v)
   }
 }
+
+
+#' Assign distance matrix manually
+#'
+#' @param object A `CoPro` object
+#' @param distanceList A list object that contains all pairwise distances
+#' between any two pairs of cells.
+#'
+#' @return A `CoPro` object with specified
+#' @rdname assignDistanceManually
+#' @aliases assignDistanceManually,CoPro-method
+#' @export
+#'
+setGeneric("assignDistanceManually",
+           function(object,
+                    distanceList) standardGeneric("assignDistanceManually")
+)
+
+
+#' @rdname assignDistanceManually
+#' @aliases assignDistanceManually,CoPro-method
+#' @export
+setMethod(
+  "assignDistanceManually", "CoPro",
+  function(object, distanceList) {
+    if (!is.list(distanceList)) {
+      stop(paste(
+        "distanceList must be a nested list object with names",
+        "specified by cell types"
+      ))
+    }
+
+    ## choose cell types
+    if (length(object@cellTypesOfInterest) != 0) {
+      cts <- object@cellTypesOfInterest
+    } else {
+      warning(paste(
+        "no cell type of interest specified,",
+        "using all cell types to run the analysis"
+      ))
+      cts <- unique(object@cellTypesSub)
+    }
+
+    if (names(distanceList) != cts) {
+      stop(paste(
+        "The names of distanceList do not match cell types",
+        "of interest"
+      ))
+    }
+
+    for (i in cts) {
+      if (names(distanceList[[i]]) != cts) {
+        stop(paste("The names of distanceList[[", i,
+          "]] do not match cell types ",
+          "of interest",
+          sep = ""
+        ))
+      }
+    }
+
+    object@distances <- distanceList
+    return(object)
+  }
+)

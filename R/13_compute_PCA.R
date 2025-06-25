@@ -197,7 +197,22 @@ setGeneric("computePCA",
   return(object)
 }
 
-#' @noRd
+#' Compute PCA on Single-Slide Data
+#'
+#' This method performs PCA on the normalized data stored within the `CoProSingle` object.
+#' It assumes that the data has already been integrated across slides.
+#'
+#' @param object A `CoProSingle` object with the `normalizedData` slot populated.
+#' @param nPCA Number of principal components to compute for each cell type.
+#' @param center Whether to center the matrix before PCA
+#' @param scale. Whether to scale the matrix before PCA
+#' @param dataUse What data to use, choices between "raw" and "integrated".
+#'   Default is "raw". For single slide, this argument is ignored.
+#' @param center_per_slide After the global PCA, do we do center per slide
+#'   again? By default this is set to FALSE
+#' @rdname computePCA
+#' @aliases computePCA,CoProSingle-method
+#' @export
 setMethod("computePCA", "CoProSingle", 
           function(object, nPCA = 40, center = TRUE, scale. = TRUE) {
             cts <- .check_pca_input(object, nPCA, center, scale.)
@@ -205,7 +220,22 @@ setMethod("computePCA", "CoProSingle",
             return(object)
           })
 
-#' @noRd
+#' Compute PCA on Multi-Slide Data
+#'
+#' This method performs PCA on the normalized data stored within the `CoProMulti` object.
+#' It assumes that the data has already been integrated across slides.
+#'
+#' @param object A `CoProMulti` object with the `normalizedData` slot populated.
+#' @param nPCA Number of principal components to compute for each cell type.
+#' @param center Whether to center the matrix before PCA
+#' @param scale. Whether to scale the matrix before PCA
+#' @param dataUse What data to use, choices between "raw" and "integrated".
+#'   Default is "raw". For single slide, this argument is ignored.
+#' @param center_per_slide After the global PCA, do we do center per slide
+#'   again? By default this is set to FALSE
+#' @rdname computePCA
+#' @aliases computePCA,CoProMulti-method
+#' @export
 setMethod("computePCA", "CoProMulti", 
           function(object, nPCA = 40, center = TRUE, scale. = TRUE,
                    dataUse = "raw", center_per_slide = FALSE) {

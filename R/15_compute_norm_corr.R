@@ -6,7 +6,8 @@
 #'
 #' @param object A `CoPro` or `CoProMulti` object containing CCA results and kernel matrices.
 #' @param tol tolerance for approximate SVD calculation
-#' @param calculationMode (for CoProMulti only) either "perSlide" or "aggregate"
+#' @param calculationMode (for CoProMulti only) either "perSlide" or "aggregate",
+#'   for single slide analysis, it is ignored, with default value "perSlide".
 #' @return The object with the normalized correlation value
 #' between any pair of cell types
 #' added as a new slot, `normalizedCorrelation`.
@@ -14,7 +15,7 @@
 #'
 setGeneric(
   "computeNormalizedCorrelation",
-  function(object, tol = 1e-4, ...) standardGeneric("computeNormalizedCorrelation")
+  function(object, tol = 1e-4, calculationMode = "perSlide") standardGeneric("computeNormalizedCorrelation")
 )
 
 

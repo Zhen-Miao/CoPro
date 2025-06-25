@@ -140,12 +140,12 @@ etr <- subsetDataOne(etr, cellTypesOfInterest = cell_types_single)
 ```{r distCompute}
 etr <- computePCA(etr, nPCA = n_pca, center = TRUE, scale. = TRUE)
 ## By default, we normalize the distance
-etr <- computeDistanceOne(etr, distType = "Euclidean2D", normalizeDistance = FALSE)
+etr <- computeDistance(etr, distType = "Euclidean2D", normalizeDistance = FALSE)
 
 sigma_choice <- c(0.01, 0.02, 0.05, 0.1, 0.15, 0.2)
 
 ## compute kernel. Note that it is a different function for one cell type model.
-etr <- computeKernelMatrixOne(etr, sigmaValues = sigma_choice,
+etr <- computeKernelMatrix(etr, sigmaValues = sigma_choice,
                               upperQuantile = 0.85,
                               normalizeKernel = FALSE, lowerLimit = 5e-7)
 ```
@@ -153,8 +153,8 @@ etr <- computeKernelMatrixOne(etr, sigmaValues = sigma_choice,
 ## run skrCCA and obtain correlations
 
 ```{r skrCCA}
-etr <- runSkrCCAOne(etr, scalePCs = TRUE, maxIter = 500, nCC = 4)
-etr <- computeNormalizedCorrelationOne(etr, tol = 1e-3)
+etr <- runSkrCCA(etr, scalePCs = TRUE, maxIter = 500, nCC = 4)
+etr <- computeNormalizedCorrelation(etr, tol = 1e-3)
 
 
 ```
@@ -162,7 +162,7 @@ etr <- computeNormalizedCorrelationOne(etr, tol = 1e-3)
 ## compute gene and cell scores
 
 ```{r geneCellScores}
-etr <- computeGeneAndCellScoresOne(etr)
+etr <- computeGeneAndCellScores(etr)
 ```
 
 ## Look across different sigma values
