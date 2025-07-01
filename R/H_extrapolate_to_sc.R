@@ -60,7 +60,7 @@ quantile_normalize <- function(A, B, save_Sparse = FALSE,
   prob_B <- (rank_B - 1) / (nrow(B) - 1)
 
   # Use vapply for better performance and type safety
-  B_normalized <- vapply(1:n_features, function(i) {
+  B_normalized <- vapply(seq_len(n_features), function(i) {
     if (verbose && i %% max(1, n_features %/% 10) == 0) {
       message(sprintf("Processing feature %d/%d", i, n_features))
     }

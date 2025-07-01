@@ -257,13 +257,18 @@ plotSuperimposedWithLegends <- function(object,
       next
     }
     
-    # Check if cell scores exist for this cell type
-    if (!ct %in% names(object@cellScores[[sigma_name]])) {
-      warning(paste("Cell scores not found for cell type", ct))
+    # Get cell scores for this cell type
+    cell_scores_matrix <- tryCatch({
+      getCellScores(object, sigma = as.numeric(gsub("sigma_", "", sigma_name)), 
+                    cellType = ct, verbose = FALSE)
+    }, error = function(e) {
+      warning(paste("Cell scores not found for cell type", ct, ":", e$message))
+      return(NULL)
+    })
+    if (is.null(cell_scores_matrix)) {
       next
     }
     
-    cell_scores_matrix <- object@cellScores[[sigma_name]][[ct]]
     common_cells <- intersect(rownames(loc_data), rownames(cell_scores_matrix))
     
     if (length(common_cells) == 0) {
@@ -291,13 +296,14 @@ plotSuperimposedWithLegends <- function(object,
   for (ct in cell_types) {
     ct_data_list <- list()
     
-    # Check if cell scores exist for this cell type (now using aggregated structure)
-    if (!ct %in% names(object@cellScores[[sigma_name]])) {
-      warning(paste("Cell scores not found for cell type", ct))
-      next
-    }
-    
-    cell_scores_matrix <- object@cellScores[[sigma_name]][[ct]]
+    # Get cell scores for this cell type (now using aggregated structure)
+    cell_scores_matrix <- tryCatch({
+      getCellScores(object, sigma = as.numeric(gsub("sigma_", "", sigma_name)), 
+                    cellType = ct, verbose = FALSE)
+    }, error = function(e) {
+      warning(paste("Cell scores not found for cell type", ct, ":", e$message))
+      return(NULL)
+    })
     
     if (is.null(cell_scores_matrix) || nrow(cell_scores_matrix) == 0) {
       warning(paste("Empty cell scores matrix for cell type", ct))
@@ -310,7 +316,7 @@ plotSuperimposedWithLegends <- function(object,
     
     for (q in all_slides) {
       # Get location data for this slide and cell type
-      slide_mask <- object@cellTypesSub == ct & object@metaDataSub$slideID == q
+              slide_mask <- .getSlideCellTypeIndices(object, slide = q, cellType = ct)
       loc_data <- object@locationDataSub[slide_mask, , drop = FALSE]
       
       if (nrow(loc_data) == 0) {

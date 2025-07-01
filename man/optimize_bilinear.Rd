@@ -3,15 +3,16 @@
 \name{optimize_bilinear}
 \alias{optimize_bilinear}
 \title{SkrCCA optimization function for multiple groups (Single Slide) - First Component
-Assumes X_list and K_list are named lists using consistent cell type names.
-Handles upper/lower triangle K_list. Uses w_i_left structure.}
+Uses flat kernel structure for consistent data access}
 \usage{
-optimize_bilinear(X_list, K_list, max_iter = 1000, tol = 1e-05)
+optimize_bilinear(X_list, flat_kernels, sigma, max_iter = 1000, tol = 1e-05)
 }
 \arguments{
 \item{X_list}{Named list of data matrices (cell by PC matrix)}
 
-\item{K_list}{Named list of kernel matrices (potentially upper/lower triangle only)}
+\item{flat_kernels}{Flat list of kernel matrices with names like "kernel|sigma0.1|TypeA|TypeB"}
+
+\item{sigma}{Sigma value (numeric)}
 
 \item{max_iter}{Maximum number of iterations}
 
@@ -22,6 +23,5 @@ Named list \code{w_list} containing the first weight vector component.
 }
 \description{
 SkrCCA optimization function for multiple groups (Single Slide) - First Component
-Assumes X_list and K_list are named lists using consistent cell type names.
-Handles upper/lower triangle K_list. Uses w_i_left structure.
+Uses flat kernel structure for consistent data access
 }

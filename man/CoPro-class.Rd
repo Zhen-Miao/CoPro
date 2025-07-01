@@ -23,10 +23,6 @@ either contain two columns named by "x" and "y", or three columns named by
 \item{\code{locationDataSub}}{A \code{data.frame} object to store the subset of
 the location data.}
 
-\item{\code{slideID}}{A \code{factorOrCharacter} vector indicating the slide/sample origin for each cell.}
-
-\item{\code{slideList}}{A \code{character} vector storing the unique slide identifiers present.}
-
 \item{\code{metaData}}{A \code{data.frame} object to store metadata for each cell.}
 
 \item{\code{metaDataSub}}{A \code{data.frame} object to store the subset of

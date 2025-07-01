@@ -3,12 +3,12 @@
 \name{optimize_bilinear_n}
 \alias{optimize_bilinear_n}
 \title{Run multi version of skrCCA to detect subsequent components (Single Slide)
-Assumes X_list, K_list, w_list are named lists containing only cellTypesOfInterest.
-Handles upper/lower triangle K_list. No internal subsetting.}
+Uses flat kernel structure for consistent data access}
 \usage{
 optimize_bilinear_n(
   X_list,
-  K_list,
+  flat_kernels,
+  sigma,
   w_list,
   cellTypesOfInterest,
   nCC = 2,
@@ -19,7 +19,9 @@ optimize_bilinear_n(
 \arguments{
 \item{X_list}{Named list of data matrices (subsetted)}
 
-\item{K_list}{Named list of kernel matrices (subsetted, potentially upper/lower triangle)}
+\item{flat_kernels}{Flat list of kernel matrices}
+
+\item{sigma}{Sigma value (numeric)}
 
 \item{w_list}{A named list of weights (subsetted, matrices with previous components as columns)}
 
@@ -36,6 +38,5 @@ A named list of weights (matrices with components 1 to nCC as columns)
 }
 \description{
 Run multi version of skrCCA to detect subsequent components (Single Slide)
-Assumes X_list, K_list, w_list are named lists containing only cellTypesOfInterest.
-Handles upper/lower triangle K_list. No internal subsetting.
+Uses flat kernel structure for consistent data access
 }

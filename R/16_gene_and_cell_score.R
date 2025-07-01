@@ -22,7 +22,7 @@ setGeneric(
       stop("object is not a CoPro or CoProMulti object")
     }
     if(is_multi) {
-      slides <- object@slideList
+      slides <- getSlideList(object)
     } else {
       slides <- NULL
     }
@@ -77,36 +77,31 @@ setGeneric(
 }
 
 .initializeCSGS <- function(cts, sigma_names, nCC, object) {
-    ## Unified initialization for both single and multi-slide data
-    cellScores <- setNames(
-      vector(mode = "list", length = length(sigma_names)),
-      sigma_names
-    )
+    ## Initialize flat structure for cell scores and gene scores
+    cellScores <- list()
+    geneScores <- list()
     
-    for (t in sigma_names) {
-      cellScores[[t]] <- setNames(
-        vector(mode = "list", length = length(cts)),
-        cts
-      )
-    }
-
-    ## Initialize geneScores with same structure as cellScores
-    geneScores <- cellScores
-
-    ## Unified approach: initialize matrices immediately for all cases
+    ## Get required data
     cellNamesSub <- rownames(object@metaDataSub)
     cellTypesSub <- object@cellTypesSub
     geneNamesSub <- if("geneList" %in% slotNames(object)) object@geneList else colnames(object@normalizedDataSub)
     
+    # Create flat structures with informative names
     for (t in sigma_names) {
+      sigma_val <- as.numeric(gsub("sigma_", "", t))
+      
       for (ct in cts) {
-        cellScores[[t]][[ct]] <- .createScoreMatrix(
+        # Cell scores with flat names
+        cell_flat_name <- .createCellScoresName(sigma_val, ct, slide = NULL)
+        cellScores[[cell_flat_name]] <- .createScoreMatrix(
           nrows = sum(cellTypesSub == ct),
           ncols = nCC,
           row_names = cellNamesSub[cellTypesSub == ct]
         )
-
-        geneScores[[t]][[ct]] <- .createScoreMatrix(
+        
+        # Gene scores with flat names (we can create similar naming for gene scores)
+        gene_flat_name <- .createGeneScoresName(sigma_val, ct, slide = NULL)
+        geneScores[[gene_flat_name]] <- .createScoreMatrix(
           nrows = length(geneNamesSub),
           ncols = nCC,
           row_names = geneNamesSub
@@ -118,12 +113,14 @@ setGeneric(
 }
 
 .CSToMeta <- function(object, cellScores, cts, sigma_names, nCC) {
-    ## Unified function to add cell score information to metadata for both single and multi-slide data
-    ## Both approaches essentially add columns to metadata - using the more efficient direct approach
+    ## Function to add cell score information to metadata using flat structure
     
     for (t in sigma_names) {
+      sigma_val <- as.numeric(gsub("sigma_", "", t))
+      
       for (ct in cts) {
-        scores_ct <- cellScores[[t]][[ct]]
+        cell_flat_name <- .createCellScoresName(sigma_val, ct, slide = NULL)
+        scores_ct <- cellScores[[cell_flat_name]]
         
         if (!is.null(scores_ct) && nrow(scores_ct) > 0) {
           # Get all cells of this cell type
@@ -190,13 +187,15 @@ setGeneric(
           }
 
           ## compute the gene scores
-          geneScores[[t]][[i]][, cc_name] <- as.vector(
+          gene_flat_name <- .createGeneScoresName(sigmaValues[tt], i, slide = NULL)
+          geneScores[[gene_flat_name]][, cc_name] <- as.vector(
               matrix(w_1 * sdev_use, nrow = 1) %*%
                 t(object@pcaGlobal[[i]]$rotation)
             )
 
           ## compute the cell scores -- independent of scalePCs
-          cellScores[[t]][[i]][, cc_name] <- as.vector(PCmats[[i]] %*% w_1)
+          cell_flat_name <- .createCellScoresName(sigmaValues[tt], i, slide = NULL)
+          cellScores[[cell_flat_name]][, cc_name] <- as.vector(PCmats[[i]] %*% w_1)
         }
 
       }
@@ -287,8 +286,9 @@ setGeneric(
     # Calculate Cell Scores (Slide-Specific, then aggregated)
     for (sID in slides) {
       X_list_slide <- object@pcaResults[[sID]]
-      meta_slide <- object@metaDataSub[object@metaDataSub$slideID == sID, ]
-      celltype_slide <- object@cellTypesSub[object@metaDataSub$slideID == sID]
+          slide_indices <- .getSlideIndices(object, sID)
+    meta_slide <- object@metaDataSub[slide_indices, ]
+    celltype_slide <- object@cellTypesSub[slide_indices]
       
       for (ct in cts) {
         X_ct <- X_list_slide[[ct]]
@@ -302,8 +302,9 @@ setGeneric(
           colnames(scores_mat_slide) <- paste0("CC_", 1:nCC)
           rownames(scores_mat_slide) <- cell_ids_ct_slide
           
-          # Add these scores to the aggregated matrix
-          cellScores[[t]][[ct]][cell_ids_ct_slide, ] <- scores_mat_slide
+          # Add these scores to the aggregated matrix (flat structure)
+          cell_flat_name <- .createCellScoresName(sigmaValues[tt], ct, slide = NULL)
+          cellScores[[cell_flat_name]][cell_ids_ct_slide, ] <- scores_mat_slide
         }
       }
     }
@@ -313,7 +314,8 @@ setGeneric(
       pca_obj_ct <- object@pcaGlobal[[ct]]
       W_ct <- W_list[[ct]]
       gene_score_mat <- .computeGeneScores(W_ct, pca_obj_ct, scalePCs, nCC, object@geneList)
-      geneScores[[t]][[ct]] <- gene_score_mat
+      gene_flat_name <- .createGeneScoresName(sigmaValues[tt], ct, slide = NULL)
+      geneScores[[gene_flat_name]] <- gene_score_mat
     }
   }
   

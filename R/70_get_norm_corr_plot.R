@@ -19,7 +19,7 @@ setGeneric("getNormCorr",
            function(object) standardGeneric("getNormCorr")
 )
 
-.checkInputNormCorr <- function(object) {
+.checkInputNormCorrExists <- function(object) {
   if ( !( is(object, "CoPro") || is(object, "CoProm") ) ) {
     stop("Input must be a CoPro or CoProm object")
   }
@@ -34,7 +34,7 @@ setGeneric("getNormCorr",
 }
 
 .getNormCorrCore <- function(object) {
-  .checkInputNormCorr(object)
+  .checkInputNormCorrExists(object)
   
   # Check if normalizedCorrelation slot is properly populated
   normCorr <- slot(object, "normalizedCorrelation")
@@ -68,14 +68,14 @@ setGeneric("getNormCorr",
 
 #' @rdname getNormalizedCorrelation
 setMethod("getNormCorr", "CoProSingle", function(object) {
-  .checkInputNormCorr(object)
+  .checkInputNormCorrExists(object)
   .getNormCorrCore(object = object)
 })
 
 
 #' @rdname getNormalizedCorrelation
 setMethod("getNormCorr", "CoProMulti", function(object) {
-  .checkInputNormCorr(object)
+  .checkInputNormCorrExists(object)
   .getNormCorrCore(object = object)
 })
 
@@ -179,7 +179,9 @@ setGeneric("getCorrTwoTypes",
   sigma_name <- paste("sigma", sigmaValueChoice, sep = "_")
 
   # Get the cell scores data for cellTypeA
-  cell_score_data_a <- object@cellScores[[sigma_name]][[cellTypeA]][, ccIndex, drop = FALSE]
+  cell_score_data_a <- getCellScores(object, sigma = sigmaValueChoice, 
+                                     cellType = cellTypeA, ccIndex = ccIndex, 
+                                     verbose = FALSE)
   
   # Ensure it's a matrix before transposing
   if (!is.matrix(cell_score_data_a)) {
@@ -187,13 +189,12 @@ setGeneric("getCorrTwoTypes",
   }
   
   x1 <- t(cell_score_data_a)
-  x2 <- object@cellScores[[sigma_name]][[cellTypeB]][, ccIndex, drop = TRUE]
-  ktemp <- object@kernelMatrices[[sigma_name]][[cellTypeA]][[cellTypeB]]
-  if (length(ktemp) != 0) {
-    k <- ktemp
-  }else {
-    k <- t(object@kernelMatrices[[sigma_name]][[cellTypeB]][[cellTypeA]])
-  }
+  x2 <- getCellScores(object, sigma = sigmaValueChoice, 
+                      cellType = cellTypeB, ccIndex = ccIndex, 
+                      verbose = FALSE)
+  k <- getKernelMatrix(object, sigma = sigmaValueChoice, 
+                       cellType1 = cellTypeA, cellType2 = cellTypeB, 
+                       verbose = FALSE)
 
   df <- data.frame(AK = (x1 %*% k)[1, , drop = TRUE], B = x2)
   return(df)
@@ -205,35 +206,33 @@ setGeneric("getCorrTwoTypes",
 
   ## load the cellScores and kernel matrix
   sigma_name <- paste("sigma", sigmaValueChoice, sep = "_")
-  df_q <- rep(list(), length = length(object@slideList))
-  names(df_q) <- object@slideList
-
-  for (q in object@slideList) {
-    # Get the cell scores data for cellTypeA - now using aggregated structure
-    cell_score_data_a <- object@cellScores[[sigma_name]][[cellTypeA]][, ccIndex, drop = FALSE]
-    
-    # Ensure it's a matrix before transposing
-    if (!is.matrix(cell_score_data_a)) {
-      cell_score_data_a <- as.matrix(cell_score_data_a)
-    }
-    
-    # Filter for cells from this specific slide
-    slide_cells_a <- rownames(object@metaDataSub)[object@metaDataSub$slideID == q & object@cellTypesSub == cellTypeA]
-    slide_cells_b <- rownames(object@metaDataSub)[object@metaDataSub$slideID == q & object@cellTypesSub == cellTypeB]
+    df_q <- rep(list(), length = length(getSlideList(object)))
+  names(df_q) <- getSlideList(object)
+  
+  for (q in getSlideList(object)) {
+    # Get the cell scores data for cellTypeA and cellTypeB for this slide
+    slide_cells_a <- .getSlideCellTypeIDs(object, slide = q, cellType = cellTypeA)
+    slide_cells_b <- .getSlideCellTypeIDs(object, slide = q, cellType = cellTypeB)
     
     if (length(slide_cells_a) > 0 && length(slide_cells_b) > 0) {
-      # Extract data for this slide only
-      cell_score_data_a_slide <- cell_score_data_a[slide_cells_a, , drop = FALSE]
-      cell_score_data_b_slide <- object@cellScores[[sigma_name]][[cellTypeB]][slide_cells_b, ccIndex, drop = TRUE]
+      # Get cell scores for this slide
+      cell_score_data_a_slide <- getCellScores(object, sigma = sigmaValueChoice, 
+                                               cellType = cellTypeA, slide = q, 
+                                               ccIndex = ccIndex, verbose = FALSE)
+      cell_score_data_b_slide <- getCellScores(object, sigma = sigmaValueChoice, 
+                                               cellType = cellTypeB, slide = q, 
+                                               ccIndex = ccIndex, verbose = FALSE)
+      
+      # Ensure it's a matrix before transposing
+      if (!is.matrix(cell_score_data_a_slide)) {
+        cell_score_data_a_slide <- as.matrix(cell_score_data_a_slide)
+      }
       
       x1 <- t(cell_score_data_a_slide)
       x2 <- cell_score_data_b_slide
-      ktemp <- object@kernelMatrices[[sigma_name]][[q]][[cellTypeA]][[cellTypeB]]
-      if (length(ktemp) != 0) {
-        k <- ktemp
-      } else {
-        k <- t(object@kernelMatrices[[sigma_name]][[q]][[cellTypeB]][[cellTypeA]])
-      }
+      k <- getKernelMatrix(object, sigma = sigmaValueChoice, 
+                           cellType1 = cellTypeA, cellType2 = cellTypeB, 
+                           slide = q, verbose = FALSE)
       df_q[[q]] <- data.frame(AK = (x1 %*% k)[1, , drop = TRUE], B = x2, slideID = q)
     } else {
       # Create empty data frame if no cells in this slide
@@ -249,10 +248,10 @@ setGeneric("getCorrTwoTypes",
   # Create a mapping from the combined data to the original order
   # We need to match the rownames of the cell scores to the cell IDs in metaDataSub
   all_cell_ids <- c()
-  for (q in object@slideList) {
+  for (q in getSlideList(object)) {
     # Get cell IDs for cellTypeA and cellTypeB from this slide
-    slide_cell_ids_a <- rownames(object@metaDataSub)[object@metaDataSub$slideID == q & object@cellTypesSub == cellTypeA]
-    slide_cell_ids_b <- rownames(object@metaDataSub)[object@metaDataSub$slideID == q & object@cellTypesSub == cellTypeB]
+          slide_cell_ids_a <- .getSlideCellTypeIDs(object, slide = q, cellType = cellTypeA)
+      slide_cell_ids_b <- .getSlideCellTypeIDs(object, slide = q, cellType = cellTypeB)
     all_cell_ids <- c(all_cell_ids, slide_cell_ids_a, slide_cell_ids_b)
   }
   
@@ -383,7 +382,9 @@ setGeneric("getCorrOneType",
   sigma_name <- paste("sigma", sigmaValueChoice, sep = "_")
 
   # Get the cell scores data
-  cell_score_data <- object@cellScores[[sigma_name]][[cellTypeA]][, ccIndex, drop = FALSE]
+  cell_score_data <- getCellScores(object, sigma = sigmaValueChoice, 
+                                   cellType = cellTypeA, ccIndex = ccIndex, 
+                                   verbose = FALSE)
   
   # Ensure it's a matrix before transposing
   if (!is.matrix(cell_score_data)) {
@@ -391,26 +392,32 @@ setGeneric("getCorrOneType",
   }
   
   x1 <- t(cell_score_data)
-  x2 <- object@cellScores[[sigma_name]][[cellTypeA]][, ccIndex, drop = TRUE]
-  ktemp <- object@kernelMatrices[[sigma_name]][[cellTypeA]][[cellTypeA]]
+  x2 <- getCellScores(object, sigma = sigmaValueChoice, 
+                      cellType = cellTypeA, ccIndex = ccIndex, 
+                      verbose = FALSE)
+  k <- getKernelMatrix(object, sigma = sigmaValueChoice, 
+                       cellType1 = cellTypeA, cellType2 = cellTypeA, 
+                       verbose = FALSE)
 
-  df <- data.frame(AK = (x1 %*% ktemp)[1, , drop = TRUE], B = x2)
+  df <- data.frame(AK = (x1 %*% k)[1, , drop = TRUE], B = x2)
   return(df)
 }
 
 .getCorrOneTypeCoreMulti <- function(object, cellTypeA, ccIndex = 1,
                             sigmaValueChoice) {
-  df_q <- rep(list(), length = length(object@slideList))
-  names(df_q) <- object@slideList
+  df_q <- rep(list(), length = length(getSlideList(object)))
+  names(df_q) <- getSlideList(object)
   sigma_name <- paste("sigma", sigmaValueChoice, sep = "_")
   
-  for (q in object@slideList) {
+  for (q in getSlideList(object)) {
     # Get the cell scores data for this slide - now using aggregated structure
-    slide_cells <- rownames(object@metaDataSub)[object@metaDataSub$slideID == q & object@cellTypesSub == cellTypeA]
+    slide_cells <- .getSlideCellTypeIDs(object, slide = q, cellType = cellTypeA)
     
     if (length(slide_cells) > 0) {
-      # Extract data for this slide only
-      cell_score_data <- object@cellScores[[sigma_name]][[cellTypeA]][slide_cells, ccIndex, drop = FALSE]
+      # Get cell scores for this slide
+      cell_score_data <- getCellScores(object, sigma = sigmaValueChoice, 
+                                       cellType = cellTypeA, slide = q, 
+                                       ccIndex = ccIndex, verbose = FALSE)
       
       # Ensure it's a matrix before transposing
       if (!is.matrix(cell_score_data)) {
@@ -418,9 +425,13 @@ setGeneric("getCorrOneType",
       }
       
       x1 <- t(cell_score_data)
-      x2 <- cell_score_data[,1, drop = TRUE]
-      ktemp <- object@kernelMatrices[[sigma_name]][[q]][[cellTypeA]][[cellTypeA]]
-      df_q[[q]] <- data.frame(AK = (x1 %*% ktemp)[1, , drop = TRUE], B = x2, slideID = q)
+      x2 <- getCellScores(object, sigma = sigmaValueChoice, 
+                          cellType = cellTypeA, slide = q, 
+                          ccIndex = ccIndex, verbose = FALSE)
+      k <- getKernelMatrix(object, sigma = sigmaValueChoice, 
+                           cellType1 = cellTypeA, cellType2 = cellTypeA, 
+                           slide = q, verbose = FALSE)
+      df_q[[q]] <- data.frame(AK = (x1 %*% k)[1, , drop = TRUE], B = x2, slideID = q)
     } else {
       # Create empty data frame if no cells in this slide
       df_q[[q]] <- data.frame(AK = numeric(0), B = numeric(0), slideID = character(0))

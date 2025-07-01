@@ -236,7 +236,7 @@
 #' @noRd
 .prepareDataMatrices <- function(object, is_multi, scalePCs, cts) {
   if (is_multi) {
-    slides <- object@slideList
+    slides <- getSlideList(object)
     X_list_all <- .preparePCMatrices(
       pc_data = object@pcaResults,
       pca_global = object@pcaGlobal,
@@ -301,6 +301,8 @@
   })
 }
 
+
+
 #' Get first component for optimization
 #' @param object CoPro or CoProMulti object
 #' @param sig_name Sigma name
@@ -321,29 +323,28 @@
     return(transferred_weight_1)
   }
   
+  # Extract sigma value from sigma name
+  sigma_val <- as.numeric(gsub("sigma_", "", sig_name))
+  
   if (is_multi) {
-    # Validate kernel matrix structure for multi-slide
-    K_list_all_sigma <- object@kernelMatrices[[sig_name]]
+    # Run multi-slide optimization with flat kernels
     slides <- data_matrices$slides
-    if (!all(slides %in% names(K_list_all_sigma))) {
-      stop(paste("Slide mismatch in kernelMatrices for sigma", 
-                gsub("sigma_", "", sig_name)))
-    }
-    
-    # Run multi-slide optimization - first component
     return(optimize_bilinear_multi_slides(
       X_list_all = data_matrices$X_list_all,
-      K_list_all = K_list_all_sigma,
+      flat_kernels = object@kernelMatrices,
+      sigma = sigma_val,
+      slides = slides,
       max_iter = maxIter, 
       tol = tol, 
       n_cores = n_cores
     ))
     
   } else {
-    # Run single-slide optimization - first component
+    # Run single-slide optimization with flat kernels
     return(optimize_bilinear(
       X_list = data_matrices$PCmats,
-      K_list = object@kernelMatrices[[sig_name]],
+      flat_kernels = object@kernelMatrices,
+      sigma = sigma_val,
       max_iter = maxIter, 
       tol = tol
     ))
@@ -366,10 +367,17 @@
 .getSubsequentComponents <- function(object, sig_name, data_matrices, cca_result_1,
                                     is_multi, cts, nCC, maxIter, tol, n_cores) {
   
+  # Extract sigma value from sigma name
+  sigma_val <- as.numeric(gsub("sigma_", "", sig_name))
+  
   if (is_multi) {
+    # Run multi-slide optimization with flat kernels
+    slides <- data_matrices$slides
     cca_result_n <- optimize_bilinear_n_multi_slides(
       X_list_all = data_matrices$X_list_all,
-      K_list_all = object@kernelMatrices[[sig_name]],
+      flat_kernels = object@kernelMatrices,
+      sigma = sigma_val,
+      slides = slides,
       w_list = cca_result_1,
       cellTypesOfInterest = cts,
       nCC = nCC,
@@ -378,9 +386,11 @@
       n_cores = n_cores
     )
   } else {
+    # Run single-slide optimization with flat kernels
     cca_result_n <- optimize_bilinear_n(
       X_list = data_matrices$PCmats, 
-      K_list = object@kernelMatrices[[sig_name]],
+      flat_kernels = object@kernelMatrices,
+      sigma = sigma_val,
       w_list = cca_result_1,
       cellTypesOfInterest = cts, 
       nCC = nCC,

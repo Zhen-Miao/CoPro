@@ -30,6 +30,9 @@ setGeneric(
       "Please compute the kernel matrices first."
     ))
   }
+  if (length(object@pcaGlobal) == 0) {
+    stop("PCA results missing. Please run computePCA first.")
+  }
   
   ## choose cell types
   if (length(object@cellTypesOfInterest) != 0) {
@@ -79,10 +82,13 @@ setGeneric(
   }
 
   for (t in sigma_names) {
+    sigma_val <- as.numeric(gsub("sigma_", "", t))
     for (pp in seq_len(ncol(pair_cell_types))) {
       cellType1 <- pair_cell_types[1, pp]
       cellType2 <- pair_cell_types[2, pp]
-      K <- object@kernelMatrices[[t]][[cellType1]][[cellType2]]
+      K <- getKernelMatrix(object, sigma = sigma_val, 
+                           cellType1 = cellType1, cellType2 = cellType2, 
+                           verbose = FALSE)
       ## Calculate the spectral norm of the kernel matrix
       svd_result <- irlba::irlba(K, nv = 1, tol = tol)
       norm_K12[[t]][[cellType1]][[cellType2]] <- svd_result$d[1]
@@ -144,7 +150,10 @@ setGeneric(
         B_w2 <- B %*% w_2
 
         ## get pre-calculated spectral norm
-        K <- object@kernelMatrices[[t]][[cellType1]][[cellType2]]
+        sigma_val <- as.numeric(gsub("sigma_", "", t))
+        K <- getKernelMatrix(object, sigma = sigma_val, 
+                             cellType1 = cellType1, cellType2 = cellType2, 
+                             verbose = FALSE)
         norm_K12_sel <- norm_K12[[t]][[cellType1]][[cellType2]]
 
         ## Calculate normalized correlation
@@ -210,11 +219,12 @@ setMethod(
   
   # --- Input Checks ---
   if (length(object@skrCCAOut) == 0) stop("skrCCA results missing. Run runSkrCCAMulti.")
-  if (length(object@pcaResults) == 0) stop("PCA results missing.")
+  if (length(object@pcaResults) == 0) stop("PCA results missing. Please run computePCA first.")
+  if (length(object@pcaGlobal) == 0) stop("PCA global results missing. Please run computePCA first.")
   if (length(object@kernelMatrices) == 0) stop("Kernel matrices missing.")
   cts <- object@cellTypesOfInterest
   if (length(cts) < 1) stop("Need at least one cell type.")
-  slides <- object@slideList
+  slides <- getSlideList(object)
   sigmas_run <- names(object@skrCCAOut)
   if (length(sigmas_run) == 0) stop("No skrCCA results found.")
   nCC <- object@nCC

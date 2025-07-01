@@ -29,9 +29,9 @@ setMethod("show", "CoPro",
             
             # Handle slide information appropriately
             if (is_multi) {
-              cat(sprintf("Number of slides: %d\n", length(object@slideList)))
-              if (length(object@slideList) > 0) {
-                cat(sprintf("Slide IDs: %s\n", paste(object@slideList, collapse = ", ")))
+                cat(sprintf("Number of slides: %d\n", length(getSlideList(object))))
+  if (length(getSlideList(object)) > 0) {
+    cat(sprintf("Slide IDs: %s\n", paste(getSlideList(object), collapse = ", ")))
               }
             } else {
               cat("Number of slides: 1 (single-slide analysis)\n")

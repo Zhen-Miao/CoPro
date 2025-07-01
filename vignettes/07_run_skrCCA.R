@@ -213,7 +213,7 @@
   
   # Prepare PC matrices
   if (is_multi) {
-    slides <- object@slideList
+    slides <- getSlideList(object)
     X_list_all <- .preparePCMatrices(
       pc_data = object@pcaResults,
       pca_global = object@pcaGlobal,

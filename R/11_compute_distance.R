@@ -105,7 +105,7 @@ setGeneric(
     ct_indices <- object@cellTypesSub == cellType
   } else {
     # Multi-slide case - filter by both cell type and slide
-    ct_indices <- object@cellTypesSub == cellType & object@metaDataSub$slideID == slideID
+    ct_indices <- .getSlideCellTypeIndices(object, slide = slideID, cellType = cellType)
   }
   
   # Check if any cells were found
@@ -134,9 +134,7 @@ setGeneric(
   
   # Set rownames to match the cell IDs
   if (!is.null(slideID)) {
-    slide_cell_ids <- rownames(object@locationDataSub)[object@metaDataSub$slideID == slideID]
-    ct_cell_ids <- slide_cell_ids[object@cellTypesSub[object@metaDataSub$slideID == slideID] == cellType]
-    rownames(mat) <- ct_cell_ids
+    rownames(mat) <- .getSlideCellTypeIDs(object, slide = slideID, cellType = cellType)
   } else {
     rownames(mat) <- rownames(object@locationDataSub)[ct_indices]
   }
@@ -187,11 +185,8 @@ setGeneric(
 .computeDistancePairs <- function(object, cts, distType, xDistScale, yDistScale, zDistScale,
                                  normalizeDistance, truncateLowDist, verbose) {
   
-  # Initialize distance list structure
-  distances <- setNames(rep(list(), length = length(cts)), cts)
-  for (i in cts) {
-    distances[[i]] <- setNames(rep(list(), length = length(cts)), cts)
-  }
+  # Initialize flat distance structure
+  distances <- list()
   
   pair_cell_types <- combn(cts, 2)
   
@@ -221,12 +216,12 @@ setGeneric(
     distances_ij <- processed$distances
     dist_percentiles[pp] <- processed$percentile
     
-    # Save the distances
-    distances[[i]][[j]] <- distances_ij
+    # Save the distances using flat structure
+    flat_name <- .createDistMatrixName(i, j, slide = NULL)
+    distances[[flat_name]] <- distances_ij
     
     if (verbose) {
-      cat("quantile of the distances between", i, "and", j, "is: \n")
-      print(quantile(distances_ij, na.rm = TRUE))
+      if (verbose) print(quantile(distances_ij, na.rm = TRUE))
     }
   }
   
@@ -239,7 +234,8 @@ setGeneric(
     for (pp in seq_len(ncol(pair_cell_types))) {
       i <- pair_cell_types[1, pp]
       j <- pair_cell_types[2, pp]
-      distances[[i]][[j]] <- distances[[i]][[j]] * scaling_factor
+      flat_name <- .createDistMatrixName(i, j, slide = NULL)
+      distances[[flat_name]] <- distances[[flat_name]] * scaling_factor
     }
   }
   
@@ -251,11 +247,8 @@ setGeneric(
 .computeDistanceWithin <- function(object, cts, distType, xDistScale, yDistScale, zDistScale,
                                   normalizeDistance, truncateLowDist, verbose) {
   
-  # Initialize distance list structure
-  distances <- setNames(rep(list(), length = length(cts)), cts)
-  for (i in cts) {
-    distances[[i]] <- setNames(rep(list(), length = length(cts)), cts)
-  }
+  # Initialize flat distance structure
+  distances <- list()
   
   # Notify users if normalizeDistance = TRUE
   if (normalizeDistance) {
@@ -276,19 +269,20 @@ setGeneric(
   distances_ij <- processed$distances
   dist_percentile <- processed$percentile
   
-  # Save the distances
-  distances[[cts]][[cts]] <- distances_ij
+  # Save the distances using flat structure
+  flat_name <- .createDistMatrixName(cts, cts, slide = NULL)
+  distances[[flat_name]] <- distances_ij
   
   if (verbose) {
-    cat("quantile of the distances within", cts, "is: \n")
-    print(quantile(distances_ij[is.finite(distances_ij)], na.rm = TRUE))
+    if (verbose) print(quantile(distances_ij[is.finite(distances_ij)], na.rm = TRUE))
   }
   
   # Apply normalization if requested
   if (normalizeDistance) {
     scaling_factor <- 0.01 / dist_percentile
     cat("The scaling factor for normalizing distance is", scaling_factor, "\n")
-    distances[[cts]][[cts]] <- distances_ij * scaling_factor
+    flat_name <- .createDistMatrixName(cts, cts, slide = NULL)
+    distances[[flat_name]] <- distances_ij * scaling_factor
   }
   
   object@distances <- distances
@@ -334,7 +328,7 @@ setMethod("computeDistance", "CoProMulti", function(object, distType = c("Euclid
 
 # Helper function to get slide-specific location data and cell types
 .getSlideData <- function(object, slideID) {
-  slide_indices <- which(object@metaDataSub$slideID == slideID)
+  slide_indices <- which(.getSlideIndices(object, slideID))
   list(
     locationData = object@locationDataSub[slide_indices, , drop = FALSE],
     cellTypes = object@cellTypesSub[slide_indices],
@@ -342,17 +336,10 @@ setMethod("computeDistance", "CoProMulti", function(object, distType = c("Euclid
   )
 }
 
-# Helper function to initialize distance structure for multi-slide
+# Helper function to initialize distance structure for multi-slide (flat)
 .initializeDistanceStructureMulti <- function(slides, cts) {
-  distances_all <- setNames(vector("list", length = length(slides)), slides)
-  for (sID in slides) {
-    distances_slide <- setNames(vector("list", length = length(cts)), cts)
-    for (i in cts) {
-      distances_slide[[i]] <- setNames(vector("list", length = length(cts)), cts)
-    }
-    distances_all[[sID]] <- distances_slide
-  }
-  return(distances_all)
+  # Return empty list - will be populated with flat names
+  return(list())
 }
 
 # Helper function to process multi-slide distance normalization
@@ -370,8 +357,9 @@ setMethod("computeDistance", "CoProMulti", function(object, distType = c("Euclid
     # Single cell type case
     ct <- cts
     for (sID in slides) {
-      if (!is.null(distances_all[[sID]][[ct]][[ct]])) {
-        distances_all[[sID]][[ct]][[ct]] <- distances_all[[sID]][[ct]][[ct]] * scaling_factor
+      flat_name <- .createDistMatrixName(ct, ct, slide = sID)
+      if (flat_name %in% names(distances_all) && !is.null(distances_all[[flat_name]])) {
+        distances_all[[flat_name]] <- distances_all[[flat_name]] * scaling_factor
       }
     }
   } else {
@@ -380,8 +368,9 @@ setMethod("computeDistance", "CoProMulti", function(object, distType = c("Euclid
       for (pp in seq_len(ncol(pair_cell_types))) {
         ct_i <- pair_cell_types[1, pp]
         ct_j <- pair_cell_types[2, pp]
-        if (!is.null(distances_all[[sID]][[ct_i]][[ct_j]])) {
-          distances_all[[sID]][[ct_i]][[ct_j]] <- distances_all[[sID]][[ct_i]][[ct_j]] * scaling_factor
+        flat_name <- .createDistMatrixName(ct_i, ct_j, slide = sID)
+        if (flat_name %in% names(distances_all) && !is.null(distances_all[[flat_name]])) {
+          distances_all[[flat_name]] <- distances_all[[flat_name]] * scaling_factor
         }
       }
     }
@@ -394,7 +383,7 @@ setMethod("computeDistance", "CoProMulti", function(object, distType = c("Euclid
 .computeDistanceMultiWithin <- function(object, cts, distType, xDistScale, yDistScale, zDistScale,
                                        normalizeDistance, truncateLowDist, verbose) {
   
-  slides <- object@slideList
+  slides <- getSlideList(object)
   distances_all <- .initializeDistanceStructureMulti(slides, cts)
   global_min_percentile <- Inf
   
@@ -409,7 +398,7 @@ setMethod("computeDistance", "CoProMulti", function(object, distType = c("Euclid
     if (verbose) message(paste("Computing within-cell-type distances for slide:", sID))
     
     # Check if there are enough cells for this cell type in this slide
-    slide_ct_count <- sum(object@cellTypesSub == cts & object@metaDataSub$slideID == sID)
+    slide_ct_count <- .countSlideCellType(object, slide = sID, cellType = cts)
     if (slide_ct_count <= 5) {
       if (verbose) message(paste("Skipping slide", sID, "- insufficient cells of type", cts, "(", slide_ct_count, "cells)"))
       next
@@ -431,12 +420,13 @@ setMethod("computeDistance", "CoProMulti", function(object, distType = c("Euclid
       global_min_percentile <- min(global_min_percentile, dist_percentile, na.rm = TRUE)
     }
     
-    # Save the distances
-    distances_all[[sID]][[cts]][[cts]] <- distances_ij
+    # Save the distances using flat structure
+    flat_name <- .createDistMatrixName(cts, cts, slide = sID)
+    distances_all[[flat_name]] <- distances_ij
     
     if (verbose) {
       cat("Slide:", sID, ", Cell type:", cts, "\n")
-      print(quantile(distances_ij[is.finite(distances_ij)], na.rm = TRUE))
+      if (verbose) print(quantile(distances_ij[is.finite(distances_ij)], na.rm = TRUE))
     }
   }
   
@@ -453,7 +443,7 @@ setMethod("computeDistance", "CoProMulti", function(object, distType = c("Euclid
 .computeDistanceMultiPairs <- function(object, cts, distType, xDistScale, yDistScale, zDistScale,
                                       normalizeDistance, truncateLowDist, verbose) {
   
-  slides <- object@slideList
+  slides <- getSlideList(object)
   distances_all <- .initializeDistanceStructureMulti(slides, cts)
   pair_cell_types <- combn(cts, 2)
   global_min_percentile <- Inf
@@ -473,8 +463,8 @@ setMethod("computeDistance", "CoProMulti", function(object, distType = c("Euclid
       ct_j <- pair_cell_types[2, pp]
       
       # Check cell counts for both cell types in this slide
-      ct_i_count <- sum(object@cellTypesSub == ct_i & object@metaDataSub$slideID == sID)
-      ct_j_count <- sum(object@cellTypesSub == ct_j & object@metaDataSub$slideID == sID)
+      ct_i_count <- .countSlideCellType(object, slide = sID, cellType = ct_i)
+      ct_j_count <- .countSlideCellType(object, slide = sID, cellType = ct_j)
       
       if (ct_i_count <= 5 || ct_j_count <= 5) {
         if (verbose) message(paste("Skipping pair", ct_i, "-", ct_j, 
@@ -498,12 +488,13 @@ setMethod("computeDistance", "CoProMulti", function(object, distType = c("Euclid
         global_min_percentile <- min(global_min_percentile, dist_percentile, na.rm = TRUE)
       }
       
-      # Save the distances
-      distances_all[[sID]][[ct_i]][[ct_j]] <- distances_ij
+      # Save the distances using flat structure
+      flat_name <- .createDistMatrixName(ct_i, ct_j, slide = sID)
+      distances_all[[flat_name]] <- distances_ij
       
       if (verbose) {
         cat("Slide:", sID, ", Pair:", ct_i, "-", ct_j, "\n")
-        print(quantile(distances_ij, na.rm = TRUE))
+        if (verbose) print(quantile(distances_ij, na.rm = TRUE))
       }
     }
   }

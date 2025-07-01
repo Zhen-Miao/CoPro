@@ -1,29 +1,40 @@
-#' Helper function to safely get K_ij or t(K_ji) from K_list
-#' @note Assumes K_list is named list K_list[[ct1]][[ct2]]
-#' @note Assumes if K_list[[ct_i]][[ct_j]] is NULL, K_list[[ct_j]][[ct_i]] exists.
-#' @param K_list The named kernel list structure
+#' Helper function to get K_ij from flat kernel structure
+#' @param flat_kernels Flat list of kernel matrices with names like "kernel|sigma0.1|TypeA|TypeB"
+#' @param sigma Sigma value (numeric)
 #' @param ct_i Name of the first cell type
 #' @param ct_j Name of the second cell type
+#' @param slide Slide ID (NULL for single slide)
 #' @return The K_ij matrix
 #' @importFrom irlba irlba
 #' @noRd
-get_kernel_matrix <- function(K_list, ct_i, ct_j) {
-  K12 <- NULL
-  # Try accessing K_ij directly
-  if (length(K_list[[ct_i]][[ct_j]]) != 0) {
-    K12 <- K_list[[ct_i]][[ct_j]]
+get_kernel_matrix_flat <- function(flat_kernels, sigma, ct_i, ct_j, slide = NULL) {
+  # Create the expected flat name using the same logic as .createKernelMatrixName
+  if (is.null(slide)) {
+    flat_name <- paste("kernel", paste0("sigma", sigma), ct_i, ct_j, sep = "|")
   } else {
-    # If K_ij is missing, try getting K_ji and transposing it
-    K21 <- K_list[[ct_j]][[ct_i]]
-    K12 <- t(K21)
+    flat_name <- paste("kernel", paste0("sigma", sigma), slide, ct_i, ct_j, sep = "|")
   }
-
-  # Check if we successfully obtained a matrix
-  if (length(K12) == 0) {
-    stop(paste("Could not find kernel matrix for pair:", ct_i, ct_j,
-               "or its transpose in K_list."))
+  
+  # Try direct access
+  if (flat_name %in% names(flat_kernels)) {
+    return(flat_kernels[[flat_name]])
   }
-  return(K12)
+  
+  # Try symmetric access (swap ct_i and ct_j)
+  if (is.null(slide)) {
+    symmetric_name <- paste("kernel", paste0("sigma", sigma), ct_j, ct_i, sep = "|")
+  } else {
+    symmetric_name <- paste("kernel", paste0("sigma", sigma), slide, ct_j, ct_i, sep = "|")
+  }
+  
+  if (symmetric_name %in% names(flat_kernels)) {
+    return(t(flat_kernels[[symmetric_name]]))
+  }
+  
+  # If we get here, kernel not found
+  stop(paste("Could not find kernel matrix for pair:", ct_i, ct_j,
+             "with sigma =", sigma, if (!is.null(slide)) paste("on slide", slide),
+             "in flat kernel structure."))
 }
 
 
@@ -73,19 +84,21 @@ check_convergence <- function(w_list_new, w_list_old, cell_types) {
 #' @param ct_i Cell type i
 #' @param cell_types All cell types
 #' @param X_list Data matrices
-#' @param K_list Kernel matrices
+#' @param flat_kernels Flat kernel matrices
+#' @param sigma Sigma value
 #' @param w_list Current weights
 #' @param n_features Number of features
+#' @param slide Slide ID (NULL for single slide)
 #' @return Update vector for ct_i
 #' @noRd
-compute_update_vector_standard <- function(ct_i, cell_types, X_list, K_list, w_list, n_features) {
+compute_update_vector_standard <- function(ct_i, cell_types, X_list, flat_kernels, sigma, w_list, n_features, slide = NULL) {
   w_i_update_vec <- matrix(0, nrow = n_features, ncol = 1)
   
   for (ct_j in cell_types) {
     if (ct_i == ct_j) next
     
-    # Get K_ij or t(K_ji) robustly
-    K12 <- get_kernel_matrix(K_list, ct_i, ct_j)
+    # Get K_ij from flat structure
+    K12 <- get_kernel_matrix_flat(flat_kernels, sigma, ct_i, ct_j, slide)
     
     # Get matrices and current weights
     X1 <- X_list[[ct_i]]
@@ -120,17 +133,17 @@ compute_update_vector_within <- function(X, K, w) {
 }
 
 #' SkrCCA optimization function for multiple groups (Single Slide) - First Component
-#' Assumes X_list and K_list are named lists using consistent cell type names.
-#' Handles upper/lower triangle K_list. Uses w_i_left structure.
+#' Uses flat kernel structure for consistent data access
 #'
 #' @param X_list Named list of data matrices (cell by PC matrix)
-#' @param K_list Named list of kernel matrices (potentially upper/lower triangle only)
+#' @param flat_kernels Flat list of kernel matrices with names like "kernel|sigma0.1|TypeA|TypeB"
+#' @param sigma Sigma value (numeric)
 #' @param max_iter Maximum number of iterations
 #' @param tol tolerance of accuracy
 #'
 #' @return Named list `w_list` containing the first weight vector component.
 #' @export
-optimize_bilinear <- function(X_list, K_list, max_iter = 1000,
+optimize_bilinear <- function(X_list, flat_kernels, sigma, max_iter = 1000,
                               tol = 1e-5) {
 
   cell_types <- names(X_list)
@@ -141,11 +154,6 @@ optimize_bilinear <- function(X_list, K_list, max_iter = 1000,
   is_within <- (n_mat == 1)
   
   n_features <- ncol(X_list[[cell_types[1]]])
-
-  # Basic check on K_list names
-  if (is.null(names(K_list)) || !all(cell_types %in% names(K_list))) {
-    stop("K_list must be a named list containing entries for all cell types in X_list.")
-  }
 
   # Initialize w_list using SVD
   w_list <- initialize_weights_svd(X_list, cell_types)
@@ -159,11 +167,7 @@ optimize_bilinear <- function(X_list, K_list, max_iter = 1000,
       # Within-cell-type optimization
       ct <- cell_types[1]
       X <- X_list[[ct]]
-      K <- K_list[[ct]][[ct]]
-      
-      if (is.null(K)) {
-        stop(paste("Kernel matrix not found for within-cell-type:", ct))
-      }
+      K <- get_kernel_matrix_flat(flat_kernels, sigma, ct, ct, slide = NULL)
       
       w_update <- compute_update_vector_within(X, K, w_list[[ct]])
       w_list[[ct]] <- normalize_vec(w_update)
@@ -171,7 +175,7 @@ optimize_bilinear <- function(X_list, K_list, max_iter = 1000,
     } else {
       # Standard multi-cell-type optimization
       for (ct_i in cell_types) {
-        w_i_update_vec <- compute_update_vector_standard(ct_i, cell_types, X_list, K_list, w_list, n_features)
+        w_i_update_vec <- compute_update_vector_standard(ct_i, cell_types, X_list, flat_kernels, sigma, w_list, n_features, slide = NULL)
         w_list[[ct_i]] <- normalize_vec(w_i_update_vec)
       }
     }
@@ -201,11 +205,13 @@ optimize_bilinear <- function(X_list, K_list, max_iter = 1000,
 
 #' Compute Y_resi for subsequent components
 #' @param X_list Data matrices
-#' @param K_list Kernel matrices
+#' @param flat_kernels Flat kernel matrices
+#' @param sigma Sigma value
 #' @param cell_types Cell type names
+#' @param slide Slide ID (NULL for single slide)
 #' @return Y_resi structure
 #' @noRd
-compute_Y_resi <- function(X_list, K_list, cell_types) {
+compute_Y_resi <- function(X_list, flat_kernels, sigma, cell_types, slide = NULL) {
   n_mat <- length(cell_types)
   is_within <- (n_mat == 1)
   Y_resi <- setNames(vector(mode = "list", length = n_mat), cell_types)
@@ -215,7 +221,7 @@ compute_Y_resi <- function(X_list, K_list, cell_types) {
     ct <- cell_types[1]
     Y_resi[[ct]] <- setNames(list(NULL), ct)
     X <- X_list[[ct]]
-    K <- K_list[[ct]][[ct]]
+    K <- get_kernel_matrix_flat(flat_kernels, sigma, ct, ct, slide)
     Y_resi[[ct]][[ct]] <- crossprod(X, K %*% X)
   } else {
     # Standard case: initialize structure for all pairs
@@ -229,7 +235,7 @@ compute_Y_resi <- function(X_list, K_list, cell_types) {
       i <- pair_cell_types[1, pp]
       j <- pair_cell_types[2, pp]
       
-      K12 <- get_kernel_matrix(K_list, i, j)
+      K12 <- get_kernel_matrix_flat(flat_kernels, sigma, i, j, slide)
       Y_ij <- crossprod(X_list[[i]], K12 %*% X_list[[j]])
       
       Y_resi[[i]][[j]] <- Y_ij
@@ -395,11 +401,11 @@ bilinear_w_from_Y_resi <- function(w_list_new, Y_resi,
 }
 
 #' Run multi version of skrCCA to detect subsequent components (Single Slide)
-#' Assumes X_list, K_list, w_list are named lists containing only cellTypesOfInterest.
-#' Handles upper/lower triangle K_list. No internal subsetting.
+#' Uses flat kernel structure for consistent data access
 #'
 #' @param X_list Named list of data matrices (subsetted)
-#' @param K_list Named list of kernel matrices (subsetted, potentially upper/lower triangle)
+#' @param flat_kernels Flat list of kernel matrices
+#' @param sigma Sigma value (numeric)
 #' @param w_list A named list of weights (subsetted, matrices with previous components as columns)
 #' @param cellTypesOfInterest A vector specifying cell type names present in the input lists
 #' @param nCC Total number of canonical vectors desired (must be >= 2)
@@ -408,7 +414,7 @@ bilinear_w_from_Y_resi <- function(w_list_new, Y_resi,
 #'
 #' @return A named list of weights (matrices with components 1 to nCC as columns)
 #' @export
-optimize_bilinear_n <- function(X_list, K_list, w_list,
+optimize_bilinear_n <- function(X_list, flat_kernels, sigma, w_list,
                                       cellTypesOfInterest,
                                       nCC = 2,
                                       max_iter = 1000,
@@ -420,8 +426,8 @@ optimize_bilinear_n <- function(X_list, K_list, w_list,
   is_within <- (n_mat == 1)
 
   
-  if (length(X_list) != n_mat || length(K_list) != n_mat || length(w_list) != n_mat ||
-      !all(cts %in% names(X_list)) || !all(cts %in% names(K_list)) || !all(cts %in% names(w_list))) {
+  if (length(X_list) != n_mat || length(w_list) != n_mat ||
+      !all(cts %in% names(X_list)) || !all(cts %in% names(w_list))) {
     stop("Input lists length or names do not match cellTypesOfInterest.")
   }
   n_features <- ncol(X_list[[cts[1]]])
@@ -439,7 +445,7 @@ optimize_bilinear_n <- function(X_list, K_list, w_list,
   }
 
   # Initialize Y_resi structure using original data
-  Y_resi <- compute_Y_resi(X_list, K_list, cts)
+  Y_resi <- compute_Y_resi(X_list, flat_kernels, sigma, cts, slide = NULL)
 
   # Loop to compute components k_start + 1 up to nCC
   for (qq in k_start:(nCC - 1)) {
@@ -490,12 +496,12 @@ NULL
 
 #' Validate multi-slide input data structure
 #' @param X_list_all List of lists of data matrices
-#' @param K_list_all List of lists of kernel matrices
+#' @param K_list_all List of lists of kernel matrices (deprecated, can be NULL)
 #' @param expected_cell_types Expected cell types (NULL to auto-detect)
 #' @param check_single_type Whether to check for single cell type
 #' @return List with validated inputs and metadata
 #' @noRd
-validate_multi_slide_inputs <- function(X_list_all, K_list_all, 
+validate_multi_slide_inputs <- function(X_list_all, K_list_all = NULL, 
                                        expected_cell_types = NULL,
                                        check_single_type = FALSE) {
   n_slides <- length(X_list_all)
@@ -504,7 +510,8 @@ validate_multi_slide_inputs <- function(X_list_all, K_list_all,
     stop("Need at least one slide.")
   }
   
-  if (length(K_list_all) != n_slides) {
+  # K_list_all validation is now optional (for backward compatibility)
+  if (!is.null(K_list_all) && length(K_list_all) != n_slides) {
     stop("X_list_all and K_list_all must have the same length (number of slides).")
   }
   
@@ -589,34 +596,38 @@ initialize_weights_multi_slide <- function(X_list_all, cell_types, use_aggregati
 
 #' Compute Y matrix for a single slide
 #' @param X_list Data matrices for one slide
-#' @param K_list Kernel matrices for one slide
+#' @param flat_kernels Flat kernel matrices
+#' @param sigma Sigma value
+#' @param slide Slide ID
 #' @param ct_i First cell type
 #' @param ct_j Second cell type
 #' @return Y_ij matrix
 #' @noRd
-compute_Y_slide <- function(X_list, K_list, ct_i, ct_j) {
+compute_Y_slide <- function(X_list, flat_kernels, sigma, slide, ct_i, ct_j) {
   if (ct_i == ct_j) {
     # Within-cell-type case
     X <- X_list[[ct_i]]
-    K <- K_list[[ct_i]][[ct_i]]
+    K <- get_kernel_matrix_flat(flat_kernels, sigma, ct_i, ct_i, slide)
     return(crossprod(X, K %*% X))
   } else {
     # Between-cell-type case
     X1 <- X_list[[ct_i]]
     X2 <- X_list[[ct_j]]
-    K12 <- get_kernel_matrix(K_list, ct_i, ct_j)
+    K12 <- get_kernel_matrix_flat(flat_kernels, sigma, ct_i, ct_j, slide)
     return(crossprod(X1, K12 %*% X2))
   }
 }
 
 #' Aggregate Y matrices across slides
 #' @param X_list_all List of lists of data matrices
-#' @param K_list_all List of lists of kernel matrices
+#' @param flat_kernels Flat kernel matrices
+#' @param sigma Sigma value
+#' @param slides Slide IDs
 #' @param cell_types Cell type names
 #' @param n_cores Number of cores for parallel computation
 #' @return Aggregated Y matrices structure
 #' @noRd
-compute_Y_multi_slide <- function(X_list_all, K_list_all, cell_types, n_cores = 1) {
+compute_Y_multi_slide <- function(X_list_all, flat_kernels, sigma, slides, cell_types, n_cores = 1) {
   n_slides <- length(X_list_all)
   n_mat <- length(cell_types)
   is_within <- (n_mat == 1)
@@ -625,7 +636,7 @@ compute_Y_multi_slide <- function(X_list_all, K_list_all, cell_types, n_cores = 
     # Single cell type case
     ct <- cell_types[1]
     Y_list <- mclapply(seq_len(n_slides), function(q) {
-      compute_Y_slide(X_list_all[[q]], K_list_all[[q]], ct, ct)
+      compute_Y_slide(X_list_all[[q]], flat_kernels, sigma, slides[q], ct, ct)
     }, mc.cores = n_cores)
     
     Y_sum <- Reduce("+", Y_list)
@@ -648,7 +659,7 @@ compute_Y_multi_slide <- function(X_list_all, K_list_all, cell_types, n_cores = 
       
       # Compute Y_ij for all slides in parallel
       Y_ij_list <- mclapply(seq_len(n_slides), function(q) {
-        compute_Y_slide(X_list_all[[q]], K_list_all[[q]], ct_i, ct_j)
+        compute_Y_slide(X_list_all[[q]], flat_kernels, sigma, slides[q], ct_i, ct_j)
       }, mc.cores = n_cores)
       
       Y_ij_sum <- Reduce("+", Y_ij_list)
@@ -664,14 +675,16 @@ compute_Y_multi_slide <- function(X_list_all, K_list_all, cell_types, n_cores = 
 #' @param ct_i Cell type to update
 #' @param cell_types All cell types
 #' @param X_list_all List of lists of data matrices
-#' @param K_list_all List of lists of kernel matrices
+#' @param flat_kernels Flat kernel matrices
+#' @param sigma Sigma value
+#' @param slides Slide IDs
 #' @param w_list Current weights
 #' @param n_features Number of features
 #' @param n_cores Number of cores
 #' @return Update vector
 #' @noRd
-compute_update_vector_multi_slide <- function(ct_i, cell_types, X_list_all, K_list_all, 
-                                             w_list, n_features, n_cores = 1) {
+compute_update_vector_multi_slide <- function(ct_i, cell_types, X_list_all, flat_kernels, 
+                                             sigma, slides, w_list, n_features, n_cores = 1) {
   n_slides <- length(X_list_all)
   w_i_update_vec <- matrix(0, nrow = n_features, ncol = 1)
   
@@ -684,7 +697,7 @@ compute_update_vector_multi_slide <- function(ct_i, cell_types, X_list_all, K_li
     contributions <- mclapply(seq_len(n_slides), function(q) {
       X_i <- X_list_all[[q]][[ct_i]]
       X_j <- X_list_all[[q]][[ct_j]]
-      K_ij <- get_kernel_matrix(K_list_all[[q]], ct_i, ct_j)
+      K_ij <- get_kernel_matrix_flat(flat_kernels, sigma, ct_i, ct_j, slides[q])
       
       # Efficient computation: t(X_i) %*% K_ij %*% (X_j %*% w_j)
       v_j <- X_j %*% w_j
@@ -707,21 +720,24 @@ compute_update_vector_multi_slide <- function(ct_i, cell_types, X_list_all, K_li
 #' Multi-slide SkrCCA optimization - First Component
 #' 
 #' Handles both standard (multiple cell types) and within (single cell type) cases
+#' Uses flat kernel structure for consistent data access
 #' 
 #' @param X_list_all List of lists of data matrices
-#' @param K_list_all List of lists of kernel matrices
+#' @param flat_kernels Flat list of kernel matrices
+#' @param sigma Sigma value (numeric)
+#' @param slides Slide IDs
 #' @param max_iter Maximum number of iterations
 #' @param tol Convergence tolerance
 #' @param n_cores Number of cores for parallel computation
 #' @param direct_solve For single cell type, use direct eigenvalue solution
 #' @return Named list of weight vectors (first component)
 #' @export
-optimize_bilinear_multi_slides <- function(X_list_all, K_list_all,
+optimize_bilinear_multi_slides <- function(X_list_all, flat_kernels, sigma, slides,
                                           max_iter = 1000, tol = 1e-5,
                                           n_cores = 1, direct_solve = TRUE) {
   
   # Validate inputs
-  validated <- validate_multi_slide_inputs(X_list_all, K_list_all)
+  validated <- validate_multi_slide_inputs(X_list_all, NULL)  # Don't validate K_list_all anymore
   n_slides <- validated$n_slides
   cell_types <- validated$cell_types
   n_cell_types <- validated$n_cell_types
@@ -733,7 +749,7 @@ optimize_bilinear_multi_slides <- function(X_list_all, K_list_all,
   # For single slide, delegate to single-slide function
   if (n_slides == 1) {
     message("Single slide detected, using single-slide optimization")
-    return(optimize_bilinear(X_list_all[[1]], K_list_all[[1]], 
+    return(optimize_bilinear(X_list_all[[1]], flat_kernels, sigma,
                             max_iter = max_iter, tol = tol))
   }
   
@@ -742,7 +758,7 @@ optimize_bilinear_multi_slides <- function(X_list_all, K_list_all,
     ct <- cell_types[1]
     
     # Aggregate Y matrices across slides
-    Y_aggregate <- compute_Y_multi_slide(X_list_all, K_list_all, cell_types, n_cores)
+    Y_aggregate <- compute_Y_multi_slide(X_list_all, flat_kernels, sigma, slides, cell_types, n_cores)
     Y_sum <- Y_aggregate[[ct]][[ct]]
     
     # Direct eigenvalue solution
@@ -778,7 +794,7 @@ optimize_bilinear_multi_slides <- function(X_list_all, K_list_all,
       # Compute aggregated update
       update_contributions <- mclapply(seq_len(n_slides), function(q) {
         X <- X_list_all[[q]][[ct]]
-        K <- K_list_all[[q]][[ct]][[ct]]
+        K <- get_kernel_matrix_flat(flat_kernels, sigma, ct, ct, slides[q])
         w <- w_list[[ct]]
         
         # Compute: t(X) %*% K %*% X %*% w
@@ -794,7 +810,7 @@ optimize_bilinear_multi_slides <- function(X_list_all, K_list_all,
       # Standard multi-cell-type optimization
       for (ct_i in cell_types) {
         w_i_update_vec <- compute_update_vector_multi_slide(
-          ct_i, cell_types, X_list_all, K_list_all, w_list, n_features, n_cores
+          ct_i, cell_types, X_list_all, flat_kernels, sigma, slides, w_list, n_features, n_cores
         )
         w_list[[ct_i]] <- normalize_vec(w_i_update_vec)
       }
@@ -828,9 +844,12 @@ optimize_bilinear_multi_slides <- function(X_list_all, K_list_all,
 #' Multi-slide SkrCCA optimization - Multiple Components
 #' 
 #' Computes components 2 to nCC using deflation
+#' Uses flat kernel structure for consistent data access
 #' 
 #' @param X_list_all List of lists of data matrices
-#' @param K_list_all List of lists of kernel matrices
+#' @param flat_kernels Flat list of kernel matrices
+#' @param sigma Sigma value (numeric)
+#' @param slides Slide IDs
 #' @param w_list Initial weight list with first component(s)
 #' @param cellTypesOfInterest Cell types to process
 #' @param nCC Total number of components desired
@@ -839,13 +858,13 @@ optimize_bilinear_multi_slides <- function(X_list_all, K_list_all,
 #' @param n_cores Number of cores for parallel computation
 #' @return Updated weight list with all components
 #' @export
-optimize_bilinear_n_multi_slides <- function(X_list_all, K_list_all, w_list,
+optimize_bilinear_n_multi_slides <- function(X_list_all, flat_kernels, sigma, slides, w_list,
                                             cellTypesOfInterest,
                                             nCC = 2, max_iter = 1000, 
                                             tol = 1e-5, n_cores = 1) {
   
   # Validate inputs
-  validated <- validate_multi_slide_inputs(X_list_all, K_list_all, 
+  validated <- validate_multi_slide_inputs(X_list_all, NULL, 
                                           expected_cell_types = cellTypesOfInterest)
   n_slides <- validated$n_slides
   cell_types <- cellTypesOfInterest
@@ -874,7 +893,7 @@ optimize_bilinear_n_multi_slides <- function(X_list_all, K_list_all, w_list,
   # Initialize Y_resi for all slides
   Y_resi_all <- vector("list", n_slides)
   for (q in seq_len(n_slides)) {
-    Y_resi_all[[q]] <- compute_Y_resi(X_list_all[[q]], K_list_all[[q]], cell_types)
+    Y_resi_all[[q]] <- compute_Y_resi(X_list_all[[q]], flat_kernels, sigma, cell_types, slides[q])
   }
   
   # Compute additional components

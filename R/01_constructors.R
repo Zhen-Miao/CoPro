@@ -55,6 +55,9 @@ setMethod(
     if (!is.character(cellTypes)) {
       cellTypes <- as.character(cellTypes)
     }
+    
+    ## validate cell types don't contain pipe characters
+    .validateSeparatorSafety(cellTypes = cellTypes)
 
     ## convert locationData to data.frame
     if (is.matrix(locationData)) {
@@ -157,6 +160,9 @@ setMethod(
     if (!is.character(cellTypes)) cellTypes <- as.character(cellTypes)
     if (!is.character(slideID)) slideID <- as.character(slideID)
     if (is.matrix(locationData)) locationData <- as.data.frame(locationData) # Ensure data frame
+    
+    # Validate cell types and slide IDs don't contain pipe characters
+    .validateSeparatorSafety(cellTypes = cellTypes, slideIDs = slideID)
 
     # Get unique slide identifiers
     unique_slides <- unique(slideID)
@@ -178,7 +184,6 @@ setMethod(
                  locationData = locationData,
                  metaData = metaData,
                  cellTypes = cellTypes,
-                 slideID = slideID,
                  slideList = unique_slides,
                  geneList = geneList
     )

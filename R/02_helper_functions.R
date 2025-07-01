@@ -89,6 +89,40 @@ normalize_vec <- function(v) {
   }
 }
 
+#' Validate that cell types and slide IDs don't contain pipe characters
+#' @param cellTypes Character vector of cell type names
+#' @param slideIDs Character vector of slide IDs (optional)
+#' @return TRUE if valid, stops execution with error if invalid
+#' @noRd
+.validateSeparatorSafety <- function(cellTypes = NULL, slideIDs = NULL) {
+  
+  # Check cell types for pipe characters
+  if (!is.null(cellTypes)) {
+    cellTypes <- as.character(cellTypes)
+    pipe_in_cellTypes <- grepl("\\|", cellTypes)
+    if (any(pipe_in_cellTypes)) {
+      problematic_types <- cellTypes[pipe_in_cellTypes]
+      stop(paste("Cell type names cannot contain pipe characters (|).",
+                 "Problematic cell types:", paste(problematic_types, collapse = ", "),
+                 "\nPlease rename these cell types to avoid conflicts with internal naming."))
+    }
+  }
+  
+  # Check slide IDs for pipe characters
+  if (!is.null(slideIDs)) {
+    slideIDs <- as.character(slideIDs)
+    pipe_in_slideIDs <- grepl("\\|", slideIDs)
+    if (any(pipe_in_slideIDs)) {
+      problematic_slides <- slideIDs[pipe_in_slideIDs]
+      stop(paste("Slide IDs cannot contain pipe characters (|).",
+                 "Problematic slide IDs:", paste(problematic_slides, collapse = ", "),
+                 "\nPlease rename these slide IDs to avoid conflicts with internal naming."))
+    }
+  }
+  
+  return(TRUE)
+}
+
 
 
 #' Assign distance matrix manually
@@ -169,7 +203,11 @@ setMethod("getSlideID", "CoProSingle", function(object) {
 
 #' @rdname getSlideID  
 setMethod("getSlideID", "CoProMulti", function(object) {
-  object@slideID
+  if ("slideID" %in% colnames(object@metaDataSub)) {
+    return(object@metaDataSub$slideID)
+  } else {
+    return(character(0))
+  }
 })
 
 #' Get slide list from CoPro object

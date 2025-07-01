@@ -144,11 +144,9 @@ setClass(
   "CoProMulti",
   contains = "CoPro",
   slots = list(
-    slideID = "factorOrCharacter",
     slideList = "character"
   ),
   prototype = list(
-    slideID = character(0),
     slideList = character(0)
   )
 )

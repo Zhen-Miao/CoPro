@@ -247,7 +247,9 @@ computeNormalizedCorrelationPermu <- function(object, tol = 1e-4) {
   for (pp in seq_len(ncol(pair_cell_types))) {
     cellType1 <- pair_cell_types[1, pp]
     cellType2 <- pair_cell_types[2, pp]
-    K <- object@kernelMatrices[[s_name]][[cellType1]][[cellType2]]
+    K <- getKernelMatrix(object, sigma = sigmaValueChoice, 
+                         cellType1 = cellType1, cellType2 = cellType2, 
+                         verbose = FALSE)
     ## Calculate the spectral norm of the kernel matrix
     svd_result <- irlba::irlba(K, nv = 1, tol = tol)
     norm_K12[[s_name]][[cellType1]][[cellType2]] <- svd_result$d[1]
@@ -281,7 +283,9 @@ computeNormalizedCorrelationPermu <- function(object, tol = 1e-4) {
         B_w2 <- B %*% w_2
 
         ## get pre-calculated spectral norm
-        K <- object@kernelMatrices[[s_name]][[cellType1]][[cellType2]]
+        K <- getKernelMatrix(object, sigma = sigmaValueChoice, 
+                             cellType1 = cellType1, cellType2 = cellType2, 
+                             verbose = FALSE)
         norm_K12_sel <- norm_K12[[s_name]][[cellType1]][[cellType2]]
 
         ## Calculate normalized correlation

@@ -163,7 +163,9 @@ testGeneGLM <- function(
     ){
 
   meta = object@metaDataSub[object@cellTypesSub == cellTypeChoice, covariates]
-  Y = object@cellScores[[sigmaName]][[cellTypeChoice]][,CCChoice]
+  Y = getCellScores(object, sigma = as.numeric(gsub("sigma_", "", sigmaName)), 
+                    cellType = cellTypeChoice, ccIndex = as.numeric(gsub("CC_", "", CCChoice)), 
+                    verbose = FALSE)
   X = object@normalizedDataSub[object@cellTypesSub == cellTypeChoice,]
 
   m<-t(apply(X, MARGIN = 1,
@@ -178,7 +180,9 @@ testGeneMixedEffect <- function(
     ){
 
         meta = object@metaDataSub[object@cellTypesSub == cellTypeChoice]
-        Y = object@cellScores[[sigmaName]][[cellTypeChoice]][,CCChoice]
+        Y = getCellScores(object, sigma = as.numeric(gsub("sigma_", "", sigmaName)), 
+                          cellType = cellTypeChoice, ccIndex = as.numeric(gsub("CC_", "", CCChoice)), 
+                          verbose = FALSE)
         X = object@normalizedDataSub[object@cellTypesSub == cellTypeChoice,]
 
         m<-t(apply(X, MARGIN = 1,

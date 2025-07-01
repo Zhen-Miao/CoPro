@@ -47,46 +47,53 @@ setGeneric("getCellScoresInSitu",
     stop("sigmaValueChoice does not exist in the list of sigmaValues")
   }
 
-  sigma_name_choice <- paste("sigma", sigmaValueChoice, sep = "_")
-  
-  # Check if sigma choice exists in cellScores
-  if (!sigma_name_choice %in% names(object@cellScores)) {
-    stop(paste("Sigma choice", sigma_name_choice, "not found in cellScores"))
+  # Validate ccIndex using flat structure
+  cell_types <- object@cellTypesOfInterest
+  if (length(cell_types) == 0) {
+    cell_types <- unique(object@cellTypesSub)
   }
-
-  # Check ccIndex validity - need to handle both single and multi-slide cases
-  if (length(object@slideID) == 0) {
-    # Single slide case - check any cell type
-    cell_types <- names(object@cellScores[[sigma_name_choice]])
-    if (length(cell_types) > 0) {
-      first_ct_scores <- object@cellScores[[sigma_name_choice]][[cell_types[1]]]
-      if (ccIndex > ncol(first_ct_scores)) {
-        stop("ccIndex exceeds number of canonical components")
-      }
-    }
-  } else {
-    # Multi-slide case - check any slide and cell type
-    slides <- names(object@cellScores[[sigma_name_choice]])
-    if (length(slides) > 0) {
-      cell_types <- names(object@cellScores[[sigma_name_choice]][[slides[1]]])
-      if (length(cell_types) > 0) {
-        first_ct_scores <- object@cellScores[[sigma_name_choice]][[slides[1]]][[cell_types[1]]]
-        if (ccIndex > ncol(first_ct_scores)) {
+  
+  # Try to find any cell scores matrix to validate ccIndex
+  found_valid_matrix <- FALSE
+  for (ct in cell_types) {
+    flat_name <- .createCellScoresName(sigmaValueChoice, ct, slide = NULL)
+    if (flat_name %in% names(object@cellScores)) {
+      scores_matrix <- object@cellScores[[flat_name]]
+      if (!is.null(scores_matrix) && ncol(scores_matrix) > 0) {
+        if (ccIndex > ncol(scores_matrix)) {
           stop("ccIndex exceeds number of canonical components")
         }
+        found_valid_matrix <- TRUE
+        break
       }
     }
+  }
+  
+  if (!found_valid_matrix) {
+    stop("No cell scores found for validation")
   }
 
   return(TRUE)
 }
 
 .getCellScoresInSituCore <- function(object, sigmaValueChoice, ccIndex = 1){
-  ## if slideID slot exists, use multi-slide approach, otherwise single slide
-  if(length(object@slideID) == 0 || length(unique(object@slideID)) == 1){
+  ## Safely detect single vs multi-slide based on object class
+  if (inherits(object, "CoProSingle")) {
     return(.csSingleSlide(object, sigmaValueChoice, ccIndex = ccIndex))
-  } else {
+  } else if (inherits(object, "CoProMulti")) {
     return(.csMultiSlide(object, sigmaValueChoice, ccIndex = ccIndex))
+  } else {
+    # Fallback: try to detect based on slideID slot existence
+    has_slideID <- tryCatch({
+      slideID_data <- object@slideID
+      length(slideID_data) > 0 && length(unique(slideID_data)) > 1
+    }, error = function(e) FALSE)
+    
+    if (has_slideID) {
+      return(.csMultiSlide(object, sigmaValueChoice, ccIndex = ccIndex))
+    } else {
+      return(.csSingleSlide(object, sigmaValueChoice, ccIndex = ccIndex))
+    }
   }
 }
 
@@ -101,8 +108,6 @@ setGeneric("getCellScoresInSitu",
     ))
     cts <- unique(object@cellTypesSub)
   }
-
-  sigma_name_choice <- paste("sigma", sigmaValueChoice, sep = "_")
 
   loc_t <- stats::setNames(
     vector(mode = "list", length = length(cts)),
@@ -120,13 +125,19 @@ setGeneric("getCellScoresInSitu",
       next
     }
     
-    # Check if cell scores exist for this cell type
-    if (!ct %in% names(object@cellScores[[sigma_name_choice]])) {
+    # Use flat structure to access cell scores
+    flat_name <- .createCellScoresName(sigmaValueChoice, ct, slide = NULL)
+    if (!flat_name %in% names(object@cellScores)) {
       warning(paste("Cell scores not found for cell type", ct))
       next
     }
     
-    cell_scores_matrix <- object@cellScores[[sigma_name_choice]][[ct]]
+    cell_scores_matrix <- object@cellScores[[flat_name]]
+    if (is.null(cell_scores_matrix)) {
+      warning(paste("Cell scores matrix is NULL for cell type", ct))
+      next
+    }
+    
     common_cells <- intersect(rownames(loc_t[[ct]]), rownames(cell_scores_matrix))
     
     if (length(common_cells) == 0) {
@@ -179,9 +190,7 @@ setGeneric("getCellScoresInSitu",
     cts <- unique(object@cellTypesSub)
   }
   
-  sigma_name_choice <- paste("sigma", sigmaValueChoice, sep = "_")
-  
-  # Initialize nested list structure: slide -> cell type -> data
+  # Initialize list structure for slide and cell type combinations
   df_by_slide_ct <- vector("list", length = length(all_slides))
   names(df_by_slide_ct) <- all_slides
   
@@ -190,6 +199,9 @@ setGeneric("getCellScoresInSitu",
     names(df_by_slide_ct[[q]]) <- cts
   }
 
+  # Note: For multi-slide objects, cell scores are aggregated across slides
+  # in the flat structure, so we access them directly without slide-specific keys
+  
   # Collect data for each slide and cell type
   for (q in all_slides) {
     for (ct in cts) {
@@ -202,18 +214,18 @@ setGeneric("getCellScoresInSitu",
         next  # Skip if no cells
       }
       
-      # Check if cell scores exist for this slide and cell type
-      if (!q %in% names(object@cellScores[[sigma_name_choice]]) ||
-          !ct %in% names(object@cellScores[[sigma_name_choice]][[q]])) {
-        warning(paste("Cell scores not found for slide", q, "and cell type", ct))
+      # Use flat structure to access cell scores (aggregated across slides)
+      flat_name <- .createCellScoresName(sigmaValueChoice, ct, slide = NULL)
+      if (!flat_name %in% names(object@cellScores)) {
+        warning(paste("Cell scores not found for cell type", ct))
         next
       }
       
-      cell_scores_matrix <- object@cellScores[[sigma_name_choice]][[q]][[ct]]
+      cell_scores_matrix <- object@cellScores[[flat_name]]
       
       # Check if the cell scores matrix exists and has the right dimensions
       if (is.null(cell_scores_matrix) || nrow(cell_scores_matrix) == 0) {
-        warning(paste("Empty cell scores matrix for slide", q, "and cell type", ct))
+        warning(paste("Empty cell scores matrix for cell type", ct))
         next
       }
       

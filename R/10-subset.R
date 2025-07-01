@@ -40,10 +40,7 @@ setGeneric("subsetData",
   object@locationDataSub <- object@locationData[idx, , drop = FALSE]
   object@cellTypesSub <- object@cellTypes[idx]
   
-  # Only subset slideID if this is a multi-slide object
-  if (isMultiSlide(object)) {
-    object@slideID <- object@slideID[idx]
-  }
+  # slideID is automatically subsetted with metaDataSub (no separate slot)
   
   if (!saveOriginal) {
     object@normalizedData <- matrix(0)
@@ -61,6 +58,6 @@ setMethod("subsetData", "CoProSingle", function(object, cellTypesOfInterest, sav
 })
 
 setMethod("subsetData", "CoProMulti", function(object, cellTypesOfInterest, saveOriginal = FALSE) {
-  n_slide = length(object@slideList)
+  n_slide = length(getSlideList(object))
   .subset_core(object, cellTypesOfInterest, min_n = 10 * n_slide, saveOriginal = saveOriginal)
 })

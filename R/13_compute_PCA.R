@@ -120,7 +120,7 @@ setGeneric("computePCA",
 
 .compute_pca_multi <- function(object, nPCA = 40, center = TRUE, scale. = TRUE,
                                dataUse = "raw", center_per_slide = FALSE, cts) {
-  slides <- object@slideList
+      slides <- getSlideList(object)
 
   # Initialize pcaResults structure
   pca_results_all <- setNames(vector("list", length = length(slides)), slides)
@@ -172,7 +172,7 @@ setGeneric("computePCA",
     pca_global[[ct]] <- pca_ct
 
     # Project each slide's data onto the shared PCs
-    slide_id_ct <- object@metaDataSub$slideID[object@cellTypesSub == ct]
+          slide_id_ct <- getSlideID(object)[object@cellTypesSub == ct]
     row_names_ct <- rownames(object@metaDataSub)[object@cellTypesSub == ct]
     
     for (slide_id in slides) {
