@@ -96,9 +96,9 @@ setMethod(
 )
 
 
-#' Create a new CoProm object for Multi-Slide Analysis
+#' Create a new CoProMulti object for Multi-Slide Analysis
 #'
-#' Initializes a `CoProm` object with combined data from multiple slides.
+#' Initializes a `CoProMulti` object with combined data from multiple slides.
 #'
 #' @param normalizedData Combined normalized expression matrix (cells x genes) for all slides. Rownames should be unique cell identifiers.
 #' @param locationData Combined location data frame (cells x coordinates) for all slides. Rownames must match `normalizedData`. Columns 'x', 'y', (and optionally 'z') required.
@@ -106,10 +106,10 @@ setMethod(
 #' @param cellTypes Combined cell type labels vector for all cells. Length must match `nrow(normalizedData)`.
 #' @param slideID Combined slide/sample identifier vector for all cells. Length must match `nrow(normalizedData)`.
 #'
-#' @return A `CoProm` object.
+#' @return A `CoProMulti` object.
 #' @export
 #' @rdname newCoProMulti
-#' @aliases newCoProMulti,CoProm-method
+#' @aliases newCoProMulti,CoProMulti-method
 setGeneric(
   "newCoProMulti",
   function(normalizedData, locationData, metaData,
@@ -117,7 +117,7 @@ setGeneric(
 )
 
 #' @rdname newCoProMulti
-#' @aliases newCoProMulti,CoProm-method
+#' @aliases newCoProMulti,CoProMulti-method
 #' @export
 setMethod(
   "newCoProMulti", signature(
@@ -167,7 +167,7 @@ setMethod(
     # Get unique slide identifiers
     unique_slides <- unique(slideID)
     if(length(unique_slides) < 2) {
-      warning("CoProm object created with only one unique slide ID. Multi-slide functions may not be appropriate.")
+      warning("CoProMulti object created with only one unique slide ID. Multi-slide functions may not be appropriate.")
     }
 
     # add slideID to metadata, if not already in it

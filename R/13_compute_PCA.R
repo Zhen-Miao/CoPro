@@ -1,11 +1,11 @@
 #' Compute PCA on Integrated Multi-Slide Data
 #'
-#' Performs PCA on the integrated data stored within the `CoProm` object.
+#' Performs PCA on the integrated data stored within the `CoProMulti` object.
 #' Assumes integration has created a common space across slides.
 #'
 #' @importFrom stats setNames prcomp
 #' @importFrom irlba prcomp_irlba
-#' @param object A `CoProm` object with the `integratedData` slot populated.
+#' @param object A `CoProMulti` object with the `integratedData` slot populated.
 #' @param nPCA Number of principal components to compute for each cell type.
 #' @param dataUse What data to use, choices between "raw" and "integrated".
 #'   Default is "raw". For single slide, this argument is ignored.
@@ -14,11 +14,11 @@
 #' @param center Whether to center the matrix before PCA
 #' @param scale. Whether to scale the matrix before PCA
 #'
-#' @return A `CoProm` object with the `pcaResults` slot populated.
+#' @return A `CoProMulti` object with the `pcaResults` slot populated.
 #'         `pcaResults` structure: `list(slideID = list(cellType = pc_matrix))`.
 #' @export
 #' @rdname computePCAMulti
-#' @aliases computePCAMulti,CoProm-method
+#' @aliases computePCAMulti,CoProMulti-method
 setGeneric("computePCA",
            function(object, nPCA = 40,
                     center = TRUE, scale. = TRUE,

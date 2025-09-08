@@ -20,8 +20,8 @@ setGeneric("getNormCorr",
 )
 
 .checkInputNormCorrExists <- function(object) {
-  if ( !( is(object, "CoPro") || is(object, "CoProm") ) ) {
-    stop("Input must be a CoPro or CoProm object")
+  if ( !( is(object, "CoProSingle") || is(object, "CoProMulti") ) ) {
+    stop("Input must be a CoProSingle or CoProMulti object")
   }
     ## make sure normalizedCorrelation exists
   if (length(object@normalizedCorrelation) == 0) {

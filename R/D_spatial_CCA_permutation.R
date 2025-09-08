@@ -153,8 +153,10 @@ runSkrCCAPermu <- function(object, tol = 1e-5, nPermu = 20,
 
     cca_result <- optimize_bilinear(
       X_list = PCmats2,
-      K_list = object@kernelMatrices[[s_name]],
-      max_iter = maxIter, tol = tol
+      flat_kernels = object@kernelMatrices,
+      sigma = sigmaValueChoice,
+      max_iter = maxIter,
+      tol = tol
     )
     names(cca_result) <- cts
 
@@ -163,10 +165,13 @@ runSkrCCAPermu <- function(object, tol = 1e-5, nPermu = 20,
     }else {
       cca_result_n <- optimize_bilinear_n(
         X_list = PCmats2,
-        K_list = object@kernelMatrices[[s_name]],
+        flat_kernels = object@kernelMatrices,
+        sigma = sigmaValueChoice,
         w_list = cca_result,
-        cellTypesOfInterest = cts, nCC = nCC,
-        max_iter = maxIter, tol = tol
+        cellTypesOfInterest = cts,
+        nCC = nCC,
+        max_iter = maxIter,
+        tol = tol
       )
       cca_permu_out[[t]] <- cca_result_n
     }

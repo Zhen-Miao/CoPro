@@ -83,8 +83,15 @@ conducted.}
 \item{\code{normalizedCorrelation}}{A \code{list} object. Normalized correlation values
 for each sigma value.}
 
+\item{\code{bidirCorrelation}}{A \code{list} object. Bidirectional correlation values
+for each sigma value.}
+
 \item{\code{normalizedCorrelationPermu}}{A \code{list} object.
 Normalized correlation values
+for each sigma value after permutation}
+
+\item{\code{bidirCorrelationPermu}}{A \code{list} object.
+Bidirectional correlation values
 for each sigma value after permutation}
 
 \item{\code{sigmaValueChoice}}{A \code{numeric} value. The optimal sigma squared based

@@ -2,7 +2,7 @@
 % Please edit documentation in R/13_compute_PCA.R
 \name{computePCA}
 \alias{computePCA}
-\alias{computePCAMulti,CoProm-method}
+\alias{computePCAMulti,CoProMulti-method}
 \title{Compute PCA on Integrated Multi-Slide Data}
 \usage{
 computePCA(
@@ -15,7 +15,7 @@ computePCA(
 )
 }
 \arguments{
-\item{object}{A \code{CoProm} object with the \code{integratedData} slot populated.}
+\item{object}{A \code{CoProMulti} object with the \code{integratedData} slot populated.}
 
 \item{nPCA}{Number of principal components to compute for each cell type.}
 
@@ -30,10 +30,10 @@ Default is "raw". For single slide, this argument is ignored.}
 again? By default this is set to FALSE}
 }
 \value{
-A \code{CoProm} object with the \code{pcaResults} slot populated.
+A \code{CoProMulti} object with the \code{pcaResults} slot populated.
 \code{pcaResults} structure: \code{list(slideID = list(cellType = pc_matrix))}.
 }
 \description{
-Performs PCA on the integrated data stored within the \code{CoProm} object.
+Performs PCA on the integrated data stored within the \code{CoProMulti} object.
 Assumes integration has created a common space across slides.
 }

@@ -2,9 +2,9 @@
 % Please edit documentation in R/01_constructors.R
 \name{newCoProMulti}
 \alias{newCoProMulti}
-\alias{newCoProMulti,CoProm-method}
+\alias{newCoProMulti,CoProMulti-method}
 \alias{newCoProMulti,matrixOrSparseMatrix,matrixOrDataFrame,data.frame,factorOrCharacter,factorOrCharacter-method}
-\title{Create a new CoProm object for Multi-Slide Analysis}
+\title{Create a new CoProMulti object for Multi-Slide Analysis}
 \usage{
 newCoProMulti(normalizedData, locationData, metaData, cellTypes, slideID)
 
@@ -22,8 +22,8 @@ newCoProMulti(normalizedData, locationData, metaData, cellTypes, slideID)
 \item{slideID}{Combined slide/sample identifier vector for all cells. Length must match \code{nrow(normalizedData)}.}
 }
 \value{
-A \code{CoProm} object.
+A \code{CoProMulti} object.
 }
 \description{
-Initializes a \code{CoProm} object with combined data from multiple slides.
+Initializes a \code{CoProMulti} object with combined data from multiple slides.
 }

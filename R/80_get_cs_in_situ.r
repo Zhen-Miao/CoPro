@@ -84,12 +84,12 @@ setGeneric("getCellScoresInSitu",
     return(.csMultiSlide(object, sigmaValueChoice, ccIndex = ccIndex))
   } else {
     # Fallback: try to detect based on slideID slot existence
-    has_slideID <- tryCatch({
-      slideID_data <- object@slideID
-      length(slideID_data) > 0 && length(unique(slideID_data)) > 1
+    has_slideList <- tryCatch({
+      slideList_data <- object@slideList
+      length(slideList_data) > 0 && length(unique(slideList_data)) > 1
     }, error = function(e) FALSE)
     
-    if (has_slideID) {
+    if (has_slideList) {
       return(.csMultiSlide(object, sigmaValueChoice, ccIndex = ccIndex))
     } else {
       return(.csSingleSlide(object, sigmaValueChoice, ccIndex = ccIndex))
@@ -179,7 +179,7 @@ setGeneric("getCellScoresInSitu",
 }
 
 .csMultiSlide <- function(object, sigmaValueChoice, ccIndex = 1){
-  all_slides <- unique(object@slideID)
+  all_slides <- object@slideList
   cts <- object@cellTypesOfInterest
   
   if (length(cts) == 0) {
@@ -346,6 +346,7 @@ setMethod("getCellScoresInSitu", "CoProMulti", function(object, sigmaValueChoice
   .checkInputCs(object, sigmaValueChoice, ccIndex = ccIndex)
   .getCellScoresInSituCore(object = object, sigmaValueChoice = sigmaValueChoice, ccIndex = ccIndex)
 })
+
 
 
 

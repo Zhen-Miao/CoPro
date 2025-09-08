@@ -13,7 +13,7 @@
 setMethod("show", "CoPro",
           function(object) {
             # Detect if this is a multi-slide object
-            is_multi <- inherits(object, "CoProMulti") || inherits(object, "CoProm")
+            is_multi <- inherits(object, "CoProMulti")
             
             # Header
             if (is_multi) {

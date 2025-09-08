@@ -14,12 +14,12 @@ setGeneric(
 
 .checkInputGAC <- function(object) {
     ## determine if the object is a CoPro object or CoProMulti object
-    if(is(object, "CoPro")) {
+    if(is(object, "CoProSingle")) {
       is_multi <- FALSE
     } else if(is(object, "CoProMulti")) {
       is_multi <- TRUE
     } else {
-      stop("object is not a CoPro or CoProMulti object")
+      stop("object is not a CoProSingle or CoProMulti object")
     }
     if(is_multi) {
       slides <- getSlideList(object)
@@ -273,7 +273,7 @@ setGeneric(
   nCC <- object@nCC
   sigma_names <- paste("sigma", sigmaValues, sep = "_")
   
-      # Initialize data structures - now aggregated across slides
+  # Initialize data structures - now aggregated across slides
     csgs <- .initializeCSGS(cts, sigma_names, nCC, object)
     cellScores <- csgs$cellScores
     geneScores <- csgs$geneScores
@@ -286,9 +286,9 @@ setGeneric(
     # Calculate Cell Scores (Slide-Specific, then aggregated)
     for (sID in slides) {
       X_list_slide <- object@pcaResults[[sID]]
-          slide_indices <- .getSlideIndices(object, sID)
-    meta_slide <- object@metaDataSub[slide_indices, ]
-    celltype_slide <- object@cellTypesSub[slide_indices]
+      slide_indices <- .getSlideIndices(object, sID)
+      meta_slide <- object@metaDataSub[slide_indices, ]
+      celltype_slide <- object@cellTypesSub[slide_indices]
       
       for (ct in cts) {
         X_ct <- X_list_slide[[ct]]
@@ -323,9 +323,9 @@ setGeneric(
   object@cellScores <- cellScores
   object@geneScores <- geneScores
   
-      ## Add cell scores to metadata
-    meta_all <- .CSToMeta(object, cellScores, cts, sigma_names, nCC)
-    object@metaDataSub <- meta_all
+  ## Add cell scores to metadata
+  meta_all <- .CSToMeta(object, cellScores, cts, sigma_names, nCC)
+  object@metaDataSub <- meta_all
   
   return(object)
 }

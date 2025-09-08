@@ -247,30 +247,37 @@ setMethod(
   # --- Precompute Spectral Norms (Per Slide, Per Sigma) ---
   message("Calculating spectral norms (can take time)...")
   norm_K_all <- setNames(vector("list", length = length(sigmas_run)), sigmas_run)
+  
   for (sig_name in sigmas_run) {
+    sigma_val <- as.numeric(gsub("sigma_", "", sig_name))
     norm_K_sigma <- setNames(vector("list", length = length(slides)), slides)
-    K_list_sigma <- object@kernelMatrices[[sig_name]]
-    
-    for (sID in slides) {
-      norm_K_slide <- setNames(vector("list", length = length(cts)), cts)
-      for (ct_i in cts) norm_K_slide[[ct_i]] <- setNames(vector("list", length=length(cts)), cts)
 
-      K_list_slide <- K_list_sigma[[sID]]
+    for (sID in slides) {
+      # Create empty (ct_i, ct_j) list structure for this slide
+      norm_K_slide <- setNames(vector("list", length = length(cts)), cts)
+      for (ct_i in cts) {
+        norm_K_slide[[ct_i]] <- setNames(vector("list", length = length(cts)), cts)
+      }
 
       for (pp in seq_len(ncol(pair_cell_types))) {
         ct_i <- pair_cell_types[1, pp]
         ct_j <- pair_cell_types[2, pp]
-        K <- K_list_slide[[ct_i]][[ct_j]]
+
+        # Retrieve kernel matrix via accessor (works with flat storage)
+        K <- tryCatch({
+          getKernelMatrix(object, sigma = sigma_val, cellType1 = ct_i, cellType2 = ct_j,
+                          slide = sID, verbose = FALSE)
+        }, error = function(e) NULL)
+
         if (!is.null(K) && nrow(K) > 0 && ncol(K) > 0) {
-          # Handle potential sparse matrices if irlba supports them well
           svd_d <- tryCatch({
-            irlba::irlba(K, nv = 1, nu = 0, tol = tol)$d[1] # Only need singular value
+            irlba::irlba(K, nv = 1, nu = 0, tol = tol)$d[1]
           }, error = function(e) {
-            warning(paste("SVD failed for K[",sID,",",ct_i,",",ct_j,"]:", e$message))
-            NA # Return NA if SVD fails
+            warning(paste("SVD failed for K[", sID, ",", ct_i, ",", ct_j, "]:", e$message))
+            NA
           })
           norm_K_slide[[ct_i]][[ct_j]] <- svd_d
-          norm_K_slide[[ct_j]][[ct_i]] <- svd_d # Store transpose too
+          norm_K_slide[[ct_j]][[ct_i]] <- svd_d # symmetry
         } else {
           norm_K_slide[[ct_i]][[ct_j]] <- NA
           norm_K_slide[[ct_j]][[ct_i]] <- NA
@@ -280,8 +287,8 @@ setMethod(
     }
     norm_K_all[[sig_name]] <- norm_K_sigma
   }
-  message("Finished calculating spectral norms.")
 
+  message("Finished calculating spectral norms.")
   return(norm_K_all)
 }
 
@@ -313,10 +320,9 @@ setMethod(
           stringsAsFactors = FALSE
         )
         X_list_slide <- object@pcaResults[[sID]]
-        K_list_slide <- object@kernelMatrices[[sig_name]][[sID]]
         norm_K_slide <- norm_K_all[[sig_name]][[sID]]
 
-        if(is.null(X_list_slide) || is.null(K_list_slide)) next # Skip if data missing
+        if (is.null(X_list_slide)) next  # Skip if PCA data missing
 
         for (pp in seq_len(ncol(pair_cell_types))) {
           ct_i <- pair_cell_types[1, pp]
@@ -324,7 +330,14 @@ setMethod(
 
           X_i <- X_list_slide[[ct_i]]
           X_j <- X_list_slide[[ct_j]]
-          K_ij <- K_list_slide[[ct_i]][[ct_j]]
+          K_ij <- tryCatch({
+            getKernelMatrix(object,
+                           sigma = as.numeric(gsub("sigma_", "", sig_name)),
+                           cellType1 = ct_i,
+                           cellType2 = ct_j,
+                           slide = sID,
+                           verbose = FALSE)
+          }, error = function(e) NULL)
           norm_K_ij <- norm_K_slide[[ct_i]][[ct_j]]
 
           if(is.null(X_i) || is.null(X_j) || is.null(K_ij) ||
@@ -379,14 +392,20 @@ setMethod(
           
           for(sID in slides) {
             X_list_slide <- object@pcaResults[[sID]]
-            K_list_slide <- object@kernelMatrices[[sig_name]][[sID]]
             norm_K_slide <- norm_K_all[[sig_name]][[sID]]
             
-            if(is.null(X_list_slide) || is.null(K_list_slide)) next
+            if (is.null(X_list_slide)) next
             
             X_i <- X_list_slide[[ct_i]]
             X_j <- X_list_slide[[ct_j]]
-            K_ij <- K_list_slide[[ct_i]][[ct_j]]
+            K_ij <- tryCatch({
+              getKernelMatrix(object,
+                             sigma = as.numeric(gsub("sigma_", "", sig_name)),
+                             cellType1 = ct_i,
+                             cellType2 = ct_j,
+                             slide = sID,
+                             verbose = FALSE)
+            }, error = function(e) NULL)
             norm_K_ij <- norm_K_slide[[ct_i]][[ct_j]]
             
             if(is.null(X_i) || is.null(X_j) || is.null(K_ij) ||

@@ -56,15 +56,19 @@ setClassUnion("matrixOrDataFrame", c("matrix", "data.frame"))
 #' @slot geneScoresTest A `list` object. Tested gene scores
 #' @slot normalizedCorrelation A `list` object. Normalized correlation values
 #' for each sigma value.
+#' @slot bidirCorrelation A `list` object. Bidirectional correlation values
+#' for each sigma value.
 #' @slot normalizedCorrelationPermu A `list` object.
 #'  Normalized correlation values
+#' for each sigma value after permutation
+#' @slot bidirCorrelationPermu A `list` object.
+#'  Bidirectional correlation values
 #' for each sigma value after permutation
 #' @slot sigmaValueChoice A `numeric` value. The optimal sigma squared based
 #' on the median normalized correlation value.
 #' @name CoPro-class
-setClass("CoPro",
-         contains  = "VIRTUAL",
-         slots = list(
+setClass("CoPro", contains  = "VIRTUAL",
+    slots = list(
 
            ## cell by gene data matrix
            normalizedData = "matrixOrSparseMatrix",
@@ -110,6 +114,7 @@ setClass("CoPro",
            nCC = "numeric",
            skrCCAOut = "list",      # Stores list(sigma = list(cellType = W)) - Shared
            normalizedCorrelation = "list", # Store per-slide or aggregate results
+           bidirCorrelation = "list", # Store bidirectional correlation results
            cellScores = "list",     # Stores list(sigma = list(slideID = list(cellType = Scores)))
            geneScores = "list",     # Stores list(sigma = list(cellType = gene_scores)) - Potentially Shared
            geneScoresTest = "list",
@@ -119,7 +124,8 @@ setClass("CoPro",
            nPermu = "numeric",
            skrCCAPermuOut = "list",
            cellPermu = "list",
-           normalizedCorrelationPermu = "list"
+           normalizedCorrelationPermu = "list",
+           bidirCorrelationPermu = "list"
          ),
          prototype = list(
            cellTypesOfInterest = character(0),

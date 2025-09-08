@@ -89,6 +89,13 @@ normalize_vec <- function(v) {
   }
 }
 
+# Declare globals used across the package to quiet R CMD check NOTES
+utils::globalVariables(c(
+  ".computeSpatialCrossCorrelation",
+  "getKernelMatrix",
+  "getSlideList"
+))
+
 #' Validate that cell types and slide IDs don't contain pipe characters
 #' @param cellTypes Character vector of cell type names
 #' @param slideIDs Character vector of slide IDs (optional)
