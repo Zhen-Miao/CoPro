@@ -10,6 +10,7 @@ getTransferNormCorr(
   sigma_choice,
   tol = 1e-04,
   calculationMode = NULL,
+  sigma_choice_tar = NULL,
   verbose = TRUE
 )
 }
@@ -30,6 +31,8 @@ estimation (default 1e-4).}
 \item{calculationMode}{For \code{CoProMulti} objects only, either "perSlide" or
 "aggregate". Ignored for \code{CoProSingle}. Default "perSlide" if \code{tar_obj}
 is multi-slide.}
+
+\item{sigma_choice_tar}{Numeric; sigma value for target object kernel matrices. If NULL (default), uses sigma_choice. Not recommended for general use.}
 
 \item{verbose}{Logical; whether to print progress messages.}
 }

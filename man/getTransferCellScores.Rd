@@ -12,6 +12,7 @@ getTransferCellScores(
   use_quantile_normalization = TRUE,
   agg_cell_type = FALSE,
   gs_weight_threshold = 0.05,
+  sigma_choice_tar = NULL,
   verbose = TRUE
 )
 }
@@ -27,6 +28,8 @@ getTransferCellScores(
 \item{agg_cell_type}{Logical; if TRUE, returns a single matrix aggregated across cell types (default FALSE)}
 
 \item{gs_weight_threshold}{Numeric; absolute gene-weight threshold for filtering prior to transfer (default 0.05)}
+
+\item{sigma_choice_tar}{Numeric; sigma value for target object. If NULL (default), uses sigma_choice. Not recommended for general use.}
 
 \item{verbose}{verbose}
 }

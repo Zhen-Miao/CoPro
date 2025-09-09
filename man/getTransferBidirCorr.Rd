@@ -10,8 +10,10 @@ getTransferBidirCorr(
   sigma_choice,
   calculationMode = NULL,
   normalize_K = c("row_or_col", "sinkhorn_knopp", "none"),
+  filter_kernel = TRUE,
   K_row_sum_cutoff = 0.005,
   K_col_sum_cutoff = 0.005,
+  sigma_choice_tar = NULL,
   verbose = TRUE
 )
 }
@@ -33,11 +35,15 @@ is multi-slide.}
 \item{normalize_K}{Character; method for normalizing the kernel matrix, one of
 "row_or_col", "sinkhorn_knopp", or "none". Default "row_or_col".}
 
+\item{filter_kernel}{Logical; whether to filter the kernel matrix. Default TRUE.}
+
 \item{K_row_sum_cutoff}{Numeric; cutoff for row sums when normalizing kernel matrix.
 Default 5e-3.}
 
 \item{K_col_sum_cutoff}{Numeric; cutoff for column sums when normalizing kernel matrix.
 Default 5e-3.}
+
+\item{sigma_choice_tar}{Numeric; sigma value for target object kernel matrices. If NULL (default), uses sigma_choice. Not recommended for general use.}
 
 \item{verbose}{Logical; whether to print progress messages.}
 }
