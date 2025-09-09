@@ -225,6 +225,7 @@ transfer_scores <- function(mat_A, mat_B, gs_ct,
 #' @param use_quantile_normalization Logical; apply quantile normalization of target to reference distribution (default TRUE)
 #' @param agg_cell_type Logical; if TRUE, returns a single matrix aggregated across cell types (default FALSE)
 #' @param gs_weight_threshold Numeric; absolute gene-weight threshold for filtering prior to transfer (default 0.05)
+#' @param sigma_choice_tar Numeric; sigma value for target object. If NULL (default), uses sigma_choice. Not recommended for general use.
 #' @param verbose verbose
 #'
 #' @returns cell scores as a matrix
@@ -232,13 +233,21 @@ transfer_scores <- function(mat_A, mat_B, gs_ct,
 getTransferCellScores <- function(ref_obj, tar_obj, sigma_choice,
                             use_quantile_normalization = TRUE,
                             agg_cell_type = FALSE,
-                            gs_weight_threshold = 0.05, verbose = TRUE){
+                            gs_weight_threshold = 0.05, 
+                            sigma_choice_tar = NULL, verbose = TRUE){
   ## check object
   if (!(is(ref_obj, "CoProMulti") || is(ref_obj, "CoProSingle"))) {
     stop("ref_obj must be a CoProSingle or CoProMulti object")
   }
   if (!(is(tar_obj, "CoProMulti") || is(tar_obj, "CoProSingle"))) {
     stop("tar_obj must be a CoProSingle or CoProMulti object")
+  }
+  
+  ## handle sigma_choice_tar parameter
+  if (is.null(sigma_choice_tar)) {
+    sigma_choice_tar <- sigma_choice
+  } else {
+    warning("Using different sigma values for reference and target objects is not recommended and is intended for development use only.")
   }
 
   ## make sure gene names match
@@ -335,6 +344,7 @@ getTransferCellScores <- function(ref_obj, tar_obj, sigma_choice,
 #' @param calculationMode For `CoProMulti` objects only, either "perSlide" or
 #'   "aggregate". Ignored for `CoProSingle`. Default "perSlide" if `tar_obj`
 #'   is multi-slide.
+#' @param sigma_choice_tar Numeric; sigma value for target object kernel matrices. If NULL (default), uses sigma_choice. Not recommended for general use.
 #' @param verbose Logical; whether to print progress messages.
 #'
 #' @return A list with one element named `paste0("sigma_", sigma_choice)`, whose
@@ -357,6 +367,7 @@ getTransferNormCorr <- function(tar_obj,
                                 sigma_choice,
                                 tol = 1e-4,
                                 calculationMode = NULL,
+                                sigma_choice_tar = NULL,
                                 verbose = TRUE) {
   # --- Input validation ---
   if (!(is(tar_obj, "CoProMulti") || is(tar_obj, "CoProSingle"))) {
@@ -370,6 +381,13 @@ getTransferNormCorr <- function(tar_obj,
   }
   if (!is.numeric(sigma_choice) || length(sigma_choice) != 1 || is.na(sigma_choice) || sigma_choice <= 0) {
     stop("sigma_choice must be a positive numeric scalar")
+  }
+  
+  ## handle sigma_choice_tar parameter
+  if (is.null(sigma_choice_tar)) {
+    sigma_choice_tar <- sigma_choice
+  } else {
+    warning("Using different sigma values for reference and target objects is not recommended and is intended for development use only.")
   }
 
   # Determine cell types to use (from the provided scores)
@@ -407,6 +425,7 @@ getTransferNormCorr <- function(tar_obj,
   }
 
   sigma_name <- paste0("sigma_", sigma_choice)
+  sigma_name_tar <- paste0("sigma_", sigma_choice_tar)
 
   # Helper: align a score vector to matrix dimension names if available
   .align_scores <- function(scores_mat, target_names) {
@@ -425,7 +444,7 @@ getTransferNormCorr <- function(tar_obj,
     norm_K12 <- .computeSpecNorm(
       object = tar_obj, tol = tol, cts = cts,
       scalePCs = if (length(tar_obj@scalePCs) == 0) FALSE else tar_obj@scalePCs,
-      sigmaValues = sigma_choice,
+      sigmaValues = sigma_choice_tar,
       nCC = if (length(tar_obj@nCC) == 0) nCC else tar_obj@nCC,
       pair_cell_types = pair_cell_types
     )
@@ -443,10 +462,10 @@ getTransferNormCorr <- function(tar_obj,
       ct_j <- pair_cell_types[2, pp]
 
       # Kernel and its spectral norm
-      K_ij <- getKernelMatrix(tar_obj, sigma = sigma_choice,
+      K_ij <- getKernelMatrix(tar_obj, sigma = sigma_choice_tar,
                               cellType1 = ct_i, cellType2 = ct_j,
                               verbose = FALSE)
-      norm_K_ij <- norm_K12[[sigma_name]][[ct_i]][[ct_j]]
+      norm_K_ij <- norm_K12[[sigma_name_tar]][[ct_i]][[ct_j]]
       if (is.na(norm_K_ij) || norm_K_ij < 1e-9) next
 
       # Align transferred scores if kernel has dimnames
@@ -478,7 +497,7 @@ getTransferNormCorr <- function(tar_obj,
   # Precompute spectral norms using existing multi-slide helper
   norm_K_all <- .computeSpecNormMulti(
     object = tar_obj, tol = tol, cts = cts, slides = slides,
-    sigmas_run = sigma_name, nCC = if (length(tar_obj@nCC) == 0) nCC else tar_obj@nCC,
+    sigmas_run = sigma_name_tar, nCC = if (length(tar_obj@nCC) == 0) nCC else tar_obj@nCC,
     pair_cell_types = pair_cell_types
   )
 
@@ -497,12 +516,12 @@ getTransferNormCorr <- function(tar_obj,
         ct_j <- pair_cell_types[2, pp]
 
         K_ij <- tryCatch({
-          getKernelMatrix(tar_obj, sigma = sigma_choice,
+          getKernelMatrix(tar_obj, sigma = sigma_choice_tar,
                           cellType1 = ct_i, cellType2 = ct_j,
                           slide = sID, verbose = FALSE)
         }, error = function(e) NULL)
         if (is.null(K_ij)) next
-        norm_K_ij <- norm_K_all[[sigma_name]][[sID]][[ct_i]][[ct_j]]
+        norm_K_ij <- norm_K_all[[sigma_name_tar]][[sID]][[ct_i]][[ct_j]]
         if (is.na(norm_K_ij) || norm_K_ij < 1e-9) next
 
         # Extract slide-specific rows by cell IDs
@@ -555,12 +574,12 @@ getTransferNormCorr <- function(tar_obj,
 
         for (sID in slides) {
           K_ij <- tryCatch({
-            getKernelMatrix(tar_obj, sigma = sigma_choice,
+            getKernelMatrix(tar_obj, sigma = sigma_choice_tar,
                             cellType1 = ct_i, cellType2 = ct_j,
                             slide = sID, verbose = FALSE)
           }, error = function(e) NULL)
           if (is.null(K_ij)) next
-          norm_K_ij <- norm_K_all[[sigma_name]][[sID]][[ct_i]][[ct_j]]
+          norm_K_ij <- norm_K_all[[sigma_name_tar]][[sID]][[ct_i]][[ct_j]]
           if (is.na(norm_K_ij) || norm_K_ij < 1e-9) next
 
           cells_i <- .getSlideCellTypeIDs(tar_obj, slide = sID, cellType = ct_i)
@@ -627,10 +646,12 @@ getTransferNormCorr <- function(tar_obj,
 #'   is multi-slide.
 #' @param normalize_K Character; method for normalizing the kernel matrix, one of 
 #'   "row_or_col", "sinkhorn_knopp", or "none". Default "row_or_col".
+#' @param filter_kernel Logical; whether to filter the kernel matrix. Default TRUE.
 #' @param K_row_sum_cutoff Numeric; cutoff for row sums when normalizing kernel matrix.
 #'   Default 5e-3.
 #' @param K_col_sum_cutoff Numeric; cutoff for column sums when normalizing kernel matrix.
 #'   Default 5e-3.
+#' @param sigma_choice_tar Numeric; sigma value for target object kernel matrices. If NULL (default), uses sigma_choice. Not recommended for general use.
 #' @param verbose Logical; whether to print progress messages.
 #'
 #' @return A list with one element named `paste0("sigma_", sigma_choice)`, whose
@@ -655,6 +676,7 @@ getTransferBidirCorr <- function(tar_obj,
                                  filter_kernel = TRUE,
                                  K_row_sum_cutoff = 5e-3,
                                  K_col_sum_cutoff = 5e-3,
+                                 sigma_choice_tar = NULL,
                                  verbose = TRUE) {
   normalize_K <- match.arg(normalize_K)
   # --- Input validation ---
@@ -669,6 +691,13 @@ getTransferBidirCorr <- function(tar_obj,
   }
   if (!is.numeric(sigma_choice) || length(sigma_choice) != 1 || is.na(sigma_choice) || sigma_choice <= 0) {
     stop("sigma_choice must be a positive numeric scalar")
+  }
+  
+  ## handle sigma_choice_tar parameter
+  if (is.null(sigma_choice_tar)) {
+    sigma_choice_tar <- sigma_choice
+  } else {
+    warning("Using different sigma values for reference and target objects is not recommended and is intended for development use only.")
   }
 
   # Determine cell types to use (from the provided scores)
@@ -706,6 +735,7 @@ getTransferBidirCorr <- function(tar_obj,
   }
 
   sigma_name <- paste0("sigma_", sigma_choice)
+  sigma_name_tar <- paste0("sigma_", sigma_choice_tar)
 
   # Helper: align a score vector to matrix dimension names if available
   .align_scores <- function(scores_mat, target_names) {
@@ -733,7 +763,7 @@ getTransferBidirCorr <- function(tar_obj,
       ct_j <- pair_cell_types[2, pp]
 
       # Kernel
-      K_ij <- getKernelMatrix(tar_obj, sigma = sigma_choice,
+      K_ij <- getKernelMatrix(tar_obj, sigma = sigma_choice_tar,
                               cellType1 = ct_i, cellType2 = ct_j,
                               verbose = FALSE)
 
@@ -779,7 +809,7 @@ getTransferBidirCorr <- function(tar_obj,
         ct_j <- pair_cell_types[2, pp]
 
         K_ij <- tryCatch({
-          getKernelMatrix(tar_obj, sigma = sigma_choice,
+          getKernelMatrix(tar_obj, sigma = sigma_choice_tar,
                           cellType1 = ct_i, cellType2 = ct_j,
                           slide = sID, verbose = FALSE)
         }, error = function(e) NULL)
@@ -832,7 +862,7 @@ getTransferBidirCorr <- function(tar_obj,
 
         for (sID in slides) {
           K_ij <- tryCatch({
-            getKernelMatrix(tar_obj, sigma = sigma_choice,
+            getKernelMatrix(tar_obj, sigma = sigma_choice_tar,
                             cellType1 = ct_i, cellType2 = ct_j,
                             slide = sID, verbose = FALSE)
           }, error = function(e) NULL)
