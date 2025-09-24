@@ -11,7 +11,10 @@ devtools::install("/Users/zhenmiao/Documents/GitHub/CoPro/")
 
 # Content
 
-This Vignette contains an example to run CoPro on a brain MERFISH data. The data is from Zhang et al. *Nature* 2023 (see reference 1). Here, we focus on detecting the co-progression between D1 and D2 neurons, as reported in the original publication. Here, we aim to show the unsupervised detection of continuous and coordinated cell progressions and how that is related to the tissue structure.
+This Vignette contains an example to run CoPro on a brain MERFISH data. 
+The data is from Zhang et al. *Nature* 2023 (see reference 1). 
+Here, we focus on detecting the co-progression between D1 and D2 neurons, as reported in the original publication.
+ Here, we aim to show the unsupervised detection of continuous and coordinated cell progressions and how that is related to the tissue structure.
 
 # load packages
 
@@ -74,7 +77,7 @@ ggplot(data = meta) +
 ```{r create_object}
 location_data <- meta[, c("x", "y")]
 cell_type_data <- meta[, "subclass"]
-br <- newCoPro(
+br <- newCoProSingle(
   normalizedData = ra,
   locationData = location_data,
   metaData = meta,
@@ -88,7 +91,7 @@ br <- subsetData(br, cellTypesOfInterest = cell_types)
 ```{r distCompute}
 br <- computePCA(br, nPCA = n_pca, center = TRUE, scale. = TRUE)
 # sigma_square_choice <- c(0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2)
-sigma_value_choice <- c(0.1, 0.14, 0.2)
+sigma_value_choice <- c(0.1, 0.14, 0.2, 0.5)
 ## By default, we normalize the distance
 br <- computeDistance(br, distType = "Euclidean2D", normalizeDistance = FALSE)
 br <- computeKernelMatrix(br, sigmaValues = sigma_value_choice)
@@ -158,8 +161,7 @@ We can retrive the `data.frame` that contains the cell scores using the followin
 
 ```{r}
 br_cs <- getCellScoresInSitu(br,
-  sigmaValueChoice = 0.14,
-  scoreColorType = "binary"
+  sigmaValueChoice = 0.14
 )
 ```
 

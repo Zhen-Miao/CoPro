@@ -1,0 +1,89 @@
+\name{computeSelfKernel}
+\alias{computeSelfKernel}
+\alias{computeSelfKernel,CoProSingle-method}
+\alias{computeSelfKernel,CoProMulti-method}
+\title{Compute Self-Kernel Matrices for Multiple Cell Types}
+\usage{
+computeSelfKernel(
+  object,
+  sigmaValues,
+  lowerLimit = 1e-07,
+  upperQuantile = 0.85,
+  normalizeKernel = FALSE,
+  minAveCellNeighor = 2,
+  rowNormalizeKernel = FALSE,
+  colNormalizeKernel = FALSE,
+  verbose = TRUE,
+  overwrite = FALSE
+)
+
+\S4method{computeSelfKernel}{CoProSingle}(
+  object,
+  sigmaValues,
+  lowerLimit = 1e-07,
+  upperQuantile = 0.85,
+  normalizeKernel = FALSE,
+  minAveCellNeighor = 2,
+  rowNormalizeKernel = FALSE,
+  colNormalizeKernel = FALSE,
+  verbose = TRUE,
+  overwrite = FALSE
+)
+
+\S4method{computeSelfKernel}{CoProMulti}(
+  object,
+  sigmaValues,
+  lowerLimit = 1e-07,
+  upperQuantile = 0.85,
+  normalizeKernel = FALSE,
+  minAveCellNeighor = 2,
+  rowNormalizeKernel = FALSE,
+  colNormalizeKernel = FALSE,
+  verbose = TRUE,
+  overwrite = FALSE
+)
+}
+\arguments{
+\item{object}{A \code{CoPro} object with multiple cell types and self-distance matrices}
+
+\item{sigmaValues}{A vector of sigma values used for kernel calculation}
+
+\item{lowerLimit}{The lower limit for the kernel function, default is 1e-7}
+
+\item{upperQuantile}{The quantile used for clipping the kernel values, default is 0.85}
+
+\item{normalizeKernel}{Whether to normalize the kernel matrix? Default = FALSE}
+
+\item{minAveCellNeighor}{Minimum average number of neighbors. Default = 2}
+
+\item{rowNormalizeKernel}{Whether to row-normalize kernel matrices. Default = FALSE}
+
+\item{colNormalizeKernel}{Whether to column-normalize kernel matrices. Default = FALSE}
+
+\item{verbose}{Whether to output progress information}
+
+\item{overwrite}{Whether to overwrite existing kernel matrices. If FALSE,
+will add self-kernel matrices to existing cross-type kernels. Default = FALSE}
+}
+\value{
+\code{CoPro} object with self-kernel matrices added to the kernelMatrices slot
+}
+\description{
+This function computes within-cell-type kernel matrices for each cell type
+when multiple cell types are present. It requires that self-distance matrices
+have been computed first (using computeSelfDistance).
+}
+\examples{
+\dontrun{
+# Assume you have a CoPro object with multiple cell types
+# First compute cross-type distances and kernels
+object <- computeDistance(object)
+object <- computeKernelMatrix(object, sigmaValues = c(0.01, 0.05, 0.1))
+
+# Then add self-distances and self-kernels
+object <- computeSelfDistance(object)
+object <- computeSelfKernel(object, sigmaValues = c(0.01, 0.05, 0.1))
+
+# Now you have both cross-type and self-type kernel matrices
+}
+}

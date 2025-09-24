@@ -124,14 +124,14 @@ meta_cell$"Celltype" <- "Epithelial"
 
 cell_type_data <- meta_cell[, "Celltype"]
 
-etr <- newCoPro(
+etr <- newCoProSingle(
   normalizedData = ra_norm,
   locationData = location_data,
   metaData = meta_cell,
   cellTypes = cell_type_data
 ) ## etr stands for enteroid
 cell_types_single <- "Epithelial"
-etr <- subsetDataOne(etr, cellTypesOfInterest = cell_types_single)
+etr <- subsetData(etr, cellTypesOfInterest = cell_types_single)
 ```
 
 # run CoPro pipeline
@@ -234,8 +234,7 @@ We can retrieve the `data.frame` that contains the cell scores using the followi
 ```{r}
 
 etr_cs <- getCellScoresInSitu(etr,
-                              sigmaValueChoice = 0.1,
-                              scoreColorType = "binary"
+                              sigmaValueChoice = 0.1
 )
 
 ```
