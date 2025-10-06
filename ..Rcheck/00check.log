@@ -1,14 +1,21 @@
-* using log directory ‘/Users/zhenmiao/Documents/GitHub/CoPro/..Rcheck’
+* using log directory '/Users/zhenmiao/Documents/GitHub/CoPro/..Rcheck'
 * using R version 4.4.0 (2024-04-24)
 * using platform: aarch64-apple-darwin20
 * R was compiled by
     Apple clang version 14.0.0 (clang-1400.0.29.202)
     GNU Fortran (GCC) 12.2.0
 * running under: macOS 15.2
-* using session charset: UTF-8
-* using options ‘--no-examples --no-manual --no-vignettes’
-* checking for file ‘./DESCRIPTION’ ... ERROR
-Required fields missing or empty:
-  ‘Author’ ‘Maintainer’
+* using session charset: ASCII
+* using options '--no-manual --no-build-vignettes'
+* checking for file './DESCRIPTION' ... OK
+* this is package 'CoPro' version '0.6.0'
+* package encoding: UTF-8
+* checking package namespace information ... OK
+* checking package dependencies ... ERROR
+Namespace dependencies missing from DESCRIPTION Imports/Depends entries:
+  'dplyr', 'ggplot2'
+
+See section 'The DESCRIPTION file' in the 'Writing R Extensions'
+manual.
 * DONE
 Status: 1 ERROR
