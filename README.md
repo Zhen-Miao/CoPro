@@ -4,6 +4,7 @@
 # CoPro
 
 <!-- badges: start -->
+
 <!-- badges: end -->
 
 <img src="man/figures/copro-refined-logo-final.jpg" width="400" />
