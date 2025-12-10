@@ -235,12 +235,14 @@ nn_cross_fraction <- function(A, B, window_range, pixel_size_um = 1) {
 #'   - `slideID`: Slide identifier
 #'
 #' @details The colocalization score is computed as:
-#'   CES_z = mean_r((g12_obs(r) - mean_null(r)) / sd_null(r))
+#'   \deqn{CES_z = mean_r((g12_obs(r) - mean_null(r)) / sd_null(r))}
 #'   
 #'   Where:
-#'   - g12_obs(r) is the observed inhomogeneous cross pair-correlation function
-#'   - mean_null(r) and sd_null(r) are the mean and standard deviation from random labelling simulations
-#'   - The average is taken over the distance band [r_um_range[1], r_um_range[2]]
+#'   \itemize{
+#'   - \eqn{g12_obs(r)} is the observed inhomogeneous cross pair-correlation function
+#'   - \eqn{mean_null(r)} and \eqn{sd_null(r)} are the mean and standard deviation from random labelling simulations
+#'   - The average is taken over the distance band \eqn{[r_um_range[1], r_um_range[2]]}
+#'   }
 #'   
 #'   Positive scores indicate colocalization, negative scores indicate segregation.
 #'

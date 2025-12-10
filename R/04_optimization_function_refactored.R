@@ -336,7 +336,7 @@ initialize_next_component <- function(Y_resi, cell_types) {
 
 #' Helper function for optimizing multiple components using precomputed Y_resi
 #' @note Assumes w_list_new and Y_resi are named lists using consistent cell type names.
-#' @note the structure of Y_resi is Y_resi[[ct1]][[ct2]]
+#' @note the structure of Y_resi is Y_resi\[[ct1\]\]\[[ct2\]\]
 #' @param w_list_new Initial named list of weight vectors
 #' @param Y_resi Named list of residual matrices 
 #' @param n_features Number of features
