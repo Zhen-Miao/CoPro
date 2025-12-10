@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html>
+<head><title>R: Detecting Co-Progression Between Cell Types in Spatial
+Transcriptomics Data</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+<link rel="stylesheet" type="text/css" href="R.css">
+</head><body><div class="container">
+<h1> Detecting Co-Progression Between Cell Types in Spatial
+Transcriptomics Data
+<img class="toplogo" src="../../../doc/html/Rlogo.svg" alt="[R logo]">
+</h1>
+<hr>
+<div style="text-align: center;">
+<a href="../../../doc/html/packages.html"><img class="arrow" src="../../../doc/html/left.jpg" alt="[Up]"></a>
+<a href="../../../doc/html/index.html"><img class="arrow" src="../../../doc/html/up.jpg" alt="[Top]"></a>
+</div><h2>Documentation for package &lsquo;CoPro&rsquo; version 0.6.1</h2>
+
+<ul><li><a href="../DESCRIPTION" type="text/plain; charset=utf-8">DESCRIPTION file</a>.</li>
+</ul>
+
+<h2>Help Pages</h2>
+
+
+<table style="width: 100%;">
+<tr><td style="width: 25%;"><a href="assignDistanceManually.html">assignDistanceManually</a></td>
+<td>Assign distance matrix manually</td></tr>
+<tr><td style="width: 25%;"><a href="assignDistanceManually.html">assignDistanceManually-method</a></td>
+<td>Assign distance matrix manually</td></tr>
+<tr><td style="width: 25%;"><a href="computeBidirCorrelation.html">computeBidirCorrelation</a></td>
+<td>Compute Bidirectional Correlation</td></tr>
+<tr><td style="width: 25%;"><a href="computeBidirCorrelation.html">computeBidirCorrelation-method</a></td>
+<td>Compute Bidirectional Correlation</td></tr>
+<tr><td style="width: 25%;"><a href="computeDistance.html">computeDistance</a></td>
+<td>computeDistance between pairs of cell types</td></tr>
+<tr><td style="width: 25%;"><a href="computeDistance.html">computeDistance-method</a></td>
+<td>computeDistance between pairs of cell types</td></tr>
+<tr><td style="width: 25%;"><a href="computeGeneAndCellScores.html">computeGeneAndCellScores</a></td>
+<td>computeGeneAndCellScores</td></tr>
+<tr><td style="width: 25%;"><a href="computeGeneAndCellScores.html">computeGeneAndCellScores-method</a></td>
+<td>computeGeneAndCellScores</td></tr>
+<tr><td style="width: 25%;"><a href="computeKernelMatrix.html">computeKernelMatrix</a></td>
+<td>Compute Kernel Matrix for CoPro</td></tr>
+<tr><td style="width: 25%;"><a href="computeKernelMatrix.html">computeKernelMatrix-method</a></td>
+<td>Compute Kernel Matrix for CoPro</td></tr>
+<tr><td style="width: 25%;"><a href="computeNormalizedCorrelation.html">computeNormalizedCorrelation</a></td>
+<td>Compute Normalized Correlation (approximation)</td></tr>
+<tr><td style="width: 25%;"><a href="computeNormalizedCorrelation.html">computeNormalizedCorrelation-method</a></td>
+<td>Compute Normalized Correlation (approximation)</td></tr>
+<tr><td style="width: 25%;"><a href="computeNormalizedCorrelationPermu.html">computeNormalizedCorrelationPermu</a></td>
+<td>Compute Normalized Correlation under permutation (approximation)</td></tr>
+<tr><td style="width: 25%;"><a href="computePCAMulti.html">computePCA</a></td>
+<td>Compute PCA on Integrated Multi-Slide Data</td></tr>
+<tr><td style="width: 25%;"><a href="computePCA.html">computePCA-method</a></td>
+<td>Compute PCA on Single-Slide Data</td></tr>
+<tr><td style="width: 25%;"><a href="computePCAMulti.html">computePCAMulti-method</a></td>
+<td>Compute PCA on Integrated Multi-Slide Data</td></tr>
+<tr><td style="width: 25%;"><a href="computeSelfBidirCorr.html">computeSelfBidirCorr</a></td>
+<td>Compute Self-Bidirectional Correlation using skrCCA Results</td></tr>
+<tr><td style="width: 25%;"><a href="computeSelfDistance.html">computeSelfDistance</a></td>
+<td>Compute Self-Distance Matrices for Multiple Cell Types</td></tr>
+<tr><td style="width: 25%;"><a href="computeSelfDistance.html">computeSelfDistance-method</a></td>
+<td>Compute Self-Distance Matrices for Multiple Cell Types</td></tr>
+<tr><td style="width: 25%;"><a href="computeSelfKernel.html">computeSelfKernel</a></td>
+<td>Compute Self-Kernel Matrices for Multiple Cell Types</td></tr>
+<tr><td style="width: 25%;"><a href="computeSelfKernel.html">computeSelfKernel-method</a></td>
+<td>Compute Self-Kernel Matrices for Multiple Cell Types</td></tr>
+<tr><td style="width: 25%;"><a href="CoPro-class.html">CoPro-class</a></td>
+<td>CoPro object of spatial transcriptomics data</td></tr>
+<tr><td style="width: 25%;"><a href="ensureBidirCorrelationSlot.html">ensureBidirCorrelationSlot</a></td>
+<td>Ensure object has bidirCorrelation slot</td></tr>
+<tr><td style="width: 25%;"><a href="getCellScores.html">getCellScores</a></td>
+<td>Get cell scores from CoPro object</td></tr>
+<tr><td style="width: 25%;"><a href="getCellScores.html">getCellScores-method</a></td>
+<td>Get cell scores from CoPro object</td></tr>
+<tr><td style="width: 25%;"><a href="getCellScoresInSitu.html">getCellScoresInSitu</a></td>
+<td>Get cell score and location information as a data.frame</td></tr>
+<tr><td style="width: 25%;"><a href="getCellScoresInSitu.html">getCellScoresInSitu-method</a></td>
+<td>Get cell score and location information as a data.frame</td></tr>
+<tr><td style="width: 25%;"><a href="getColocScores.html">getColocScores</a></td>
+<td>Compute Colocalization Scores for All Cell Type Pairs</td></tr>
+<tr><td style="width: 25%;"><a href="getCorrOneType.html">getCorrOneType</a></td>
+<td>Retrieve the Correlation within one cell types</td></tr>
+<tr><td style="width: 25%;"><a href="getCorrOneType.html">getCorrOneType-method</a></td>
+<td>Retrieve the Correlation within one cell types</td></tr>
+<tr><td style="width: 25%;"><a href="getCorrTwoTypes.html">getCorrTwoTypes</a></td>
+<td>Retrieve the Correlation between two cell types</td></tr>
+<tr><td style="width: 25%;"><a href="getCorrTwoTypes.html">getCorrTwoTypes-method</a></td>
+<td>Retrieve the Correlation between two cell types</td></tr>
+<tr><td style="width: 25%;"><a href="getDistMat.html">getDistMat</a></td>
+<td>Get Distance Matrix</td></tr>
+<tr><td style="width: 25%;"><a href="getDistMat.html">getDistMat-method</a></td>
+<td>Get Distance Matrix</td></tr>
+<tr><td style="width: 25%;"><a href="getKernelMatrix.html">getKernelMatrix</a></td>
+<td>Get Kernel Matrix</td></tr>
+<tr><td style="width: 25%;"><a href="getKernelMatrix.html">getKernelMatrix-method</a></td>
+<td>Get Kernel Matrix</td></tr>
+<tr><td style="width: 25%;"><a href="getNormalizedCorrelation.html">getNormCorr</a></td>
+<td>Get normalized correlation vs Sigma squared values</td></tr>
+<tr><td style="width: 25%;"><a href="getNormalizedCorrelation.html">getNormCorr-method</a></td>
+<td>Get normalized correlation vs Sigma squared values</td></tr>
+<tr><td style="width: 25%;"><a href="getSelfDistMat.html">getSelfDistMat</a></td>
+<td>Get Self-Distance Matrix</td></tr>
+<tr><td style="width: 25%;"><a href="getSelfKernelMatrix.html">getSelfKernelMatrix</a></td>
+<td>Get Self-Kernel Matrix</td></tr>
+<tr><td style="width: 25%;"><a href="getSlideID.html">getSlideID</a></td>
+<td>Get slide IDs from CoPro object</td></tr>
+<tr><td style="width: 25%;"><a href="getSlideID.html">getSlideID-method</a></td>
+<td>Get slide IDs from CoPro object</td></tr>
+<tr><td style="width: 25%;"><a href="getSlideList.html">getSlideList</a></td>
+<td>Get slide list from CoPro object</td></tr>
+<tr><td style="width: 25%;"><a href="getSlideList.html">getSlideList-method</a></td>
+<td>Get slide list from CoPro object</td></tr>
+<tr><td style="width: 25%;"><a href="getTransferBidirCorr.html">getTransferBidirCorr</a></td>
+<td>Compute Bidirectional Correlation from Transferred Cell Scores</td></tr>
+<tr><td style="width: 25%;"><a href="getTransferCellScores.html">getTransferCellScores</a></td>
+<td>Get cell score by transferring gene weights from another slide By default, quantile normalization is used to ensure distribution match</td></tr>
+<tr><td style="width: 25%;"><a href="getTransferNormCorr.html">getTransferNormCorr</a></td>
+<td>Compute Normalized Correlation from Transferred Cell Scores</td></tr>
+<tr><td style="width: 25%;"><a href="getTransferSelfBidirCorr.html">getTransferSelfBidirCorr</a></td>
+<td>Compute Self-Bidirectional Correlation from Transferred Cell Scores</td></tr>
+<tr><td style="width: 25%;"><a href="isMultiSlide.html">isMultiSlide</a></td>
+<td>Check if object is multi-slide</td></tr>
+<tr><td style="width: 25%;"><a href="isMultiSlide.html">isMultiSlide-method</a></td>
+<td>Check if object is multi-slide</td></tr>
+<tr><td style="width: 25%;"><a href="newCoProMulti.html">newCoProMulti</a></td>
+<td>Create a new CoProMulti object for Multi-Slide Analysis</td></tr>
+<tr><td style="width: 25%;"><a href="newCoProMulti.html">newCoProMulti-method</a></td>
+<td>Create a new CoProMulti object for Multi-Slide Analysis</td></tr>
+<tr><td style="width: 25%;"><a href="newCoProSingle.html">newCoProSingle</a></td>
+<td>Function to create a new object</td></tr>
+<tr><td style="width: 25%;"><a href="newCoProSingle.html">newCoProSingle-method</a></td>
+<td>Function to create a new object</td></tr>
+<tr><td style="width: 25%;"><a href="optimize_bilinear.html">optimize_bilinear</a></td>
+<td>SkrCCA optimization function for multiple groups (Single Slide) - First Component Uses flat kernel structure for consistent data access</td></tr>
+<tr><td style="width: 25%;"><a href="optimize_bilinear_multi_slides.html">optimize_bilinear_multi_slides</a></td>
+<td>Multi-slide SkrCCA optimization - First Component</td></tr>
+<tr><td style="width: 25%;"><a href="optimize_bilinear_n.html">optimize_bilinear_n</a></td>
+<td>Run multi version of skrCCA to detect subsequent components (Single Slide) Uses flat kernel structure for consistent data access</td></tr>
+<tr><td style="width: 25%;"><a href="optimize_bilinear_n_multi_slides.html">optimize_bilinear_n_multi_slides</a></td>
+<td>Multi-slide SkrCCA optimization - Multiple Components</td></tr>
+<tr><td style="width: 25%;"><a href="plotG12Functions.html">plotG12Functions</a></td>
+<td>Plot g_12(r) pair correlation functions for colocalization analysis</td></tr>
+<tr><td style="width: 25%;"><a href="quantile_normalize.html">quantile_normalize</a></td>
+<td>quantile normalize data</td></tr>
+<tr><td style="width: 25%;"><a href="runSkrCCA.html">runSkrCCA</a></td>
+<td>runSkrCCA</td></tr>
+<tr><td style="width: 25%;"><a href="runSkrCCA.html">runSkrCCA-method</a></td>
+<td>runSkrCCA</td></tr>
+<tr><td style="width: 25%;"><a href="runSkrCCAPermu.html">runSkrCCAPermu</a></td>
+<td>runSkrCCAPermu</td></tr>
+<tr><td style="width: 25%;"><a href="show.html">show-method</a></td>
+<td>Show method for CoPro objects</td></tr>
+<tr><td style="width: 25%;"><a href="smoothCellScoresMatrix.html">smoothCellScoresMatrix</a></td>
+<td>Smooth the cell scores based on expression neighborhood</td></tr>
+<tr><td style="width: 25%;"><a href="subsetData.html">subsetData</a></td>
+<td>subsetData</td></tr>
+<tr><td style="width: 25%;"><a href="subsetData.html">subsetData-method</a></td>
+<td>subsetData</td></tr>
+<tr><td style="width: 25%;"><a href="testGeneGLM.html">testGeneGLM</a></td>
+<td>testGeneGLM</td></tr>
+</table>
+</div></body></html>

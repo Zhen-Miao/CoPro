@@ -2,7 +2,7 @@
 % Please edit documentation in R/D_spatial_CCA_permutation.R
 \name{runSkrCCAPermu}
 \alias{runSkrCCAPermu}
-\title{runSkrCCAPermu}
+\title{Run Spatial CCA with Permutation Testing}
 \usage{
 runSkrCCAPermu(
   object,
@@ -16,28 +16,79 @@ runSkrCCAPermu(
 )
 }
 \arguments{
-\item{object}{A \code{CoPro} object}
+\item{object}{A \code{CoPro} object with CCA already computed via \code{runSkrCCA()}}
 
-\item{tol}{Tolerance for termination, default = 1e-5}
+\item{tol}{Tolerance for CCA optimization convergence (default: 1e-5)}
 
-\item{nPermu}{Number of permutation to run, default = 20}
+\item{nPermu}{Number of permutations to run (default: 20).
+Increase to 100+ for publication-quality p-values.}
 
-\item{maxIter}{Maximum iterations}
+\item{maxIter}{Maximum iterations for CCA optimization (default: 200)}
 
-\item{permu_method}{Method of permutation. Must be "global" or "bin".
-Default = "bin", which will shuffle the cells by bin.
-This will conserve local bin structures, so that local covariance
-will be maintained}
+\item{permu_method}{Method of permutation:
+\itemize{
+\item "bin" (default): Bin-wise permutation preserving local spatial structure
+\item "global": Simple random permutation breaking all spatial structure
+}}
 
-\item{num_bins_x}{Number of bins in x for bin-wise permutation, default = 10}
+\item{num_bins_x}{Number of bins in x direction for bin-wise permutation (default: 10).
+Use \code{diagnose_bin_distribution()} to choose appropriate values.}
 
-\item{num_bins_y}{Number of bins in y for bin-wise permutation, default = 10}
+\item{num_bins_y}{Number of bins in y direction for bin-wise permutation (default: 10)}
 
-\item{verbose}{Whether to output the progress and related information}
+\item{verbose}{Whether to print progress messages (default: TRUE)}
 }
 \value{
-CoPro object with distnace matrix computed
+CoPro object with permutation results stored in \verb{@skrCCAPermuOut}
 }
 \description{
-runSkrCCAPermu
+Performs permutation testing to assess the significance of spatial
+co-progression detected by CoPro. This generates a null distribution
+by permuting cell assignments while optionally preserving spatial structure.
+}
+\details{
+\subsection{Permutation Strategy}{
+
+The function supports two permutation methods:
+
+\strong{"global"}: Simple random shuffling of cells. This breaks ALL spatial
+structure and tests against a null of complete spatial randomness.
+
+\strong{"bin"} (recommended): Bin-wise shuffling that preserves local spatial
+structure. This tests against a null where cells have spatial autocorrelation
+within their type, but no coordination across types.
+}
+
+\subsection{Important Notes}{
+\itemize{
+\item The FIRST cell type is always kept FIXED (not permuted)
+\item All other cell types are permuted
+\item For two cell types A and B, only B is permuted while A stays fixed
+\item This is equivalent to testing: "Is the A-B correlation stronger than
+expected if B cells were randomly rearranged (within spatial constraints)?"
+}
+}
+}
+\examples{
+\dontrun{
+# After running standard CoPro analysis
+br <- runSkrCCA(br, scalePCs = TRUE)
+br <- computeNormalizedCorrelation(br)
+
+# Run permutation testing
+br <- runSkrCCAPermu(br, nPermu = 100, permu_method = "bin")
+br <- computeNormalizedCorrelationPermu(br)
+
+# Calculate p-value
+observed <- max(getNormCorr(br)$normalizedCorrelation)
+permu_values <- sapply(br@normalizedCorrelationPermu,
+                       function(x) x$normalizedCorrelation[1])
+p_value <- mean(permu_values >= observed)
+}
+
+}
+\seealso{
+\code{\link{computeNormalizedCorrelationPermu}} to compute normalized
+correlation from permutation results
+\code{\link{diagnose_bin_distribution}} to check bin distribution
 }

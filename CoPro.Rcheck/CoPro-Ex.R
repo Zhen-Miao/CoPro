@@ -1,0 +1,346 @@
+pkgname <- "CoPro"
+source(file.path(R.home("share"), "R", "examples-header.R"))
+options(warn = 1)
+base::assign(".ExTimings", "CoPro-Ex.timings", pos = 'CheckExEnv')
+base::cat("name\tuser\tsystem\telapsed\n", file=base::get(".ExTimings", pos = 'CheckExEnv'))
+base::assign(".format_ptime",
+function(x) {
+  if(!is.na(x[4L])) x[1L] <- x[1L] + x[4L]
+  if(!is.na(x[5L])) x[2L] <- x[2L] + x[5L]
+  options(OutDec = '.')
+  format(x[1L:3L], digits = 7L)
+},
+pos = 'CheckExEnv')
+
+### * </HEADER>
+library('CoPro')
+
+base::assign(".oldSearch", base::search(), pos = 'CheckExEnv')
+base::assign(".old_wd", base::getwd(), pos = 'CheckExEnv')
+cleanEx()
+nameEx("computeBidirCorrelation")
+### * computeBidirCorrelation
+
+flush(stderr()); flush(stdout())
+
+base::assign(".ptime", proc.time(), pos = "CheckExEnv")
+### Name: computeBidirCorrelation
+### Title: Compute Bidirectional Correlation
+### Aliases: computeBidirCorrelation computeBidirCorrelation,CoPro-method
+###   computeBidirCorrelation,CoProMulti-method
+
+### ** Examples
+
+# Assuming `obj` is a prepared CoProSingle with PCA, kernels, and skrCCA:
+# obj <- computeBidirCorrelation(obj)
+
+# For CoProMulti per-slide results:
+# objm <- computeBidirCorrelation(objm, calculationMode = "perSlide")
+
+# For CoProMulti aggregate results:
+# objm <- computeBidirCorrelation(objm, calculationMode = "aggregate")
+
+
+
+base::assign(".dptime", (proc.time() - get(".ptime", pos = "CheckExEnv")), pos = "CheckExEnv")
+base::cat("computeBidirCorrelation", base::get(".format_ptime", pos = 'CheckExEnv')(get(".dptime", pos = "CheckExEnv")), "\n", file=base::get(".ExTimings", pos = 'CheckExEnv'), append=TRUE, sep="\t")
+cleanEx()
+nameEx("computeSelfBidirCorr")
+### * computeSelfBidirCorr
+
+flush(stderr()); flush(stdout())
+
+base::assign(".ptime", proc.time(), pos = "CheckExEnv")
+### Name: computeSelfBidirCorr
+### Title: Compute Self-Bidirectional Correlation using skrCCA Results
+### Aliases: computeSelfBidirCorr
+
+### ** Examples
+
+## Not run: 
+##D # Assuming you have a CoPro object with skrCCA results and self-kernels
+##D object <- runSkrCCA(object)
+##D object <- computeSelfDistance(object)
+##D object <- computeSelfKernel(object, sigmaValues = c(0.01, 0.05, 0.1))
+##D 
+##D # Compute self-bidirectional correlation using native skrCCA results
+##D self_bidir <- computeSelfBidirCorr(object, sigma_choice = 0.05)
+## End(Not run)
+
+
+
+base::assign(".dptime", (proc.time() - get(".ptime", pos = "CheckExEnv")), pos = "CheckExEnv")
+base::cat("computeSelfBidirCorr", base::get(".format_ptime", pos = 'CheckExEnv')(get(".dptime", pos = "CheckExEnv")), "\n", file=base::get(".ExTimings", pos = 'CheckExEnv'), append=TRUE, sep="\t")
+cleanEx()
+nameEx("computeSelfDistance")
+### * computeSelfDistance
+
+flush(stderr()); flush(stdout())
+
+base::assign(".ptime", proc.time(), pos = "CheckExEnv")
+### Name: computeSelfDistance
+### Title: Compute Self-Distance Matrices for Multiple Cell Types
+### Aliases: computeSelfDistance computeSelfDistance,CoProSingle-method
+###   computeSelfDistance,CoProMulti-method
+
+### ** Examples
+
+## Not run: 
+##D # Assume you have a CoPro object with multiple cell types
+##D # First compute cross-type distances
+##D object <- computeDistance(object)
+##D 
+##D # Then add self-distances
+##D object <- computeSelfDistance(object)
+##D 
+##D # Now you have both cross-type and self-type distance matrices
+## End(Not run)
+
+
+
+base::assign(".dptime", (proc.time() - get(".ptime", pos = "CheckExEnv")), pos = "CheckExEnv")
+base::cat("computeSelfDistance", base::get(".format_ptime", pos = 'CheckExEnv')(get(".dptime", pos = "CheckExEnv")), "\n", file=base::get(".ExTimings", pos = 'CheckExEnv'), append=TRUE, sep="\t")
+cleanEx()
+nameEx("computeSelfKernel")
+### * computeSelfKernel
+
+flush(stderr()); flush(stdout())
+
+base::assign(".ptime", proc.time(), pos = "CheckExEnv")
+### Name: computeSelfKernel
+### Title: Compute Self-Kernel Matrices for Multiple Cell Types
+### Aliases: computeSelfKernel computeSelfKernel,CoProSingle-method
+###   computeSelfKernel,CoProMulti-method
+
+### ** Examples
+
+## Not run: 
+##D # Assume you have a CoPro object with multiple cell types
+##D # First compute cross-type distances and kernels
+##D object <- computeDistance(object)
+##D object <- computeKernelMatrix(object, sigmaValues = c(0.01, 0.05, 0.1))
+##D 
+##D # Then add self-distances and self-kernels
+##D object <- computeSelfDistance(object)
+##D object <- computeSelfKernel(object, sigmaValues = c(0.01, 0.05, 0.1))
+##D 
+##D # Now you have both cross-type and self-type kernel matrices
+## End(Not run)
+
+
+
+base::assign(".dptime", (proc.time() - get(".ptime", pos = "CheckExEnv")), pos = "CheckExEnv")
+base::cat("computeSelfKernel", base::get(".format_ptime", pos = 'CheckExEnv')(get(".dptime", pos = "CheckExEnv")), "\n", file=base::get(".ExTimings", pos = 'CheckExEnv'), append=TRUE, sep="\t")
+cleanEx()
+nameEx("ensureBidirCorrelationSlot")
+### * ensureBidirCorrelationSlot
+
+flush(stderr()); flush(stdout())
+
+base::assign(".ptime", proc.time(), pos = "CheckExEnv")
+### Name: ensureBidirCorrelationSlot
+### Title: Ensure object has bidirCorrelation slot
+### Aliases: ensureBidirCorrelationSlot
+
+### ** Examples
+
+# Upgrade legacy object to include bidirCorrelation slot
+# obj <- ensureBidirCorrelationSlot(obj)
+
+
+
+base::assign(".dptime", (proc.time() - get(".ptime", pos = "CheckExEnv")), pos = "CheckExEnv")
+base::cat("ensureBidirCorrelationSlot", base::get(".format_ptime", pos = 'CheckExEnv')(get(".dptime", pos = "CheckExEnv")), "\n", file=base::get(".ExTimings", pos = 'CheckExEnv'), append=TRUE, sep="\t")
+cleanEx()
+nameEx("getCellScores")
+### * getCellScores
+
+flush(stderr()); flush(stdout())
+
+base::assign(".ptime", proc.time(), pos = "CheckExEnv")
+### Name: getCellScores
+### Title: Get cell scores from CoPro object
+### Aliases: getCellScores getCellScores,CoProSingle-method
+###   getCellScores,CoProMulti-method
+
+### ** Examples
+
+## Not run: 
+##D # Get all cell scores for a specific sigma and cell type
+##D scores <- getCellScores(object, sigma = 0.1, cellType = "TypeA")
+##D 
+##D # Get scores for a specific canonical component
+##D cc1_scores <- getCellScores(object, sigma = 0.1, cellType = "TypeA", ccIndex = 1)
+##D 
+##D # Get scores for specific cells
+##D specific_scores <- getCellScores(object, sigma = 0.1, cellType = "TypeA", 
+##D                                  cells = c("cell_1", "cell_2"))
+##D 
+##D # For multi-slide object, specify slide
+##D slide_scores <- getCellScores(object, sigma = 0.1, cellType = "TypeA", 
+##D                               slide = "slide1")
+## End(Not run)
+
+
+
+
+base::assign(".dptime", (proc.time() - get(".ptime", pos = "CheckExEnv")), pos = "CheckExEnv")
+base::cat("getCellScores", base::get(".format_ptime", pos = 'CheckExEnv')(get(".dptime", pos = "CheckExEnv")), "\n", file=base::get(".ExTimings", pos = 'CheckExEnv'), append=TRUE, sep="\t")
+cleanEx()
+nameEx("getColocScores")
+### * getColocScores
+
+flush(stderr()); flush(stdout())
+
+base::assign(".ptime", proc.time(), pos = "CheckExEnv")
+### Name: getColocScores
+### Title: Compute Colocalization Scores for All Cell Type Pairs
+### Aliases: getColocScores
+
+### ** Examples
+
+## Not run: 
+##D # Basic usage with default parameters
+##D coloc_results <- getColocScores(object)
+##D 
+##D # Custom parameters for high-resolution data
+##D coloc_results <- getColocScores(object, 
+##D                                r_um_range = c(5, 30),
+##D                                pixel_size_um = 0.325,  # Convert from pixels to microns
+##D                                cell_diam_um = 8,
+##D                                nsim = 99)
+##D                                
+##D # For multi-slide objects
+##D coloc_results <- getColocScores(multi_object)
+##D # Results will include slideID column
+## End(Not run)
+
+
+
+base::assign(".dptime", (proc.time() - get(".ptime", pos = "CheckExEnv")), pos = "CheckExEnv")
+base::cat("getColocScores", base::get(".format_ptime", pos = 'CheckExEnv')(get(".dptime", pos = "CheckExEnv")), "\n", file=base::get(".ExTimings", pos = 'CheckExEnv'), append=TRUE, sep="\t")
+cleanEx()
+nameEx("getTransferBidirCorr")
+### * getTransferBidirCorr
+
+flush(stderr()); flush(stdout())
+
+base::assign(".ptime", proc.time(), pos = "CheckExEnv")
+### Name: getTransferBidirCorr
+### Title: Compute Bidirectional Correlation from Transferred Cell Scores
+### Aliases: getTransferBidirCorr
+
+### ** Examples
+
+# Assuming `tar_obj` is prepared and `trans_scores` was computed with
+# getTransferCellScores(..., agg_cell_type = FALSE)
+# res <- getTransferBidirCorr(tar_obj, trans_scores, sigma_choice = 2.0)
+
+
+
+
+base::assign(".dptime", (proc.time() - get(".ptime", pos = "CheckExEnv")), pos = "CheckExEnv")
+base::cat("getTransferBidirCorr", base::get(".format_ptime", pos = 'CheckExEnv')(get(".dptime", pos = "CheckExEnv")), "\n", file=base::get(".ExTimings", pos = 'CheckExEnv'), append=TRUE, sep="\t")
+cleanEx()
+nameEx("getTransferNormCorr")
+### * getTransferNormCorr
+
+flush(stderr()); flush(stdout())
+
+base::assign(".ptime", proc.time(), pos = "CheckExEnv")
+### Name: getTransferNormCorr
+### Title: Compute Normalized Correlation from Transferred Cell Scores
+### Aliases: getTransferNormCorr
+
+### ** Examples
+
+# Assuming `tar_obj` is prepared and `trans_scores` was computed with
+# getTransferCellScores(..., agg_cell_type = FALSE)
+# res <- getTransferNormCorr(tar_obj, trans_scores, sigma_choice = 2.0)
+
+
+
+
+base::assign(".dptime", (proc.time() - get(".ptime", pos = "CheckExEnv")), pos = "CheckExEnv")
+base::cat("getTransferNormCorr", base::get(".format_ptime", pos = 'CheckExEnv')(get(".dptime", pos = "CheckExEnv")), "\n", file=base::get(".ExTimings", pos = 'CheckExEnv'), append=TRUE, sep="\t")
+cleanEx()
+nameEx("getTransferSelfBidirCorr")
+### * getTransferSelfBidirCorr
+
+flush(stderr()); flush(stdout())
+
+base::assign(".ptime", proc.time(), pos = "CheckExEnv")
+### Name: getTransferSelfBidirCorr
+### Title: Compute Self-Bidirectional Correlation from Transferred Cell
+###   Scores
+### Aliases: getTransferSelfBidirCorr
+
+### ** Examples
+
+## Not run: 
+##D # Assuming you have a CoPro object with multiple cell types
+##D # First compute standard workflow
+##D object <- computeDistance(object)
+##D object <- computeKernelMatrix(object, sigmaValues = c(0.01, 0.05, 0.1))
+##D 
+##D # Add self-distances and self-kernels
+##D object <- computeSelfDistance(object)
+##D object <- computeSelfKernel(object, sigmaValues = c(0.01, 0.05, 0.1))
+##D 
+##D # Compute transferred cell scores
+##D trans_scores <- getTransferCellScores(ref_obj, tar_obj, sigma_choice = 0.05, 
+##D                                      agg_cell_type = FALSE)
+##D 
+##D # Compute self-bidirectional correlation from transferred scores
+##D self_bidir <- getTransferSelfBidirCorr(tar_obj, trans_scores, sigma_choice = 0.05)
+## End(Not run)
+
+
+
+base::assign(".dptime", (proc.time() - get(".ptime", pos = "CheckExEnv")), pos = "CheckExEnv")
+base::cat("getTransferSelfBidirCorr", base::get(".format_ptime", pos = 'CheckExEnv')(get(".dptime", pos = "CheckExEnv")), "\n", file=base::get(".ExTimings", pos = 'CheckExEnv'), append=TRUE, sep="\t")
+cleanEx()
+nameEx("plotG12Functions")
+### * plotG12Functions
+
+flush(stderr()); flush(stdout())
+
+base::assign(".ptime", proc.time(), pos = "CheckExEnv")
+### Name: plotG12Functions
+### Title: Plot g_12(r) pair correlation functions for colocalization
+###   analysis
+### Aliases: plotG12Functions
+
+### ** Examples
+
+## Not run: 
+##D # Basic usage
+##D g12_plots <- plotG12Functions(object)
+##D 
+##D # Custom parameters with individual plots
+##D g12_plots <- plotG12Functions(object, 
+##D                              r_um_range = c(5, 40),
+##D                              plot_type = "individual",
+##D                              include_confidence = TRUE)
+##D 
+##D # Access the plot and data
+##D print(g12_plots$plot)
+##D head(g12_plots$data)
+## End(Not run)
+
+
+
+base::assign(".dptime", (proc.time() - get(".ptime", pos = "CheckExEnv")), pos = "CheckExEnv")
+base::cat("plotG12Functions", base::get(".format_ptime", pos = 'CheckExEnv')(get(".dptime", pos = "CheckExEnv")), "\n", file=base::get(".ExTimings", pos = 'CheckExEnv'), append=TRUE, sep="\t")
+### * <FOOTER>
+###
+cleanEx()
+options(digits = 7L)
+base::cat("Time elapsed: ", proc.time() - base::get("ptime", pos = 'CheckExEnv'),"\n")
+grDevices::dev.off()
+###
+### Local variables: ***
+### mode: outline-minor ***
+### outline-regexp: "\\(> \\)?### [*]+" ***
+### End: ***
+quit('no')

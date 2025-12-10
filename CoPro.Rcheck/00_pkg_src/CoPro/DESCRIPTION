@@ -1,0 +1,25 @@
+Package: CoPro
+Title: Detecting Co-Progression Between Cell Types in Spatial
+        Transcriptomics Data
+Version: 0.6.1
+Maintainer: Zhen Miao <zhenmiao@sas.upenn.edu>
+Authors@R: 
+    person("Zhen", "Miao", , "zhenmiao@sas.upenn.edu", role = c("aut", "cre"),
+           comment = c(ORCID = "https://orcid.org/0000-0002-3255-9517"))
+Description: Detecting co-progression between cell types in spatial 
+ transcriptomics data. The method works in both supervised and unsupervised manner,
+ so it can be used for explorative data analyses. 
+License: MIT + file LICENSE
+Encoding: UTF-8
+Imports: methods, Matrix, stats, utils, irlba, fields, matrixStats,
+        dplyr, ggplot2
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.3
+Suggests: testthat (>= 3.0.0), RcppAnnoy, SeuratObject, viridis,
+        spatstat.geom, spatstat.explore, spatstat.random
+Config/testthat/edition: 3
+URL: https://github.com/Zhen-Miao/CoPro
+BugReports: https://github.com/Zhen-Miao/CoPro/issues
+NeedsCompilation: no
+Packaged: 2025-12-02 22:31:53 UTC; zhenmiao
+Author: Zhen Miao [aut, cre] (ORCID: <https://orcid.org/0000-0002-3255-9517>)
