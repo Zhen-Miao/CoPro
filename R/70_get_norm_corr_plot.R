@@ -55,11 +55,15 @@ setGeneric("getNormCorr",
   ## organize into a data.frame
   ncorr <- do.call(rbind, normCorr)
   ncorr$"ct12" <- paste(ncorr$"cellType1", ncorr$"cellType2", sep = "-")
-  ncorr$"sigmaValues" <- factor(ncorr$"sigmaValues",
-    levels = sort(unique(ncorr$"sigmaValues"),
-      decreasing = FALSE
-    )
-  )
+  
+  ## Keep sigmaValues as numeric for easier downstream use
+  ## Convert to numeric if needed (in case they were stored as character)
+  if (!is.numeric(ncorr$"sigmaValues")) {
+    ncorr$"sigmaValues" <- as.numeric(as.character(ncorr$"sigmaValues"))
+  }
+  
+  ## For plotting, users can convert to factor if needed:
+  ## ncorr$sigmaValues <- factor(ncorr$sigmaValues, levels = sort(unique(ncorr$sigmaValues)))
 
   return(ncorr)
   

@@ -9,38 +9,48 @@
   permu_method,
   nPermu,
   cts,
+  permu_which = "second_only",
   num_bins_x = 10,
-  num_bins_y = 10
+  num_bins_y = 10,
+  match_quantile = FALSE
 )
 }
 \arguments{
 \item{object}{A CoPro object}
 
-\item{permu_method}{"global" or "bin"}
+\item{permu_method}{"global", "bin", "pc", or "toroidal"}
 
 \item{nPermu}{Number of permutations}
 
 \item{cts}{Cell types to permute}
 
+\item{permu_which}{Which cell types to permute: "second_only", "both", or "first_only"}
+
 \item{num_bins_x}{Number of bins in x for bin-wise permutation}
 
 \item{num_bins_y}{Number of bins in y for bin-wise permutation}
+
+\item{match_quantile}{Logical. If TRUE and permu_method="bin", matches cells
+between tiles based on their relative (quantile) positions to better preserve
+within-tile spatial structure. Default: FALSE.}
 }
 \value{
-List of permutation matrices, one per cell type
+List of permutation matrices (for "global"/"bin"/"toroidal") or
+list of permuted PC matrices (for "pc"), one per cell type
 }
 \description{
 Internal function to generate permutation indices for each cell type.
 }
 \details{
-Permutation strategy:
+Permutation strategy is controlled by \code{permu_which}:
 \itemize{
-\item The FIRST cell type is kept FIXED (identity permutation)
-\item All OTHER cell types are permuted (either globally or bin-wise)
+\item "second_only" (default): Keep first cell type FIXED, permute others
+\item "both": Permute ALL cell types independently
+\item "first_only": Keep second+ cell types FIXED, permute only first
 }
 
-This is the standard approach for permutation testing: we test whether
-the relationship between cell types is stronger than expected by chance,
-while keeping one cell type as reference.
+The default ("second_only") is the standard approach for permutation testing:
+we test whether the relationship between cell types is stronger than expected
+by chance, while keeping one cell type as reference.
 }
 \keyword{internal}

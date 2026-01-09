@@ -1,6 +1,20 @@
 
 
-## 0. rescale the scores to (0,1)
+## 0. Helper functions
+
+#' Normalize a vector to unit length
+#' @param v Input vector
+#' @return Normalized vector with ||v|| = 1
+normalize_vec <- function(v) {
+  v <- v - mean(v)  # Center first
+  norm_v <- sqrt(sum(v^2))
+  if (norm_v > 1e-10) {
+    return(v / norm_v)
+  }
+  return(v)
+}
+
+#' Rescale scores to (0,1)
 rescale_scores <- function(current_scores){
   scaled_scores <- (current_scores - min(current_scores)) /
     (max(current_scores) - min(current_scores))
@@ -63,8 +77,10 @@ simulate_smooth_points <- function(n_points,
 
   # 5. Perform spatial smoothing for specified number of rounds
   current_scores <- points$initial_score
-  for(i in 1:n_rounds) {
-    current_scores <- as.vector(kernel_matrix %*% current_scores)
+  if (n_rounds > 0) {
+    for(i in seq_len(n_rounds)) {
+      current_scores <- as.vector(kernel_matrix %*% current_scores)
+    }
   }
 
   # 6. Put the score back to the 0-1 range
@@ -167,6 +183,10 @@ generate_prob_vector <- function(length, seed = NULL) {
 #' independent smoothed scores. Cells have spatial autocorrelation within their
 #' own type, but there is no coordination across cell types.
 #'
+#' After smoothing, the function can optionally orthogonalize scores to ensure
+#' minimal cross-type spatial correlation (s_1^T K_12 s_2 ≈ 0), which prevents
+#' spurious correlations that can arise by chance due to spatial proximity.
+#'
 #' @param n_points Total number of points to simulate
 #' @param x_range Range for x coordinates (default: c(0, 10))
 #' @param y_range Range for y coordinates (default: c(0, 10))
@@ -178,6 +198,13 @@ generate_prob_vector <- function(length, seed = NULL) {
 #' @param labels Vector of cell type labels
 #' @param label_prob Probability of each label (default: equal probabilities)
 #' @param label_name Name of the label column (default: "label")
+#' @param orthogonalize Whether to orthogonalize scores to remove cross-type
+#'   spatial correlation (default: TRUE). This ensures the null simulation
+#'   has minimal spurious cross-type correlation.
+#' @param ortho_sigma Sigma for cross-type kernel in orthogonalization.
+#'   Default is 0.2 (typical optimal sigma). Set to NULL to use bandwidth.
+#' @param ortho_row_normalize Whether to row-normalize the cross-type kernel
+#'   during orthogonalization (default: TRUE, matches CoPro's default).
 #'
 #' @return A data.frame with columns: x, y, initial_score, smoothed_score, and cell type
 #'
@@ -191,7 +218,10 @@ simulate_smooth_points_null <- function(n_points,
                                         seed = NULL,
                                         labels,
                                         label_prob = NULL,
-                                        label_name = "label") {
+                                        label_name = "label",
+                                        orthogonalize = TRUE,
+                                        ortho_sigma = 0.2,
+                                        ortho_row_normalize = TRUE) {
   # Set seed if provided
   if (!is.null(seed)) {
     set.seed(seed)
@@ -248,8 +278,10 @@ simulate_smooth_points_null <- function(n_points,
 
     # Perform spatial smoothing within this cell type
     current_scores <- points$initial_score[idx]
-    for (i in 1:n_rounds) {
-      current_scores <- as.vector(kernel_matrix %*% current_scores)
+    if (n_rounds > 0) {
+      for (i in seq_len(n_rounds)) {
+        current_scores <- as.vector(kernel_matrix %*% current_scores)
+      }
     }
 
     # Rescale if requested
@@ -260,6 +292,122 @@ simulate_smooth_points_null <- function(n_points,
     # Store smoothed scores
     points$smoothed_score[idx] <- current_scores
   }
+
+  # 5. Orthogonalize scores to remove spurious cross-type correlation
+  #    This ensures s_1^T K_12 s_2 ≈ 0 (true null hypothesis)
+  if (orthogonalize && length(labels) >= 2) {
+    points <- .orthogonalize_cross_type_scores(
+      points = points,
+      labels = labels,
+      label_name = label_name,
+      sigma = if (is.null(ortho_sigma)) bandwidth else ortho_sigma,
+      row_normalize = ortho_row_normalize
+    )
+  }
+
+  return(points)
+}
+
+
+#' Symmetric Orthogonalization of Cross-Type Scores (Internal)
+#'
+#' Removes spurious cross-type spatial correlation from simulated scores
+#' using symmetric adjustment. Both cell types are adjusted equally.
+#'
+#' @param points Data frame with x, y, label, smoothed_score columns
+#' @param labels Vector of cell type labels
+#' @param label_name Name of the label column
+#' @param sigma Sigma for cross-type kernel
+#' @param row_normalize Whether to row-normalize the kernel
+#'
+#' @return Modified points data frame with orthogonalized scores
+#' @keywords internal
+.orthogonalize_cross_type_scores <- function(points, labels, label_name,
+                                              sigma, row_normalize = TRUE) {
+
+  # For now, handle the two-cell-type case
+
+  # Can be extended to multiple cell types if needed
+  if (length(labels) < 2) {
+    return(points)
+  }
+
+  ct1 <- labels[1]
+  ct2 <- labels[2]
+
+  # Get indices for each cell type
+  idx1 <- which(points[[label_name]] == ct1)
+  idx2 <- which(points[[label_name]] == ct2)
+
+  if (length(idx1) == 0 || length(idx2) == 0) {
+    return(points)
+  }
+
+  # Get locations
+  loc1 <- as.matrix(points[idx1, c("x", "y")])
+  loc2 <- as.matrix(points[idx2, c("x", "y")])
+
+  # Get current scores
+  s1 <- points$smoothed_score[idx1]
+  s2 <- points$smoothed_score[idx2]
+
+  # Compute cross-type kernel matrix K_12 (n1 x n2)
+  dist_12 <- fields::rdist(loc1, loc2)
+  K_12 <- exp(-0.5 * (dist_12 / sigma)^2)
+
+  # Row-normalize if requested (matches CoPro's default)
+  if (row_normalize) {
+    rs <- rowSums(K_12)
+    nz <- rs > 1e-10
+    K_12[nz, ] <- K_12[nz, ] / rs[nz]
+  }
+
+  # Compute current cross-type correlation: c = s1^T K_12 s2
+  K12_s2 <- as.vector(K_12 %*% s2)        # n1 x 1: s2 projected into s1's space
+  K12T_s1 <- as.vector(t(K_12) %*% s1)    # n2 x 1: s1 projected into s2's space
+
+  cross_corr <- sum(s1 * K12_s2)  # = s1^T K_12 s2
+
+  # If correlation is already near zero, no adjustment needed
+  if (abs(cross_corr) < 1e-10) {
+    return(points)
+  }
+
+  # Compute norms for adjustment
+  norm_K12_s2_sq <- sum(K12_s2^2)
+  norm_K12T_s1_sq <- sum(K12T_s1^2)
+
+  # Avoid division by zero
+  if (norm_K12_s2_sq < 1e-10 || norm_K12T_s1_sq < 1e-10) {
+    return(points)
+  }
+
+  # Symmetric adjustment: each vector removes half the correlation
+  # s1_adj = s1 - (c/2) / ||K12 s2||^2 * (K12 s2)
+  # s2_adj = s2 - (c/2) / ||K12^T s1||^2 * (K12^T s1)
+  alpha <- (cross_corr / 2) / norm_K12_s2_sq
+  beta <- (cross_corr / 2) / norm_K12T_s1_sq
+
+  s1_adj <- s1 - alpha * K12_s2
+  s2_adj <- s2 - beta * K12T_s1
+
+  # After symmetric adjustment, there's a small residual ~O(c^2)
+  # We can iterate to remove it completely
+  # Compute residual and do one more adjustment on s1 only
+  K12_s2_adj <- as.vector(K_12 %*% s2_adj)
+  residual_corr <- sum(s1_adj * K12_s2_adj)
+
+  if (abs(residual_corr) > 1e-10) {
+    norm_K12_s2_adj_sq <- sum(K12_s2_adj^2)
+    if (norm_K12_s2_adj_sq > 1e-10) {
+      gamma <- residual_corr / norm_K12_s2_adj_sq
+      s1_adj <- s1_adj - gamma * K12_s2_adj
+    }
+  }
+
+  # Update points with adjusted scores
+  points$smoothed_score[idx1] <- s1_adj
+  points$smoothed_score[idx2] <- s2_adj
 
   return(points)
 }

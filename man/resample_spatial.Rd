@@ -4,7 +4,12 @@
 \alias{resample_spatial}
 \title{Spatial Resampling for Permutation Testing}
 \usage{
-resample_spatial(location_data, num_bins_x = 10, num_bins_y = 10)
+resample_spatial(
+  location_data,
+  num_bins_x = 10,
+  num_bins_y = 10,
+  match_quantile = FALSE
+)
 }
 \arguments{
 \item{location_data}{Data frame with columns: x, y, cell_ID.
@@ -14,6 +19,10 @@ Optionally can include pre-computed x_bin, y_bin columns.}
 Larger values preserve more local structure but may have sparse bins.}
 
 \item{num_bins_y}{Number of bins in the y direction (default: 10).}
+
+\item{match_quantile}{Logical. If TRUE, matches cells between original and
+target tiles based on their relative (quantile) positions within each tile.
+This better preserves within-tile spatial structure. Default: FALSE.}
 }
 \value{
 Data frame with resampled cell assignments. The x, y coordinates
@@ -33,6 +42,11 @@ The algorithm:
 \item If target bin has insufficient cells, expands to neighboring bins
 }
 
+When \code{match_quantile = TRUE}, step 3 uses quantile-based matching instead of
+random sampling. This matches cells based on their relative x/y positions
+within each tile (using rank quantiles), better preserving within-tile
+spatial autocorrelation structure.
+
 This preserves spatial autocorrelation within cell types while breaking
 the cross-type coordination that would indicate true co-progression.
 }
@@ -48,8 +62,12 @@ loc_data <- data.frame(
 # Check bin distribution first
 diagnose_bin_distribution(loc_data, num_bins_x = 5, num_bins_y = 5)
 
-# Perform spatial resampling
+# Perform spatial resampling (random within tile)
 resampled <- resample_spatial(loc_data, num_bins_x = 5, num_bins_y = 5)
+
+# Perform spatial resampling (quantile-matched within tile)
+resampled_matched <- resample_spatial(loc_data, num_bins_x = 5, num_bins_y = 5,
+                                      match_quantile = TRUE)
 }
 
 }

@@ -15,6 +15,7 @@ Imports:
     Matrix,
     stats,
     utils,
+    parallel,
     irlba,
     fields,
     matrixStats,
