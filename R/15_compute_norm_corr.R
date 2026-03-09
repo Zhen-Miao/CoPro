@@ -135,31 +135,30 @@ setGeneric(
       stringsAsFactors = FALSE
     )
     
-    for (pp in seq_len(ncol(pair_cell_types))) {
-      for (cc_index in seq_len(nCC)) {
-        cellType1 <- pair_cell_types[1, pp]
-        cellType2 <- pair_cell_types[2, pp]
+    sigma_val <- as.numeric(gsub("sigma_", "", t))
 
+    for (pp in seq_len(ncol(pair_cell_types))) {
+      cellType1 <- pair_cell_types[1, pp]
+      cellType2 <- pair_cell_types[2, pp]
+
+      A <- PCmats[[cellType1]]
+      B <- PCmats[[cellType2]]
+
+      K <- getKernelMatrix(object, sigma = sigma_val,
+                           cellType1 = cellType1, cellType2 = cellType2,
+                           verbose = FALSE)
+      norm_K12_sel <- norm_K12[[t]][[cellType1]][[cellType2]]
+
+      for (cc_index in seq_len(nCC)) {
         w_1 <- object@skrCCAOut[[t]][[cellType1]][, cc_index, drop = FALSE]
         w_2 <- object@skrCCAOut[[t]][[cellType2]][, cc_index, drop = FALSE]
-
-        A <- PCmats[[cellType1]]
-        B <- PCmats[[cellType2]]
 
         A_w1 <- A %*% w_1
         B_w2 <- B %*% w_2
 
-        ## get pre-calculated spectral norm
-        sigma_val <- as.numeric(gsub("sigma_", "", t))
-        K <- getKernelMatrix(object, sigma = sigma_val, 
-                             cellType1 = cellType1, cellType2 = cellType2, 
-                             verbose = FALSE)
-        norm_K12_sel <- norm_K12[[t]][[cellType1]][[cellType2]]
-
-        ## Calculate normalized correlation
         numerator <- (t(A_w1) %*% K %*% B_w2)[1, 1]
         denominator <- sqrt(sum(A_w1^2)) * sqrt(sum(B_w2^2)) * norm_K12_sel
-        
+
         correlation_value[[t]]$"normalizedCorrelation"[
           pp + (cc_index - 1) * ncol(pair_cell_types)] <-
           ifelse(abs(denominator) < 1e-9, 0, numerator / denominator)
