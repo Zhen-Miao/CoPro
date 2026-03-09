@@ -231,3 +231,23 @@ test_that("Multi-slide full workflow runs without errors", {
   expect_true(length(obj@geneScores) > 0)
 })
 
+test_that("computeNormalizedCorrelation works for CoProMulti aggregate mode", {
+  obj <- create_test_copro_multi(n_cells_per_slide = 60, n_slides = 2,
+                                 n_cell_types = 2, seed = 42)
+  obj <- subsetData(obj, cellTypesOfInterest = c("CellTypeA", "CellTypeB"))
+  obj <- computePCA(obj, nPCA = 10, center = TRUE, scale. = TRUE)
+  obj <- computeDistance(obj, distType = "Euclidean2D",
+                         normalizeDistance = TRUE, verbose = FALSE)
+  obj <- computeKernelMatrix(obj, sigmaValues = c(0.1), verbose = FALSE)
+  obj <- runSkrCCA(obj, scalePCs = TRUE, nCC = 2, maxIter = 100)
+
+  obj <- computeNormalizedCorrelation(obj, calculationMode = "aggregate")
+
+  expect_true(length(obj@normalizedCorrelation) > 0)
+  agg_df <- obj@normalizedCorrelation[[1]]
+  expect_true(nrow(agg_df) > 0)
+  expect_true("sigmaValue" %in% colnames(agg_df))
+  expect_true("aggregateCorrelation" %in% colnames(agg_df))
+  expect_true(is.numeric(agg_df$sigmaValue))
+})
+
