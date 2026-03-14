@@ -175,7 +175,7 @@ testGeneGLM <- function(
                     verbose = FALSE)
   X = object@normalizedDataSub[object@cellTypesSub == cellTypeChoice,]
 
-  m<-t(apply(X, MARGIN = 1,
+  m<-t(apply(X, MARGIN = 2,
              function(x){
                fit <- lm(formula = as.formula(frm), data = cbind(meta, x = x, y = Y))
                coef(summary(fit))["x", c("Estimate", "Pr(>|t|)")]
@@ -194,7 +194,7 @@ testGeneMixedEffect <- function(
                           verbose = FALSE)
         X = object@normalizedDataSub[object@cellTypesSub == cellTypeChoice,]
 
-        m<-t(apply(X, MARGIN = 1,
+        m<-t(apply(X, MARGIN = 2,
                    function(x){formula.HLM(Y,x,meta,formula = frm)}))
 
         colnames(m)<-c("Estimate","P")
@@ -231,7 +231,7 @@ get.cor.zscores<-function(c,p){
   return(z)
 }
 
-apply.formula.HLM<-function(meta,X,Y,MARGIN = 1,formula = "y ~ (1 | samples) + x"){
+apply.formula.HLM<-function(meta,X,Y,MARGIN = 2,formula = "y ~ (1 | samples) + x"){
 
   m<-t(apply(X,MARGIN = MARGIN,
              function(x){formula.HLM(Y,x,meta,formula = formula)}))
