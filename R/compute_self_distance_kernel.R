@@ -646,18 +646,18 @@ getSelfDistMat <- function(object, cellType, slide = NULL, verbose = TRUE) {
   flat_name <- .createDistMatrixName(cellType, cellType, slide = slide)
   
   if (!flat_name %in% names(object@distances)) {
-    if (verbose) {
-      if (is.null(slide)) {
-        stop(paste("Self-distance matrix not found for cell type:", cellType, 
-                  ". Run computeSelfDistance() first."))
-      } else {
-        stop(paste("Self-distance matrix not found for cell type:", cellType, 
-                  "in slide:", slide, ". Run computeSelfDistance() first."))
-      }
+    msg <- if (is.null(slide)) {
+      paste("Self-distance matrix not found for cell type:", cellType,
+            ". Run computeSelfDistance() first.")
+    } else {
+      paste("Self-distance matrix not found for cell type:", cellType,
+            "in slide:", slide, ". Run computeSelfDistance() first.")
     }
+    if (verbose) stop(msg)
+    warning(msg)
     return(NULL)
   }
-  
+
   return(object@distances[[flat_name]])
 }
 
@@ -681,17 +681,17 @@ getSelfKernelMatrix <- function(object, sigma, cellType, slide = NULL, verbose =
   flat_name <- .createKernelMatrixName(sigma, cellType, cellType, slide = slide)
   
   if (!flat_name %in% names(object@kernelMatrices)) {
-    if (verbose) {
-      if (is.null(slide)) {
-        stop(paste("Self-kernel matrix not found for cell type:", cellType, 
-                  "with sigma:", sigma, ". Run computeSelfKernel() first."))
-      } else {
-        stop(paste("Self-kernel matrix not found for cell type:", cellType, 
-                  "with sigma:", sigma, "in slide:", slide, ". Run computeSelfKernel() first."))
-      }
+    msg <- if (is.null(slide)) {
+      paste("Self-kernel matrix not found for cell type:", cellType,
+            "with sigma:", sigma, ". Run computeSelfKernel() first.")
+    } else {
+      paste("Self-kernel matrix not found for cell type:", cellType,
+            "with sigma:", sigma, "in slide:", slide, ". Run computeSelfKernel() first.")
     }
+    if (verbose) stop(msg)
+    warning(msg)
     return(NULL)
   }
-  
+
   return(object@kernelMatrices[[flat_name]])
 }

@@ -829,7 +829,7 @@ getTransferBidirCorr <- function(tar_obj,
           A_w1 <- A_scores[, cc, drop = FALSE]
           B_w2 <- B_scores[, cc, drop = FALSE]
           
-          bidir_val <- .computeSpatialCrossCorrelation(A_w1, B_w2, K_ij, normalize_K = normalize_K, K_row_sum_cutoff = K_row_sum_cutoff, K_col_sum_cutoff = K_col_sum_cutoff)
+          bidir_val <- .computeSpatialCrossCorrelation(A_w1, B_w2, K_ij, normalize_K = normalize_K, filter_kernel = filter_kernel, K_row_sum_cutoff = K_row_sum_cutoff, K_col_sum_cutoff = K_col_sum_cutoff)
           
           df_all <- rbind(df_all, data.frame(
             sigmaValue = sigma_choice,

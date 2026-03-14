@@ -385,8 +385,7 @@ plotG12Functions <- function(object,
   if (include_confidence && nsim > 0) {
     # Simulate random labelling nsim times
     g_mat <- matrix(NA_real_, nrow = length(r_vec), ncol = nsim)
-    set.seed(1)
-    
+
     for (k in seq_len(nsim)) {
       X_sim <- spatstat.random::rlabel(X)
       spatstat.geom::marks(X_sim) <- factor(spatstat.geom::marks(X_sim), levels = c("A", "B"))

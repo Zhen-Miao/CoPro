@@ -100,7 +100,6 @@ coloc_score <- function(
 
   # Simulate random labelling nsim times, compute g each time
   g_mat <- matrix(NA_real_, nrow = length(r_vec), ncol = nsim)
-  set.seed(1)
   for (k in seq_len(nsim)) {
     X_sim <- spatstat.random::rlabel(X)  # keeps locations, shuffles marks
     # Ensure mark levels preserved
