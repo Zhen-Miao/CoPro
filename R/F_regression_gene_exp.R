@@ -188,7 +188,7 @@ testGeneMixedEffect <- function(
     CCChoice, frm = "y ~ (1 | samples) + x + nCount_Spatial"
     ){
 
-        meta = object@metaDataSub[object@cellTypesSub == cellTypeChoice]
+        meta = object@metaDataSub[object@cellTypesSub == cellTypeChoice, , drop = FALSE]
         Y = getCellScores(object, sigma = as.numeric(gsub("sigma_", "", sigmaName)), 
                           cellType = cellTypeChoice, ccIndex = as.numeric(gsub("CC_", "", CCChoice)), 
                           verbose = FALSE)
