@@ -140,11 +140,19 @@ compute_update_vector_within <- function(X, K, w) {
 #' @param sigma Sigma value (numeric)
 #' @param max_iter Maximum number of iterations
 #' @param tol tolerance of accuracy
+#' @param step_size Step size for damped power iteration. Default 1 (standard
+#'   power iteration). Values in (0,1) blend old and new weights for smoother
+#'   convergence, which can help with many cells or many CCs.
 #'
 #' @return Named list `w_list` containing the first weight vector component.
 #' @export
 optimize_bilinear <- function(X_list, flat_kernels, sigma, max_iter = 1000,
-                              tol = 1e-5) {
+                              tol = 1e-5, step_size = 1) {
+
+  # Validate step_size
+  if (!is.numeric(step_size) || length(step_size) != 1 || step_size <= 0 || step_size > 1) {
+    stop("step_size must be a single numeric value in (0, 1]")
+  }
 
   cell_types <- names(X_list)
   if (is.null(cell_types)) stop("Input X_list must be a named list.")
@@ -170,13 +178,21 @@ optimize_bilinear <- function(X_list, flat_kernels, sigma, max_iter = 1000,
       K <- get_kernel_matrix_flat(flat_kernels, sigma, ct, ct, slide = NULL)
       
       w_update <- compute_update_vector_within(X, K, w_list[[ct]])
-      w_list[[ct]] <- normalize_vec(w_update)
-      
+      if (step_size < 1) {
+        w_list[[ct]] <- normalize_vec((1 - step_size) * w_list_old[[ct]] + step_size * normalize_vec(w_update))
+      } else {
+        w_list[[ct]] <- normalize_vec(w_update)
+      }
+
     } else {
       # Standard multi-cell-type optimization
       for (ct_i in cell_types) {
         w_i_update_vec <- compute_update_vector_standard(ct_i, cell_types, X_list, flat_kernels, sigma, w_list, n_features, slide = NULL)
-        w_list[[ct_i]] <- normalize_vec(w_i_update_vec)
+        if (step_size < 1) {
+          w_list[[ct_i]] <- normalize_vec((1 - step_size) * w_list_old[[ct_i]] + step_size * normalize_vec(w_i_update_vec))
+        } else {
+          w_list[[ct_i]] <- normalize_vec(w_i_update_vec)
+        }
       }
     }
 
@@ -342,11 +358,13 @@ initialize_next_component <- function(Y_resi, cell_types) {
 #' @param n_features Number of features
 #' @param max_iter Maximum iterations
 #' @param tol Tolerance
+#' @param step_size Step size for damped power iteration (default 1)
 #'
 #' @return Updated named list of weight vectors
 #' @noRd
 bilinear_w_from_Y_resi <- function(w_list_new, Y_resi,
-                                   n_features, max_iter, tol) {
+                                   n_features, max_iter, tol,
+                                   step_size = 1) {
 
   cell_types <- names(w_list_new)
   if (length(cell_types) == 0) stop("Input w_list_new must be a named list.")
@@ -367,7 +385,11 @@ bilinear_w_from_Y_resi <- function(w_list_new, Y_resi,
       Y <- Y_resi[[ct]][[ct]]
       w <- w_list_new[[ct]]
       w_update <- Y %*% w
-      w_list_new[[ct]] <- normalize_vec(w_update)
+      if (step_size < 1) {
+        w_list_new[[ct]] <- normalize_vec((1 - step_size) * w_list_old[[ct]] + step_size * normalize_vec(w_update))
+      } else {
+        w_list_new[[ct]] <- normalize_vec(w_update)
+      }
     } else {
       # Standard multi-cell-type case - use direct accumulation
       for (ct_i in cell_types) {
@@ -380,7 +402,11 @@ bilinear_w_from_Y_resi <- function(w_list_new, Y_resi,
           if(is.null(Y)) stop(paste("Missing Y_resi matrix for pair:", ct_i, ct_j))
           w_i_update_vec <- w_i_update_vec + Y %*% w2
         }
-        w_list_new[[ct_i]] <- normalize_vec(w_i_update_vec)
+        if (step_size < 1) {
+          w_list_new[[ct_i]] <- normalize_vec((1 - step_size) * w_list_old[[ct_i]] + step_size * normalize_vec(w_i_update_vec))
+        } else {
+          w_list_new[[ct_i]] <- normalize_vec(w_i_update_vec)
+        }
       }
     }
 
@@ -411,6 +437,7 @@ bilinear_w_from_Y_resi <- function(w_list_new, Y_resi,
 #' @param nCC Total number of canonical vectors desired (must be >= 2)
 #' @param max_iter Maximum number of iterations for helper function
 #' @param tol Tolerance of accuracy for helper function
+#' @param step_size Step size for damped power iteration (default 1)
 #'
 #' @return A named list of weights (matrices with components 1 to nCC as columns)
 #' @export
@@ -418,7 +445,8 @@ optimize_bilinear_n <- function(X_list, flat_kernels, sigma, w_list,
                                       cellTypesOfInterest,
                                       nCC = 2,
                                       max_iter = 1000,
-                                      tol = 1e-5) {
+                                      tol = 1e-5,
+                                      step_size = 1) {
 
   # Validate inputs based on assumption they are already subsetted
   cts <- cellTypesOfInterest
@@ -460,8 +488,9 @@ optimize_bilinear_n <- function(X_list, flat_kernels, sigma, w_list,
       w_list_new = w_list_new,
       Y_resi = Y_resi,
       n_features = n_features,
-      max_iter = max_iter, 
-      tol = tol)
+      max_iter = max_iter,
+      tol = tol,
+      step_size = step_size)
 
     # Step 4: Add the new component (qq+1) to w_list
     for (ct in cts) {
@@ -730,12 +759,20 @@ compute_update_vector_multi_slide <- function(ct_i, cell_types, X_list_all, flat
 #' @param tol Convergence tolerance
 #' @param n_cores Number of cores for parallel computation
 #' @param direct_solve For single cell type, use direct eigenvalue solution
+#' @param step_size Step size for damped power iteration (default 1).
+#'   Values in (0,1) blend old and new weights for smoother convergence.
 #' @return Named list of weight vectors (first component)
 #' @export
 optimize_bilinear_multi_slides <- function(X_list_all, flat_kernels, sigma, slides,
                                           max_iter = 1000, tol = 1e-5,
-                                          n_cores = 1, direct_solve = TRUE) {
-  
+                                          n_cores = 1, direct_solve = TRUE,
+                                          step_size = 1) {
+
+  # Validate step_size
+  if (!is.numeric(step_size) || length(step_size) != 1 || step_size <= 0 || step_size > 1) {
+    stop("step_size must be a single numeric value in (0, 1]")
+  }
+
   # Validate inputs
   validated <- validate_multi_slide_inputs(X_list_all, NULL)  # Don't validate K_list_all anymore
   n_slides <- validated$n_slides
@@ -750,7 +787,8 @@ optimize_bilinear_multi_slides <- function(X_list_all, flat_kernels, sigma, slid
   if (n_slides == 1) {
     message("Single slide detected, using single-slide optimization")
     return(optimize_bilinear(X_list_all[[1]], flat_kernels, sigma,
-                            max_iter = max_iter, tol = tol))
+                            max_iter = max_iter, tol = tol,
+                            step_size = step_size))
   }
   
   # Handle within-cell-type case with direct solution
@@ -804,15 +842,23 @@ optimize_bilinear_multi_slides <- function(X_list_all, flat_kernels, sigma, slid
       }, mc.cores = n_cores)
       
       w_update <- Reduce("+", update_contributions)
-      w_list[[ct]] <- normalize_vec(w_update)
-      
+      if (step_size < 1) {
+        w_list[[ct]] <- normalize_vec((1 - step_size) * w_list_old[[ct]] + step_size * normalize_vec(w_update))
+      } else {
+        w_list[[ct]] <- normalize_vec(w_update)
+      }
+
     } else {
       # Standard multi-cell-type optimization
       for (ct_i in cell_types) {
         w_i_update_vec <- compute_update_vector_multi_slide(
           ct_i, cell_types, X_list_all, flat_kernels, sigma, slides, w_list, n_features, n_cores
         )
-        w_list[[ct_i]] <- normalize_vec(w_i_update_vec)
+        if (step_size < 1) {
+          w_list[[ct_i]] <- normalize_vec((1 - step_size) * w_list_old[[ct_i]] + step_size * normalize_vec(w_i_update_vec))
+        } else {
+          w_list[[ct_i]] <- normalize_vec(w_i_update_vec)
+        }
       }
     }
     
@@ -856,12 +902,14 @@ optimize_bilinear_multi_slides <- function(X_list_all, flat_kernels, sigma, slid
 #' @param max_iter Maximum iterations for refinement
 #' @param tol Convergence tolerance
 #' @param n_cores Number of cores for parallel computation
+#' @param step_size Step size for damped power iteration (default 1)
 #' @return Updated weight list with all components
 #' @export
 optimize_bilinear_n_multi_slides <- function(X_list_all, flat_kernels, sigma, slides, w_list,
                                             cellTypesOfInterest,
-                                            nCC = 2, max_iter = 1000, 
-                                            tol = 1e-5, n_cores = 1) {
+                                            nCC = 2, max_iter = 1000,
+                                            tol = 1e-5, n_cores = 1,
+                                            step_size = 1) {
   
   # Validate inputs
   validated <- validate_multi_slide_inputs(X_list_all, NULL, 
@@ -935,7 +983,8 @@ optimize_bilinear_n_multi_slides <- function(X_list_all, flat_kernels, sigma, sl
       Y_resi = Y_aggregate,
       n_features = n_features,
       max_iter = max_iter,
-      tol = tol
+      tol = tol,
+      step_size = step_size
     )
     
     # Step 5: Append new component
