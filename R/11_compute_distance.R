@@ -456,8 +456,12 @@ setGeneric(
       # Extract geodesic distances for this cell type pair
       idx_i <- match(rownames(mat1), cell_ids_all)
       idx_j <- match(rownames(mat2), cell_ids_all)
+      if (any(is.na(idx_i)) || any(is.na(idx_j))) {
+        stop("Cell IDs in coordinate matrix do not match geodesic distance matrix. ",
+             "Check that cell IDs are consistent across inputs.")
+      }
       geodesic_ij <- geodesic_all[idx_i, idx_j, drop = FALSE]
-      
+
       if (verbose) message(sprintf("Applying morphology filter for pair: %s - %s", i, j))
       
       # Apply filtering
@@ -854,8 +858,12 @@ setMethod("computeDistance", "CoProMulti", function(object, distType = c("Euclid
         # Extract geodesic distances for this cell type pair
         idx_i <- match(rownames(mat1), cell_ids_all)
         idx_j <- match(rownames(mat2), cell_ids_all)
+        if (any(is.na(idx_i)) || any(is.na(idx_j))) {
+          stop("Cell IDs in coordinate matrix do not match geodesic distance matrix. ",
+               "Check that cell IDs are consistent across inputs.")
+        }
         geodesic_ij <- geodesic_all[idx_i, idx_j, drop = FALSE]
-        
+
         if (verbose) message(sprintf("Applying morphology filter for pair: %s - %s", ct_i, ct_j))
         
         # Apply filtering
