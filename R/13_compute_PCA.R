@@ -88,10 +88,23 @@ setGeneric("computePCA",
     # Apply centering and scaling
     scaled_data <- .apply_centering_scaling(sub_data, center, scale.)
 
+    # Guard against nPCA exceeding data dimensions
+    max_pca <- min(nrow(scaled_data) - 1, ncol(scaled_data))
+    if (nPCA >= max_pca) {
+      warning(paste0("nPCA (", nPCA, ") exceeds max allowed (", max_pca,
+                     ") for cell type '", ct, "'. Reducing to ", max(1, max_pca - 1), "."))
+      nPCA_use <- max(1, max_pca - 1)
+    } else {
+      nPCA_use <- nPCA
+    }
+
     # PCA on the matrix that is already centered and scaled
-    pca <- prcomp_irlba(scaled_data, center = FALSE, scale. = FALSE, n = nPCA)
+    pca <- prcomp_irlba(scaled_data, center = FALSE, scale. = FALSE, n = nPCA_use)
     object@pcaGlobal[[ct]] <- pca
   }
+
+  object@nPCA <- nPCA
+  object@scalePCs <- TRUE
 
   return(object)
 }
@@ -165,8 +178,18 @@ setGeneric("computePCA",
       message("Data centered and/or scaled")
     }
 
+    # Guard against nPCA exceeding data dimensions
+    max_pca <- min(nrow(scaled_data) - 1, ncol(scaled_data))
+    if (nPCA >= max_pca) {
+      warning(paste0("nPCA (", nPCA, ") exceeds max allowed (", max_pca,
+                     ") for cell type '", ct, "'. Reducing to ", max(1, max_pca - 1), "."))
+      nPCA_use <- max(1, max_pca - 1)
+    } else {
+      nPCA_use <- nPCA
+    }
+
     # Perform PCA on the combined integrated data for this cell type
-    pca_ct <- prcomp_irlba(scaled_data, n = nPCA,
+    pca_ct <- prcomp_irlba(scaled_data, n = nPCA_use,
                            center = FALSE, scale. = FALSE)
     message("PCA computed for cell type: ", ct)
     pca_global[[ct]] <- pca_ct

@@ -70,11 +70,7 @@ center_scale_matrix_opt <- function(input_matrix,
 #' @return Normalized vector as column matrix
 #' @noRd
 normalize_vec <- function(v) {
-  if (is.matrix(v)) {
-    v_norm <- sqrt(sum(v^2))
-  } else {
-    v_norm <- sqrt(sum(v^2))
-  }
+  v_norm <- sqrt(sum(v^2))
   
   if (v_norm < 1e-12) {
     warning("Vector has very small norm, may cause numerical issues")
@@ -173,7 +169,7 @@ setMethod(
       cts <- unique(object@cellTypesSub)
     }
 
-    if (names(distanceList) != cts) {
+    if (!identical(names(distanceList), cts)) {
       stop(paste(
         "The names of distanceList do not match cell types",
         "of interest"
@@ -181,7 +177,7 @@ setMethod(
     }
 
     for (i in cts) {
-      if (names(distanceList[[i]]) != cts) {
+      if (!identical(names(distanceList[[i]]), cts)) {
         stop(paste("The names of distanceList[[", i,
           "]] do not match cell types ",
           "of interest",

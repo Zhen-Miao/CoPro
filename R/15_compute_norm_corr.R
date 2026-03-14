@@ -148,6 +148,17 @@ setGeneric(
                            cellType1 = cellType1, cellType2 = cellType2,
                            verbose = FALSE)
       norm_K12_sel <- norm_K12[[t]][[cellType1]][[cellType2]]
+      if (is.null(norm_K12_sel) || !is.finite(norm_K12_sel)) {
+        warning(paste("Spectral norm unavailable for", cellType1, "-", cellType2, "at", t, "- skipping"))
+        next
+      }
+
+      # Check that skrCCA results exist for this pair
+      if (is.null(object@skrCCAOut[[t]][[cellType1]]) ||
+          is.null(object@skrCCAOut[[t]][[cellType2]])) {
+        warning(paste("skrCCA results missing for", cellType1, "-", cellType2, "at", t, "- skipping"))
+        next
+      }
 
       for (cc_index in seq_len(nCC)) {
         w_1 <- object@skrCCAOut[[t]][[cellType1]][, cc_index, drop = FALSE]

@@ -12,7 +12,7 @@ removeOutliers <- function(object, threshold,
   }
 
   ## obtain cell scores
-  cs <- object$cellScores
+  cs <- object@cellScores
 
   ## slots to be taken subset
   # @cellTypesSub
@@ -24,21 +24,22 @@ removeOutliers <- function(object, threshold,
 
 
   if (method == "zscore") {
-    z_scores <- abs(scale(object$data))
+    z_scores <- abs(scale(object@normalizedDataSub))
     outliers <- which(z_scores > threshold, arr.ind = TRUE)
   } else if (method == "iqr") {
-    Q1 <- apply(object$data, 2, quantile, probs = 0.25)
-    Q3 <- apply(object$data, 2, quantile, probs = 0.75)
+    Q1 <- apply(object@normalizedDataSub, 2, quantile, probs = 0.25)
+    Q3 <- apply(object@normalizedDataSub, 2, quantile, probs = 0.75)
     IQR <- Q3 - Q1
     lower_bound <- Q1 - threshold * IQR
     upper_bound <- Q3 + threshold * IQR
-    outliers <- which(object$data < lower_bound | object$data > upper_bound, arr.ind = TRUE)
+    outliers <- which(object@normalizedDataSub < lower_bound | object@normalizedDataSub > upper_bound, arr.ind = TRUE)
   }
 
-  if (length(outliers) > 0) {
-    object$data[outliers] <- NA
+  outlier_cells <- unique(outliers[, 1])
+  if (length(outlier_cells) > 0) {
+    object@normalizedDataSub[outliers] <- NA
     if (verbose) {
-      message("Removed ", length(outliers), " outliers.")
+      message("Removed ", length(outlier_cells), " outlier cells.")
     }
   } else {
     if (verbose) {

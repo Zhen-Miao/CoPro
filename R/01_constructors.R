@@ -37,8 +37,8 @@ setMethod(
   ),
   function(normalizedData, locationData, metaData, cellTypes) {
     ## check dimension of input
-    if (length(cellTypes) != nrow(normalizedData) |
-        nrow(normalizedData) != nrow(metaData) |
+    if (length(cellTypes) != nrow(normalizedData) ||
+        nrow(normalizedData) != nrow(metaData) ||
         nrow(normalizedData) != nrow(locationData)) {
       stop("input data do not match dimensionality, please check")
     }
@@ -65,14 +65,14 @@ setMethod(
     }
 
     ## check cell id and gene names
-    if (is.null(rownames(metaData)) | is.null(rownames(normalizedData)) |
+    if (is.null(rownames(metaData)) || is.null(rownames(normalizedData)) ||
         is.null(rownames(locationData))) {
       stop(paste("please make sure the rownames of data,",
                  "metaData, and locationData are cell barcodes",
                  sep = " "
       ))
-    } else if (any((rownames(metaData) != rownames(normalizedData)) |
-                   any(rownames(locationData) != rownames(normalizedData)))) {
+    } else if (any(rownames(metaData) != rownames(normalizedData)) ||
+                   any(rownames(locationData) != rownames(normalizedData))) {
       stop(paste("please make sure the cell barcodes match,",
                  "between data, metaData,and locationData",
                  sep = " "
@@ -171,7 +171,7 @@ setMethod(
     }
 
     # add slideID to metadata, if not already in it
-    if("slideID" %in% metaData) {
+    if("slideID" %in% colnames(metaData)) {
       if(any(metaData[, "slideID", drop=TRUE] != slideID)) stop(
         "metaData contains slideID column, but it does not match slideID")
     }else {

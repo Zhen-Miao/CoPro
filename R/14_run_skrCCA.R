@@ -166,7 +166,11 @@
         stop("No valid sigma values found in object.")
       }
     } else {
-      if (!paste0("sigma_", sigmaChoice) %in% names(object@kernelMatrices)) {
+      # Check if any kernel matrix name contains this sigma value
+      sigma_prefix <- paste0("sigma_", sigmaChoice)
+      has_sigma <- any(grepl(paste0("(^|\\|)", sigma_prefix, "(\\||$)"),
+                             names(object@kernelMatrices)))
+      if (!has_sigma) {
         stop(paste("Chosen sigma value", sigmaChoice, "not found or was invalid."))
       }
       sigmas_to_run <- sigmaChoice

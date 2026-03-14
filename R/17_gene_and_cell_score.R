@@ -226,9 +226,12 @@ setGeneric(
 
 .createScoreMatrix <- function(nrows, ncols, row_names = NULL, col_names = NULL, fill_value = NA) {
   ## Helper function to create matrices with consistent naming
+  if (ncols == 0) {
+    stop("ncols must be > 0 for score matrix creation")
+  }
   mat <- matrix(fill_value, nrow = nrows, ncol = ncols)
   if (is.null(col_names)) {
-    colnames(mat) <- paste0("CC_", 1:ncols)
+    colnames(mat) <- paste0("CC_", seq_len(ncols))
   } else {
     colnames(mat) <- col_names
   }

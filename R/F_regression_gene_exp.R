@@ -20,6 +20,7 @@ smoothCellScoresMatrix <- function(cell_scores, NN_mat) {
 
   # Normalize adjacency matrix rows to sum to 1
   row_sums <- rowSums(NN_mat)
+  row_sums[row_sums == 0] <- 1  # avoid division by zero for isolated cells
   NN_mat_norm <- NN_mat / row_sums
 
   # Matrix multiplication to smooth cell_scores
@@ -104,7 +105,7 @@ testGeneScores <- function(object, sigmaChoice,
 
   ## check if covariates exist in the meta.data
   meta_full = object@metaDataSub
-  if(!all(covariates %in% meta_full)){
+  if(!all(covariates %in% colnames(meta_full))){
     stop("not all covariates present in the metadata")
   }
 
@@ -136,12 +137,18 @@ testGeneScores <- function(object, sigmaChoice,
 
 
   }else{
-    results <- testGeneMixedEffect(object = object,
-                                   sigmaName = sigmaName,
-                                   CCChoice = cci, frm = frm)
+    for(i in cts){
+      for(cci in ccNames){
+        results[[i]][[cci]] <- testGeneMixedEffect(object = object,
+                                     sigmaName = sigmaName,
+                                     cellTypeChoice = i,
+                                     CCChoice = cci, frm = frm)
+      }
+    }
   }
   object@geneScoreTest = results
 
+  return(object)
 }
 
 #' testGeneGLM
@@ -153,24 +160,26 @@ testGeneScores <- function(object, sigmaChoice,
 #' @param CCChoice CCChoice
 #' @param frm formula
 #'
-#' @returns lm.fit results
+#' @returns lm results
 #' @export
-#' @importFrom stats lm.fit
+#' @importFrom stats lm
 testGeneGLM <- function(
     object, sigmaName,cellTypeChoice,covariates,
     CCChoice,
     frm = "y ~ x + nCount_Spatial"
     ){
 
-  meta = object@metaDataSub[object@cellTypesSub == cellTypeChoice, covariates]
-  Y = getCellScores(object, sigma = as.numeric(gsub("sigma_", "", sigmaName)), 
-                    cellType = cellTypeChoice, ccIndex = as.numeric(gsub("CC_", "", CCChoice)), 
+  meta = object@metaDataSub[object@cellTypesSub == cellTypeChoice, covariates, drop = FALSE]
+  Y = getCellScores(object, sigma = as.numeric(gsub("sigma_", "", sigmaName)),
+                    cellType = cellTypeChoice, ccIndex = as.numeric(gsub("CC_", "", CCChoice)),
                     verbose = FALSE)
   X = object@normalizedDataSub[object@cellTypesSub == cellTypeChoice,]
 
   m<-t(apply(X, MARGIN = 1,
              function(x){
-               lm.fit(data = cbind(meta,x,y = Y),formula = frm)}))
+               fit <- lm(formula = as.formula(frm), data = cbind(meta, x = x, y = Y))
+               coef(summary(fit))["x", c("Estimate", "Pr(>|t|)")]
+             }))
   return(m)
 }
 
