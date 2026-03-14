@@ -172,7 +172,7 @@
       }
     } else {
       # Check if any kernel matrix name contains this sigma value
-      sigma_prefix <- paste0("sigma_", sigmaChoice)
+      sigma_prefix <- paste0("sigma", sigmaChoice)
       has_sigma <- any(grepl(paste0("(^|\\|)", sigma_prefix, "(\\||$)"),
                              names(object@kernelMatrices)))
       if (!has_sigma) {
