@@ -160,7 +160,7 @@ optimize_bilinear <- function(X_list, flat_kernels, sigma, max_iter = 1000,
 
   # Iterative refinement
   iter <- 0
-  while (iter <= max_iter) {
+  while (iter < max_iter) {
     w_list_old <- w_list
 
     if (is_within) {

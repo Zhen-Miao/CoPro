@@ -1,9 +1,4 @@
-#' @import Matrix
-#' @import methods
-# Define necessary class unions from the original CoPro object
-setClassUnion("matrixOrSparseMatrix", c("matrix", "dgCMatrix", "dgTMatrix"))
-setClassUnion("factorOrCharacter", c("factor", "character"))
-setClassUnion("matrixOrDataFrame", c("matrix", "data.frame"))
+# Note: class unions are defined in 00-classes.R; not duplicated here
 
 #' Function to create a new object
 #' @importFrom methods new

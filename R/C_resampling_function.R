@@ -396,6 +396,11 @@ generate_toroidal_permutations <- function(location_data, n_permu = 100,
                                            seed = NULL) {
 
   if (!is.null(seed)) {
+    old_seed <- if (exists(".Random.seed", envir = .GlobalEnv)) .Random.seed else NULL
+    on.exit({
+      if (is.null(old_seed)) rm(".Random.seed", envir = .GlobalEnv)
+      else assign(".Random.seed", old_seed, envir = .GlobalEnv)
+    })
     set.seed(seed)
   }
 

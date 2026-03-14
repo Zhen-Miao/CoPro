@@ -484,7 +484,7 @@ setGeneric(
     distances[[flat_name]] <- distances_ij
     
     if (verbose) {
-      if (verbose) print(quantile(distances_ij, na.rm = TRUE))
+      print(quantile(distances_ij, na.rm = TRUE))
     }
   }
   
@@ -575,7 +575,7 @@ setGeneric(
   distances[[flat_name]] <- distances_ij
   
   if (verbose) {
-    if (verbose) print(quantile(distances_ij[is.finite(distances_ij)], na.rm = TRUE))
+    print(quantile(distances_ij[is.finite(distances_ij)], na.rm = TRUE))
   }
   
   # Apply normalization if requested
@@ -774,7 +774,7 @@ setMethod("computeDistance", "CoProMulti", function(object, distType = c("Euclid
     
     if (verbose) {
       cat("Slide:", sID, ", Cell type:", cts, "\n")
-      if (verbose) print(quantile(distances_ij[is.finite(distances_ij)], na.rm = TRUE))
+      print(quantile(distances_ij[is.finite(distances_ij)], na.rm = TRUE))
     }
   }
   
@@ -891,7 +891,7 @@ setMethod("computeDistance", "CoProMulti", function(object, distType = c("Euclid
       
       if (verbose) {
         cat("Slide:", sID, ", Pair:", ct_i, "-", ct_j, "\n")
-        if (verbose) print(quantile(distances_ij, na.rm = TRUE))
+        print(quantile(distances_ij, na.rm = TRUE))
       }
     }
   }
