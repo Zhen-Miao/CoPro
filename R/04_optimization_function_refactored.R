@@ -206,7 +206,7 @@ optimize_bilinear <- function(X_list, flat_kernels, sigma, max_iter = 1000,
     iter <- iter + 1
   } # end while
 
-  if (iter > max_iter) {
+  if (iter >= max_iter) {
     warning("Maximum number of iterations reached without convergence")
   }
 
