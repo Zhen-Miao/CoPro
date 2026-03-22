@@ -38,29 +38,34 @@
 center_scale_matrix_opt <- function(input_matrix,
                                     zero_sd_threshold = 1e-3,
                                     nz_propion_threshold = 0.01) {
-  # Calculate column standard deviations
-  col_means <- colMeans(input_matrix)
-  col_sds <- apply(input_matrix, 2, sd)
 
-  # non-zero proportion
-  col_nz <- colSums(input_matrix != 0) / nrow(input_matrix)
+  if (!.is_bpcells(input_matrix)) {
+    # Original behavior for base matrix / Matrix::dgCMatrix
+    col_means <- colMeans(input_matrix)
+    col_sds   <- apply(input_matrix, 2, sd)
+    col_nz    <- colSums(input_matrix != 0) / nrow(input_matrix)
 
-  # Identify columns that are not full of zeros (to avoid division by zero)
+    zero_sd_cols <- which(col_sds < zero_sd_threshold | col_nz < nz_propion_threshold)
+    col_sds_safe <- col_sds
+    if (length(zero_sd_cols) > 0) col_sds_safe[zero_sd_cols] <- 1.0
 
-  zero_sd_cols <- which(col_sds < zero_sd_threshold |
-                        col_nz < nz_propion_threshold)
-
-  ## do not scale if the sd is too small, or if the proportion of non-zero
-  # values is too low
-  col_sds_safe <- col_sds
-  if (length(zero_sd_cols) > 0) {
-    col_sds_safe[zero_sd_cols] <- 1.0
+    return(scale(input_matrix, center = col_means, scale = col_sds_safe))
   }
 
-  scaled_matrix <- scale(input_matrix, center = col_means, scale = col_sds_safe)
+  # ---- BPCells path ----
 
+  col_means <- colMeans(input_matrix)
+  col_sds <- sqrt(BPCells::colVars(input_matrix))
+  col_nz <- colSums(BPCells::binarize(input_matrix)) / nrow(input_matrix)
+  zero_sd_cols <- which(col_sds < zero_sd_threshold | col_nz < nz_propion_threshold)
+  col_sds_safe <- col_sds
+  if (length(zero_sd_cols) > 0) col_sds_safe[zero_sd_cols] <- 1.0
 
-  return(scaled_matrix)
+  # Center then scale using BPCells broadcasting (no base::scale())
+  centered <- BPCells::add_cols(input_matrix, -col_means)
+  scaled   <- BPCells::multiply_cols(centered, 1 / col_sds_safe)
+
+  scaled
 }
 
 
@@ -71,12 +76,12 @@ center_scale_matrix_opt <- function(input_matrix,
 #' @noRd
 normalize_vec <- function(v) {
   v_norm <- sqrt(sum(v^2))
-  
+
   if (v_norm < 1e-12) {
     warning("Vector has very small norm, may cause numerical issues")
     return(matrix(0, nrow = length(v), ncol = 1))
   }
-  
+
   normalized <- v / v_norm
   if (is.matrix(v)) {
     return(normalized)
@@ -98,7 +103,7 @@ utils::globalVariables(c(
 #' @return TRUE if valid, stops execution with error if invalid
 #' @noRd
 .validateSeparatorSafety <- function(cellTypes = NULL, slideIDs = NULL) {
-  
+
   # Check cell types for pipe characters
   if (!is.null(cellTypes)) {
     cellTypes <- as.character(cellTypes)
@@ -110,7 +115,7 @@ utils::globalVariables(c(
                  "\nPlease rename these cell types to avoid conflicts with internal naming."))
     }
   }
-  
+
   # Check slide IDs for pipe characters
   if (!is.null(slideIDs)) {
     slideIDs <- as.character(slideIDs)
@@ -122,7 +127,7 @@ utils::globalVariables(c(
                  "\nPlease rename these slide IDs to avoid conflicts with internal naming."))
     }
   }
-  
+
   return(TRUE)
 }
 
@@ -204,7 +209,7 @@ setMethod("getSlideID", "CoProSingle", function(object) {
   character(0)
 })
 
-#' @rdname getSlideID  
+#' @rdname getSlideID
 setMethod("getSlideID", "CoProMulti", function(object) {
   if ("slideID" %in% colnames(object@metaDataSub)) {
     return(object@metaDataSub$slideID)
