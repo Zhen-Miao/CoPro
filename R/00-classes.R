@@ -4,6 +4,7 @@
 setClassUnion("matrixOrSparseMatrix", c("matrix", "dgCMatrix", "dgTMatrix"))
 setClassUnion("factorOrCharacter", c("factor", "character"))
 setClassUnion("matrixOrDataFrame", c("matrix", "data.frame"))
+setClassUnion("factorOrCharacterOrNULL", c("factor", "character", "NULL"))
 
 # Define a virtual class that is a union of 'matrix' and 'sparseMatrix'
 #' CoPro object of spatial transcriptomics data
@@ -71,8 +72,8 @@ setClass("CoPro", contains  = "VIRTUAL",
     slots = list(
 
            ## cell by gene data matrix
-           normalizedData = "matrixOrSparseMatrix",
-           normalizedDataSub = "matrixOrSparseMatrix",
+           normalizedData = "ANY",
+           normalizedDataSub = "ANY",
            integratedData = "list", # Stores output of integrateSlidesMulti
 
            ## location data
