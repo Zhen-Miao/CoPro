@@ -1,5 +1,3 @@
-#' @importFrom BPCells colVars binarize add_cols multiply_cols colSums
-
 ## get PC matrices
 .getAllPCMats <- function(allPCs, scalePCs) {
 
@@ -41,11 +39,7 @@ center_scale_matrix_opt <- function(input_matrix,
                                     zero_sd_threshold = 1e-3,
                                     nz_propion_threshold = 0.01) {
 
-  is_bpcells <- inherits(input_matrix, "MatrixSubset") ||
-    inherits(input_matrix, "IterableMatrix") ||
-    inherits(input_matrix, "Iterable_dgCMatrix_wrapper")
-
-  if (!is_bpcells) {
+  if (!.is_bpcells(input_matrix)) {
     # Original behavior for base matrix / Matrix::dgCMatrix
     col_means <- colMeans(input_matrix)
     col_sds   <- apply(input_matrix, 2, sd)
@@ -61,15 +55,15 @@ center_scale_matrix_opt <- function(input_matrix,
   # ---- BPCells path ----
 
   col_means <- colMeans(input_matrix)
-  col_sds <- sqrt(colVars(input_matrix))
-  col_nz <- colSums(binarize(input_matrix)) / nrow(input_matrix)
+  col_sds <- sqrt(BPCells::colVars(input_matrix))
+  col_nz <- colSums(BPCells::binarize(input_matrix)) / nrow(input_matrix)
   zero_sd_cols <- which(col_sds < zero_sd_threshold | col_nz < nz_propion_threshold)
   col_sds_safe <- col_sds
   if (length(zero_sd_cols) > 0) col_sds_safe[zero_sd_cols] <- 1.0
 
   # Center then scale using BPCells broadcasting (no base::scale())
-  centered <- add_cols(input_matrix, -col_means)
-  scaled   <- multiply_cols(centered, 1 / col_sds_safe)
+  centered <- BPCells::add_cols(input_matrix, -col_means)
+  scaled   <- BPCells::multiply_cols(centered, 1 / col_sds_safe)
 
   scaled
 }
@@ -81,11 +75,7 @@ center_scale_matrix_opt <- function(input_matrix,
 #' @return Normalized vector as column matrix
 #' @noRd
 normalize_vec <- function(v) {
-  if (is.matrix(v)) {
-    v_norm <- sqrt(sum(v^2))
-  } else {
-    v_norm <- sqrt(sum(v^2))
-  }
+  v_norm <- sqrt(sum(v^2))
 
   if (v_norm < 1e-12) {
     warning("Vector has very small norm, may cause numerical issues")

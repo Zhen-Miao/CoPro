@@ -24,8 +24,9 @@ Imports:
     ggplot2
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.3.3
-Suggests: 
+Suggests:
     testthat (>= 3.0.0),
+    BPCells,
     RcppAnnoy,
     SeuratObject,
     viridis,

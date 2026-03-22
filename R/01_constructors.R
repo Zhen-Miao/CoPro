@@ -31,6 +31,12 @@ setMethod(
     "data.frame", "factorOrCharacter"
   ),
   function(normalizedData, locationData, metaData, cellTypes) {
+    ## validate normalizedData type
+    if (!is.matrix(normalizedData) && !inherits(normalizedData, "sparseMatrix") &&
+        !inherits(normalizedData, "IterableMatrix")) {
+      stop("normalizedData must be a matrix, sparse matrix, or BPCells IterableMatrix")
+    }
+
     ## check dimension of input
     if (length(cellTypes) != nrow(normalizedData) ||
         nrow(normalizedData) != nrow(metaData) ||
@@ -122,6 +128,12 @@ setMethod(
   function(normalizedData, locationData, metaData, cellTypes, slideID) {
 
     # --- Input Validation ---
+    # validate normalizedData type
+    if (!is.matrix(normalizedData) && !inherits(normalizedData, "sparseMatrix") &&
+        !inherits(normalizedData, "IterableMatrix")) {
+      stop("normalizedData must be a matrix, sparse matrix, or BPCells IterableMatrix")
+    }
+
     n_cells <- nrow(normalizedData)
     if (length(cellTypes) != n_cells || nrow(metaData) != n_cells ||
         nrow(locationData) != n_cells || length(slideID) != n_cells) {
@@ -322,8 +334,15 @@ CreateCoPro <- function(normalizedData, locationData, metaData, cellTypes,
     )
   }
 
-  # Set seed once here before any kmeans calls; .partitionByLocation does not
-  # call set.seed() internally so the RNG state flows naturally through recursion.
+  # Save and restore RNG state so we don't alter the caller's random stream
+  old_seed <- if (exists(".Random.seed", envir = globalenv())) get(".Random.seed", envir = globalenv()) else NULL
+  on.exit({
+    if (is.null(old_seed)) {
+      rm(".Random.seed", envir = globalenv(), inherits = FALSE)
+    } else {
+      assign(".Random.seed", old_seed, envir = globalenv())
+    }
+  }, add = TRUE)
   set.seed(seed)
 
   t0 <- Sys.time()

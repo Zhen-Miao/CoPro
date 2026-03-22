@@ -4,7 +4,6 @@
 setClassUnion("matrixOrSparseMatrix", c("matrix", "dgCMatrix", "dgTMatrix"))
 setClassUnion("factorOrCharacter", c("factor", "character"))
 setClassUnion("matrixOrDataFrame", c("matrix", "data.frame"))
-setClassUnion("factorOrCharacterOrNULL", c("factor", "character", "NULL"))
 
 # Define a virtual class that is a union of 'matrix' and 'sparseMatrix'
 #' CoPro object of spatial transcriptomics data

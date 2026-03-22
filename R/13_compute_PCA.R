@@ -5,7 +5,6 @@
 #'
 #' @importFrom stats setNames prcomp
 #' @importFrom irlba prcomp_irlba
-#' @import BPCells
 #' @param object A `CoProMulti` object with the `integratedData` slot populated.
 #' @param nPCA Number of principal components to compute for each cell type.
 #' @param dataUse What data to use, choices between "raw" and "integrated".
@@ -75,13 +74,7 @@ setGeneric("computePCA",
 }
 
 .is_bpcells <- function(x) {
-  # is input bpcell object?
-  inherits(x, c(
-    "MatrixSubset",
-    "IterableMatrix",
-    "Iterable_dgCMatrix_wrapper",
-    "TransformScaleShift"
-  ))
+  inherits(x, "IterableMatrix")
 }
 
 .compute_pca_single <- function(object, nPCA = 40, center = TRUE, scale. = TRUE, cts) {
@@ -99,10 +92,20 @@ setGeneric("computePCA",
     # Apply centering and scaling
     scaled_data <- .apply_centering_scaling(sub_data, center, scale.)
 
+    # Guard against nPCA exceeding data dimensions
+    max_pca <- min(nrow(scaled_data) - 1, ncol(scaled_data))
+    if (nPCA >= max_pca) {
+      warning(paste0("nPCA (", nPCA, ") exceeds max allowed (", max_pca,
+                     ") for cell type '", ct, "'. Reducing to ", max(1, max_pca - 1), "."))
+      nPCA_use <- max(1, max_pca - 1)
+    } else {
+      nPCA_use <- nPCA
+    }
+
     # PCA on the matrix that is already centered and scaled
     if (.is_bpcells(scaled_data)) {
-      print(paste0("Input is BPCell (", class(scaled_data), "), performing BPCell svd..."))
-      sv <- BPCells::svds(scaled_data, k = nPCA, nu = nPCA, nv = nPCA, threads = 0L)
+      message("Input is BPCell (", class(scaled_data), "), performing BPCell svd...")
+      sv <- BPCells::svds(scaled_data, k = nPCA_use, nu = nPCA_use, nv = nPCA_use, threads = 0L)
       x_scores <- sweep(sv$u, 2, sv$d, `*`)
 
       # add cell names to pca matrix
@@ -125,8 +128,8 @@ setGeneric("computePCA",
       )
       class(pca) <- "prcomp"
     } else {
-      print(paste0("Input is dense (", class(scaled_data), "), performing irlba pca..."))
-      pca <- prcomp_irlba(scaled_data, center = FALSE, scale. = FALSE, n = nPCA)
+      message("Input is dense (", class(scaled_data), "), performing irlba pca...")
+      pca <- prcomp_irlba(scaled_data, center = FALSE, scale. = FALSE, n = nPCA_use)
     }
     object@pcaGlobal[[ct]] <- pca
   }
@@ -206,11 +209,21 @@ setGeneric("computePCA",
       message("Data centered and/or scaled")
     }
 
+    # Guard against nPCA exceeding data dimensions
+    max_pca <- min(nrow(scaled_data) - 1, ncol(scaled_data))
+    if (nPCA >= max_pca) {
+      warning(paste0("nPCA (", nPCA, ") exceeds max allowed (", max_pca,
+                     ") for cell type '", ct, "'. Reducing to ", max(1, max_pca - 1), "."))
+      nPCA_use <- max(1, max_pca - 1)
+    } else {
+      nPCA_use <- nPCA
+    }
+
     # Perform PCA on the combined integrated data for this cell type
     if (.is_bpcells(scaled_data)) {
       message("Input is BPCell (", paste(class(scaled_data), collapse = ", "),
               "), performing BPCell svd...")
-      sv <- BPCells::svds(scaled_data, k = nPCA, nu = nPCA, nv = nPCA, threads = 0L)
+      sv <- BPCells::svds(scaled_data, k = nPCA_use, nu = nPCA_use, nv = nPCA_use, threads = 0L)
       x_scores <- sweep(sv$u, 2, sv$d, `*`)
 
       # add cell id to pca matrix
@@ -228,7 +241,7 @@ setGeneric("computePCA",
       )
       class(pca_ct) <- "prcomp"
     } else {
-      pca_ct <- prcomp_irlba(scaled_data, n = nPCA,
+      pca_ct <- prcomp_irlba(scaled_data, n = nPCA_use,
                              center = FALSE, scale. = FALSE)
     }
     message("PCA computed for cell type: ", ct)
