@@ -271,40 +271,49 @@ setGeneric(
 }
 
 .computeGACMultiCore <- function(object, cts, sigmaValues, scalePCs, slides) {
-  
+
   # Initialize variables
   nCC <- object@nCC
   sigma_names <- paste("sigma", sigmaValues, sep = "_")
-  
+
   # Initialize data structures - now aggregated across slides
     csgs <- .initializeCSGS(cts, sigma_names, nCC, object)
     cellScores <- csgs$cellScores
     geneScores <- csgs$geneScores
 
+  # Scale per-slide PCA matrices to match optimization (whitening)
+  X_scaled <- .preparePCMatrices(
+    pc_data = object@pcaResults,
+    pca_global = object@pcaGlobal,
+    scalePCs = scalePCs,
+    slides = slides,
+    cts = cts
+  )
+
   ## Iterate over all sigma values and slides to compute and aggregate scores
   for (tt in seq_along(sigmaValues)) {
     t <- sigma_names[tt]
     W_list <- object@skrCCAOut[[t]] # Shared weights for this sigma
-    
+
     # Calculate Cell Scores (Slide-Specific, then aggregated)
     for (sID in slides) {
-      X_list_slide <- object@pcaResults[[sID]]
+      X_list_slide <- X_scaled[[sID]]
       slide_indices <- .getSlideIndices(object, sID)
       meta_slide <- object@metaDataSub[slide_indices, ]
       celltype_slide <- object@cellTypesSub[slide_indices]
-      
+
       for (ct in cts) {
         X_ct <- X_list_slide[[ct]]
         W_ct <- W_list[[ct]] # Shared weight matrix for cell type ct
         check_XW <- .checkXW(X_ct, W_ct, sID, ct)
         cell_ids_ct_slide <- rownames(meta_slide)[celltype_slide == ct]
-        
+
         if (check_XW && length(cell_ids_ct_slide) > 0) {
           # Compute scores for this slide and cell type
           scores_mat_slide <- X_ct %*% W_ct
           colnames(scores_mat_slide) <- paste0("CC_", 1:nCC)
           rownames(scores_mat_slide) <- cell_ids_ct_slide
-          
+
           # Add these scores to the aggregated matrix (flat structure)
           cell_flat_name <- .createCellScoresName(sigmaValues[tt], ct, slide = NULL)
           cellScores[[cell_flat_name]][cell_ids_ct_slide, ] <- scores_mat_slide
