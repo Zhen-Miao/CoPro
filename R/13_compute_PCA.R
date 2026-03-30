@@ -13,6 +13,11 @@
 #'   again? By default this is set to FALSE
 #' @param center Whether to center the matrix before PCA
 #' @param scale. Whether to scale the matrix before PCA
+#' @param scalePCs Whether to scale (whiten) PCs by their standard deviation
+#'   before downstream CCA optimization. Default `TRUE` (recommended). When
+#'   PCs are whitened, the unit-norm constraint `||w|| = 1` is equivalent to
+#'   the standard CCA constraint `||w'X'Xw|| = 1`. Setting this to `FALSE`
+#'   distorts the constraint space and may produce unreliable results.
 #'
 #' @return A `CoProMulti` object with the `pcaResults` slot populated.
 #'         `pcaResults` structure: `list(slideID = list(cellType = pc_matrix))`.
@@ -22,11 +27,12 @@
 setGeneric("computePCA",
            function(object, nPCA = 40,
                     center = TRUE, scale. = TRUE,
+                    scalePCs = TRUE,
                     dataUse = "raw",
                     center_per_slide = FALSE) standardGeneric("computePCA"))
 
 # Common input validation function
-.validate_pca_params <- function(nPCA, center, scale.) {
+.validate_pca_params <- function(nPCA, center, scale., scalePCs) {
   if (!is.numeric(nPCA) || nPCA <= 0 || nPCA != as.integer(nPCA)) {
     stop("nPCA must be a positive integer")
   }
@@ -35,6 +41,17 @@ setGeneric("computePCA",
   }
   if (!is.logical(scale.) || length(scale.) != 1) {
     stop("scale. must be a single logical value")
+  }
+  if (!is.logical(scalePCs) || length(scalePCs) != 1) {
+    stop("scalePCs must be a single logical value")
+  }
+  if (!scalePCs) {
+    warning(paste(
+      "scalePCs = FALSE is not recommended. When PCs are whitened (scaled),",
+      "the unit-norm constraint ||w|| = 1 is equivalent to the standard CCA",
+      "constraint ||w'X'Xw|| = 1. Without whitening, the optimization may",
+      "produce unreliable results because the constraint space is distorted."
+    ))
   }
 }
 
@@ -56,8 +73,8 @@ setGeneric("computePCA",
   }
 }
 
-.check_pca_input <- function(object, nPCA, center, scale.) {
-  .validate_pca_params(nPCA, center, scale.)
+.check_pca_input <- function(object, nPCA, center, scale., scalePCs) {
+  .validate_pca_params(nPCA, center, scale., scalePCs)
 
   # Choose cell types
   if (length(object@cellTypesOfInterest) != 0) {
@@ -77,7 +94,7 @@ setGeneric("computePCA",
   inherits(x, "IterableMatrix")
 }
 
-.compute_pca_single <- function(object, nPCA = 40, center = TRUE, scale. = TRUE, cts) {
+.compute_pca_single <- function(object, nPCA = 40, center = TRUE, scale. = TRUE, scalePCs = TRUE, cts) {
   # PCA results will be saved under the name of cell types
   object@pcaGlobal <- setNames(
     vector("list", length = length(cts)),
@@ -135,13 +152,13 @@ setGeneric("computePCA",
   }
 
   object@nPCA <- nPCA
-  object@scalePCs <- TRUE
+  object@scalePCs <- scalePCs
 
   return(object)
 }
 
-.check_pca_input_multi <- function(object, nPCA, center, scale., dataUse) {
-  .validate_pca_params(nPCA, center, scale.)
+.check_pca_input_multi <- function(object, nPCA, center, scale., scalePCs, dataUse) {
+  .validate_pca_params(nPCA, center, scale., scalePCs)
 
   # Validate dataUse argument
   if (!dataUse %in% c("raw", "integrated")) {
@@ -163,7 +180,7 @@ setGeneric("computePCA",
 }
 
 .compute_pca_multi <- function(object, nPCA = 40, center = TRUE, scale. = TRUE,
-                               dataUse = "raw", center_per_slide = FALSE, cts) {
+                               scalePCs = TRUE, dataUse = "raw", center_per_slide = FALSE, cts) {
       slides <- getSlideList(object)
 
   # Initialize pcaResults structure
@@ -267,8 +284,7 @@ setGeneric("computePCA",
   object@pcaGlobal <- pca_global
   object@pcaResults <- pca_results_all
   object@nPCA <- nPCA
-  # Default scalePCs set to TRUE
-  object@scalePCs <- TRUE
+  object@scalePCs <- scalePCs
 
   return(object)
 }
@@ -290,9 +306,10 @@ setGeneric("computePCA",
 #' @aliases computePCA,CoProSingle-method
 #' @export
 setMethod("computePCA", "CoProSingle",
-          function(object, nPCA = 40, center = TRUE, scale. = TRUE) {
-            cts <- .check_pca_input(object, nPCA, center, scale.)
-            object <- .compute_pca_single(object, nPCA, center, scale., cts)
+          function(object, nPCA = 40, center = TRUE, scale. = TRUE,
+                   scalePCs = TRUE) {
+            cts <- .check_pca_input(object, nPCA, center, scale., scalePCs)
+            object <- .compute_pca_single(object, nPCA, center, scale., scalePCs, cts)
             return(object)
           })
 
@@ -314,9 +331,9 @@ setMethod("computePCA", "CoProSingle",
 #' @export
 setMethod("computePCA", "CoProMulti",
           function(object, nPCA = 40, center = TRUE, scale. = TRUE,
-                   dataUse = "raw", center_per_slide = FALSE) {
-            cts <- .check_pca_input_multi(object, nPCA, center, scale., dataUse)
-            object <- .compute_pca_multi(object, nPCA, center, scale.,
+                   scalePCs = TRUE, dataUse = "raw", center_per_slide = FALSE) {
+            cts <- .check_pca_input_multi(object, nPCA, center, scale., scalePCs, dataUse)
+            object <- .compute_pca_multi(object, nPCA, center, scale., scalePCs,
                                          dataUse, center_per_slide, cts)
             return(object)
           })

@@ -244,6 +244,19 @@
 #' @return List containing prepared matrices (X_list_all for multi-slide, PCmats for single-slide)
 #' @noRd
 .prepareDataMatrices <- function(object, is_multi, scalePCs, cts) {
+  # When scalePCs = FALSE, build sdev2_list so the optimizer can enforce
+  # the correct CCA constraint w'(X'X)w = 1 via weighted normalization.
+  # When scalePCs = TRUE, X is already whitened so sdev2_list = NULL
+  # and the standard ||w|| = 1 constraint is equivalent.
+  if (!scalePCs) {
+    sdev2_list <- setNames(
+      lapply(cts, function(ct) object@pcaGlobal[[ct]]$sdev^2),
+      cts
+    )
+  } else {
+    sdev2_list <- NULL
+  }
+
   if (is_multi) {
     slides <- getSlideList(object)
     X_list_all <- .preparePCMatrices(
@@ -253,14 +266,14 @@
       slides = slides,
       cts = cts
     )
-    return(list(X_list_all = X_list_all, slides = slides))
+    return(list(X_list_all = X_list_all, slides = slides, sdev2_list = sdev2_list))
   } else {
     PCmats <- .preparePCMatrices(
       pca_global = object@pcaGlobal,
       scalePCs = scalePCs,
       cts = cts
     )
-    return(list(PCmats = PCmats))
+    return(list(PCmats = PCmats, sdev2_list = sdev2_list))
   }
 }
 
@@ -349,7 +362,8 @@
       max_iter = maxIter,
       tol = tol,
       n_cores = n_cores,
-      step_size = step_size
+      step_size = step_size,
+      sdev2_list = data_matrices$sdev2_list
     ))
 
   } else {
@@ -360,7 +374,8 @@
       sigma = sigma_val,
       max_iter = maxIter,
       tol = tol,
-      step_size = step_size
+      step_size = step_size,
+      sdev2_list = data_matrices$sdev2_list
     ))
   }
 }
@@ -400,7 +415,8 @@
       max_iter = maxIter,
       tol = tol,
       n_cores = n_cores,
-      step_size = step_size
+      step_size = step_size,
+      sdev2_list = data_matrices$sdev2_list
     )
   } else {
     # Run single-slide optimization with flat kernels
@@ -413,7 +429,8 @@
       nCC = nCC,
       max_iter = maxIter,
       tol = tol,
-      step_size = step_size
+      step_size = step_size,
+      sdev2_list = data_matrices$sdev2_list
     )
   }
   

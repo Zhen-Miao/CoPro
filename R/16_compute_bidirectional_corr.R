@@ -443,11 +443,23 @@ setMethod(
       stop("Cannot infer nCC from skrCCA results")
     }
   }
-  return(list(cts = cts, slides = slides, sigmas_run = sigmas_run, nCC = nCC))
+  if (length(object@scalePCs) == 0) stop("object@scalePCs not specified")
+  scalePCs <- object@scalePCs
+
+  return(list(cts = cts, slides = slides, sigmas_run = sigmas_run, nCC = nCC, scalePCs = scalePCs))
 }
 
-.computeBidirCorrCoreMulti <- function(object, cts, slides, sigmas_run, nCC, calculationMode = "perSlide", normalize_K = c("row_or_col", "sinkhorn_knopp", "none"), filter_kernel = TRUE, K_row_sum_cutoff = 5e-3, K_col_sum_cutoff = 5e-3) {
+.computeBidirCorrCoreMulti <- function(object, cts, slides, sigmas_run, nCC, scalePCs, calculationMode = "perSlide", normalize_K = c("row_or_col", "sinkhorn_knopp", "none"), filter_kernel = TRUE, K_row_sum_cutoff = 5e-3, K_col_sum_cutoff = 5e-3) {
   normalize_K <- match.arg(normalize_K)
+
+  # Scale per-slide PCA matrices to match optimization (whitening)
+  X_scaled <- .preparePCMatrices(
+    pc_data = object@pcaResults,
+    pca_global = object@pcaGlobal,
+    scalePCs = scalePCs,
+    slides = slides,
+    cts = cts
+  )
   if (length(cts) == 1) {
     pair_cell_types <- matrix(c(cts, cts), nrow = 2, ncol = 1)
   } else {
@@ -470,7 +482,7 @@ setMethod(
           stringsAsFactors = FALSE
         )
 
-        X_list_slide <- object@pcaResults[[sID]]
+        X_list_slide <- X_scaled[[sID]]
         if (is.null(X_list_slide)) next
 
         for (pp in seq_len(ncol(pair_cell_types))) {
@@ -528,7 +540,7 @@ setMethod(
           sum_corr <- 0
           valid_slides <- 0
           for (sID in slides) {
-            X_list_slide <- object@pcaResults[[sID]]
+            X_list_slide <- X_scaled[[sID]]
             if (is.null(X_list_slide)) next
             X_i <- X_list_slide[[ct_i]]
             X_j <- X_list_slide[[ct_j]]
@@ -593,9 +605,11 @@ K_row_sum_cutoff = 5e-2, K_col_sum_cutoff = 5e-2) {
   slides <- input_check$slides
   sigmas_run <- input_check$sigmas_run
   nCC <- input_check$nCC
+  scalePCs <- input_check$scalePCs
 
   object <- .computeBidirCorrCoreMulti(object, cts = cts, slides = slides,
                                        sigmas_run = sigmas_run, nCC = nCC,
+                                       scalePCs = scalePCs,
                                        calculationMode = calculationMode, normalize_K = normalize_K,
                                        filter_kernel = filter_kernel,
                                        K_row_sum_cutoff = K_row_sum_cutoff, K_col_sum_cutoff = K_col_sum_cutoff)

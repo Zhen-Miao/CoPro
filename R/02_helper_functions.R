@@ -90,6 +90,57 @@ normalize_vec <- function(v) {
   }
 }
 
+#' Normalize w under the CCA constraint w'(X'X)w = 1
+#'
+#' When \code{sdev2} is \code{NULL} (whitened PCs), this reduces to
+#' \code{||w|| = 1}. Otherwise the weighted norm
+#' \code{sqrt(sum(w^2 * sdev2))} is used so that the constraint becomes
+#' \code{w' diag(sdev^2) w = 1}, which is equivalent to \code{||Xw|| = 1}
+#' in the original (unwhitened) PC space.
+#'
+#' @param v Numeric vector or single-column matrix
+#' @param sdev2 Squared sdev vector (same length as v), or NULL for standard norm
+#' @return Normalized vector as column matrix
+#' @noRd
+normalize_vec_weighted <- function(v, sdev2 = NULL) {
+  if (is.null(sdev2)) {
+    return(normalize_vec(v))
+  }
+  v_norm <- sqrt(sum(as.numeric(v)^2 * sdev2))
+  if (v_norm < 1e-12) {
+    warning("Vector has very small weighted norm, may cause numerical issues")
+    return(matrix(0, nrow = length(v), ncol = 1))
+  }
+  normalized <- v / v_norm
+  if (is.matrix(v)) {
+    return(normalized)
+  } else {
+    return(matrix(normalized, ncol = 1))
+  }
+}
+
+#' Apply D-inverse preconditioner to gradient, then normalize under D-norm
+#'
+#' For the generalized eigenvalue problem \code{Yw = λDw}, the correct power
+#' iteration is: (1) compute gradient \code{v = Yw}, (2) apply
+#' \code{D^{-1}}: \code{u = v / sdev2}, (3) normalize so that
+#' \code{u'Du = 1}. This function performs steps 2--3 in one call.
+#' When \code{sdev2} is \code{NULL}, falls back to standard normalization.
+#'
+#' @param v Gradient vector (single-column matrix)
+#' @param sdev2 Squared sdev vector, or NULL for standard norm
+#' @return Preconditioned and normalized vector as column matrix
+#' @noRd
+normalize_gradient_weighted <- function(v, sdev2 = NULL) {
+  if (is.null(sdev2)) {
+    return(normalize_vec(v))
+  }
+  # D^{-1} v
+  u <- as.numeric(v) / sdev2
+  # Normalize under D-norm: sqrt(u' D u) = sqrt(sum(u^2 * sdev2))
+  normalize_vec_weighted(matrix(u, ncol = 1), sdev2)
+}
+
 # Declare globals used across the package to quiet R CMD check NOTES
 utils::globalVariables(c(
   ".computeSpatialCrossCorrelation",

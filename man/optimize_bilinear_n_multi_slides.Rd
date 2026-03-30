@@ -14,7 +14,9 @@ optimize_bilinear_n_multi_slides(
   nCC = 2,
   max_iter = 1000,
   tol = 1e-05,
-  n_cores = 1
+  n_cores = 1,
+  step_size = 1,
+  sdev2_list = NULL
 )
 }
 \arguments{
@@ -37,6 +39,8 @@ optimize_bilinear_n_multi_slides(
 \item{tol}{Convergence tolerance}
 
 \item{n_cores}{Number of cores for parallel computation}
+
+\item{step_size}{Step size for damped power iteration (default 1)}
 }
 \value{
 Updated weight list with all components

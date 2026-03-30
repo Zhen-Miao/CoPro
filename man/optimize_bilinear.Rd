@@ -5,7 +5,15 @@
 \title{SkrCCA optimization function for multiple groups (Single Slide) - First Component
 Uses flat kernel structure for consistent data access}
 \usage{
-optimize_bilinear(X_list, flat_kernels, sigma, max_iter = 1000, tol = 1e-05)
+optimize_bilinear(
+  X_list,
+  flat_kernels,
+  sigma,
+  max_iter = 1000,
+  tol = 1e-05,
+  step_size = 1,
+  sdev2_list = NULL
+)
 }
 \arguments{
 \item{X_list}{Named list of data matrices (cell by PC matrix)}
@@ -17,6 +25,10 @@ optimize_bilinear(X_list, flat_kernels, sigma, max_iter = 1000, tol = 1e-05)
 \item{max_iter}{Maximum number of iterations}
 
 \item{tol}{tolerance of accuracy}
+
+\item{step_size}{Step size for damped power iteration. Default 1 (standard
+power iteration). Values in (0,1) blend old and new weights for smoother
+convergence, which can help with many cells or many CCs.}
 }
 \value{
 Named list \code{w_list} containing the first weight vector component.

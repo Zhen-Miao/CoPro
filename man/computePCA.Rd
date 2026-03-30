@@ -5,13 +5,14 @@
 \alias{computePCA,CoProMulti-method}
 \title{Compute PCA on Single-Slide Data}
 \usage{
-\S4method{computePCA}{CoProSingle}(object, nPCA = 40, center = TRUE, scale. = TRUE)
+\S4method{computePCA}{CoProSingle}(object, nPCA = 40, center = TRUE, scale. = TRUE, scalePCs = TRUE)
 
 \S4method{computePCA}{CoProMulti}(
   object,
   nPCA = 40,
   center = TRUE,
   scale. = TRUE,
+  scalePCs = TRUE,
   dataUse = "raw",
   center_per_slide = FALSE
 )

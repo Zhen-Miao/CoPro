@@ -3,12 +3,12 @@
 \name{newCoProMulti}
 \alias{newCoProMulti}
 \alias{newCoProMulti,CoProMulti-method}
-\alias{newCoProMulti,matrixOrSparseMatrix,matrixOrDataFrame,data.frame,factorOrCharacter,factorOrCharacter-method}
+\alias{newCoProMulti,ANY,matrixOrDataFrame,data.frame,factorOrCharacter,factorOrCharacter-method}
 \title{Create a new CoProMulti object for Multi-Slide Analysis}
 \usage{
 newCoProMulti(normalizedData, locationData, metaData, cellTypes, slideID)
 
-\S4method{newCoProMulti}{matrixOrSparseMatrix,matrixOrDataFrame,data.frame,factorOrCharacter,factorOrCharacter}(normalizedData, locationData, metaData, cellTypes, slideID)
+\S4method{newCoProMulti}{ANY,matrixOrDataFrame,data.frame,factorOrCharacter,factorOrCharacter}(normalizedData, locationData, metaData, cellTypes, slideID)
 }
 \arguments{
 \item{normalizedData}{Combined normalized expression matrix (cells x genes) for all slides. Rownames should be unique cell identifiers.}

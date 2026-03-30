@@ -249,7 +249,10 @@ setMethod(
     }
   }
 
-  return(list(cts = cts, slides = slides, sigmas_run = sigmas_run, nCC = nCC))
+  if (length(object@scalePCs) == 0) stop("object@scalePCs not specified")
+  scalePCs <- object@scalePCs
+
+  return(list(cts = cts, slides = slides, sigmas_run = sigmas_run, nCC = nCC, scalePCs = scalePCs))
 }
 
 .computeSpecNormMulti <- function(object, tol = 1e-4, cts, slides, sigmas_run, nCC, pair_cell_types) {
@@ -302,13 +305,22 @@ setMethod(
   return(norm_K_all)
 }
 
-.computeNormCorrCoreMulti <- function(object, tol = 1e-4, cts, slides, sigmas_run, nCC, calculationMode = "perSlide") {
-    
+.computeNormCorrCoreMulti <- function(object, tol = 1e-4, cts, slides, sigmas_run, nCC, scalePCs, calculationMode = "perSlide") {
+
   if (length(cts) == 1) {
     pair_cell_types <- matrix(c(cts, cts), nrow = 2, ncol = 1)
   } else {
     pair_cell_types <- combn(cts, 2)
   }
+
+  # Scale per-slide PCA matrices to match optimization (whitening)
+  X_scaled <- .preparePCMatrices(
+    pc_data = object@pcaResults,
+    pca_global = object@pcaGlobal,
+    scalePCs = scalePCs,
+    slides = slides,
+    cts = cts
+  )
 
   norm_K_all <- .computeSpecNormMulti(object, tol = tol, cts = cts,
    slides = slides, sigmas_run = sigmas_run, nCC = nCC, pair_cell_types = pair_cell_types)
@@ -325,7 +337,7 @@ setMethod(
       for(sID in slides) {
         row_buffer <- vector("list", ncol(pair_cell_types) * nCC)
         row_idx <- 1
-        X_list_slide <- object@pcaResults[[sID]]
+        X_list_slide <- X_scaled[[sID]]
         norm_K_slide <- norm_K_all[[sig_name]][[sID]]
 
         if (is.null(X_list_slide)) {
@@ -408,7 +420,7 @@ setMethod(
         valid_slide_data <- vector("list", length(slides))
         valid_slide_idx <- 1
         for(sID in slides) {
-          X_list_slide <- object@pcaResults[[sID]]
+          X_list_slide <- X_scaled[[sID]]
           norm_K_slide <- norm_K_all[[sig_name]][[sID]]
           
           if (is.null(X_list_slide)) next
@@ -544,8 +556,10 @@ setMethod("computeNormalizedCorrelation", "CoProMulti", function(
   slides <- input_check$slides
   sigmas_run <- input_check$sigmas_run
   nCC <- input_check$nCC
+  scalePCs <- input_check$scalePCs
 
-  object <- .computeNormCorrCoreMulti(object, tol = tol, cts = cts, slides = slides, 
-                                      sigmas_run = sigmas_run, nCC = nCC, calculationMode = calculationMode)
+  object <- .computeNormCorrCoreMulti(object, tol = tol, cts = cts, slides = slides,
+                                      sigmas_run = sigmas_run, nCC = nCC, scalePCs = scalePCs,
+                                      calculationMode = calculationMode)
   return(object)
 })

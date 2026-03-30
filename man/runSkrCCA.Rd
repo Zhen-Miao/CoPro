@@ -14,7 +14,8 @@ runSkrCCA(
   transferred_weight_1 = NULL,
   maxIter = 200,
   sigmaChoice = NULL,
-  n_cores = 1
+  n_cores = 1,
+  step_size = 1
 )
 
 \S4method{runSkrCCA}{CoPro}(
@@ -25,7 +26,8 @@ runSkrCCA(
   transferred_weight_1 = NULL,
   maxIter = 200,
   sigmaChoice = NULL,
-  n_cores = 1
+  n_cores = 1,
+  step_size = 1
 )
 
 \S4method{runSkrCCA}{CoProMulti}(
@@ -36,7 +38,8 @@ runSkrCCA(
   transferred_weight_1 = NULL,
   maxIter = 200,
   sigmaChoice = NULL,
-  n_cores = 1
+  n_cores = 1,
+  step_size = 1
 )
 }
 \arguments{
@@ -57,6 +60,10 @@ the transferred weight on each PC. Otherwise, the value should be set to NULL.}
 \item{sigmaChoice}{Specific sigma value to use (CoProMulti only, ignored for CoPro)}
 
 \item{n_cores}{Number of cores for parallel processing (CoProMulti only, ignored for CoPro)}
+
+\item{step_size}{Step size for damped power iteration. Default 1 (standard
+power iteration). Values in (0,1) blend old and new weights for smoother
+convergence, which can help with many cells or many CCs.}
 }
 \value{
 CoPro object with skrCCA results computed

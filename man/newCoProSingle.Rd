@@ -3,12 +3,12 @@
 \name{newCoProSingle}
 \alias{newCoProSingle}
 \alias{newCoProSingle,CoPro-method}
-\alias{newCoProSingle,matrixOrSparseMatrix,matrixOrDataFrame,data.frame,factorOrCharacter-method}
+\alias{newCoProSingle,ANY,matrixOrDataFrame,data.frame,factorOrCharacter-method}
 \title{Function to create a new object}
 \usage{
 newCoProSingle(normalizedData, locationData, metaData, cellTypes)
 
-\S4method{newCoProSingle}{matrixOrSparseMatrix,matrixOrDataFrame,data.frame,factorOrCharacter}(normalizedData, locationData, metaData, cellTypes)
+\S4method{newCoProSingle}{ANY,matrixOrDataFrame,data.frame,factorOrCharacter}(normalizedData, locationData, metaData, cellTypes)
 }
 \arguments{
 \item{normalizedData}{A \code{matrix} object to store normalized data.}
