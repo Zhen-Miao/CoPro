@@ -179,11 +179,14 @@ setGeneric(
           cc_name <- paste0("CC_", cc_index)
           w_1 <- object@skrCCAOut[[t]][[i]][, cc_index, drop = FALSE]
 
-          ## get the sdev of the PCs
+          ## Map CCA weight from PC space back to gene space.
+          ## De novo cell score = X_whitened %*% w = X_centered %*% R %*% diag(1/sdev) %*% w
+          ## so the gene-space weight is R %*% diag(1/sdev) %*% w when scalePCs=TRUE,
+          ## or R %*% w when scalePCs=FALSE (w already in raw PC space).
           if(!scalePCs) {
             sdev_use <- 1L
           } else {
-            sdev_use <- object@pcaGlobal[[i]]$sdev
+            sdev_use <- 1 / object@pcaGlobal[[i]]$sdev
           }
 
           ## compute the gene scores
@@ -252,11 +255,12 @@ setGeneric(
     for (cc in 1:nCC) {
       w_cc <- W_ct[, cc, drop = FALSE]
       
-      ## get the sdev of the PCs
+      ## Map CCA weight from PC space back to gene space (see comment in
+      ## .computeGACCore for derivation: gene_weight = R %*% diag(1/sdev) %*% w)
       if (!scalePCs) {
         sdev_use <- 1L
       } else {
-        sdev_use <- sdev
+        sdev_use <- 1 / sdev
       }
       
       ## compute the gene scores
