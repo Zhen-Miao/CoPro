@@ -1,4 +1,4 @@
-source("renv/activate.R")
+# source("renv/activate.R")
 
 # Automatically load development libraries when opening the CoPro project
 if (interactive()) {
