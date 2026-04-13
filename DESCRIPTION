@@ -30,10 +30,14 @@ Suggests:
     RcppAnnoy,
     SeuratObject,
     viridis,
+    spatstat.core,
     spatstat.geom,
     spatstat.explore,
     spatstat.random,
-    igraph
+    igraph,
+    knitr,
+    rmarkdown
+VignetteBuilder: knitr
 Config/testthat/edition: 3
-URL: https://github.com/Zhen-Miao/CoPro
-BugReports: https://github.com/Zhen-Miao/CoPro/issues
+URL: https://github.com/zhenmiao/CoPro
+BugReports: https://github.com/zhenmiao/CoPro/issues

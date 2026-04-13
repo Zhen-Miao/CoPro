@@ -106,6 +106,25 @@ setGeneric(
 # using approximate nearest neighbor methods (e.g., Annoy, HNSW).
 .computeKnnGraph <- function(coord_mat, k = 10) {
   n_cells <- nrow(coord_mat)
+  cell_names <- rownames(coord_mat)
+  
+  if (n_cells <= 0) {
+    return(Matrix::sparseMatrix(
+      i = integer(0),
+      j = integer(0),
+      dims = c(0, 0)
+    ))
+  }
+  
+  if (n_cells == 1) {
+    warning("Only one cell available. Returning an empty KNN graph.")
+    return(Matrix::sparseMatrix(
+      i = integer(0),
+      j = integer(0),
+      dims = c(1, 1),
+      dimnames = list(cell_names, cell_names)
+    ))
+  }
   
   # Validate k parameter
   if (k >= n_cells) {

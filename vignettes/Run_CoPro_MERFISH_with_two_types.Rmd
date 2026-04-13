@@ -5,8 +5,7 @@ date: "`r Sys.Date()`"
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
-devtools::install("/Users/zhenmiao/Documents/GitHub/CoPro/")
+knitr::opts_chunk$set(echo = TRUE, eval = FALSE)
 ```
 
 # Content
@@ -45,7 +44,7 @@ vertical_dist_scale <- 1
 
 Here we load the normalized gene matrix as well as the meta data. The cell type label as well as cell location information are in the meta data.
 
-```{r}
+```{r, eval=FALSE}
 ra <- readRDS("/Users/zhenmiao/Dropbox/Zhuang-ABCA-1.054_1/Zhuang_ABCA_1.054_subset_data.rds")
 meta <- readRDS("/Users/zhenmiao/Dropbox/Zhuang-ABCA-1.054_1/Zhuang_ABCA_1.054_subset_metadata.rds")
 ```

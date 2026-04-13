@@ -5,8 +5,7 @@ date: "`r Sys.Date()`"
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
-devtools::install("/Users/zhenmiao/Documents/GitHub/CoPro/")
+knitr::opts_chunk$set(echo = TRUE, eval = FALSE)
 ```
 
 # Content
@@ -42,7 +41,7 @@ num_bins_y <- 10
 
 Here we load the normalized gene matrix as well as the meta data. The cell type label as well as cell location information are in the meta data.
 
-```{r load_data}
+```{r load_data, eval=FALSE}
 loc <- "/Users/zhenmiao/Library/CloudStorage/Dropbox/DIALOGUE_plus project/Raj_lab_data/72hr/roi1/"
 
 ra <- read.csv(paste0(loc, 'output/cell_by_gene/cell_by_gene.csv'))

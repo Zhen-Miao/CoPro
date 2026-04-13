@@ -11,33 +11,34 @@ removeOutliers <- function(object, threshold,
     message("Removing outliers using method: ", method)
   }
 
-  ## obtain cell scores
-  cs <- object@cellScores
-
-  ## slots to be taken subset
-  # @cellTypesSub
-  # @cellScores
-  # @normalizedDataSub
-  # @metaDataSub
-  # @slideID if exist
-  # @locationDataSub
-
-
+  expr <- object@normalizedDataSub
+  if (inherits(expr, "Matrix")) {
+    if (verbose) {
+      message("Converting sparse matrix normalizedDataSub to dense matrix for outlier detection.")
+    }
+    expr <- as.matrix(expr)
+  } else if (is.data.frame(expr)) {
+    expr <- as.matrix(expr)
+  } else if (!is.matrix(expr)) {
+    stop("normalizedDataSub must be a matrix-like object.")
+  }
+  
   if (method == "zscore") {
-    z_scores <- abs(scale(object@normalizedDataSub))
+    z_scores <- abs(scale(expr))
     outliers <- which(z_scores > threshold, arr.ind = TRUE)
   } else if (method == "iqr") {
-    Q1 <- apply(object@normalizedDataSub, 2, quantile, probs = 0.25)
-    Q3 <- apply(object@normalizedDataSub, 2, quantile, probs = 0.75)
+    Q1 <- apply(expr, 2, quantile, probs = 0.25)
+    Q3 <- apply(expr, 2, quantile, probs = 0.75)
     IQR <- Q3 - Q1
     lower_bound <- Q1 - threshold * IQR
     upper_bound <- Q3 + threshold * IQR
-    outliers <- which(object@normalizedDataSub < lower_bound | object@normalizedDataSub > upper_bound, arr.ind = TRUE)
+    outliers <- which(expr < lower_bound | expr > upper_bound, arr.ind = TRUE)
   }
 
   outlier_cells <- unique(outliers[, 1])
   if (length(outlier_cells) > 0) {
-    object@normalizedDataSub[outliers] <- NA
+    expr[outliers] <- NA
+    object@normalizedDataSub <- expr
     if (verbose) {
       message("Removed ", length(outlier_cells), " outlier cells.")
     }

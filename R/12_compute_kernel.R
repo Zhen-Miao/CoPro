@@ -658,14 +658,13 @@ setMethod("computeKernelMatrix", "CoProMulti",
       cat("current sigma value is", sigma_val, "\n")
     }
     
-    sigma_valid_across_slides <- TRUE
+    sigma_has_valid_kernel <- FALSE
     
     for (sID in slides) {
       # Check if distance matrix exists for this slide using flat structure
       dist_flat_name <- .createDistMatrixName(cts, cts, slide = sID)
       if (!dist_flat_name %in% names(object@distances)) {
         if (verbose) message(paste("No distance matrix found for slide", sID))
-        sigma_valid_across_slides <- FALSE
         next
       }
       
@@ -688,7 +687,7 @@ setMethod("computeKernelMatrix", "CoProMulti",
       # Check kernel validity
       if (!.checkKernelValidityMulti(kernel_current, lowerLimit, minAveCellNeighor,
                                     sigma_val, cts, cts, sID)) {
-        sigma_valid_across_slides <- FALSE
+        next
       }
       
               # Process kernel matrix (clipping and normalization)
@@ -698,12 +697,13 @@ setMethod("computeKernelMatrix", "CoProMulti",
         # Store in flat structure
         flat_name <- .createKernelMatrixName(sigma_val, cts, cts, slide = sID)
         kernel_matrices_all[[flat_name]] <- kernel_current
+        sigma_has_valid_kernel <- TRUE
     }
     
-    # Mark sigma for removal if invalid across slides
-    if (!sigma_valid_across_slides) {
+    # Remove sigma only when no valid kernels were generated in any slide.
+    if (!sigma_has_valid_kernel) {
       sigmaValuesToRemove[sigma_name] <- TRUE
-      warning(paste("Removing sigma value", sigma_val, "as it was invalid for one or more slides."))
+      warning(paste("Removing sigma value", sigma_val, "as no valid kernels were generated across slides."))
     }
   }
   
@@ -734,7 +734,7 @@ setMethod("computeKernelMatrix", "CoProMulti",
       cat("current sigma value is", sigma_val, "\n")
     }
     
-    sigma_valid_across_slides <- TRUE
+    sigma_has_valid_kernel <- FALSE
     
     for (sID in slides) {
       for (pp in seq_len(ncol(pair_cell_types))) {
@@ -745,7 +745,6 @@ setMethod("computeKernelMatrix", "CoProMulti",
         dist_flat_name <- .createDistMatrixName(ct_i, ct_j, slide = sID)
         if (!dist_flat_name %in% names(object@distances)) {
           if (verbose) message(paste("No distance matrix found for", ct_i, "-", ct_j, "in slide", sID))
-          sigma_valid_across_slides <- FALSE
           next
         }
         
@@ -768,7 +767,7 @@ setMethod("computeKernelMatrix", "CoProMulti",
         # Check kernel validity
         if (!.checkKernelValidityMulti(kernel_current, lowerLimit, minAveCellNeighor,
                                       sigma_val, ct_i, ct_j, sID)) {
-          sigma_valid_across_slides <- FALSE
+          next
         }
         
         # Process kernel matrix (clipping and normalization)
@@ -778,13 +777,14 @@ setMethod("computeKernelMatrix", "CoProMulti",
         # Store in flat structure
         flat_name <- .createKernelMatrixName(sigma_val, ct_i, ct_j, slide = sID)
         kernel_matrices_all[[flat_name]] <- kernel_current
+        sigma_has_valid_kernel <- TRUE
       }
     }
     
-    # Mark sigma for removal if invalid across slides
-    if (!sigma_valid_across_slides) {
+    # Remove sigma only when no valid kernels were generated in any slide/pair.
+    if (!sigma_has_valid_kernel) {
       sigmaValuesToRemove[sigma_name] <- TRUE
-      warning(paste("Removing sigma value", sigma_val, "as it was invalid for one or more slides."))
+      warning(paste("Removing sigma value", sigma_val, "as no valid kernels were generated across slides."))
     }
   }
   
