@@ -71,8 +71,8 @@ setClass("CoPro", contains  = "VIRTUAL",
     slots = list(
 
            ## cell by gene data matrix
-           normalizedData = "matrixOrSparseMatrix",
-           normalizedDataSub = "matrixOrSparseMatrix",
+           normalizedData = "ANY",
+           normalizedDataSub = "ANY",
            integratedData = "list", # Stores output of integrateSlidesMulti
 
            ## location data

@@ -112,8 +112,9 @@
 #' @param n_cores Number of cores (multi-slide only)
 #' @return List with validated parameters
 #' @noRd
-.validateSkrCCAInputs <- function(object, scalePCs, nCC, tol, maxIter, 
-                                 sigmaChoice = NULL, n_cores = 1) {
+.validateSkrCCAInputs <- function(object, scalePCs, nCC, tol, maxIter,
+                                 sigmaChoice = NULL, n_cores = 1,
+                                 step_size = 1) {
   
   # check if scalePCs is a logical value
   if (!is.logical(scalePCs) || length(scalePCs) != 1) {
@@ -136,7 +137,11 @@
   if (!is.numeric(n_cores) || length(n_cores) != 1 || n_cores <= 0 || n_cores != as.integer(n_cores)) {
     stop("n_cores must be a positive integer")
   }
-  
+
+  if (!is.numeric(step_size) || length(step_size) != 1 || step_size <= 0 || step_size > 1) {
+    stop("step_size must be a single numeric value in (0, 1]")
+  }
+
   # Check kernel matrices
   if (length(object@kernelMatrices) == 0) {
     stop("Kernel matrix is empty, please run computeKernelMatrix first")
@@ -166,7 +171,11 @@
         stop("No valid sigma values found in object.")
       }
     } else {
-      if (!paste0("sigma_", sigmaChoice) %in% names(object@kernelMatrices)) {
+      # Check if any kernel matrix name contains this sigma value
+      sigma_prefix <- paste0("sigma", sigmaChoice)
+      has_sigma <- any(grepl(paste0("(^|\\|)", sigma_prefix, "(\\||$)"),
+                             names(object@kernelMatrices)))
+      if (!has_sigma) {
         stop(paste("Chosen sigma value", sigmaChoice, "not found or was invalid."))
       }
       sigmas_to_run <- sigmaChoice
@@ -235,6 +244,19 @@
 #' @return List containing prepared matrices (X_list_all for multi-slide, PCmats for single-slide)
 #' @noRd
 .prepareDataMatrices <- function(object, is_multi, scalePCs, cts) {
+  # When scalePCs = FALSE, build sdev2_list so the optimizer can enforce
+  # the correct CCA constraint w'(X'X)w = 1 via weighted normalization.
+  # When scalePCs = TRUE, X is already whitened so sdev2_list = NULL
+  # and the standard ||w|| = 1 constraint is equivalent.
+  if (!scalePCs) {
+    sdev2_list <- setNames(
+      lapply(cts, function(ct) object@pcaGlobal[[ct]]$sdev^2),
+      cts
+    )
+  } else {
+    sdev2_list <- NULL
+  }
+
   if (is_multi) {
     slides <- getSlideList(object)
     X_list_all <- .preparePCMatrices(
@@ -244,14 +266,14 @@
       slides = slides,
       cts = cts
     )
-    return(list(X_list_all = X_list_all, slides = slides))
+    return(list(X_list_all = X_list_all, slides = slides, sdev2_list = sdev2_list))
   } else {
     PCmats <- .preparePCMatrices(
       pca_global = object@pcaGlobal,
       scalePCs = scalePCs,
       cts = cts
     )
-    return(list(PCmats = PCmats))
+    return(list(PCmats = PCmats, sdev2_list = sdev2_list))
   }
 }
 
@@ -267,26 +289,27 @@
 #' @param maxIter Maximum iterations
 #' @param tol Tolerance
 #' @param n_cores Number of cores
+#' @param step_size Step size for damped power iteration
 #' @return Optimization result or NULL if failed
 #' @noRd
 .runSingleSigmaOptimization <- function(object, sig_val, sig_name, data_matrices,
                                        transferred_weight_1, is_multi, cts, nCC,
-                                       maxIter, tol, n_cores) {
+                                       maxIter, tol, n_cores, step_size = 1) {
   
   tryCatch({
     # Get first component
     cca_result_1 <- .getFirstComponent(
       object, sig_name, data_matrices, transferred_weight_1,
-      is_multi, cts, maxIter, tol, n_cores
+      is_multi, cts, maxIter, tol, n_cores, step_size
     )
-    
+
     # Handle multiple components if needed
     if (nCC == 1) {
       return(cca_result_1)
     } else {
       return(.getSubsequentComponents(
         object, sig_name, data_matrices, cca_result_1,
-        is_multi, cts, nCC, maxIter, tol, n_cores
+        is_multi, cts, nCC, maxIter, tol, n_cores, step_size
       ))
     }
     
@@ -313,10 +336,12 @@
 #' @param maxIter Maximum iterations
 #' @param tol Tolerance
 #' @param n_cores Number of cores
+#' @param step_size Step size for damped power iteration
 #' @return First component result
 #' @noRd
 .getFirstComponent <- function(object, sig_name, data_matrices, transferred_weight_1,
-                              is_multi, cts, maxIter, tol, n_cores) {
+                              is_multi, cts, maxIter, tol, n_cores,
+                              step_size = 1) {
   
   # Use transferred weights if provided
   if (!is.null(transferred_weight_1)) {
@@ -334,19 +359,23 @@
       flat_kernels = object@kernelMatrices,
       sigma = sigma_val,
       slides = slides,
-      max_iter = maxIter, 
-      tol = tol, 
-      n_cores = n_cores
+      max_iter = maxIter,
+      tol = tol,
+      n_cores = n_cores,
+      step_size = step_size,
+      sdev2_list = data_matrices$sdev2_list
     ))
-    
+
   } else {
     # Run single-slide optimization with flat kernels
     return(optimize_bilinear(
       X_list = data_matrices$PCmats,
       flat_kernels = object@kernelMatrices,
       sigma = sigma_val,
-      max_iter = maxIter, 
-      tol = tol
+      max_iter = maxIter,
+      tol = tol,
+      step_size = step_size,
+      sdev2_list = data_matrices$sdev2_list
     ))
   }
 }
@@ -362,10 +391,12 @@
 #' @param maxIter Maximum iterations
 #' @param tol Tolerance
 #' @param n_cores Number of cores
+#' @param step_size Step size for damped power iteration
 #' @return All components result
 #' @noRd
 .getSubsequentComponents <- function(object, sig_name, data_matrices, cca_result_1,
-                                    is_multi, cts, nCC, maxIter, tol, n_cores) {
+                                    is_multi, cts, nCC, maxIter, tol, n_cores,
+                                    step_size = 1) {
   
   # Extract sigma value from sigma name
   sigma_val <- as.numeric(gsub("sigma_", "", sig_name))
@@ -381,21 +412,25 @@
       w_list = cca_result_1,
       cellTypesOfInterest = cts,
       nCC = nCC,
-      max_iter = maxIter, 
+      max_iter = maxIter,
       tol = tol,
-      n_cores = n_cores
+      n_cores = n_cores,
+      step_size = step_size,
+      sdev2_list = data_matrices$sdev2_list
     )
   } else {
     # Run single-slide optimization with flat kernels
     cca_result_n <- optimize_bilinear_n(
-      X_list = data_matrices$PCmats, 
+      X_list = data_matrices$PCmats,
       flat_kernels = object@kernelMatrices,
       sigma = sigma_val,
       w_list = cca_result_1,
-      cellTypesOfInterest = cts, 
+      cellTypesOfInterest = cts,
       nCC = nCC,
-      max_iter = maxIter, 
-      tol = tol
+      max_iter = maxIter,
+      tol = tol,
+      step_size = step_size,
+      sdev2_list = data_matrices$sdev2_list
     )
   }
   
@@ -450,7 +485,7 @@
 #' @return Updated object with skrCCA results
 #' @noRd
 .runSkrCCAUnified <- function(object, validation_result,
- scalePCs, nCC, tol, transferred_weight_1, maxIter) {
+ scalePCs, nCC, tol, transferred_weight_1, maxIter, step_size = 1) {
   
   # Extract parameters from validation result
   cts <- validation_result$cts
@@ -476,7 +511,7 @@
     # Run optimization for this sigma
     cca_out[[sig_name]] <- .runSingleSigmaOptimization(
       object, sig_val, sig_name, data_matrices, transferred_weight_1,
-      is_multi, cts, nCC, maxIter, tol, n_cores
+      is_multi, cts, nCC, maxIter, tol, n_cores, step_size
     )
   }
   
@@ -502,6 +537,9 @@
 #' @param maxIter Maximum iterations
 #' @param sigmaChoice Specific sigma value to use (CoProMulti only, ignored for CoPro)
 #' @param n_cores Number of cores for parallel processing (CoProMulti only, ignored for CoPro)
+#' @param step_size Step size for damped power iteration. Default 1 (standard
+#'   power iteration). Values in (0,1) blend old and new weights for smoother
+#'   convergence, which can help with many cells or many CCs.
 #'
 #' @return CoPro object with skrCCA results computed
 #' @export
@@ -510,7 +548,8 @@ setGeneric(
   "runSkrCCA",
   function(object, scalePCs = TRUE, nCC = 2, tol = 1e-5,
            transferred_weight_1 = NULL,
-           maxIter = 200, sigmaChoice = NULL, n_cores = 1) standardGeneric("runSkrCCA"))
+           maxIter = 200, sigmaChoice = NULL, n_cores = 1,
+           step_size = 1) standardGeneric("runSkrCCA"))
 
 #' @rdname runSkrCCA
 #' @aliases runSkrCCA,CoPro-method
@@ -519,21 +558,21 @@ setMethod(
   "runSkrCCA", "CoPro",
   function(object, scalePCs = TRUE, nCC = 2, tol = 1e-5,
            transferred_weight_1 = NULL,
-           maxIter = 200, sigmaChoice = NULL, n_cores = 1) {
-    
+           maxIter = 200, sigmaChoice = NULL, n_cores = 1,
+           step_size = 1) {
 
     # validate inputs
     validation_result <- .validateSkrCCAInputs(
-      object, scalePCs, nCC, tol, maxIter, sigmaChoice, n_cores
+      object, scalePCs, nCC, tol, maxIter, sigmaChoice, n_cores, step_size
     )
     # validate transferred_weight_1
     if(!is.null(transferred_weight_1)){
-      .check_input_transferred_weight_1(transferred_weight_1, 
+      .check_input_transferred_weight_1(transferred_weight_1,
       cts = validation_result$cts, nPCA = object@nPCA)
     }
     # run skrCCA
     object <- .runSkrCCAUnified(object, validation_result, scalePCs,
-     nCC, tol, transferred_weight_1, maxIter)
+     nCC, tol, transferred_weight_1, maxIter, step_size)
     object@scalePCs = scalePCs
     return(object)
   }
@@ -546,20 +585,21 @@ setMethod(
   "runSkrCCA", "CoProMulti",
   function(object, scalePCs = TRUE, nCC = 2, tol = 1e-5,
           transferred_weight_1 = NULL,
-           maxIter = 200, sigmaChoice = NULL, n_cores = 1) {
-    
+           maxIter = 200, sigmaChoice = NULL, n_cores = 1,
+           step_size = 1) {
+
     # validate inputs
     validation_result <- .validateSkrCCAInputs(
-      object, scalePCs, nCC, tol, maxIter, sigmaChoice, n_cores
+      object, scalePCs, nCC, tol, maxIter, sigmaChoice, n_cores, step_size
     )
     # validate transferred_weight_1
     if(!is.null(transferred_weight_1)){
-      .check_input_transferred_weight_1(transferred_weight_1, 
+      .check_input_transferred_weight_1(transferred_weight_1,
       cts = validation_result$cts, nPCA = object@nPCA)
     }
     # run skrCCA
     object <- .runSkrCCAUnified(object, validation_result, scalePCs,
-     nCC, tol, transferred_weight_1, maxIter)
+     nCC, tol, transferred_weight_1, maxIter, step_size)
     object@scalePCs = scalePCs
     return(object)
   }

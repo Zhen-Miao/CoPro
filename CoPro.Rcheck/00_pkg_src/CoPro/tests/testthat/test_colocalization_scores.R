@@ -1,7 +1,7 @@
 # Test colocalization scores function
 test_that("Colocalization scores function works correctly", {
   skip_if_not_installed("spatstat.geom")
-  skip_if_not_installed("spatstat.core")
+  skip_if_not_installed("spatstat.explore")
   skip_if_not_installed("CoPro")
   
   # Test that functions exist and have correct signatures

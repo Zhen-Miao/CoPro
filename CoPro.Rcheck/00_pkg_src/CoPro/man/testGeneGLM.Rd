@@ -27,7 +27,7 @@ testGeneGLM(
 \item{frm}{formula}
 }
 \value{
-lm.fit results
+lm results
 }
 \description{
 testGeneGLM

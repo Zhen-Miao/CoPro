@@ -320,10 +320,11 @@ setGeneric("getCellScoresInSitu",
   cell_ids_meta <- rownames(object@metaDataSub)
   common_cells <- intersect(cell_ids_meta, rownames(combined_loc_t))
   if (length(common_cells) > 0) {
-    # Reorder based on the original order in metaDataSub
-    combined_loc_t <- combined_loc_t[common_cells, , drop = FALSE]
-    # Ensure the order matches exactly with metaDataSub
-    combined_loc_t <- combined_loc_t[match(common_cells, cell_ids_meta), , drop = FALSE]
+    # Reorder to match the original order in metaDataSub
+    # common_cells is already ordered by cell_ids_meta (from intersect above)
+    # Reorder combined_loc_t rows to match the metaDataSub order
+    meta_order <- cell_ids_meta[cell_ids_meta %in% rownames(combined_loc_t)]
+    combined_loc_t <- combined_loc_t[meta_order, , drop = FALSE]
   } else {
     warning("No common cell IDs found between combined_loc_t and metaDataSub")
   }

@@ -37,6 +37,29 @@ Type 'q()' to quit R.
 > base::assign(".oldSearch", base::search(), pos = 'CheckExEnv')
 > base::assign(".old_wd", base::getwd(), pos = 'CheckExEnv')
 > cleanEx()
+> nameEx("calculate_pvalue")
+> ### * calculate_pvalue
+> 
+> flush(stderr()); flush(stdout())
+> 
+> base::assign(".ptime", proc.time(), pos = "CheckExEnv")
+> ### Name: calculate_pvalue
+> ### Title: Calculate P-value from Permutation Results
+> ### Aliases: calculate_pvalue
+> 
+> ### ** Examples
+> 
+> ## Not run: 
+> ##D result <- calculate_pvalue(br, cc_index = 1, alternative = "greater")
+> ##D print(paste("P-value:", result$p_value))
+> ## End(Not run)
+> 
+> 
+> 
+> 
+> base::assign(".dptime", (proc.time() - get(".ptime", pos = "CheckExEnv")), pos = "CheckExEnv")
+> base::cat("calculate_pvalue", base::get(".format_ptime", pos = 'CheckExEnv')(get(".dptime", pos = "CheckExEnv")), "\n", file=base::get(".ExTimings", pos = 'CheckExEnv'), append=TRUE, sep="\t")
+> cleanEx()
 > nameEx("computeBidirCorrelation")
 > ### * computeBidirCorrelation
 > 
@@ -64,6 +87,37 @@ Type 'q()' to quit R.
 > base::assign(".dptime", (proc.time() - get(".ptime", pos = "CheckExEnv")), pos = "CheckExEnv")
 > base::cat("computeBidirCorrelation", base::get(".format_ptime", pos = 'CheckExEnv')(get(".dptime", pos = "CheckExEnv")), "\n", file=base::get(".ExTimings", pos = 'CheckExEnv'), append=TRUE, sep="\t")
 > cleanEx()
+> nameEx("computeNormalizedCorrelationPermu")
+> ### * computeNormalizedCorrelationPermu
+> 
+> flush(stderr()); flush(stdout())
+> 
+> base::assign(".ptime", proc.time(), pos = "CheckExEnv")
+> ### Name: computeNormalizedCorrelationPermu
+> ### Title: Compute Normalized Correlation for Permutation Results
+> ### Aliases: computeNormalizedCorrelationPermu
+> 
+> ### ** Examples
+> 
+> ## Not run: 
+> ##D # After running permutation testing
+> ##D br <- computeNormalizedCorrelationPermu(br)
+> ##D 
+> ##D # Extract permutation values and calculate p-value
+> ##D permu_values <- sapply(br@normalizedCorrelationPermu,
+> ##D                        function(x) x$normalizedCorrelation[1])
+> ##D observed <- max(getNormCorr(br)$normalizedCorrelation)
+> ##D 
+> ##D # One-sided p-value (testing if observed > permutation)
+> ##D p_value <- mean(permu_values >= observed)
+> ## End(Not run)
+> 
+> 
+> 
+> 
+> base::assign(".dptime", (proc.time() - get(".ptime", pos = "CheckExEnv")), pos = "CheckExEnv")
+> base::cat("computeNormalizedCorrelationPermu", base::get(".format_ptime", pos = 'CheckExEnv')(get(".dptime", pos = "CheckExEnv")), "\n", file=base::get(".ExTimings", pos = 'CheckExEnv'), append=TRUE, sep="\t")
+> cleanEx()
 > nameEx("computeSelfBidirCorr")
 > ### * computeSelfBidirCorr
 > 
@@ -85,6 +139,7 @@ Type 'q()' to quit R.
 > ##D # Compute self-bidirectional correlation using native skrCCA results
 > ##D self_bidir <- computeSelfBidirCorr(object, sigma_choice = 0.05)
 > ## End(Not run)
+> 
 > 
 > 
 > 
@@ -151,6 +206,41 @@ Type 'q()' to quit R.
 > base::assign(".dptime", (proc.time() - get(".ptime", pos = "CheckExEnv")), pos = "CheckExEnv")
 > base::cat("computeSelfKernel", base::get(".format_ptime", pos = 'CheckExEnv')(get(".dptime", pos = "CheckExEnv")), "\n", file=base::get(".ExTimings", pos = 'CheckExEnv'), append=TRUE, sep="\t")
 > cleanEx()
+> nameEx("compute_ground_truth_ncorr")
+> ### * compute_ground_truth_ncorr
+> 
+> flush(stderr()); flush(stdout())
+> 
+> base::assign(".ptime", proc.time(), pos = "CheckExEnv")
+> ### Name: compute_ground_truth_ncorr
+> ### Title: Compute Normalized Correlation from Ground Truth Scores
+> ### Aliases: compute_ground_truth_ncorr
+> 
+> ### ** Examples
+> 
+> ## Not run: 
+> ##D # After running CoPro analysis on simulated data
+> ##D # Get ground truth scores from metadata
+> ##D meta <- br@metaDataSub
+> ##D gt_scores_A <- meta$smoothed_score[meta$cell_type == "A"]
+> ##D gt_scores_B <- meta$smoothed_score[meta$cell_type == "B"]
+> ##D 
+> ##D # Compute ground truth normalized correlation
+> ##D gt_ncorr <- compute_ground_truth_ncorr(
+> ##D   object = br,
+> ##D   scores_ct1 = gt_scores_A,
+> ##D   scores_ct2 = gt_scores_B,
+> ##D   cellType1 = "A",
+> ##D   cellType2 = "B"
+> ##D )
+> ## End(Not run)
+> 
+> 
+> 
+> 
+> base::assign(".dptime", (proc.time() - get(".ptime", pos = "CheckExEnv")), pos = "CheckExEnv")
+> base::cat("compute_ground_truth_ncorr", base::get(".format_ptime", pos = 'CheckExEnv')(get(".dptime", pos = "CheckExEnv")), "\n", file=base::get(".ExTimings", pos = 'CheckExEnv'), append=TRUE, sep="\t")
+> cleanEx()
 > nameEx("ensureBidirCorrelationSlot")
 > ### * ensureBidirCorrelationSlot
 > 
@@ -170,6 +260,39 @@ Type 'q()' to quit R.
 > 
 > base::assign(".dptime", (proc.time() - get(".ptime", pos = "CheckExEnv")), pos = "CheckExEnv")
 > base::cat("ensureBidirCorrelationSlot", base::get(".format_ptime", pos = 'CheckExEnv')(get(".dptime", pos = "CheckExEnv")), "\n", file=base::get(".ExTimings", pos = 'CheckExEnv'), append=TRUE, sep="\t")
+> cleanEx()
+> nameEx("generate_toroidal_permutations")
+> ### * generate_toroidal_permutations
+> 
+> flush(stderr()); flush(stdout())
+> 
+> base::assign(".ptime", proc.time(), pos = "CheckExEnv")
+> ### Name: generate_toroidal_permutations
+> ### Title: Generate Toroidal Shift Permutation Indices
+> ### Aliases: generate_toroidal_permutations
+> 
+> ### ** Examples
+> 
+> ## Not run: 
+> ##D # Create example location data
+> ##D loc_data <- data.frame(
+> ##D   x = runif(100, 0, 10),
+> ##D   y = runif(100, 0, 10),
+> ##D   cell_ID = paste0("cell_", 1:100)
+> ##D )
+> ##D 
+> ##D # Generate 100 toroidal permutations
+> ##D perm_matrix <- generate_toroidal_permutations(loc_data, n_permu = 100)
+> ##D 
+> ##D # Apply first permutation
+> ##D permuted_cells <- loc_data$cell_ID[perm_matrix[, 1]]
+> ## End(Not run)
+> 
+> 
+> 
+> 
+> base::assign(".dptime", (proc.time() - get(".ptime", pos = "CheckExEnv")), pos = "CheckExEnv")
+> base::cat("generate_toroidal_permutations", base::get(".format_ptime", pos = 'CheckExEnv')(get(".dptime", pos = "CheckExEnv")), "\n", file=base::get(".ExTimings", pos = 'CheckExEnv'), append=TRUE, sep="\t")
 > cleanEx()
 > nameEx("getCellScores")
 > ### * getCellScores
@@ -233,6 +356,7 @@ Type 'q()' to quit R.
 > ##D coloc_results <- getColocScores(multi_object)
 > ##D # Results will include slideID column
 > ## End(Not run)
+> 
 > 
 > 
 > 
@@ -316,6 +440,7 @@ Type 'q()' to quit R.
 > 
 > 
 > 
+> 
 > base::assign(".dptime", (proc.time() - get(".ptime", pos = "CheckExEnv")), pos = "CheckExEnv")
 > base::cat("getTransferSelfBidirCorr", base::get(".format_ptime", pos = 'CheckExEnv')(get(".dptime", pos = "CheckExEnv")), "\n", file=base::get(".ExTimings", pos = 'CheckExEnv'), append=TRUE, sep="\t")
 > cleanEx()
@@ -349,14 +474,132 @@ Type 'q()' to quit R.
 > 
 > 
 > 
+> 
 > base::assign(".dptime", (proc.time() - get(".ptime", pos = "CheckExEnv")), pos = "CheckExEnv")
 > base::cat("plotG12Functions", base::get(".format_ptime", pos = 'CheckExEnv')(get(".dptime", pos = "CheckExEnv")), "\n", file=base::get(".ExTimings", pos = 'CheckExEnv'), append=TRUE, sep="\t")
+> cleanEx()
+> nameEx("resample_spatial")
+> ### * resample_spatial
+> 
+> flush(stderr()); flush(stdout())
+> 
+> base::assign(".ptime", proc.time(), pos = "CheckExEnv")
+> ### Name: resample_spatial
+> ### Title: Spatial Resampling for Permutation Testing
+> ### Aliases: resample_spatial
+> 
+> ### ** Examples
+> 
+> ## Not run: 
+> ##D # Create example data
+> ##D loc_data <- data.frame(
+> ##D   x = runif(100, 0, 10),
+> ##D   y = runif(100, 0, 10),
+> ##D   cell_ID = paste0("cell_", 1:100)
+> ##D )
+> ##D 
+> ##D # Check bin distribution first
+> ##D diagnose_bin_distribution(loc_data, num_bins_x = 5, num_bins_y = 5)
+> ##D 
+> ##D # Perform spatial resampling (random within tile)
+> ##D resampled <- resample_spatial(loc_data, num_bins_x = 5, num_bins_y = 5)
+> ##D 
+> ##D # Perform spatial resampling (quantile-matched within tile)
+> ##D resampled_matched <- resample_spatial(loc_data, num_bins_x = 5, num_bins_y = 5,
+> ##D                                       match_quantile = TRUE)
+> ## End(Not run)
+> 
+> 
+> 
+> 
+> base::assign(".dptime", (proc.time() - get(".ptime", pos = "CheckExEnv")), pos = "CheckExEnv")
+> base::cat("resample_spatial", base::get(".format_ptime", pos = 'CheckExEnv')(get(".dptime", pos = "CheckExEnv")), "\n", file=base::get(".ExTimings", pos = 'CheckExEnv'), append=TRUE, sep="\t")
+> cleanEx()
+> nameEx("runSkrCCAPermu")
+> ### * runSkrCCAPermu
+> 
+> flush(stderr()); flush(stdout())
+> 
+> base::assign(".ptime", proc.time(), pos = "CheckExEnv")
+> ### Name: runSkrCCAPermu
+> ### Title: Run Spatial CCA with Permutation Testing
+> ### Aliases: runSkrCCAPermu
+> 
+> ### ** Examples
+> 
+> ## Not run: 
+> ##D # After running standard CoPro analysis
+> ##D br <- runSkrCCA(br, scalePCs = TRUE)
+> ##D br <- computeNormalizedCorrelation(br)
+> ##D 
+> ##D # Standard permutation (only permute second cell type)
+> ##D br <- runSkrCCAPermu(br, nPermu = 100, permu_method = "bin",
+> ##D                      permu_which = "second_only")
+> ##D 
+> ##D # Conservative permutation (lower FPR - better preserves spatial structure)
+> ##D br <- runSkrCCAPermu(br, nPermu = 100, conservative = TRUE)
+> ##D 
+> ##D # Manual conservative settings: more bins + quantile matching
+> ##D br <- runSkrCCAPermu(br, nPermu = 100, permu_method = "bin",
+> ##D                      permu_which = "second_only",
+> ##D                      num_bins_x = 15, num_bins_y = 15,
+> ##D                      match_quantile = TRUE)
+> ##D 
+> ##D # PC-space permutation (like DIALOGUE) - shuffles within PC dimensions
+> ##D br <- runSkrCCAPermu(br, nPermu = 100, permu_method = "pc",
+> ##D                      permu_which = "second_only")
+> ##D 
+> ##D br <- computeNormalizedCorrelationPermu(br)
+> ##D 
+> ##D # Calculate p-value
+> ##D observed <- max(getNormCorr(br)$normalizedCorrelation)
+> ##D permu_values <- sapply(br@normalizedCorrelationPermu,
+> ##D                        function(x) x$normalizedCorrelation[1])
+> ##D p_value <- mean(permu_values >= observed)
+> ## End(Not run)
+> 
+> 
+> 
+> 
+> base::assign(".dptime", (proc.time() - get(".ptime", pos = "CheckExEnv")), pos = "CheckExEnv")
+> base::cat("runSkrCCAPermu", base::get(".format_ptime", pos = 'CheckExEnv')(get(".dptime", pos = "CheckExEnv")), "\n", file=base::get(".ExTimings", pos = 'CheckExEnv'), append=TRUE, sep="\t")
+> cleanEx()
+> nameEx("runSkrCCAPermu_FairSigma")
+> ### * runSkrCCAPermu_FairSigma
+> 
+> flush(stderr()); flush(stdout())
+> 
+> base::assign(".ptime", proc.time(), pos = "CheckExEnv")
+> ### Name: runSkrCCAPermu_FairSigma
+> ### Title: Run Permutation Test with Fair Sigma Selection
+> ### Aliases: runSkrCCAPermu_FairSigma
+> 
+> ### ** Examples
+> 
+> ## Not run: 
+> ##D # After running standard CoPro analysis
+> ##D br <- runSkrCCA(br, scalePCs = TRUE)
+> ##D br <- computeNormalizedCorrelation(br)
+> ##D 
+> ##D # Run fair sigma permutation test
+> ##D br <- runSkrCCAPermu_FairSigma(br, nPermu = 100,
+> ##D                                 permu_method = "toroidal")
+> ##D 
+> ##D # Calculate p-value
+> ##D result <- calculate_pvalue(br)
+> ## End(Not run)
+> 
+> 
+> 
+> 
+> base::assign(".dptime", (proc.time() - get(".ptime", pos = "CheckExEnv")), pos = "CheckExEnv")
+> base::cat("runSkrCCAPermu_FairSigma", base::get(".format_ptime", pos = 'CheckExEnv')(get(".dptime", pos = "CheckExEnv")), "\n", file=base::get(".ExTimings", pos = 'CheckExEnv'), append=TRUE, sep="\t")
 > ### * <FOOTER>
 > ###
 > cleanEx()
 > options(digits = 7L)
 > base::cat("Time elapsed: ", proc.time() - base::get("ptime", pos = 'CheckExEnv'),"\n")
-Time elapsed:  1.685 0.074 2.26 0 0 
+Time elapsed:  2.295 0.099 2.922 0 0 
 > grDevices::dev.off()
 null device 
           1 

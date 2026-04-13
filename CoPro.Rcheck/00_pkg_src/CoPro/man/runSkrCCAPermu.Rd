@@ -2,7 +2,7 @@
 % Please edit documentation in R/D_spatial_CCA_permutation.R
 \name{runSkrCCAPermu}
 \alias{runSkrCCAPermu}
-\title{runSkrCCAPermu}
+\title{Run Spatial CCA with Permutation Testing}
 \usage{
 runSkrCCAPermu(
   object,
@@ -10,34 +10,172 @@ runSkrCCAPermu(
   nPermu = 20,
   maxIter = 200,
   permu_method = "bin",
+  permu_which = "second_only",
   num_bins_x = 10,
   num_bins_y = 10,
+  match_quantile = FALSE,
+  conservative = FALSE,
+  n_cores = 1,
   verbose = TRUE
 )
 }
 \arguments{
-\item{object}{A \code{CoPro} object}
+\item{object}{A \code{CoPro} object with CCA already computed via \code{runSkrCCA()}}
 
-\item{tol}{Tolerance for termination, default = 1e-5}
+\item{tol}{Tolerance for CCA optimization convergence (default: 1e-5)}
 
-\item{nPermu}{Number of permutation to run, default = 20}
+\item{nPermu}{Number of permutations to run (default: 20).
+Increase to 100+ for publication-quality p-values.}
 
-\item{maxIter}{Maximum iterations}
+\item{maxIter}{Maximum iterations for CCA optimization (default: 200)}
 
-\item{permu_method}{Method of permutation. Must be "global" or "bin".
-Default = "bin", which will shuffle the cells by bin.
-This will conserve local bin structures, so that local covariance
-will be maintained}
+\item{permu_method}{Method of permutation:
+\itemize{
+\item "bin" (default): Bin-wise permutation preserving local spatial structure
+\item "global": Simple random permutation breaking all spatial structure
+\item "pc": PC-space permutation (like DIALOGUE) - shuffles values within each
+PC dimension, breaking cell correlation while preserving PC distributions
+\item "toroidal": Toroidal shift permutation - perfectly preserves spatial
+autocorrelation by shifting coordinates in wrap-around manner
+}}
 
-\item{num_bins_x}{Number of bins in x for bin-wise permutation, default = 10}
+\item{permu_which}{Which cell types to permute:
+\itemize{
+\item "second_only" (default): Keep first cell type fixed, permute others
+\item "both": Permute all cell types independently (more conservative)
+\item "first_only": Keep others fixed, permute only the first cell type
+}}
 
-\item{num_bins_y}{Number of bins in y for bin-wise permutation, default = 10}
+\item{num_bins_x}{Number of bins in x direction for bin-wise permutation (default: 10).
+Use \code{diagnose_bin_distribution()} to choose appropriate values.
+\strong{More bins = better preserve local structure = lower FPR.}}
 
-\item{verbose}{Whether to output the progress and related information}
+\item{num_bins_y}{Number of bins in y direction for bin-wise permutation (default: 10).
+\strong{More bins = better preserve local structure = lower FPR.}}
+
+\item{match_quantile}{Logical. If TRUE and \code{permu_method = "bin"}, matches cells
+between tiles based on their relative (quantile) x/y positions. This better
+preserves within-tile spatial autocorrelation structure. Default: FALSE.
+\strong{Setting TRUE helps reduce FPR by better preserving spatial structure.}}
+
+\item{conservative}{Logical. If TRUE, automatically uses settings that better
+preserve spatial autocorrelation to reduce false positive rate:
+\code{permu_which = "second_only"}, \code{num_bins_x = 15}, \code{num_bins_y = 15},
+\code{match_quantile = TRUE}. Default: FALSE.}
+
+\item{n_cores}{Number of cores for parallel computation (default: 1).
+Set to higher values to speed up permutation testing. Use \code{parallel::detectCores()}
+to find available cores. Parallelization uses the \code{parallel} package.}
+
+\item{verbose}{Whether to print progress messages (default: TRUE)}
 }
 \value{
-CoPro object with distnace matrix computed
+CoPro object with permutation results stored in \verb{@skrCCAPermuOut}
 }
 \description{
-runSkrCCAPermu
+Performs permutation testing to assess the significance of spatial
+co-progression detected by CoPro. This generates a null distribution
+by permuting cell assignments while optionally preserving spatial structure.
+}
+\details{
+\subsection{Permutation Methods}{
+
+The function supports three permutation methods:
+
+\strong{"global"}: Simple random shuffling of cells. This breaks ALL spatial
+structure and tests against a null of complete spatial randomness.
+
+\strong{"bin"} (default): Bin-wise shuffling that preserves local spatial
+structure. This tests against a null where cells have spatial autocorrelation
+within their type, but no coordination across types.
+
+\strong{"pc"}: PC-space permutation (like DIALOGUE). Shuffles values within each
+PC dimension across cells, breaking cell-to-cell correlation while preserving
+the marginal distribution of each PC. This is the same approach used by
+DIALOGUE's internal significance testing. Use this to compare with DIALOGUE's
+conservative behavior.
+
+\strong{"toroidal"}: Toroidal (wrap-around) shift permutation. Shifts all cells'
+coordinates by a random amount, wrapping at boundaries. This PERFECTLY
+preserves spatial autocorrelation within each cell type because relative
+positions are unchanged. Best choice for reducing FPR when spatial
+autocorrelation is strong.
+}
+
+\subsection{Which Cell Types to Permute}{
+
+The \code{permu_which} parameter controls which cell types are permuted:
+
+\strong{"second_only"} (default): Keep the first cell type FIXED, permute all others.
+This is the standard approach for permutation testing. For two cell types A and B,
+only B is permuted while A stays fixed.
+
+\strong{"both"}: Permute ALL cell types independently. Both A and B are shuffled
+with different random permutations. This breaks MORE structure and may
+lead to higher FPR. Use "second_only" for better FPR control.
+
+\strong{"first_only"}: Keep second+ cell types FIXED, permute only the first.
+Useful if you want to test from the opposite direction.
+}
+
+\subsection{Controlling False Positive Rate}{
+
+High FPR under null simulations typically means the permutation is \strong{breaking
+too much spatial structure}, making the null distribution too low, so that
+even random observed values appear significant.
+
+To \strong{reduce FPR}, you need to \strong{better preserve spatial autocorrelation}:
+\enumerate{
+\item \strong{Use MORE bins} (not fewer): \verb{num_bins_x = 15, num_bins_y = 15} preserves
+more local structure than the default 10x10.
+\item \strong{Enable quantile matching}: \code{match_quantile = TRUE} matches cells by their
+relative positions within tiles, better preserving within-tile structure.
+\item \strong{Only permute one cell type}: \code{permu_which = "second_only"} (default)
+keeps one cell type fixed, preserving more structure than "both".
+\item \strong{Avoid global permutation}: \code{permu_method = "global"} breaks ALL spatial
+structure and will likely have high FPR.
+}
+
+The key insight: if permutation doesn't adequately preserve within-type spatial
+autocorrelation, the null distribution will be too low, leading to inflated
+significance.
+}
+}
+\examples{
+\dontrun{
+# After running standard CoPro analysis
+br <- runSkrCCA(br, scalePCs = TRUE)
+br <- computeNormalizedCorrelation(br)
+
+# Standard permutation (only permute second cell type)
+br <- runSkrCCAPermu(br, nPermu = 100, permu_method = "bin",
+                     permu_which = "second_only")
+
+# Conservative permutation (lower FPR - better preserves spatial structure)
+br <- runSkrCCAPermu(br, nPermu = 100, conservative = TRUE)
+
+# Manual conservative settings: more bins + quantile matching
+br <- runSkrCCAPermu(br, nPermu = 100, permu_method = "bin",
+                     permu_which = "second_only",
+                     num_bins_x = 15, num_bins_y = 15,
+                     match_quantile = TRUE)
+
+# PC-space permutation (like DIALOGUE) - shuffles within PC dimensions
+br <- runSkrCCAPermu(br, nPermu = 100, permu_method = "pc",
+                     permu_which = "second_only")
+
+br <- computeNormalizedCorrelationPermu(br)
+
+# Calculate p-value
+observed <- max(getNormCorr(br)$normalizedCorrelation)
+permu_values <- sapply(br@normalizedCorrelationPermu,
+                       function(x) x$normalizedCorrelation[1])
+p_value <- mean(permu_values >= observed)
+}
+
+}
+\seealso{
+\code{\link{computeNormalizedCorrelationPermu}} to compute normalized
+correlation from permutation results
+\code{\link{diagnose_bin_distribution}} to check bin distribution
 }

@@ -26,6 +26,9 @@
 
 \item{scale.}{Whether to scale the matrix before PCA}
 
+\item{scalePCs}{Logical; whether PCA outputs are intended to be scaled in
+downstream CCA optimization. Stored in the object for later use.}
+
 \item{dataUse}{What data to use, choices between "raw" and "integrated".
 Default is "raw". For single slide, this argument is ignored.}
 

@@ -179,11 +179,14 @@ setGeneric(
           cc_name <- paste0("CC_", cc_index)
           w_1 <- object@skrCCAOut[[t]][[i]][, cc_index, drop = FALSE]
 
-          ## get the sdev of the PCs
+          ## Map CCA weight from PC space back to gene space.
+          ## gene_score = R %*% diag(1/sdev) %*% w  (regression coefficient)
+          ## This inverts the sdev scaling applied during PCA whitening,
+          ## giving the correct per-gene weight for score transfer.
           if(!scalePCs) {
             sdev_use <- 1L
           } else {
-            sdev_use <- object@pcaGlobal[[i]]$sdev
+            sdev_use <- 1 / object@pcaGlobal[[i]]$sdev
           }
 
           ## compute the gene scores
@@ -226,9 +229,12 @@ setGeneric(
 
 .createScoreMatrix <- function(nrows, ncols, row_names = NULL, col_names = NULL, fill_value = NA) {
   ## Helper function to create matrices with consistent naming
+  if (ncols == 0) {
+    stop("ncols must be > 0 for score matrix creation")
+  }
   mat <- matrix(fill_value, nrow = nrows, ncol = ncols)
   if (is.null(col_names)) {
-    colnames(mat) <- paste0("CC_", 1:ncols)
+    colnames(mat) <- paste0("CC_", seq_len(ncols))
   } else {
     colnames(mat) <- col_names
   }
@@ -249,11 +255,11 @@ setGeneric(
     for (cc in 1:nCC) {
       w_cc <- W_ct[, cc, drop = FALSE]
       
-      ## get the sdev of the PCs
+      ## gene_score = R %*% diag(1/sdev) %*% w (regression coefficient)
       if (!scalePCs) {
         sdev_use <- 1L
       } else {
-        sdev_use <- sdev
+        sdev_use <- 1 / sdev
       }
       
       ## compute the gene scores
@@ -268,40 +274,49 @@ setGeneric(
 }
 
 .computeGACMultiCore <- function(object, cts, sigmaValues, scalePCs, slides) {
-  
+
   # Initialize variables
   nCC <- object@nCC
   sigma_names <- paste("sigma", sigmaValues, sep = "_")
-  
+
   # Initialize data structures - now aggregated across slides
     csgs <- .initializeCSGS(cts, sigma_names, nCC, object)
     cellScores <- csgs$cellScores
     geneScores <- csgs$geneScores
 
+  # Scale per-slide PCA matrices to match optimization (whitening)
+  X_scaled <- .preparePCMatrices(
+    pc_data = object@pcaResults,
+    pca_global = object@pcaGlobal,
+    scalePCs = scalePCs,
+    slides = slides,
+    cts = cts
+  )
+
   ## Iterate over all sigma values and slides to compute and aggregate scores
   for (tt in seq_along(sigmaValues)) {
     t <- sigma_names[tt]
     W_list <- object@skrCCAOut[[t]] # Shared weights for this sigma
-    
+
     # Calculate Cell Scores (Slide-Specific, then aggregated)
     for (sID in slides) {
-      X_list_slide <- object@pcaResults[[sID]]
+      X_list_slide <- X_scaled[[sID]]
       slide_indices <- .getSlideIndices(object, sID)
       meta_slide <- object@metaDataSub[slide_indices, ]
       celltype_slide <- object@cellTypesSub[slide_indices]
-      
+
       for (ct in cts) {
         X_ct <- X_list_slide[[ct]]
         W_ct <- W_list[[ct]] # Shared weight matrix for cell type ct
         check_XW <- .checkXW(X_ct, W_ct, sID, ct)
         cell_ids_ct_slide <- rownames(meta_slide)[celltype_slide == ct]
-        
+
         if (check_XW && length(cell_ids_ct_slide) > 0) {
           # Compute scores for this slide and cell type
           scores_mat_slide <- X_ct %*% W_ct
           colnames(scores_mat_slide) <- paste0("CC_", 1:nCC)
           rownames(scores_mat_slide) <- cell_ids_ct_slide
-          
+
           # Add these scores to the aggregated matrix (flat structure)
           cell_flat_name <- .createCellScoresName(sigmaValues[tt], ct, slide = NULL)
           cellScores[[cell_flat_name]][cell_ids_ct_slide, ] <- scores_mat_slide

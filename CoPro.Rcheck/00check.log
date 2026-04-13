@@ -10,33 +10,40 @@
 * checking for file ‘CoPro/DESCRIPTION’ ... OK
 * this is package ‘CoPro’ version ‘0.6.1’
 * package encoding: UTF-8
-* checking CRAN incoming feasibility ... [10s/33s] NOTE
+* checking CRAN incoming feasibility ... NOTE
 Maintainer: ‘Zhen Miao <zhenmiao@sas.upenn.edu>’
 
 New submission
 
+Suggests or Enhances not in mainstream repositories:
+  BPCells
+
 Found the following (possibly) invalid URLs:
-  URL: https://github.com/Zhen-Miao/CoPro
+  URL: https://github.com/zhenmiao/CoPro
     From: DESCRIPTION
     Status: 404
     Message: Not Found
-  URL: https://github.com/Zhen-Miao/CoPro/issues
+  URL: https://github.com/zhenmiao/CoPro/issues
     From: DESCRIPTION
     Status: 404
     Message: Not Found
 * checking package namespace information ... OK
-* checking package dependencies ... OK
+* checking package dependencies ... INFO
+Packages suggested but not available for checking:
+  'BPCells', 'RcppAnnoy', 'SeuratObject', 'viridis', 'spatstat.geom',
+  'spatstat.explore', 'spatstat.random', 'igraph'
 * checking if this is a source package ... OK
 * checking if there is a namespace ... OK
 * checking for executable files ... OK
 * checking for hidden files and directories ... OK
 * checking for portable file names ... OK
 * checking for sufficient/correct file permissions ... OK
-* checking serialization versions ... OK
-* checking whether package ‘CoPro’ can be installed ... [34s/172s] OK
+* checking whether package ‘CoPro’ can be installed ... [6s/11s] OK
 * checking installed package size ... OK
 * checking package directory ... OK
-* checking for future file timestamps ... OK
+* checking for future file timestamps ... NOTE
+unable to verify current time
+* checking ‘build’ directory ... OK
 * checking DESCRIPTION meta-information ... OK
 * checking top-level files ... OK
 * checking for left-over files ... OK
@@ -44,18 +51,18 @@ Found the following (possibly) invalid URLs:
 * checking package subdirectories ... OK
 * checking code files for non-ASCII characters ... OK
 * checking R files for syntax errors ... OK
-* checking whether the package can be loaded ... [5s/33s] OK
-* checking whether the package can be loaded with stated dependencies ... [4s/28s] OK
-* checking whether the package can be unloaded cleanly ... [5s/25s] OK
-* checking whether the namespace can be loaded with stated dependencies ... [4s/21s] OK
-* checking whether the namespace can be unloaded cleanly ... [5s/20s] OK
-* checking loading without being on the library search path ... [5s/16s] OK
+* checking whether the package can be loaded ... OK
+* checking whether the package can be loaded with stated dependencies ... OK
+* checking whether the package can be unloaded cleanly ... OK
+* checking whether the namespace can be loaded with stated dependencies ... OK
+* checking whether the namespace can be unloaded cleanly ... OK
+* checking loading without being on the library search path ... OK
 * checking use of S3 registration ... OK
 * checking dependencies in R code ... OK
 * checking S3 generic/method consistency ... OK
 * checking replacement functions ... OK
 * checking foreign function calls ... OK
-* checking R code for possible problems ... [10s/12s] OK
+* checking R code for possible problems ... [11s/14s] OK
 * checking Rd files ... OK
 * checking Rd metadata ... OK
 * checking Rd line widths ... OK
@@ -65,11 +72,16 @@ Found the following (possibly) invalid URLs:
 * checking Rd \usage sections ... OK
 * checking Rd contents ... OK
 * checking for unstated dependencies in examples ... OK
+* checking installed files from ‘inst/doc’ ... OK
+* checking files in ‘vignettes’ ... OK
 * checking examples ... OK
 * checking for unstated dependencies in ‘tests’ ... OK
 * checking tests ... OK
   Running ‘testthat.R’
+* checking for unstated dependencies in vignettes ... OK
+* checking package vignettes ... OK
+* checking re-building of vignette outputs ... OK
 * checking for non-standard things in the check directory ... OK
 * checking for detritus in the temp directory ... OK
 * DONE
-Status: 1 NOTE
+Status: 2 NOTEs

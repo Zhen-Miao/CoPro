@@ -14,7 +14,10 @@ computeDistance(
   zDistScale = 1,
   normalizeDistance = TRUE,
   truncateLowDist = TRUE,
-  verbose = TRUE
+  verbose = TRUE,
+  knn_k = 10,
+  geodesic_threshold = 10,
+  geodesic_cutoff = 7
 )
 
 \S4method{computeDistance}{CoProSingle}(
@@ -25,7 +28,10 @@ computeDistance(
   zDistScale = 1,
   normalizeDistance = TRUE,
   truncateLowDist = TRUE,
-  verbose = TRUE
+  verbose = TRUE,
+  knn_k = 10,
+  geodesic_threshold = 10,
+  geodesic_cutoff = 7
 )
 
 \S4method{computeDistance}{CoProMulti}(
@@ -36,7 +42,10 @@ computeDistance(
   zDistScale = 1,
   normalizeDistance = TRUE,
   truncateLowDist = TRUE,
-  verbose = TRUE
+  verbose = TRUE,
+  knn_k = 10,
+  geodesic_threshold = 10,
+  geodesic_cutoff = 7
 )
 }
 \arguments{
@@ -62,6 +71,16 @@ that are nearly overlapping with each other do not have a super small
 distance. Default = TRUE.}
 
 \item{verbose}{Whether to print info about the quantile of the distance}
+
+\item{knn_k}{Number of nearest neighbors for KNN graph construction
+(used only for Morphology-Aware distance). Default = 10.}
+
+\item{geodesic_threshold}{Geodesic distance threshold for regression fitting.
+Cell pairs with geodesic distance <= this value are used to fit the
+regression. Default = 10.}
+
+\item{geodesic_cutoff}{Geodesic distance value at which to evaluate the
+regression for determining the Euclidean distance cutoff. Default = 7.}
 }
 \value{
 \code{CoPro} object with distance matrix computed
@@ -69,6 +88,24 @@ distance. Default = TRUE.}
 \description{
 computeDistance between pairs of cell types
 }
-\note{
-To-do: add morphology-aware kernel
+\details{
+For "Morphology-Aware" distance:
+This method addresses the issue where cells appear spatially close (small
+Euclidean distance) but are actually topologically distant due to tissue
+morphology (e.g., semilunar folds in colon tissue).
+
+The algorithm:
+\enumerate{
+\item Compute Euclidean distances (d_E) between all cells
+\item Build a K-nearest neighbor (KNN) graph and compute geodesic
+distances (d_g) as shortest path distances on this graph
+\item Fit a linear regression between d_g and d_E for cell pairs
+where d_g <= geodesic_threshold (default: 10)
+\item Use the fitted model to predict d_E at d_g = geodesic_cutoff
+(default: 7), this becomes cutoff_d_E
+\item For cell pairs where d_g > geodesic_threshold AND d_E < cutoff_d_E,
+set distance to the maximum distance in the matrix
+}
+
+This requires the igraph package to be installed.
 }

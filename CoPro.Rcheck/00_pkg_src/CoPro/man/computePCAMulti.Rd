@@ -10,6 +10,7 @@ computePCA(
   nPCA = 40,
   center = TRUE,
   scale. = TRUE,
+  scalePCs = TRUE,
   dataUse = "raw",
   center_per_slide = FALSE
 )
@@ -22,6 +23,12 @@ computePCA(
 \item{center}{Whether to center the matrix before PCA}
 
 \item{scale.}{Whether to scale the matrix before PCA}
+
+\item{scalePCs}{Whether to scale (whiten) PCs by their standard deviation
+before downstream CCA optimization. Default \code{TRUE} (recommended). When
+PCs are whitened, the unit-norm constraint \verb{||w|| = 1} is equivalent to
+the standard CCA constraint \verb{||w'X'Xw|| = 1}. Setting this to \code{FALSE}
+distorts the constraint space and may produce unreliable results.}
 
 \item{dataUse}{What data to use, choices between "raw" and "integrated".
 Default is "raw". For single slide, this argument is ignored.}

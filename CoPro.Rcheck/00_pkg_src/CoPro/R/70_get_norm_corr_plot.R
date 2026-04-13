@@ -54,12 +54,33 @@ setGeneric("getNormCorr",
   
   ## organize into a data.frame
   ncorr <- do.call(rbind, normCorr)
+  
+  # Normalize schema across single-slide, multi-slide perSlide, and multi-slide
+  # aggregate outputs.
+  if (!("sigmaValues" %in% colnames(ncorr)) && ("sigmaValue" %in% colnames(ncorr))) {
+    ncorr$"sigmaValues" <- ncorr$"sigmaValue"
+  }
+  if (!("normalizedCorrelation" %in% colnames(ncorr)) &&
+      ("aggregateCorrelation" %in% colnames(ncorr))) {
+    ncorr$"normalizedCorrelation" <- ncorr$"aggregateCorrelation"
+  }
+  if (!("sigmaValues" %in% colnames(ncorr))) {
+    stop("normalizedCorrelation output is missing sigma value columns.")
+  }
+  if (!("normalizedCorrelation" %in% colnames(ncorr))) {
+    stop("normalizedCorrelation output is missing correlation columns.")
+  }
+  
   ncorr$"ct12" <- paste(ncorr$"cellType1", ncorr$"cellType2", sep = "-")
-  ncorr$"sigmaValues" <- factor(ncorr$"sigmaValues",
-    levels = sort(unique(ncorr$"sigmaValues"),
-      decreasing = FALSE
-    )
-  )
+  
+  ## Keep sigmaValues as numeric for easier downstream use
+  ## Convert to numeric if needed (in case they were stored as character)
+  if (!is.numeric(ncorr$"sigmaValues")) {
+    ncorr$"sigmaValues" <- as.numeric(as.character(ncorr$"sigmaValues"))
+  }
+  
+  ## For plotting, users can convert to factor if needed:
+  ## ncorr$sigmaValues <- factor(ncorr$sigmaValues, levels = sort(unique(ncorr$sigmaValues)))
 
   return(ncorr)
   

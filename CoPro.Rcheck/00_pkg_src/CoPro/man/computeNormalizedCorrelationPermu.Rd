@@ -2,22 +2,44 @@
 % Please edit documentation in R/D_spatial_CCA_permutation.R
 \name{computeNormalizedCorrelationPermu}
 \alias{computeNormalizedCorrelationPermu}
-\title{Compute Normalized Correlation under permutation (approximation)}
+\title{Compute Normalized Correlation for Permutation Results}
 \usage{
 computeNormalizedCorrelationPermu(object, tol = 1e-04)
 }
 \arguments{
-\item{object}{A \code{CoPro} object containing CCA results and kernel matrices.}
+\item{object}{A \code{CoPro} object with permutation results from \code{runSkrCCAPermu()}}
 
-\item{tol}{tolerance for approximate SVD calculation}
+\item{tol}{Tolerance for approximate SVD calculation (default: 1e-4)}
 }
 \value{
-The \code{CoPro} object with the normalized correlation value
-between any pair of cell types
-added as a new slot, \code{normalizedCorrelation}.
+The \code{CoPro} object with permutation normalized correlations
+stored in \verb{@normalizedCorrelationPermu}
 }
 \description{
-This method calculates the normalized correlation between pairs of cell types
-based on CCA weights and the respective kernel matrix. It uses
-the spectral norm of the kernel matrix for normalization.
+Calculates the normalized correlation for each permutation, enabling
+p-value calculation by comparing observed values to the null distribution.
+}
+\details{
+The normalized correlation for each permutation is calculated using the
+same formula as the observed data:
+
+\deqn{NC = \frac{s_1^T K_{12} s_2}{||s_1|| \cdot ||s_2|| \cdot ||K_{12}||_2}}
+
+where \eqn{s_1} and \eqn{s_2} are cell scores, \eqn{K_{12}} is the kernel
+matrix, and \eqn{||K_{12}||_2} is the spectral norm.
+}
+\examples{
+\dontrun{
+# After running permutation testing
+br <- computeNormalizedCorrelationPermu(br)
+
+# Extract permutation values and calculate p-value
+permu_values <- sapply(br@normalizedCorrelationPermu,
+                       function(x) x$normalizedCorrelation[1])
+observed <- max(getNormCorr(br)$normalizedCorrelation)
+
+# One-sided p-value (testing if observed > permutation)
+p_value <- mean(permu_values >= observed)
+}
+
 }

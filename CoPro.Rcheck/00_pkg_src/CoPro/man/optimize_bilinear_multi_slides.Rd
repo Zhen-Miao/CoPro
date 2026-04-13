@@ -12,7 +12,9 @@ optimize_bilinear_multi_slides(
   max_iter = 1000,
   tol = 1e-05,
   n_cores = 1,
-  direct_solve = TRUE
+  direct_solve = TRUE,
+  step_size = 1,
+  sdev2_list = NULL
 )
 }
 \arguments{
@@ -31,6 +33,13 @@ optimize_bilinear_multi_slides(
 \item{n_cores}{Number of cores for parallel computation}
 
 \item{direct_solve}{For single cell type, use direct eigenvalue solution}
+
+\item{step_size}{Step size for damped power iteration (default 1).
+Values in (0,1) blend old and new weights for smoother convergence.}
+
+\item{sdev2_list}{Optional named list of squared PCA standard deviations per
+cell type. If provided, weighted normalization is used (for scalePCs = FALSE
+workflows).}
 }
 \value{
 Named list of weight vectors (first component)

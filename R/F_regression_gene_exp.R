@@ -177,7 +177,7 @@ testGeneGLM <- function(
 
   m<-t(apply(X, MARGIN = 2,
              function(x){
-               fit <- lm(formula = as.formula(frm), data = cbind(meta, x = x, y = Y))
+               fit <- lm(formula = stats::as.formula(frm), data = cbind(meta, x = x, y = Y))
                coef(summary(fit))["x", c("Estimate", "Pr(>|t|)")]
              }))
   return(m)

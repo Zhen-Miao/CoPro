@@ -60,12 +60,14 @@ sinkhorn_knopp <- function(A, tol = 1e-8, max_iter = 1000) {
   
   # Apply kernel normalization once based on method
   if (normalize_K == "row_or_col") {
-    # Optimized row/column normalization
+    # Optimized row/column normalization (guard against zero sums)
     K_row_sum <- rowSums(K)
     K_col_sum <- colSums(K)
+    K_row_sum[K_row_sum == 0] <- 1  # avoid division by zero
+    K_col_sum[K_col_sum == 0] <- 1  # avoid division by zero
     K_row_norm <- K / K_row_sum
     K_col_norm <- sweep(K, 2, K_col_sum, "/")
-    
+
     # Compute kernel-weighted matrices for all CC at once
     KA_all <- crossprod(K_row_norm, A_W1_all)  # nCC columns
     KB_all <- K_col_norm %*% B_W2_all         # nCC columns
@@ -102,8 +104,10 @@ sinkhorn_knopp <- function(A, tol = 1e-8, max_iter = 1000) {
       kb <- KB_centered[, cc]
       
       # Correlation = sum(x*y) / sqrt(sum(x^2) * sum(y^2))
-      cor1_all[cc] <- sum(ka * b2) / sqrt(sum(ka^2) * sum(b2^2))
-      cor2_all[cc] <- sum(a1 * kb) / sqrt(sum(a1^2) * sum(kb^2))
+      denom1 <- sqrt(sum(ka^2) * sum(b2^2))
+      denom2 <- sqrt(sum(a1^2) * sum(kb^2))
+      cor1_all[cc] <- if (denom1 < 1e-12) 0 else sum(ka * b2) / denom1
+      cor2_all[cc] <- if (denom2 < 1e-12) 0 else sum(a1 * kb) / denom2
     }
     
     corr_values <- (cor1_all + cor2_all) * 0.5
@@ -147,6 +151,9 @@ sinkhorn_knopp <- function(A, tol = 1e-8, max_iter = 1000) {
 
     return(list(K = K, A_w1 = A_w1, B_w2 = B_w2))
   }
+
+  # When filter_kernel=FALSE, return inputs unchanged
+  return(list(K = K, A_w1 = A_w1, B_w2 = B_w2))
 }
 
 #' Mean bidirectional spatial cross-correlation (internal helper)
@@ -181,9 +188,11 @@ normalize_K = c("row_or_col", "sinkhorn_knopp", "none"), filter_kernel = TRUE,
    }
 
   if(normalize_K == "row_or_col"){
-    # Optimized row/column normalization
+    # Optimized row/column normalization (guard against zero sums)
     K_row_sum <- rowSums(K)
     K_col_sum <- colSums(K)
+    K_row_sum[K_row_sum == 0] <- 1  # avoid division by zero
+    K_col_sum[K_col_sum == 0] <- 1  # avoid division by zero
 
     # More efficient normalization using vectorized operations
     K_row_norm <- K / K_row_sum  # Broadcasting division
@@ -352,18 +361,14 @@ setGeneric(
       
       # MAJOR OPTIMIZATION: Filter kernel once per pair, not per CC
       if (filter_kernel) {
-        filtered_result <- .filter_kernel_matrix(K_orig, A_W1_all[, 1, drop = FALSE], 
-                                                B_W2_all[, 1, drop = FALSE], 
-                                                TRUE, K_row_sum_cutoff, K_col_sum_cutoff)
-        K_filtered <- filtered_result$K
-        
-        # Apply same filtering to all CC projections
+        # Compute row and column masks from the original kernel consistently
         row_keep <- rowSums(K_orig) > K_row_sum_cutoff
-        col_keep <- colSums(K_filtered) > K_col_sum_cutoff  # Use filtered K for col check
-        
+        K_row_filtered <- K_orig[row_keep, , drop = FALSE]
+        col_keep <- colSums(K_row_filtered) > K_col_sum_cutoff
+
+        K <- K_row_filtered[, col_keep, drop = FALSE]
         A_W1_all <- A_W1_all[row_keep, , drop = FALSE]
         B_W2_all <- B_W2_all[col_keep, , drop = FALSE]
-        K <- K_filtered
       } else {
         K <- K_orig
       }
@@ -438,11 +443,23 @@ setMethod(
       stop("Cannot infer nCC from skrCCA results")
     }
   }
-  return(list(cts = cts, slides = slides, sigmas_run = sigmas_run, nCC = nCC))
+  if (length(object@scalePCs) == 0) stop("object@scalePCs not specified")
+  scalePCs <- object@scalePCs
+
+  return(list(cts = cts, slides = slides, sigmas_run = sigmas_run, nCC = nCC, scalePCs = scalePCs))
 }
 
-.computeBidirCorrCoreMulti <- function(object, cts, slides, sigmas_run, nCC, calculationMode = "perSlide", normalize_K = c("row_or_col", "sinkhorn_knopp", "none"), filter_kernel = TRUE, K_row_sum_cutoff = 5e-3, K_col_sum_cutoff = 5e-3) {
+.computeBidirCorrCoreMulti <- function(object, cts, slides, sigmas_run, nCC, scalePCs, calculationMode = "perSlide", normalize_K = c("row_or_col", "sinkhorn_knopp", "none"), filter_kernel = TRUE, K_row_sum_cutoff = 5e-3, K_col_sum_cutoff = 5e-3) {
   normalize_K <- match.arg(normalize_K)
+
+  # Scale per-slide PCA matrices to match optimization (whitening)
+  X_scaled <- .preparePCMatrices(
+    pc_data = object@pcaResults,
+    pca_global = object@pcaGlobal,
+    scalePCs = scalePCs,
+    slides = slides,
+    cts = cts
+  )
   if (length(cts) == 1) {
     pair_cell_types <- matrix(c(cts, cts), nrow = 2, ncol = 1)
   } else {
@@ -465,7 +482,7 @@ setMethod(
           stringsAsFactors = FALSE
         )
 
-        X_list_slide <- object@pcaResults[[sID]]
+        X_list_slide <- X_scaled[[sID]]
         if (is.null(X_list_slide)) next
 
         for (pp in seq_len(ncol(pair_cell_types))) {
@@ -523,7 +540,7 @@ setMethod(
           sum_corr <- 0
           valid_slides <- 0
           for (sID in slides) {
-            X_list_slide <- object@pcaResults[[sID]]
+            X_list_slide <- X_scaled[[sID]]
             if (is.null(X_list_slide)) next
             X_i <- X_list_slide[[ct_i]]
             X_j <- X_list_slide[[ct_j]]
@@ -588,9 +605,11 @@ K_row_sum_cutoff = 5e-2, K_col_sum_cutoff = 5e-2) {
   slides <- input_check$slides
   sigmas_run <- input_check$sigmas_run
   nCC <- input_check$nCC
+  scalePCs <- input_check$scalePCs
 
   object <- .computeBidirCorrCoreMulti(object, cts = cts, slides = slides,
                                        sigmas_run = sigmas_run, nCC = nCC,
+                                       scalePCs = scalePCs,
                                        calculationMode = calculationMode, normalize_K = normalize_K,
                                        filter_kernel = filter_kernel,
                                        K_row_sum_cutoff = K_row_sum_cutoff, K_col_sum_cutoff = K_col_sum_cutoff)

@@ -199,7 +199,7 @@
     for (name in names(flat_kernels)) {
       parsed <- .parseKernelMatrixName(name)
       if (is.null(parsed$slide)) {  # Only process single-slide entries
-        sigma_name <- paste0("sigma", parsed$sigma)
+        sigma_name <- paste("sigma", parsed$sigma, sep = "_")
         nested[[sigma_name]][[parsed$cellType1]][[parsed$cellType2]] <- flat_kernels[[name]]
       }
     }
@@ -220,7 +220,7 @@
     for (name in names(flat_kernels)) {
       parsed <- .parseKernelMatrixName(name)
       if (!is.null(parsed$slide)) {  # Only process multi-slide entries
-        sigma_name <- paste0("sigma", parsed$sigma)
+        sigma_name <- paste("sigma", parsed$sigma, sep = "_")
         nested[[sigma_name]][[parsed$slide]][[parsed$cellType1]][[parsed$cellType2]] <- flat_kernels[[name]]
       }
     }
@@ -247,7 +247,7 @@
   for (name in names(flat_scores)) {
     parsed <- .parseCellScoresName(name)
     if (is.null(parsed$slide)) {  # Only process aggregated entries
-      sigma_name <- paste0("sigma", parsed$sigma)
+      sigma_name <- paste("sigma", parsed$sigma, sep = "_")
       nested[[sigma_name]][[parsed$cellType]] <- flat_scores[[name]]
     }
   }

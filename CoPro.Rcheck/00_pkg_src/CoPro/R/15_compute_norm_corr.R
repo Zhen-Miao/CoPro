@@ -135,31 +135,41 @@ setGeneric(
       stringsAsFactors = FALSE
     )
     
-    for (pp in seq_len(ncol(pair_cell_types))) {
-      for (cc_index in seq_len(nCC)) {
-        cellType1 <- pair_cell_types[1, pp]
-        cellType2 <- pair_cell_types[2, pp]
+    sigma_val <- as.numeric(gsub("sigma_", "", t))
 
+    for (pp in seq_len(ncol(pair_cell_types))) {
+      cellType1 <- pair_cell_types[1, pp]
+      cellType2 <- pair_cell_types[2, pp]
+
+      A <- PCmats[[cellType1]]
+      B <- PCmats[[cellType2]]
+
+      K <- getKernelMatrix(object, sigma = sigma_val,
+                           cellType1 = cellType1, cellType2 = cellType2,
+                           verbose = FALSE)
+      norm_K12_sel <- norm_K12[[t]][[cellType1]][[cellType2]]
+      if (is.null(norm_K12_sel) || !is.finite(norm_K12_sel)) {
+        warning(paste("Spectral norm unavailable for", cellType1, "-", cellType2, "at", t, "- skipping"))
+        next
+      }
+
+      # Check that skrCCA results exist for this pair
+      if (is.null(object@skrCCAOut[[t]][[cellType1]]) ||
+          is.null(object@skrCCAOut[[t]][[cellType2]])) {
+        warning(paste("skrCCA results missing for", cellType1, "-", cellType2, "at", t, "- skipping"))
+        next
+      }
+
+      for (cc_index in seq_len(nCC)) {
         w_1 <- object@skrCCAOut[[t]][[cellType1]][, cc_index, drop = FALSE]
         w_2 <- object@skrCCAOut[[t]][[cellType2]][, cc_index, drop = FALSE]
-
-        A <- PCmats[[cellType1]]
-        B <- PCmats[[cellType2]]
 
         A_w1 <- A %*% w_1
         B_w2 <- B %*% w_2
 
-        ## get pre-calculated spectral norm
-        sigma_val <- as.numeric(gsub("sigma_", "", t))
-        K <- getKernelMatrix(object, sigma = sigma_val, 
-                             cellType1 = cellType1, cellType2 = cellType2, 
-                             verbose = FALSE)
-        norm_K12_sel <- norm_K12[[t]][[cellType1]][[cellType2]]
-
-        ## Calculate normalized correlation
         numerator <- (t(A_w1) %*% K %*% B_w2)[1, 1]
         denominator <- sqrt(sum(A_w1^2)) * sqrt(sum(B_w2^2)) * norm_K12_sel
-        
+
         correlation_value[[t]]$"normalizedCorrelation"[
           pp + (cc_index - 1) * ncol(pair_cell_types)] <-
           ifelse(abs(denominator) < 1e-9, 0, numerator / denominator)
@@ -239,7 +249,10 @@ setMethod(
     }
   }
 
-  return(list(cts = cts, slides = slides, sigmas_run = sigmas_run, nCC = nCC))
+  if (length(object@scalePCs) == 0) stop("object@scalePCs not specified")
+  scalePCs <- object@scalePCs
+
+  return(list(cts = cts, slides = slides, sigmas_run = sigmas_run, nCC = nCC, scalePCs = scalePCs))
 }
 
 .computeSpecNormMulti <- function(object, tol = 1e-4, cts, slides, sigmas_run, nCC, pair_cell_types) {
@@ -292,13 +305,22 @@ setMethod(
   return(norm_K_all)
 }
 
-.computeNormCorrCoreMulti <- function(object, tol = 1e-4, cts, slides, sigmas_run, nCC, calculationMode = "perSlide") {
-    
+.computeNormCorrCoreMulti <- function(object, tol = 1e-4, cts, slides, sigmas_run, nCC, scalePCs, calculationMode = "perSlide") {
+
   if (length(cts) == 1) {
     pair_cell_types <- matrix(c(cts, cts), nrow = 2, ncol = 1)
   } else {
     pair_cell_types <- combn(cts, 2)
   }
+
+  # Scale per-slide PCA matrices to match optimization (whitening)
+  X_scaled <- .preparePCMatrices(
+    pc_data = object@pcaResults,
+    pca_global = object@pcaGlobal,
+    scalePCs = scalePCs,
+    slides = slides,
+    cts = cts
+  )
 
   norm_K_all <- .computeSpecNormMulti(object, tol = tol, cts = cts,
    slides = slides, sigmas_run = sigmas_run, nCC = nCC, pair_cell_types = pair_cell_types)
@@ -308,21 +330,26 @@ setMethod(
 
   for (sig_name in sigmas_run) {
     W_list_sigma <- object@skrCCAOut[[sig_name]] # Shared weights
+    sigma_val <- as.numeric(gsub("sigma_", "", sig_name))
 
     if (calculationMode == "perSlide") {
       correlation_per_slide <- setNames(vector("list", length=length(slides)), slides)
       for(sID in slides) {
-        df_slide <- data.frame(
-          sigmaValue = character(),
-          slideID = character(),
-          cellType1 = character(), cellType2 = character(),
-          CC_index = integer(), normalizedCorrelation = numeric(),
-          stringsAsFactors = FALSE
-        )
-        X_list_slide <- object@pcaResults[[sID]]
+        row_buffer <- vector("list", ncol(pair_cell_types) * nCC)
+        row_idx <- 1
+        X_list_slide <- X_scaled[[sID]]
         norm_K_slide <- norm_K_all[[sig_name]][[sID]]
 
-        if (is.null(X_list_slide)) next  # Skip if PCA data missing
+        if (is.null(X_list_slide)) {
+          correlation_per_slide[[sID]] <- data.frame(
+            sigmaValue = numeric(),
+            slideID = character(),
+            cellType1 = character(), cellType2 = character(),
+            CC_index = integer(), normalizedCorrelation = numeric(),
+            stringsAsFactors = FALSE
+          )
+          next  # Skip if PCA data missing
+        }
 
         for (pp in seq_len(ncol(pair_cell_types))) {
           ct_i <- pair_cell_types[1, pp]
@@ -332,7 +359,7 @@ setMethod(
           X_j <- X_list_slide[[ct_j]]
           K_ij <- tryCatch({
             getKernelMatrix(object,
-                           sigma = as.numeric(gsub("sigma_", "", sig_name)),
+                           sigma = sigma_val,
                            cellType1 = ct_i,
                            cellType2 = ct_j,
                            slide = sID,
@@ -355,32 +382,76 @@ setMethod(
             denom_norm <- sqrt(sum(Xiw^2)) * sqrt(sum(Xjw^2)) * norm_K_ij
 
             norm_corr_val <- ifelse(abs(denom_norm) < 1e-9, 0, numerator / denom_norm)
-
-            df_slide <- rbind(df_slide, data.frame(
-              sigmaValue = as.numeric(gsub("sigma_", "", sig_name)),
+            row_buffer[[row_idx]] <- list(
+              sigmaValue = sigma_val,
               slideID = sID,
-              cellType1 = ct_i, cellType2 = ct_j,
-              CC_index = cc, normalizedCorrelation = as.numeric(norm_corr_val),
-              stringsAsFactors = FALSE
-            ))
+              cellType1 = ct_i,
+              cellType2 = ct_j,
+              CC_index = cc,
+              normalizedCorrelation = as.numeric(norm_corr_val)
+            )
+            row_idx <- row_idx + 1
           } # end CC loop
         } # end pair loop
+        if (row_idx > 1) {
+          df_slide <- do.call(rbind.data.frame, c(row_buffer[seq_len(row_idx - 1)], stringsAsFactors = FALSE))
+        } else {
+          df_slide <- data.frame(
+            sigmaValue = numeric(),
+            slideID = character(),
+            cellType1 = character(), cellType2 = character(),
+            CC_index = integer(), normalizedCorrelation = numeric(),
+            stringsAsFactors = FALSE
+          )
+        }
         correlation_per_slide[[sID]] <- df_slide
       } # end slide loop
       correlation_results[[sig_name]] <- do.call(rbind, correlation_per_slide)
 
     } else { # calculationMode == "aggregate"
       # For aggregate mode, calculate correlations across all slides for each cell type pair
-      df_agg <- data.frame(
-        sigmaValue = numeric(),
-        cellType1 = character(), cellType2 = character(),
-        CC_index = integer(), aggregateCorrelation = numeric(),
-        stringsAsFactors = FALSE
-      )
+      row_buffer <- vector("list", ncol(pair_cell_types) * nCC)
+      row_idx <- 1
       
       for (pp in seq_len(ncol(pair_cell_types))) {
         ct_i <- pair_cell_types[1, pp]
         ct_j <- pair_cell_types[2, pp]
+
+        valid_slide_data <- vector("list", length(slides))
+        valid_slide_idx <- 1
+        for(sID in slides) {
+          X_list_slide <- X_scaled[[sID]]
+          norm_K_slide <- norm_K_all[[sig_name]][[sID]]
+          
+          if (is.null(X_list_slide)) next
+          
+          X_i <- X_list_slide[[ct_i]]
+          X_j <- X_list_slide[[ct_j]]
+          K_ij <- tryCatch({
+            getKernelMatrix(object,
+                           sigma = sigma_val,
+                           cellType1 = ct_i,
+                           cellType2 = ct_j,
+                           slide = sID,
+                           verbose = FALSE)
+          }, error = function(e) NULL)
+          norm_K_ij <- norm_K_slide[[ct_i]][[ct_j]]
+          
+          if(is.null(X_i) || is.null(X_j) || is.null(K_ij) ||
+             is.na(norm_K_ij) || norm_K_ij < 1e-9 ||
+             nrow(X_i)==0 || nrow(X_j)==0) next
+
+          valid_slide_data[[valid_slide_idx]] <- list(
+            X_i = X_i,
+            X_j = X_j,
+            K_ij = K_ij,
+            norm_K_ij = norm_K_ij
+          )
+          valid_slide_idx <- valid_slide_idx + 1
+        }
+
+        valid_slides_count <- valid_slide_idx - 1
+        if (valid_slides_count == 0) next
         
         for (cc in 1:nCC) {
           # Aggregate numerator and denominator components across slides
@@ -388,59 +459,46 @@ setMethod(
           total_norm_sum_i <- 0
           total_norm_sum_j <- 0
           total_K_norm <- 0
-          valid_slides <- 0
-          
-          for(sID in slides) {
-            X_list_slide <- object@pcaResults[[sID]]
-            norm_K_slide <- norm_K_all[[sig_name]][[sID]]
+          w_i <- W_list_sigma[[ct_i]][, cc, drop = FALSE]
+          w_j <- W_list_sigma[[ct_j]][, cc, drop = FALSE]
+
+          for(slide_idx in seq_len(valid_slides_count)) {
+            slide_data <- valid_slide_data[[slide_idx]]
+            Xiw <- slide_data$X_i %*% w_i
+            Xjw <- slide_data$X_j %*% w_j
             
-            if (is.null(X_list_slide)) next
-            
-            X_i <- X_list_slide[[ct_i]]
-            X_j <- X_list_slide[[ct_j]]
-            K_ij <- tryCatch({
-              getKernelMatrix(object,
-                             sigma = as.numeric(gsub("sigma_", "", sig_name)),
-                             cellType1 = ct_i,
-                             cellType2 = ct_j,
-                             slide = sID,
-                             verbose = FALSE)
-            }, error = function(e) NULL)
-            norm_K_ij <- norm_K_slide[[ct_i]][[ct_j]]
-            
-            if(is.null(X_i) || is.null(X_j) || is.null(K_ij) ||
-               is.na(norm_K_ij) || norm_K_ij < 1e-9 ||
-               nrow(X_i)==0 || nrow(X_j)==0) next
-            
-            w_i <- W_list_sigma[[ct_i]][, cc, drop = FALSE]
-            w_j <- W_list_sigma[[ct_j]][, cc, drop = FALSE]
-            
-            Xiw <- X_i %*% w_i
-            Xjw <- X_j %*% w_j
-            
-            total_numerator <- total_numerator + (t(Xiw) %*% K_ij %*% Xjw)[1, 1]
+            total_numerator <- total_numerator + (t(Xiw) %*% slide_data$K_ij %*% Xjw)[1, 1]
             total_norm_sum_i <- total_norm_sum_i + sum(Xiw^2)
             total_norm_sum_j <- total_norm_sum_j + sum(Xjw^2)
-            total_K_norm <- total_K_norm + norm_K_ij
-            valid_slides <- valid_slides + 1
+            total_K_norm <- total_K_norm + slide_data$norm_K_ij
           }
           
-          if (valid_slides > 0) {
-            avg_K_norm <- total_K_norm / valid_slides
+          if (valid_slides_count > 0) {
+            avg_K_norm <- total_K_norm / valid_slides_count
             denom_norm <- sqrt(total_norm_sum_i) * sqrt(total_norm_sum_j) * avg_K_norm
             
             agg_corr_val <- ifelse(abs(denom_norm) < 1e-9, 0, total_numerator / denom_norm)
-            
-            df_agg <- rbind(df_agg, data.frame(
-              sigmaValue = as.numeric(gsub("sigma_", "", sig_name)),
-              cellType1 = ct_i, cellType2 = ct_j,
-              CC_index = cc, aggregateCorrelation = as.numeric(agg_corr_val),
-              stringsAsFactors = FALSE
-            ))
+            row_buffer[[row_idx]] <- list(
+              sigmaValue = sigma_val,
+              cellType1 = ct_i,
+              cellType2 = ct_j,
+              CC_index = cc,
+              aggregateCorrelation = as.numeric(agg_corr_val)
+            )
+            row_idx <- row_idx + 1
           }
         }
       }
-      
+      if (row_idx > 1) {
+        df_agg <- do.call(rbind.data.frame, c(row_buffer[seq_len(row_idx - 1)], stringsAsFactors = FALSE))
+      } else {
+        df_agg <- data.frame(
+          sigmaValue = numeric(),
+          cellType1 = character(), cellType2 = character(),
+          CC_index = integer(), aggregateCorrelation = numeric(),
+          stringsAsFactors = FALSE
+        )
+      }
       correlation_results[[sig_name]] <- df_agg
     }
   } # End sigma loop
@@ -498,8 +556,10 @@ setMethod("computeNormalizedCorrelation", "CoProMulti", function(
   slides <- input_check$slides
   sigmas_run <- input_check$sigmas_run
   nCC <- input_check$nCC
+  scalePCs <- input_check$scalePCs
 
-  object <- .computeNormCorrCoreMulti(object, tol = tol, cts = cts, slides = slides, 
-                                      sigmas_run = sigmas_run, nCC = nCC, calculationMode = calculationMode)
+  object <- .computeNormCorrCoreMulti(object, tol = tol, cts = cts, slides = slides,
+                                      sigmas_run = sigmas_run, nCC = nCC, scalePCs = scalePCs,
+                                      calculationMode = calculationMode)
   return(object)
 })

@@ -17,16 +17,21 @@ Transcriptomics Data
 </div><h2>Documentation for package &lsquo;CoPro&rsquo; version 0.6.1</h2>
 
 <ul><li><a href="../DESCRIPTION" type="text/plain; charset=utf-8">DESCRIPTION file</a>.</li>
+<li><a href="../doc/index.html">User guides, package vignettes and other documentation.</a></li>
 </ul>
 
 <h2>Help Pages</h2>
 
 
 <table style="width: 100%;">
+<tr><td style="width: 25%;"><a href="dot-partitionByLocation.html">.partitionByLocation</a></td>
+<td>Internal: partition locations into approximately equal-sized spatial blocks</td></tr>
 <tr><td style="width: 25%;"><a href="assignDistanceManually.html">assignDistanceManually</a></td>
 <td>Assign distance matrix manually</td></tr>
 <tr><td style="width: 25%;"><a href="assignDistanceManually.html">assignDistanceManually-method</a></td>
 <td>Assign distance matrix manually</td></tr>
+<tr><td style="width: 25%;"><a href="calculate_pvalue.html">calculate_pvalue</a></td>
+<td>Calculate P-value from Permutation Results</td></tr>
 <tr><td style="width: 25%;"><a href="computeBidirCorrelation.html">computeBidirCorrelation</a></td>
 <td>Compute Bidirectional Correlation</td></tr>
 <tr><td style="width: 25%;"><a href="computeBidirCorrelation.html">computeBidirCorrelation-method</a></td>
@@ -48,7 +53,7 @@ Transcriptomics Data
 <tr><td style="width: 25%;"><a href="computeNormalizedCorrelation.html">computeNormalizedCorrelation-method</a></td>
 <td>Compute Normalized Correlation (approximation)</td></tr>
 <tr><td style="width: 25%;"><a href="computeNormalizedCorrelationPermu.html">computeNormalizedCorrelationPermu</a></td>
-<td>Compute Normalized Correlation under permutation (approximation)</td></tr>
+<td>Compute Normalized Correlation for Permutation Results</td></tr>
 <tr><td style="width: 25%;"><a href="computePCAMulti.html">computePCA</a></td>
 <td>Compute PCA on Integrated Multi-Slide Data</td></tr>
 <tr><td style="width: 25%;"><a href="computePCA.html">computePCA-method</a></td>
@@ -65,10 +70,18 @@ Transcriptomics Data
 <td>Compute Self-Kernel Matrices for Multiple Cell Types</td></tr>
 <tr><td style="width: 25%;"><a href="computeSelfKernel.html">computeSelfKernel-method</a></td>
 <td>Compute Self-Kernel Matrices for Multiple Cell Types</td></tr>
+<tr><td style="width: 25%;"><a href="compute_ground_truth_ncorr.html">compute_ground_truth_ncorr</a></td>
+<td>Compute Normalized Correlation from Ground Truth Scores</td></tr>
 <tr><td style="width: 25%;"><a href="CoPro-class.html">CoPro-class</a></td>
 <td>CoPro object of spatial transcriptomics data</td></tr>
+<tr><td style="width: 25%;"><a href="CreateCoPro.html">CreateCoPro</a></td>
+<td>Create a CoPro object, automatically choosing Single vs Multi and splitting large slices.</td></tr>
+<tr><td style="width: 25%;"><a href="diagnose_bin_distribution.html">diagnose_bin_distribution</a></td>
+<td>Diagnose Bin Distribution</td></tr>
 <tr><td style="width: 25%;"><a href="ensureBidirCorrelationSlot.html">ensureBidirCorrelationSlot</a></td>
 <td>Ensure object has bidirCorrelation slot</td></tr>
+<tr><td style="width: 25%;"><a href="generate_toroidal_permutations.html">generate_toroidal_permutations</a></td>
+<td>Generate Toroidal Shift Permutation Indices</td></tr>
 <tr><td style="width: 25%;"><a href="getCellScores.html">getCellScores</a></td>
 <td>Get cell scores from CoPro object</td></tr>
 <tr><td style="width: 25%;"><a href="getCellScores.html">getCellScores-method</a></td>
@@ -143,12 +156,16 @@ Transcriptomics Data
 <td>Plot g_12(r) pair correlation functions for colocalization analysis</td></tr>
 <tr><td style="width: 25%;"><a href="quantile_normalize.html">quantile_normalize</a></td>
 <td>quantile normalize data</td></tr>
+<tr><td style="width: 25%;"><a href="resample_spatial.html">resample_spatial</a></td>
+<td>Spatial Resampling for Permutation Testing</td></tr>
 <tr><td style="width: 25%;"><a href="runSkrCCA.html">runSkrCCA</a></td>
 <td>runSkrCCA</td></tr>
 <tr><td style="width: 25%;"><a href="runSkrCCA.html">runSkrCCA-method</a></td>
 <td>runSkrCCA</td></tr>
 <tr><td style="width: 25%;"><a href="runSkrCCAPermu.html">runSkrCCAPermu</a></td>
-<td>runSkrCCAPermu</td></tr>
+<td>Run Spatial CCA with Permutation Testing</td></tr>
+<tr><td style="width: 25%;"><a href="runSkrCCAPermu_FairSigma.html">runSkrCCAPermu_FairSigma</a></td>
+<td>Run Permutation Test with Fair Sigma Selection</td></tr>
 <tr><td style="width: 25%;"><a href="show.html">show-method</a></td>
 <td>Show method for CoPro objects</td></tr>
 <tr><td style="width: 25%;"><a href="smoothCellScoresMatrix.html">smoothCellScoresMatrix</a></td>

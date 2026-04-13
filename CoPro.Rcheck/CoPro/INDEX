@@ -1,6 +1,11 @@
+.partitionByLocation    Internal: partition locations into
+                        approximately equal-sized spatial blocks
 CoPro-class             CoPro object of spatial transcriptomics data
+CreateCoPro             Create a CoPro object, automatically choosing
+                        Single vs Multi and splitting large slices.
 assignDistanceManually
                         Assign distance matrix manually
+calculate_pvalue        Calculate P-value from Permutation Results
 computeBidirCorrelation
                         Compute Bidirectional Correlation
 computeDistance         computeDistance between pairs of cell types
@@ -10,8 +15,8 @@ computeKernelMatrix     Compute Kernel Matrix for CoPro
 computeNormalizedCorrelation
                         Compute Normalized Correlation (approximation)
 computeNormalizedCorrelationPermu
-                        Compute Normalized Correlation under
-                        permutation (approximation)
+                        Compute Normalized Correlation for Permutation
+                        Results
 computePCA              Compute PCA on Integrated Multi-Slide Data
 computePCA,CoProSingle-method
                         Compute PCA on Single-Slide Data
@@ -21,8 +26,15 @@ computeSelfDistance     Compute Self-Distance Matrices for Multiple
                         Cell Types
 computeSelfKernel       Compute Self-Kernel Matrices for Multiple Cell
                         Types
+compute_ground_truth_ncorr
+                        Compute Normalized Correlation from Ground
+                        Truth Scores
+diagnose_bin_distribution
+                        Diagnose Bin Distribution
 ensureBidirCorrelationSlot
                         Ensure object has bidirCorrelation slot
+generate_toroidal_permutations
+                        Generate Toroidal Shift Permutation Indices
 getCellScores           Get cell scores from CoPro object
 getCellScoresInSitu     Get cell score and location information as a
                         data.frame
@@ -69,8 +81,11 @@ optimize_bilinear_n_multi_slides
 plotG12Functions        Plot g_12(r) pair correlation functions for
                         colocalization analysis
 quantile_normalize      quantile normalize data
+resample_spatial        Spatial Resampling for Permutation Testing
 runSkrCCA               runSkrCCA
-runSkrCCAPermu          runSkrCCAPermu
+runSkrCCAPermu          Run Spatial CCA with Permutation Testing
+runSkrCCAPermu_FairSigma
+                        Run Permutation Test with Fair Sigma Selection
 show,CoPro-method       Show method for CoPro objects
 smoothCellScoresMatrix
                         Smooth the cell scores based on expression

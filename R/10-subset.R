@@ -43,10 +43,9 @@ setGeneric("subsetData",
   # slideID is automatically subsetted with metaDataSub (no separate slot)
   
   if (!saveOriginal) {
-    object@normalizedData <- matrix(nrow = 0, ncol = 0)
-    object@metaData <- data.frame()
-    object@locationData <- data.frame()
-    object@cellTypes <- character(0)
+    object@normalizedData <- matrix(0)
+    object@metaData <- data.frame(0)
+    object@locationData <- data.frame(0)
   }
 
   return(object)

@@ -52,7 +52,8 @@ initialize_weights_svd <- function(X_list, cell_types) {
     if(is.null(X_list[[ct]]) || !is.matrix(X_list[[ct]])) {
       stop(paste("Invalid or missing matrix in X_list for cell type:", ct))
     }
-    svd_result <- tryCatch(irlba(X_list[[ct]], nv = 1, right_only = TRUE),
+    init_v <- rep(1 / ncol(X_list[[ct]]), ncol(X_list[[ct]]))
+    svd_result <- tryCatch(irlba(X_list[[ct]], nv = 1, right_only = TRUE, v = init_v),
                           error = function(e) {
       stop(paste("SVD failed for cell type:", ct, "Error:", e$message))})
     if(ncol(svd_result$v) < 1) stop(paste("SVD resulted in zero singular vectors for cell type:", ct))

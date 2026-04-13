@@ -145,7 +145,9 @@ normalize_gradient_weighted <- function(v, sdev2 = NULL) {
 utils::globalVariables(c(
   ".computeSpatialCrossCorrelation",
   "getKernelMatrix",
-  "getSlideList"
+  "getSlideList",
+  "x",
+  "y"
 ))
 
 #' Validate that cell types and slide IDs don't contain pipe characters

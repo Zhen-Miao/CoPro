@@ -41,6 +41,9 @@ optimize_bilinear_n_multi_slides(
 \item{n_cores}{Number of cores for parallel computation}
 
 \item{step_size}{Step size for damped power iteration (default 1)}
+
+\item{sdev2_list}{Optional named list of squared PCA standard deviations per
+cell type, used for weighted deflation and normalization when supplied.}
 }
 \value{
 Updated weight list with all components

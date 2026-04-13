@@ -5,13 +5,14 @@
 \alias{computePCA,CoProMulti-method}
 \title{Compute PCA on Single-Slide Data}
 \usage{
-\S4method{computePCA}{CoProSingle}(object, nPCA = 40, center = TRUE, scale. = TRUE)
+\S4method{computePCA}{CoProSingle}(object, nPCA = 40, center = TRUE, scale. = TRUE, scalePCs = TRUE)
 
 \S4method{computePCA}{CoProMulti}(
   object,
   nPCA = 40,
   center = TRUE,
   scale. = TRUE,
+  scalePCs = TRUE,
   dataUse = "raw",
   center_per_slide = FALSE
 )
@@ -24,6 +25,9 @@
 \item{center}{Whether to center the matrix before PCA}
 
 \item{scale.}{Whether to scale the matrix before PCA}
+
+\item{scalePCs}{Logical; whether PCA outputs are intended to be scaled in
+downstream CCA optimization. Stored in the object for later use.}
 
 \item{dataUse}{What data to use, choices between "raw" and "integrated".
 Default is "raw". For single slide, this argument is ignored.}

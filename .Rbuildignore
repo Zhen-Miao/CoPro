@@ -3,6 +3,8 @@
 ^CoPro\.Rproj$
 ^\.Rproj\.user$
 ^README\.Rmd$
+^CLAUDE\.md$
+^Rplots\.pdf$
 ^\.github$
 ^LICENSE\.md$
 ^_pkgdown\.yml$
