@@ -379,3 +379,193 @@ setMethod(
 )
 
 
+# =========================================================================
+# Regression-based gene scores
+# =========================================================================
+
+#' Compute regression-based gene scores
+#'
+#' For each gene, regresses its expression on the cell score and uses the
+#' regression coefficient (beta) as the gene weight. This evaluates each gene
+#' independently and avoids collinearity issues present in the PCA
+#' back-projection approach used by \code{\link{computeGeneAndCellScores}}.
+#'
+#' Results are stored in the \code{@@geneScoresRegression} slot, leaving the
+#' original PCA-based \code{@@geneScores} slot untouched.
+#'
+#' @param object A CoPro object with cell scores already computed via
+#'   \code{\link{computeGeneAndCellScores}}.
+#' @param sigma Optional numeric vector of sigma values to process.
+#'   If \code{NULL} (default), all sigma values in
+#'   \code{object@@sigmaValues} are used.
+#' @param verbose Logical; print progress messages. Default \code{TRUE}.
+#'
+#' @return The input object with the \code{@@geneScoresRegression} slot
+#'   populated with regression-based gene weights (beta coefficients).
+#'   The format mirrors \code{@@geneScores}: a flat list keyed by
+#'   \code{"geneScores|sigma<value>|<cellType>"}, each entry a
+#'   genes x nCC matrix.
+#'
+#' @details
+#' For each cell type, sigma value, and canonical component (CC):
+#' \enumerate{
+#'   \item Retrieves the cell score vector from \code{@@cellScores}.
+#'   \item Subsets \code{@@normalizedDataSub} to cells of that type.
+#'   \item Computes
+#'     \code{beta_g = cov(gene_g, cellScore) / var(cellScore)}
+#'     for every gene \emph{g} (equivalent to simple linear regression).
+#'   \item Stores the beta vector in \code{@@geneScoresRegression}.
+#' }
+#'
+#' @seealso \code{\link{computeGeneAndCellScores}} for the PCA-based gene
+#'   scores, \code{\link{testGeneGLM}} for statistical testing with covariates.
+#'
+#' @export
+setGeneric(
+  "computeRegressionGeneScores",
+  function(object, sigma = NULL, verbose = TRUE)
+    standardGeneric("computeRegressionGeneScores")
+)
+
+.computeRegGSCore <- function(object, cts, sigmaValues, nCC, verbose) {
+  sigma_names <- paste("sigma", sigmaValues, sep = "_")
+
+  ## Determine gene names
+  geneNames <- if (length(object@geneList) > 0) {
+    object@geneList
+  } else {
+    colnames(object@normalizedDataSub)
+  }
+
+  ## Initialize output with same structure as @geneScores
+  geneScoresReg <- list()
+  for (tt in seq_along(sigmaValues)) {
+    for (ct in cts) {
+      gene_flat_name <- .createGeneScoresName(sigmaValues[tt], ct, slide = NULL)
+      geneScoresReg[[gene_flat_name]] <- .createScoreMatrix(
+        nrows = length(geneNames), ncols = nCC, row_names = geneNames
+      )
+    }
+  }
+
+  ## Compute regression betas
+
+  for (tt in seq_along(sigmaValues)) {
+    t <- sigma_names[tt]
+    for (ct in cts) {
+      cell_flat_name <- .createCellScoresName(sigmaValues[tt], ct, slide = NULL)
+      gene_flat_name <- .createGeneScoresName(sigmaValues[tt], ct, slide = NULL)
+
+      ## Get expression matrix for this cell type
+      ct_mask <- object@cellTypesSub == ct
+      X <- object@normalizedDataSub[ct_mask, , drop = FALSE]
+
+      for (cc_index in seq_len(nCC)) {
+        cc_name <- paste0("CC_", cc_index)
+
+        ## Get cell scores
+        cs <- object@cellScores[[cell_flat_name]][, cc_name]
+
+        ## Align expression rows to cell score names
+        cs <- cs[rownames(X)]
+
+        ## Center
+        cs_c <- cs - mean(cs)
+        denom <- sum(cs_c^2)
+
+        if (denom == 0) {
+          warning(paste0("Zero variance in cell scores for sigma=",
+                         sigmaValues[tt], ", cellType='", ct,
+                         "', CC_", cc_index, ". Setting betas to 0."))
+          geneScoresReg[[gene_flat_name]][, cc_name] <- 0
+          next
+        }
+
+        ## Vectorized regression: beta_g = sum(x_g_centered * cs_centered) / sum(cs_centered^2)
+        X_c <- scale(X, center = TRUE, scale = FALSE)
+        betas <- as.vector(crossprod(X_c, cs_c) / denom)
+        geneScoresReg[[gene_flat_name]][, cc_name] <- betas
+      }
+
+      if (verbose) {
+        message("Computed regression gene scores for sigma=",
+                sigmaValues[tt], ", cellType='", ct, "'")
+      }
+    }
+  }
+
+  object@geneScoresRegression <- geneScoresReg
+  return(object)
+}
+
+#' @rdname computeRegressionGeneScores
+#' @aliases computeRegressionGeneScores,CoPro-method
+#' @export
+setMethod(
+  "computeRegressionGeneScores", "CoPro",
+  function(object, sigma = NULL, verbose = TRUE) {
+    ## Validate
+    if (length(object@cellScores) == 0) {
+      stop("Cell scores not available. Run computeGeneAndCellScores() first.")
+    }
+    if (length(object@normalizedDataSub) == 0) {
+      stop("normalizedDataSub is empty.")
+    }
+
+    cts <- if (length(object@cellTypesOfInterest) > 0) {
+      object@cellTypesOfInterest
+    } else {
+      unique(object@cellTypesSub)
+    }
+
+    sigmaValues <- if (!is.null(sigma)) {
+      bad <- setdiff(sigma, object@sigmaValues)
+      if (length(bad) > 0) {
+        stop("Sigma value(s) not found: ", paste(bad, collapse = ", "))
+      }
+      sigma
+    } else {
+      object@sigmaValues
+    }
+
+    nCC <- object@nCC
+    object <- .computeRegGSCore(object, cts, sigmaValues, nCC, verbose)
+    return(object)
+  }
+)
+
+#' @rdname computeRegressionGeneScores
+#' @aliases computeRegressionGeneScores,CoProMulti-method
+#' @export
+setMethod(
+  "computeRegressionGeneScores", "CoProMulti",
+  function(object, sigma = NULL, verbose = TRUE) {
+    ## Validate
+    if (length(object@cellScores) == 0) {
+      stop("Cell scores not available. Run computeGeneAndCellScores() first.")
+    }
+    if (length(object@normalizedDataSub) == 0) {
+      stop("normalizedDataSub is empty.")
+    }
+
+    cts <- if (length(object@cellTypesOfInterest) > 0) {
+      object@cellTypesOfInterest
+    } else {
+      unique(object@cellTypesSub)
+    }
+
+    sigmaValues <- if (!is.null(sigma)) {
+      bad <- setdiff(sigma, object@sigmaValues)
+      if (length(bad) > 0) {
+        stop("Sigma value(s) not found: ", paste(bad, collapse = ", "))
+      }
+      sigma
+    } else {
+      object@sigmaValues
+    }
+
+    nCC <- object@nCC
+    object <- .computeRegGSCore(object, cts, sigmaValues, nCC, verbose)
+    return(object)
+  }
+)

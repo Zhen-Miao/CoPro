@@ -36,9 +36,6 @@ optimize_bilinear_n(
 \item{tol}{Tolerance of accuracy for helper function}
 
 \item{step_size}{Step size for damped power iteration (default 1)}
-
-\item{sdev2_list}{Optional named list of squared PCA standard deviations per
-cell type, used for weighted normalization/deflation in unwhitened PC space.}
 }
 \value{
 A named list of weights (matrices with components 1 to nCC as columns)

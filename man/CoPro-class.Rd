@@ -78,6 +78,11 @@ conducted.}
 
 \item{\code{geneScores}}{A \code{matrix} object. Gene scores for each cell type.}
 
+\item{\code{geneScoresRegression}}{A \code{list} object. Regression-based gene scores.
+For each gene, the regression coefficient of gene expression on the cell
+score is used as the gene weight. This avoids collinearity issues present
+in the PCA back-projection approach stored in \code{geneScores}.}
+
 \item{\code{geneScoresTest}}{A \code{list} object. Tested gene scores}
 
 \item{\code{normalizedCorrelation}}{A \code{list} object. Normalized correlation values

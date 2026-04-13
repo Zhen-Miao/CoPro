@@ -29,10 +29,6 @@ optimize_bilinear(
 \item{step_size}{Step size for damped power iteration. Default 1 (standard
 power iteration). Values in (0,1) blend old and new weights for smoother
 convergence, which can help with many cells or many CCs.}
-
-\item{sdev2_list}{Optional named list of squared PCA standard deviations per
-cell type. When provided, optimization uses weighted normalization in the
-original (unwhitened) PC metric.}
 }
 \value{
 Named list \code{w_list} containing the first weight vector component.

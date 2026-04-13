@@ -36,10 +36,6 @@ optimize_bilinear_multi_slides(
 
 \item{step_size}{Step size for damped power iteration (default 1).
 Values in (0,1) blend old and new weights for smoother convergence.}
-
-\item{sdev2_list}{Optional named list of squared PCA standard deviations per
-cell type. If provided, weighted normalization is used (for scalePCs = FALSE
-workflows).}
 }
 \value{
 Named list of weight vectors (first component)

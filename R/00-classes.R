@@ -53,6 +53,10 @@ setClassUnion("matrixOrDataFrame", c("matrix", "data.frame"))
 #'  conducted.
 #' @slot cellScores A `matrix` object. Cell scores for each cell type.
 #' @slot geneScores A `matrix` object. Gene scores for each cell type.
+#' @slot geneScoresRegression A `list` object. Regression-based gene scores.
+#'  For each gene, the regression coefficient of gene expression on the cell
+#'  score is used as the gene weight. This avoids collinearity issues present
+#'  in the PCA back-projection approach stored in \code{geneScores}.
 #' @slot geneScoresTest A `list` object. Tested gene scores
 #' @slot normalizedCorrelation A `list` object. Normalized correlation values
 #' for each sigma value.
@@ -117,6 +121,7 @@ setClass("CoPro", contains  = "VIRTUAL",
            bidirCorrelation = "list", # Store bidirectional correlation results
            cellScores = "list",     # Stores list(sigma = list(slideID = list(cellType = Scores)))
            geneScores = "list",     # Stores list(sigma = list(cellType = gene_scores)) - Potentially Shared
+           geneScoresRegression = "list",  # Regression-based gene scores
            geneScoresTest = "list",
            sigmaValueChoice = "numeric",
 
