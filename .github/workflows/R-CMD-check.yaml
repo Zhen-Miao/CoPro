@@ -13,6 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
+      _R_CHECK_FORCE_SUGGESTS_: false
     steps:
       - uses: actions/checkout@v4
 
@@ -23,6 +24,7 @@ jobs:
       - uses: r-lib/actions/setup-r-dependencies@v2
         with:
           extra-packages: any::rcmdcheck, local::.
+          dependencies: '"hard"'
           needs: check
 
       - uses: r-lib/actions/check-r-package@v2
