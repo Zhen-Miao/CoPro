@@ -227,6 +227,12 @@ transfer_scores <- function(mat_A, mat_B, gs_ct,
 #' @param gs_weight_threshold Numeric; absolute threshold used to zero out small
 #'   gene weights in the gene score matrix prior to transfer (default `0`).
 #' @param sigma_choice_tar Numeric; sigma value for target object. If NULL (default), uses sigma_choice. Not recommended for general use.
+#' @param gene_score_type Character; which gene score slot to use for transfer.
+#'   \code{"PCA"} (default) uses the PCA back-projection weights in
+#'   \code{@@geneScores}. \code{"regression"} uses the regression-based weights
+#'   in \code{@@geneScoresRegression}, which avoids collinearity issues and
+#'   produces more robust transfers. The regression slot must have been populated
+#'   by calling \code{\link{computeRegressionGeneScores}} on the reference object.
 #' @param verbose verbose
 #'
 #' @returns cell scores as a matrix
@@ -235,7 +241,9 @@ getTransferCellScores <- function(ref_obj, tar_obj, sigma_choice,
                             use_quantile_normalization = TRUE,
                             agg_cell_type = FALSE,
                             gs_weight_threshold = 0,
-                            sigma_choice_tar = NULL, verbose = TRUE){
+                            sigma_choice_tar = NULL,
+                            gene_score_type = c("PCA", "regression"),
+                            verbose = TRUE){
   ## check object
   if (!(is(ref_obj, "CoProMulti") || is(ref_obj, "CoProSingle"))) {
     stop("ref_obj must be a CoProSingle or CoProMulti object")
@@ -243,7 +251,10 @@ getTransferCellScores <- function(ref_obj, tar_obj, sigma_choice,
   if (!(is(tar_obj, "CoProMulti") || is(tar_obj, "CoProSingle"))) {
     stop("tar_obj must be a CoProSingle or CoProMulti object")
   }
-  
+
+  ## validate gene_score_type
+  gene_score_type <- match.arg(gene_score_type)
+
   ## handle sigma_choice_tar parameter
   if (is.null(sigma_choice_tar)) {
     sigma_choice_tar <- sigma_choice
@@ -267,17 +278,27 @@ getTransferCellScores <- function(ref_obj, tar_obj, sigma_choice,
   }
 
   ## get gene weights for reference object
-  gs <- ref_obj@geneScores
-  if(length(gs) == 0){
-    stop(paste("geneScores slot in reference object does not exist.",
-               "Run `computeGeneAndCellScores()` first"))
+  if (gene_score_type == "regression") {
+    gs <- ref_obj@geneScoresRegression
+    if (length(gs) == 0) {
+      stop(paste("geneScoresRegression slot in reference object does not exist.",
+                 "Run `computeRegressionGeneScores()` first"))
+    }
+    if (verbose) cat("Using regression-based gene weights for transfer\n")
+  } else {
+    gs <- ref_obj@geneScores
+    if (length(gs) == 0) {
+      stop(paste("geneScores slot in reference object does not exist.",
+                 "Run `computeGeneAndCellScores()` first"))
+    }
   }
   # subset geneScores by sigma_choice and cell types
   gs_names <- .get_gs_names(sigma_choice, cts, slide = NULL)
   missing_gs <- setdiff(gs_names, names(gs))
   if(length(missing_gs) > 0){
+    fn_name <- if (gene_score_type == "regression") "computeRegressionGeneScores()" else "computeGeneAndCellScores()"
     stop(paste0("Missing gene score entries for: ", paste(missing_gs, collapse = ", "),
-                ". Ensure computeGeneAndCellScores() has been run for these."))
+                ". Ensure ", fn_name, " has been run for these."))
   }
   gs <- gs[gs_names]
 

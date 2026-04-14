@@ -9,7 +9,7 @@ transfer_scores(
   mat_B,
   gs_ct,
   use_quantile_normalization = TRUE,
-  gs_weight_threshold = 0.005,
+  gs_weight_threshold = 0,
   verbose = TRUE
 )
 }
@@ -28,7 +28,7 @@ in verbose messages.}
 \code{mat_B} to \code{mat_A} per feature before standardization (default \code{TRUE}).}
 
 \item{gs_weight_threshold}{Numeric; absolute threshold used to zero out small
-gene weights in \code{gs_ct} (default \code{0.005}).}
+gene weights in \code{gs_ct} (default \code{0}).}
 
 \item{verbose}{Logical; whether to print progress messages (default \code{TRUE}).}
 }
