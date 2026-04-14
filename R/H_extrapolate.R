@@ -131,7 +131,7 @@ utils::globalVariables(c("getKernelMatrix", "getSlideList"))
 #' @param use_quantile_normalization Logical; whether to quantile-normalize
 #'   `mat_B` to `mat_A` per feature before standardization (default `TRUE`).
 #' @param gs_weight_threshold Numeric; absolute threshold used to zero out small
-#'   gene weights in `gs_ct` (default `0.005`).
+#'   gene weights in `gs_ct` (default `0`).
 #' @param verbose Logical; whether to print progress messages (default `TRUE`).
 #'
 #' @returns A numeric matrix of cell scores with shape (nrow(`mat_B`) x ncol(`gs_ct`)).
@@ -145,7 +145,7 @@ utils::globalVariables(c("getKernelMatrix", "getSlideList"))
 #' @keywords internal
 transfer_scores <- function(mat_A, mat_B, gs_ct,
                             use_quantile_normalization = TRUE,
-                            gs_weight_threshold = 0.005,
+                            gs_weight_threshold = 0,
                             verbose = TRUE){
   ## quantile normalize if needed
   if(use_quantile_normalization){
@@ -224,7 +224,8 @@ transfer_scores <- function(mat_A, mat_B, gs_ct,
 #' @param sigma_choice Sigma value to be used
 #' @param use_quantile_normalization Logical; apply quantile normalization of target to reference distribution (default TRUE)
 #' @param agg_cell_type Logical; if TRUE, returns a single matrix aggregated across cell types (default FALSE)
-#' @param gs_weight_threshold Numeric; absolute gene-weight threshold for filtering prior to transfer (default 0.005)
+#' @param gs_weight_threshold Numeric; absolute threshold used to zero out small
+#'   gene weights in the gene score matrix prior to transfer (default `0`).
 #' @param sigma_choice_tar Numeric; sigma value for target object. If NULL (default), uses sigma_choice. Not recommended for general use.
 #' @param verbose verbose
 #'
@@ -233,7 +234,7 @@ transfer_scores <- function(mat_A, mat_B, gs_ct,
 getTransferCellScores <- function(ref_obj, tar_obj, sigma_choice,
                             use_quantile_normalization = TRUE,
                             agg_cell_type = FALSE,
-                            gs_weight_threshold = 0.005,
+                            gs_weight_threshold = 0,
                             sigma_choice_tar = NULL, verbose = TRUE){
   ## check object
   if (!(is(ref_obj, "CoProMulti") || is(ref_obj, "CoProSingle"))) {
