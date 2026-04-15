@@ -28,6 +28,7 @@ Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.3.3
 Suggests:
     testthat (>= 3.0.0),
+    BPCells,
     RcppAnnoy,
     SeuratObject,
     viridis,
@@ -40,6 +41,8 @@ Suggests:
     piggyback,
     scales,
     ggrepel
+Remotes:
+    bnprks/BPCells/r
 VignetteBuilder: knitr
 Config/testthat/edition: 3
 URL: https://zhen-miao.github.io/CoPro/, https://github.com/Zhen-Miao/CoPro
