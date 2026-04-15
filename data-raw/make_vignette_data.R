@@ -23,7 +23,12 @@ library(SeuratObject)
 library(Matrix)
 
 dir.create("data-raw/vignette_data", showWarnings = FALSE)
-DATA_ROOT <- "/Users/zhenmiao/Library/CloudStorage/Dropbox/DIALOGUE_plus project/Data"
+
+# --- Data paths: update these for your system ---
+DATA_ROOT    <- "path/to/Data"                  # Main data directory (colon, kidney seqFISH)
+SC_KIDNEY    <- "path/to/kidney_scRNAseq"       # Kidney scRNA-seq directory (contains eset.rds)
+ORGANOID_DIR <- "path/to/organoid_72hr_roi1"    # Organoid 72hr ROI-1 directory
+BRAIN_DIR    <- "path/to/brain_merfish"          # Brain MERFISH directory
 
 # ============================================================
 # 1. Colon Day 3 -- cross-cell-type co-progression
@@ -238,7 +243,7 @@ segment_order <- c(PTS1 = 1, PTS2 = 2, PTS3 = 3,
 ## Transfer uses only the shared genes, but the full transcriptome is
 ## needed for post-transfer regression to discover axis-associated genes
 ## beyond the spatial panel.
-sc_dir <- "/Users/zhenmiao/Dropbox/kidney_sex_project/sex_RNA data/kidney_cello/"
+sc_dir <- SC_KIDNEY
 seqfish_dir <- file.path(DATA_ROOT, "kidney_seqFISH")
 
 library(Biobase)
@@ -328,7 +333,7 @@ gc()
 # ============================================================
 message("\n=== Preparing Organoid ===")
 
-organoid_loc <- "/Users/zhenmiao/Library/CloudStorage/Dropbox/DIALOGUE_plus project/Raj_lab_data/72hr/roi1/"
+organoid_loc <- ORGANOID_DIR
 if (dir.exists(organoid_loc)) {
   organoid_ra <- read.csv(file.path(organoid_loc,
     "output/cell_by_gene/cell_by_gene.csv"))
@@ -392,8 +397,8 @@ if (dir.exists(organoid_loc)) {
 # ============================================================
 message("\n=== Preparing Brain MERFISH ===")
 
-brain_data_path <- "/Users/zhenmiao/Dropbox/Zhuang-ABCA-1.054_1/Zhuang_ABCA_1.054_subset_data.rds"
-brain_meta_path <- "/Users/zhenmiao/Dropbox/Zhuang-ABCA-1.054_1/Zhuang_ABCA_1.054_subset_metadata.rds"
+brain_data_path <- file.path(BRAIN_DIR, "Zhuang_ABCA_1.054_subset_data.rds")
+brain_meta_path <- file.path(BRAIN_DIR, "Zhuang_ABCA_1.054_subset_metadata.rds")
 
 if (file.exists(brain_data_path)) {
   brain_ra <- readRDS(brain_data_path)

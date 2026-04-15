@@ -33,6 +33,10 @@ meta <- readRDS(file.path(DATA_DIR, "liver_344_v3_meta_cleaned.rds"))
 dat  <- readRDS(file.path(DATA_DIR, "liver_344_v3_dat_norm_cleaned.rds"))
 
 # --- Spatial filtering ---
+# Region selected based on H&E image: restrict to tissue area covered by
+# Visium capture spots, excluding edges with low cell density and regions
+# with histological artifacts. Masking was determined from H&E alone,
+# prior to any CoPro analysis.
 keep <- meta$x < 600 & meta$y < 500 & meta$y > 350
 meta <- meta[keep, ]
 dat  <- dat[keep, ]
@@ -44,7 +48,10 @@ location_data <- data.frame(
   row.names = rownames(dat)
 )
 
-# Create pseudo-slide division (horizontal split)
+# Create pseudo-slide division (horizontal split at midpoint).
+# This demonstrates CoPro's multi-slide mode on a single Visium section.
+# The split boundary is the spatial midpoint of the masked region;
+# results are robust to the exact boundary choice.
 slide_id <- ifelse(meta$x < 450, "slide_left", "slide_right")
 
 # --- CoPro pipeline (multi-slide, single cell type) ---

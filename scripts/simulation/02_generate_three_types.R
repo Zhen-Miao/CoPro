@@ -30,7 +30,8 @@ library(Seurat)
 library(irlba)
 library(arrow)
 
-source(file.path(find.package("CoPro"), "..", "CoPro", "simulation", "sim_fun.R"))
+# Source helper functions (run from repo root, or adjust path)
+source("simulation/sim_fun.R")
 
 # =============================================================================
 # CONFIGURATION — update these paths for your system
