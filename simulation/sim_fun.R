@@ -562,3 +562,201 @@ match_by_percentile <- function(sim_df, real_cell_score,rm_outlier = TRUE) {
   return(sim_df)
 }
 
+
+## ============================================================================
+## Multi-Axis Simulation Helper Functions
+## ============================================================================
+## Functions for generating multi-axis co-progression simulations with
+## orthogonal weight vectors and 2D optimal transport matching.
+## ============================================================================
+
+#' Generate Orthogonal Weight Vectors
+#'
+#' Creates n_axes orthogonal weight vectors of specified length using
+#' Gram-Schmidt orthogonalization.
+#'
+#' @param n_weights Length of each weight vector (e.g., number of PCs)
+#' @param n_axes Number of orthogonal axes to generate
+#' @param seed Random seed for reproducibility
+#'
+#' @return List of orthogonal unit weight vectors
+generate_orthogonal_weights <- function(n_weights, n_axes, seed = 42) {
+  set.seed(seed)
+
+  weight_list <- list()
+  for (k in 1:n_axes) {
+    weight_list[[k]] <- rnorm(n_weights)
+  }
+
+  # Gram-Schmidt orthogonalization
+  for (k in 2:n_axes) {
+    for (j in 1:(k-1)) {
+      proj <- sum(weight_list[[k]] * weight_list[[j]]) / sum(weight_list[[j]]^2)
+      weight_list[[k]] <- weight_list[[k]] - proj * weight_list[[j]]
+    }
+  }
+
+  # Normalize to unit vectors
+  for (k in 1:n_axes) {
+    weight_list[[k]] <- weight_list[[k]] / sqrt(sum(weight_list[[k]]^2))
+  }
+
+  return(weight_list)
+}
+
+
+#' Orthogonalize Score Vectors
+#'
+#' Makes score vectors orthogonal by regressing out earlier axes from later
+#' ones. Each axis beyond the first is replaced by the residuals of a linear
+#' regression on all preceding axes, then standardized.
+#'
+#' @param score_list List of score vectors to orthogonalize
+#'
+#' @return List of orthogonalized score vectors (standardized)
+orthogonalize_scores <- function(score_list) {
+  n_axes <- length(score_list)
+
+  for (k in 2:n_axes) {
+    X <- do.call(cbind, score_list[1:(k-1)])
+    residuals <- lm(score_list[[k]] ~ X)$residuals
+    score_list[[k]] <- scale(residuals)[, 1]
+  }
+
+  return(score_list)
+}
+
+
+#' 2D Optimal Transport Matching (without replacement)
+#'
+#' Matches target positions to real cells in 2D score space using
+#' greedy optimal transport approximation. Each cell is used at most once.
+#'
+#' @param target_scores_list List of target score vectors (one per axis)
+#' @param cell_scores_list List of cell score vectors (one per axis)
+#' @param cell_ids Vector of cell identifiers
+#' @param rm_outlier Whether to remove outlier cells before matching
+#' @param method Matching method: "greedy_ot" (default) or "hungarian"
+#' @param use_quantile Use quantile transformation instead of z-score
+#' @param verbose Print progress messages
+#'
+#' @return List containing matched IDs, scores, and quality metrics
+match_2d_optimal_transport <- function(target_scores_list, cell_scores_list,
+                                       cell_ids, rm_outlier = TRUE,
+                                       method = "greedy_ot",
+                                       use_quantile = FALSE, verbose = TRUE) {
+
+  n_targets <- length(target_scores_list[[1]])
+  n_axes <- length(target_scores_list)
+
+  # Combine into matrices
+  target_mat <- do.call(cbind, target_scores_list)
+  cell_mat <- do.call(cbind, cell_scores_list)
+
+  if (use_quantile) {
+    if (verbose) message("    Using quantile transformation for matching...")
+    target_mat_scaled <- apply(target_mat, 2, function(x) rank(x) / (length(x) + 1))
+    cell_mat_scaled <- apply(cell_mat, 2, function(x) rank(x) / (length(x) + 1))
+  } else {
+    target_mat_scaled <- scale(target_mat)
+    cell_mat_scaled <- scale(cell_mat)
+  }
+
+  # Optional outlier removal
+  if (rm_outlier) {
+    valid_idx <- rep(TRUE, nrow(cell_mat_scaled))
+    for (k in 1:n_axes) {
+      q1 <- quantile(cell_mat_scaled[, k], 0.01)
+      q99 <- quantile(cell_mat_scaled[, k], 0.99)
+      valid_idx <- valid_idx &
+        (cell_mat_scaled[, k] >= q1) &
+        (cell_mat_scaled[, k] <= q99)
+    }
+    cell_mat_scaled <- cell_mat_scaled[valid_idx, , drop = FALSE]
+    cell_mat <- cell_mat[valid_idx, , drop = FALSE]
+    cell_ids <- cell_ids[valid_idx]
+    if (verbose) message(paste("    After outlier removal:", nrow(cell_mat_scaled), "cells"))
+  }
+
+  n_cells <- nrow(cell_mat_scaled)
+  if (n_cells < n_targets) {
+    stop(paste("Not enough cells (", n_cells, ") for targets (", n_targets, ")"))
+  }
+
+  if (verbose) message(paste("    Matching", n_targets, "targets to", n_cells,
+                             "cells (without replacement)"))
+
+  if (method == "greedy_ot") {
+    if (verbose) message("    Computing distance matrix...")
+    dist_mat <- matrix(NA, nrow = n_targets, ncol = n_cells)
+    for (i in 1:n_targets) {
+      dist_mat[i, ] <- colSums((t(cell_mat_scaled) - target_mat_scaled[i, ])^2)
+    }
+
+    if (verbose) message("    Running greedy matching...")
+    matched_idx <- integer(n_targets)
+    available_cells <- rep(TRUE, n_cells)
+    available_targets <- rep(TRUE, n_targets)
+
+    for (iter in 1:n_targets) {
+      temp_dist <- dist_mat
+      temp_dist[!available_targets, ] <- Inf
+      temp_dist[, !available_cells] <- Inf
+
+      min_idx <- which.min(temp_dist)
+      target_i <- (min_idx - 1) %% n_targets + 1
+      cell_j <- (min_idx - 1) %/% n_targets + 1
+
+      matched_idx[target_i] <- cell_j
+      available_targets[target_i] <- FALSE
+      available_cells[cell_j] <- FALSE
+
+      if (verbose && iter %% 500 == 0) {
+        message(paste("      Matched", iter, "/", n_targets))
+      }
+    }
+
+    matched_ids <- cell_ids[matched_idx]
+    matched_cell_scores <- cell_mat_scaled[matched_idx, , drop = FALSE]
+    matched_cell_scores_raw <- cell_mat[matched_idx, , drop = FALSE]
+
+  } else if (method == "hungarian") {
+    if (!requireNamespace("clue", quietly = TRUE)) {
+      stop("Package 'clue' needed for Hungarian algorithm. Use method='greedy_ot'")
+    }
+
+    if (verbose) message("    Computing distance matrix...")
+    dist_mat <- matrix(NA, nrow = n_targets, ncol = n_cells)
+    for (i in 1:n_targets) {
+      dist_mat[i, ] <- colSums((t(cell_mat_scaled) - target_mat_scaled[i, ])^2)
+    }
+
+    if (verbose) message("    Running Hungarian algorithm...")
+    assignment <- clue::solve_LSAP(dist_mat)
+    matched_idx <- as.integer(assignment)
+
+    matched_ids <- cell_ids[matched_idx]
+    matched_cell_scores <- cell_mat_scaled[matched_idx, , drop = FALSE]
+    matched_cell_scores_raw <- cell_mat[matched_idx, , drop = FALSE]
+  }
+
+  total_dist <- sum((matched_cell_scores - target_mat_scaled)^2)
+  mean_dist <- total_dist / n_targets
+
+  if (verbose) {
+    message(paste("    Total squared distance:", round(total_dist, 2)))
+    message(paste("    Mean squared distance per target:", round(mean_dist, 4)))
+  }
+
+  return(list(
+    ids = matched_ids,
+    matched_scores = matched_cell_scores,
+    matched_scores_raw = matched_cell_scores_raw,
+    target_scores = target_mat_scaled,
+    target_scores_raw = target_mat,
+    n_unique = length(unique(matched_ids)),
+    total_dist = total_dist,
+    mean_dist = mean_dist
+  ))
+}
+
