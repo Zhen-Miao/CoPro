@@ -26,6 +26,9 @@
 
 \item{scale.}{Whether to scale the matrix before PCA}
 
+\item{scalePCs}{Whether to scale (whiten) PCs by their standard deviation
+before downstream CCA optimization. Default \code{TRUE} (recommended).}
+
 \item{dataUse}{What data to use, choices between "raw" and "integrated".
 Default is "raw". For single slide, this argument is ignored.}
 

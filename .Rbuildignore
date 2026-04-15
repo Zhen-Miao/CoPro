@@ -14,3 +14,5 @@
 ^upload$
 ^example$
 ^examples$
+^data-raw$
+^scripts$

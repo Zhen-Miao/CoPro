@@ -1,0 +1,242 @@
+---
+title: "Within-cell-type spatial patterns (Organoid)"
+output: rmarkdown::html_vignette
+date: "`r Sys.Date()`"
+vignette: >
+  %\VignetteIndexEntry{Within-cell-type spatial patterns (Organoid)}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, eval = TRUE,
+                      fig.width = 6, fig.height = 5)
+```
+
+## Overview
+
+This vignette demonstrates how CoPro detects **within-cell-type spatial
+patterns** using a single cell type. We analyze a 72-hour intestinal
+organoid culture imaged by seqFISH, where all cells are epithelial. CoPro
+identifies spatially organized gene programs---self-organization patterns
+that emerge within a single population.
+
+**What CoPro finds here:** The spatial co-progression of epithelial cells
+captures the crypt--villus axis of the organoid---cells along the same
+developmental trajectory cluster spatially.
+
+## Load packages
+
+```{r load-packages, message=FALSE, warning=FALSE}
+library(CoPro)
+library(ggplot2)
+```
+
+## Download and load data
+
+```{r download-data}
+data_path <- copro_download_data("organoid")
+dat <- readRDS(data_path)
+
+cat("Cells:", nrow(dat$normalizedData), "\n")
+cat("Genes:", ncol(dat$normalizedData), "\n")
+```
+
+The dataset contains:
+
+- `normalizedData`: expression matrix (cells x genes), capped at 95th
+  percentile, DESeq2 size-factor normalized, log1p-transformed
+- `locationData`: spatial coordinates (pixels / 5000)
+- `metaData`: cell attributes
+- `cellTypes`: all cells labeled as "Epithelial"
+
+## Visualize tissue layout
+
+```{r plot-layout}
+plot_df <- data.frame(
+  x = dat$locationData$x,
+  y = dat$locationData$y
+)
+
+ggplot(plot_df, aes(x = x, y = y)) +
+  geom_point(color = "steelblue", size = 0.8, alpha = 0.7) +
+  coord_fixed() +
+  ggtitle("72hr organoid culture, ROI-1") +
+  xlab("x") + ylab("y") +
+  theme_classic()
+```
+
+## Create CoPro object
+
+```{r create-object}
+obj <- newCoProSingle(
+  normalizedData = dat$normalizedData,
+  locationData = dat$locationData,
+  metaData = dat$metaData,
+  cellTypes = dat$cellTypes
+)
+
+obj <- subsetData(obj, cellTypesOfInterest = "Epithelial")
+```
+
+## Run the CoPro pipeline
+
+```{r run-pipeline}
+# PCA
+obj <- computePCA(obj, nPCA = 30, center = TRUE, scale. = TRUE)
+
+# Spatial distance (no normalization for this dataset)
+obj <- computeDistance(obj, distType = "Euclidean2D",
+                       normalizeDistance = FALSE)
+
+# Test multiple sigma values
+sigma_choice <- c(0.01, 0.02, 0.05, 0.1, 0.15, 0.2)
+obj <- computeKernelMatrix(obj, sigmaValues = sigma_choice,
+                            upperQuantile = 0.85,
+                            normalizeKernel = FALSE,
+                            lowerLimit = 5e-7)
+
+# Sparse kernel CCA
+obj <- runSkrCCA(obj, scalePCs = TRUE, maxIter = 500, nCC = 4)
+
+# Normalized correlation and scores
+obj <- computeNormalizedCorrelation(obj, tol = 1e-3)
+obj <- computeGeneAndCellScores(obj)
+```
+
+## Select optimal sigma
+
+CoPro automatically selects the sigma that maximizes the CC1 normalized
+correlation. We visualize the normalized correlation across all sigma
+values and canonical components:
+
+```{r plot-ncorr, fig.width=8, fig.height=3.5}
+ncorr <- getNormCorr(obj)
+
+ggplot(ncorr, aes(x = sigmaValues, y = normalizedCorrelation)) +
+  geom_point() +
+  geom_line() +
+  facet_wrap(~ CC_index, nrow = 1) +
+  xlab("Sigma") +
+  ylab("Normalized Correlation") +
+  ggtitle("Normalized correlation across sigma values") +
+  theme_minimal()
+```
+
+```{r select-sigma}
+# Use the automatically selected sigma
+sigma_opt <- obj@sigmaValueChoice
+cat("Selected sigma:", sigma_opt, "\n")
+```
+
+## Correlation plot
+
+For a within-type model, the objective is to find cell scores that are
+spatially correlated: cells close in space (as measured by the kernel)
+should have similar scores. The kernel-smoothed scores (K * scores) vs
+raw cell scores should show a positive correlation:
+
+```{r plot-correlation}
+df_corr <- getCorrOneType(obj,
+  sigmaValueChoice = sigma_opt,
+  cellTypeA = "Epithelial",
+  ccIndex = 1
+)
+
+ggplot(df_corr) +
+  geom_point(aes(x = AK, y = B), size = 0.5, alpha = 0.5,
+             color = "steelblue") +
+  xlab("Epithelial · Kernel (spatially smoothed)") +
+  ylab("Epithelial cell scores") +
+  ggtitle(paste0("CC1 spatial correlation (sigma = ", sigma_opt, ")")) +
+  theme_minimal()
+```
+
+## Cell scores in situ
+
+### Continuous scores
+
+```{r plot-insitu, fig.width=6, fig.height=5.5}
+cs <- getCellScoresInSitu(obj, sigmaValueChoice = sigma_opt)
+
+# Clamp color scale for contrast
+q99 <- quantile(abs(cs$cellScores), 0.99)
+
+ggplot(cs) +
+  geom_point(aes(x = x, y = y, color = cellScores), size = 0.8) +
+  scale_color_gradient2(low = "#2166ac", mid = "white", high = "#b2182b",
+                        midpoint = 0,
+                        limits = c(-q99, q99),
+                        oob = scales::squish,
+                        name = "Cell score\n(CC1)") +
+  coord_fixed() +
+  ggtitle(paste0("CC1 cell scores in situ (sigma = ", sigma_opt, ")")) +
+  theme_classic() +
+  theme(axis.line = element_blank(), axis.text = element_blank(),
+        axis.ticks = element_blank(), axis.title = element_blank())
+```
+
+### Binarized scores
+
+Binarizing at the median highlights the two spatial groups---high vs
+low scoring cells, revealing the organoid's spatial compartments:
+
+```{r plot-binary, fig.width=6, fig.height=5.5}
+cs$group <- ifelse(cs$cellScores > median(cs$cellScores), "High", "Low")
+
+ggplot(cs) +
+  geom_point(aes(x = x, y = y, color = group), size = 0.8, alpha = 0.8) +
+  scale_color_manual(values = c("High" = "#1e17a4", "Low" = "#ffd8d8"),
+                     name = "Score group") +
+  coord_fixed() +
+  ggtitle("Binarized cell scores") +
+  theme_classic() +
+  theme(axis.line = element_blank(), axis.text = element_blank(),
+        axis.ticks = element_blank(), axis.title = element_blank())
+```
+
+The spatial pattern reveals the self-organization of the organoid
+epithelium---cells are continuously ordered along a spatial gradient
+that reflects their position within the organoid structure.
+
+## Top genes associated with spatial progression
+
+Gene scores reflect how strongly each gene contributes to the spatial
+co-progression axis:
+
+```{r top-genes, fig.width=5, fig.height=6}
+key <- paste0("geneScores|sigma", sigma_opt, "|Epithelial")
+gs <- obj@geneScores[[key]][, 1]
+
+top_idx <- head(order(abs(gs), decreasing = TRUE), 20)
+top_df <- data.frame(
+  gene = factor(names(gs)[top_idx],
+                levels = rev(names(gs)[top_idx])),
+  score = gs[top_idx]
+)
+top_df$direction <- ifelse(top_df$score > 0, "positive", "negative")
+
+ggplot(top_df, aes(x = gene, y = score, fill = direction)) +
+  geom_col() +
+  coord_flip() +
+  scale_fill_manual(values = c("positive" = "tomato",
+                                "negative" = "steelblue"),
+                    guide = "none") +
+  geom_hline(yintercept = 0, linewidth = 0.5) +
+  labs(x = NULL, y = "Gene score (CC1)") +
+  ggtitle(paste0("Top 20 genes (sigma = ", sigma_opt, ")")) +
+  theme_classic()
+```
+
+## Data citation
+
+Organoid data from: Heyman Y, Erez M, Burnham P, Nitzan M, Raj A.
+*Self-Organization Through Local Cell-Cell Communication Drives
+Intestinal Epithelial Zonation.* bioRxiv 2025.11.14.688372;
+doi: [10.1101/2025.11.14.688372](https://doi.org/10.1101/2025.11.14.688372)
+
+## Session info
+
+```{r session-info}
+sessionInfo()
+```

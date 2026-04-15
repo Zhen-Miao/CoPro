@@ -37,7 +37,8 @@ Suggests:
     spatstat.random,
     igraph,
     knitr,
-    rmarkdown
+    rmarkdown,
+    piggyback
 VignetteBuilder: knitr
 Config/testthat/edition: 3
 URL: https://github.com/Zhen-Miao/CoPro

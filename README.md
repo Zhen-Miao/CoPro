@@ -1,5 +1,5 @@
 
-<!-- README.md is generated from README.Rmd. Please edit that file -->
+<!-- README.md is generated from README.Rmd. Please edit that file and re-knit. -->
 
 # CoPro <img src="man/figures/copro-refined-logo-final.jpg" align="right" width="150" />
 
@@ -12,13 +12,13 @@
 between cell types in spatial transcriptomics data. It works in both
 supervised and unsupervised settings, enabling:
 
-- **Cross-cell-type co-progression**: Identify coordinated gene
-  expression patterns between different cell types based on spatial
-  proximity
-- **Within-cell-type spatial patterns**: Detect tissue
-  structure-associated cellular programs within a single cell type
-- **Multi-slide analysis**: Analyze patterns consistently across
-  multiple tissue slides
+  - **Cross-cell-type co-progression**: Identify coordinated gene
+    expression patterns between different cell types based on spatial
+    proximity
+  - **Within-cell-type spatial patterns**: Detect tissue
+    structure-associated cellular programs within a single cell type
+  - **Multi-slide analysis**: Analyze patterns consistently across
+    multiple tissue slides
 
 ## Installation
 
@@ -147,11 +147,11 @@ copro_obj <- runSkrCCA(copro_obj,
                        scalePCs = TRUE, 
                        nCC = 2, 
                        maxIter = 200)
-#> [1] "Convergence reached at 27 iterations (Max diff = 8.164e-06 )"
-#> [1] "Convergence reached at 0 iterations (Max diff = 3.607e-08 )"
-#> [1] "Convergence reached at 9 iterations (Max diff = 3.613e-06 )"
-#> [1] "Convergence reached at 0 iterations (Max diff = 4.922e-11 )"
-#> [1] "Convergence reached at 11 iterations (Max diff = 7.557e-06 )"
+#> [1] "Convergence reached at 29 iterations (Max diff = 9.683e-06 )"
+#> [1] "Convergence reached at 1 iterations (Max diff = 5.904e-09 )"
+#> [1] "Convergence reached at 9 iterations (Max diff = 6.823e-06 )"
+#> [1] "Convergence reached at 0 iterations (Max diff = 4.627e-11 )"
+#> [1] "Convergence reached at 10 iterations (Max diff = 3.313e-06 )"
 #> [1] "Convergence reached at 1 iterations (Max diff = 1.665e-16 )"
 
 # Compute normalized correlation to find optimal sigma
@@ -177,10 +177,10 @@ print(head(ncorr))
 #>              sigmaValues  cellType1 cellType2 CC_index normalizedCorrelation
 #> sigma_0.05.1        0.05 Epithelial    Immune        1            0.21353667
 #> sigma_0.05.2        0.05 Epithelial    Immune        2            0.17627646
-#> sigma_0.1.1          0.1 Epithelial    Immune        1            0.17049168
-#> sigma_0.1.2          0.1 Epithelial    Immune        2            0.10052308
-#> sigma_0.2.1          0.2 Epithelial    Immune        1            0.10826527
-#> sigma_0.2.2          0.2 Epithelial    Immune        2            0.05779051
+#> sigma_0.1.1         0.10 Epithelial    Immune        1            0.17049168
+#> sigma_0.1.2         0.10 Epithelial    Immune        2            0.10052308
+#> sigma_0.2.1         0.20 Epithelial    Immune        1            0.10826527
+#> sigma_0.2.2         0.20 Epithelial    Immune        2            0.05779051
 #>                           ct12
 #> sigma_0.05.1 Epithelial-Immune
 #> sigma_0.05.2 Epithelial-Immune
@@ -259,20 +259,20 @@ copro_multi <- computeGeneAndCellScores(copro_multi)
 
 ## Key Parameters
 
-- **`nPCA`**: Number of principal components to retain. Higher values
-  capture more variance but may include noise. Typical range: 20-50.
+  - **`nPCA`**: Number of principal components to retain. Higher values
+    capture more variance but may include noise. Typical range: 20-50.
 
-- **`sigmaValues`**: Spatial neighborhood bandwidth parameter(s) for the
-  Gaussian kernel. Smaller values capture local patterns; larger values
-  capture broader patterns. CoPro can test multiple values and select
-  the optimal one.
+  - **`sigmaValues`**: Spatial neighborhood bandwidth parameter(s) for
+    the Gaussian kernel. Smaller values capture local patterns; larger
+    values capture broader patterns. CoPro can test multiple values and
+    select the optimal one.
 
-- **`nCC`**: Number of canonical components to compute. The first
-  component captures the strongest spatial co-progression signal.
+  - **`nCC`**: Number of canonical components to compute. The first
+    component captures the strongest spatial co-progression signal.
 
-- **`normalizeDistance`**: When `TRUE` (default), normalizes distances
-  so that the 0.01 percentile becomes 0.01, ensuring consistent kernel
-  behavior across datasets with different spatial scales.
+  - **`normalizeDistance`**: When `TRUE` (default), normalizes distances
+    so that the 0.01 percentile becomes 0.01, ensuring consistent kernel
+    behavior across datasets with different spatial scales.
 
 ## Output
 
@@ -295,7 +295,7 @@ If you use CoPro in your research, please cite:
 
 ## Getting Help
 
-- Report bugs and request features on [GitHub
-  Issues](https://github.com/Zhen-Miao/CoPro/issues)
-- See the [package documentation](https://zhen-miao.github.io/CoPro/)
-  for detailed function references
+  - Report bugs and request features on [GitHub
+    Issues](https://github.com/Zhen-Miao/CoPro/issues)
+  - See the [package documentation](https://zhen-miao.github.io/CoPro/)
+    for detailed function references

@@ -144,6 +144,9 @@ compute_update_vector_within <- function(X, K, w) {
 #' @param step_size Step size for damped power iteration. Default 1 (standard
 #'   power iteration). Values in (0,1) blend old and new weights for smoother
 #'   convergence, which can help with many cells or many CCs.
+#' @param sdev2_list Optional named list of squared standard deviations per
+#'   cell type, used for weighted normalization when \code{scalePCs = TRUE}.
+#'   Default \code{NULL} (unweighted).
 #'
 #' @return Named list `w_list` containing the first weight vector component.
 #' @export
@@ -457,6 +460,8 @@ bilinear_w_from_Y_resi <- function(w_list_new, Y_resi,
 #' @param max_iter Maximum number of iterations for helper function
 #' @param tol Tolerance of accuracy for helper function
 #' @param step_size Step size for damped power iteration (default 1)
+#' @param sdev2_list Optional named list of squared standard deviations per
+#'   cell type for weighted normalization. Default \code{NULL}.
 #'
 #' @return A named list of weights (matrices with components 1 to nCC as columns)
 #' @export
@@ -782,6 +787,8 @@ compute_update_vector_multi_slide <- function(ct_i, cell_types, X_list_all, flat
 #' @param direct_solve For single cell type, use direct eigenvalue solution
 #' @param step_size Step size for damped power iteration (default 1).
 #'   Values in (0,1) blend old and new weights for smoother convergence.
+#' @param sdev2_list Optional named list of squared standard deviations per
+#'   cell type for weighted normalization. Default \code{NULL}.
 #' @return Named list of weight vectors (first component)
 #' @export
 optimize_bilinear_multi_slides <- function(X_list_all, flat_kernels, sigma, slides,
@@ -944,6 +951,8 @@ optimize_bilinear_multi_slides <- function(X_list_all, flat_kernels, sigma, slid
 #' @param tol Convergence tolerance
 #' @param n_cores Number of cores for parallel computation
 #' @param step_size Step size for damped power iteration (default 1)
+#' @param sdev2_list Optional named list of squared standard deviations per
+#'   cell type for weighted normalization. Default \code{NULL}.
 #' @return Updated weight list with all components
 #' @export
 optimize_bilinear_n_multi_slides <- function(X_list_all, flat_kernels, sigma, slides, w_list,

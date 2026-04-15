@@ -1,0 +1,456 @@
+---
+title: "Multi-slide analysis and score transfer (Colon Day 9)"
+output: rmarkdown::html_vignette
+date: "`r Sys.Date()`"
+vignette: >
+  %\VignetteIndexEntry{Multi-slide analysis and score transfer (Colon Day 9)}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, eval = TRUE,
+                      fig.width = 7, fig.height = 5)
+```
+
+## Overview
+
+This vignette demonstrates CoPro's **multi-slide analysis** and **score
+transfer** capabilities using colon organoid Day 9 data. At Day 9,
+the tissue exhibits severe inflammation with heterogeneous disease
+progression across different regions. CoPro detects a **disease
+progression axis** that correlates with independently derived mucosal
+neighborhood (MU) labels---in particular, **MU8** marks the most
+severely inflamed niche.
+
+When multiple tissue slides are available, CoPro can:
+
+1. Learn co-progression patterns from a **reference slide**
+2. **Transfer** the learned gene weights to new slides
+3. Compare co-progression patterns across biological replicates
+
+## Load packages
+
+```{r load-packages, message=FALSE, warning=FALSE}
+library(CoPro)
+library(ggplot2)
+```
+
+## Download and load data
+
+```{r download-data}
+data_path <- copro_download_data("colon_d9")
+dat <- readRDS(data_path)
+
+# Three slides are included
+cat("Slides:", paste(dat$selectedSlides, collapse = ", "), "\n")
+cat("Total cells:", nrow(dat$normalizedData), "\n")
+table(dat$slideID)
+```
+
+## Visualize the tissue
+
+### Cell types
+
+```{r plot-celltype, fig.width=7, fig.height=6}
+plot_df <- data.frame(
+  x = dat$locationData$x,
+  y = dat$locationData$y,
+  celltype = dat$cellTypes,
+  slide = dat$slideID
+)
+
+ggplot(plot_df[plot_df$slide == dat$selectedSlides[1], ],
+       aes(x = x, y = y, color = celltype)) +
+  geom_point(size = 0.5, alpha = 0.6) +
+  scale_color_manual(values = c("Epithelial" = "#E41A1C",
+                                 "Fibroblast" = "#377EB8",
+                                 "Immune" = "#4DAF4A")) +
+  coord_fixed() +
+  ggtitle(paste("Colon Day 9 --", dat$selectedSlides[1])) +
+  theme_classic() +
+  theme(legend.position = "bottom")
+```
+
+### Mucosal neighborhood (MU) labels
+
+The tissue has been independently annotated with mucosal neighborhood
+labels via Leiden clustering. **MU8** marks the most severely inflamed
+niche, while MU1--3 are grouped as relatively normal crypt neighborhoods:
+
+```{r plot-mu, fig.width=7, fig.height=6}
+mu_df <- data.frame(
+  x = dat$locationData$x,
+  y = dat$locationData$y,
+  MU = dat$metaData$Leiden_neigh,
+  slide = dat$slideID
+)
+
+# Group MU labels as in the manuscript
+mu_df$MU_grouped <- as.character(mu_df$MU)
+mu_df$MU_grouped[mu_df$MU %in% c("MU1", "MU11")] <- "MU1-3"
+mu_df <- mu_df[mu_df$MU_grouped %in% c("MU1-3", "MU5", "MU6", "MU7", "MU8"), ]
+mu_df$MU_grouped <- factor(mu_df$MU_grouped,
+                            levels = c("MU1-3", "MU5", "MU6", "MU7", "MU8"))
+
+mu_colors <- c("MU1-3" = "#66C2A5", "MU5" = "#E5C494",
+               "MU6" = "#8DA0CB", "MU7" = "#FC8D62", "MU8" = "#E78AC3")
+
+ggplot(mu_df[mu_df$slide == dat$selectedSlides[1], ],
+       aes(x = x, y = y, color = MU_grouped)) +
+  geom_point(size = 0.5) +
+  scale_color_manual(values = mu_colors) +
+  coord_fixed() +
+  ggtitle("Mucosal neighborhoods (MU labels)") +
+  theme_classic() +
+  theme(legend.title = element_blank(), legend.position = "right") +
+  guides(color = guide_legend(override.aes = list(size = 3)))
+```
+
+## Strategy: Reference + target slides
+
+We use the first slide as the **reference** to learn co-progression
+patterns, then transfer scores to the other two slides.
+
+```{r split-slides}
+ref_slide <- dat$selectedSlides[1]
+tar_slides <- dat$selectedSlides[2:3]
+
+# Indices for reference and target
+ref_idx <- dat$slideID == ref_slide
+tar1_idx <- dat$slideID == tar_slides[1]
+tar2_idx <- dat$slideID == tar_slides[2]
+```
+
+## Step 1: Run CoPro on the reference slide
+
+```{r run-reference}
+cell_types <- c("Epithelial", "Fibroblast", "Immune")
+
+# Create reference CoPro object
+ref_obj <- newCoProSingle(
+  normalizedData = dat$normalizedData[ref_idx, ],
+  locationData = dat$locationData[ref_idx, ],
+  metaData = dat$metaData[ref_idx, ],
+  cellTypes = dat$cellTypes[ref_idx]
+)
+ref_obj <- subsetData(ref_obj, cellTypesOfInterest = cell_types)
+
+# Run pipeline
+ref_obj <- computePCA(ref_obj, nPCA = 40, center = TRUE, scale. = TRUE)
+ref_obj <- computeDistance(ref_obj, distType = "Euclidean2D")
+
+sigma_choice <- c(0.005, 0.01, 0.02, 0.05, 0.1)
+ref_obj <- computeKernelMatrix(ref_obj, sigmaValues = sigma_choice)
+ref_obj <- runSkrCCA(ref_obj, scalePCs = TRUE, maxIter = 500, nCC = 2)
+ref_obj <- computeNormalizedCorrelation(ref_obj)
+ref_obj <- computeGeneAndCellScores(ref_obj)
+ref_obj <- computeRegressionGeneScores(ref_obj)
+```
+
+### Reference slide results
+
+```{r ref-results, fig.width=7, fig.height=6}
+sigma_opt <- 0.01  # adjust based on normalized correlation
+
+cs_ref <- getCellScoresInSitu(ref_obj, sigmaValueChoice = sigma_opt)
+
+ggplot(cs_ref) +
+  geom_point(aes(x = x, y = y, color = cellScores), size = 0.8) +
+  scale_color_viridis_c() +
+  facet_wrap(~ cellTypesSub) +
+  coord_fixed() +
+  ggtitle(paste("Reference slide:", ref_slide)) +
+  theme_minimal()
+```
+
+### Disease axis vs MU labels
+
+The CoPro disease axis should correlate with MU labels, with **MU8**
+cells showing the highest scores:
+
+```{r mu-boxplot, fig.width=6, fig.height=4}
+ref_meta <- ref_obj@metaDataSub
+ref_meta$cell_score <- ref_meta[, paste0("cellScore_sigma_", sigma_opt,
+                                          "_cc_index_1")]
+
+# Assign grouped MU labels
+ref_meta$MU_grouped <- as.character(ref_meta$Leiden_neigh)
+ref_meta$MU_grouped[ref_meta$MU_grouped %in% c("MU1", "MU11")] <- "MU1-3"
+ref_meta <- ref_meta[ref_meta$MU_grouped %in%
+                      c("MU1-3", "MU5", "MU6", "MU7", "MU8"), ]
+ref_meta$MU_grouped <- factor(ref_meta$MU_grouped,
+                               levels = c("MU1-3", "MU5", "MU6", "MU7", "MU8"))
+
+ggplot(ref_meta, aes(x = MU_grouped, y = cell_score, fill = MU_grouped)) +
+  geom_boxplot(outlier.size = 0.3) +
+  scale_fill_manual(values = mu_colors, guide = "none") +
+  labs(x = "Mucosal Neighborhood", y = "CoPro disease score (CC1)",
+       title = "Disease scores by MU label",
+       subtitle = "MU8 = most inflamed niche") +
+  theme_classic()
+```
+
+### Cell type proportions along the disease axis
+
+As disease severity increases, the cell type composition shifts---immune
+cell proportion increases while epithelial proportion decreases:
+
+```{r celltype-prop, fig.width=6, fig.height=4}
+ref_meta_all <- ref_obj@metaDataSub
+ref_meta_all$cell_score <- ref_meta_all[, paste0("cellScore_sigma_",
+                                                   sigma_opt, "_cc_index_1")]
+
+# Bin cells by disease score
+ref_meta_all$score_bin <- cut(ref_meta_all$cell_score, breaks = 20)
+
+# Calculate proportions
+prop_df <- do.call(rbind, lapply(split(ref_meta_all, ref_meta_all$score_bin),
+  function(x) {
+    data.frame(
+      score_mid = mean(x$cell_score, na.rm = TRUE),
+      Epithelial = mean(x$Tier1 == "Epithelial"),
+      Fibroblast = mean(x$Tier1 == "Fibroblast"),
+      Immune = mean(x$Tier1 == "Immune")
+    )
+  }
+))
+prop_long <- reshape(prop_df, direction = "long",
+                     varying = c("Epithelial", "Fibroblast", "Immune"),
+                     v.names = "proportion", timevar = "celltype",
+                     times = c("Epithelial", "Fibroblast", "Immune"))
+
+ggplot(prop_long, aes(x = score_mid, y = proportion, color = celltype)) +
+  geom_point() +
+  geom_smooth(method = "loess", se = FALSE) +
+  scale_color_manual(values = c("Epithelial" = "#E41A1C",
+                                 "Fibroblast" = "#377EB8",
+                                 "Immune" = "#4DAF4A")) +
+  labs(x = "CoPro disease score (CC1)", y = "Cell type proportion",
+       title = "Cell type composition along the disease axis") +
+  theme_classic() +
+  theme(legend.position = "bottom")
+```
+
+### Top genes associated with the disease axis
+
+```{r top-genes, fig.width=5, fig.height=5}
+# Immune genes on the disease axis
+key_imm <- paste0("geneScores|sigma", sigma_opt, "|Immune")
+gs_imm <- ref_obj@geneScoresRegression[[key_imm]]
+gs_imm_cc1 <- gs_imm[, 1]
+
+top_imm <- head(sort(abs(gs_imm_cc1), decreasing = TRUE), 20)
+top_imm_df <- data.frame(
+  gene = factor(names(top_imm), levels = rev(names(top_imm))),
+  weight = gs_imm_cc1[names(top_imm)]
+)
+top_imm_df$direction <- ifelse(top_imm_df$weight > 0, "inflamed", "normal")
+
+ggplot(top_imm_df, aes(x = gene, y = weight, fill = direction)) +
+  geom_col() +
+  coord_flip() +
+  scale_fill_manual(values = c("inflamed" = "darkgreen",
+                                "normal" = "lightgreen")) +
+  ggtitle("Top 20 Immune genes (CC1, regression)") +
+  theme_classic() +
+  theme(legend.position = "bottom")
+```
+
+## Step 2: Create target CoPro objects
+
+```{r create-targets}
+# Target slide 1
+tar1_obj <- newCoProSingle(
+  normalizedData = dat$normalizedData[tar1_idx, ],
+  locationData = dat$locationData[tar1_idx, ],
+  metaData = dat$metaData[tar1_idx, ],
+  cellTypes = dat$cellTypes[tar1_idx]
+)
+tar1_obj <- subsetData(tar1_obj, cellTypesOfInterest = cell_types)
+tar1_obj <- computePCA(tar1_obj, nPCA = 40, center = TRUE, scale. = TRUE)
+tar1_obj <- computeDistance(tar1_obj, distType = "Euclidean2D")
+tar1_obj <- computeKernelMatrix(tar1_obj, sigmaValues = sigma_choice)
+
+# Target slide 2
+tar2_obj <- newCoProSingle(
+  normalizedData = dat$normalizedData[tar2_idx, ],
+  locationData = dat$locationData[tar2_idx, ],
+  metaData = dat$metaData[tar2_idx, ],
+  cellTypes = dat$cellTypes[tar2_idx]
+)
+tar2_obj <- subsetData(tar2_obj, cellTypesOfInterest = cell_types)
+tar2_obj <- computePCA(tar2_obj, nPCA = 40, center = TRUE, scale. = TRUE)
+tar2_obj <- computeDistance(tar2_obj, distType = "Euclidean2D")
+tar2_obj <- computeKernelMatrix(tar2_obj, sigmaValues = sigma_choice)
+```
+
+## Step 3: Transfer scores
+
+Transfer the learned gene weights from the reference to each target slide:
+
+```{r transfer-scores}
+# Transfer to target 1
+tar1_scores <- getTransferCellScores(
+  ref_obj = ref_obj,
+  tar_obj = tar1_obj,
+  sigma_choice = sigma_opt,
+  gene_score_type = "regression"
+)
+
+# Transfer to target 2
+tar2_scores <- getTransferCellScores(
+  ref_obj = ref_obj,
+  tar_obj = tar2_obj,
+  sigma_choice = sigma_opt,
+  gene_score_type = "regression"
+)
+```
+
+## Step 4: Visualize transferred scores
+
+```{r plot-transfer, fig.width=7, fig.height=10}
+# Build data frames for target slides from transferred scores
+build_transfer_df <- function(tar_dat, tar_scores, slide_name, sigma) {
+  rows <- list()
+  for (ct in cell_types) {
+    ct_key <- paste0("geneScores|sigma", sigma, "|", ct)
+    if (ct_key %in% names(tar_scores)) {
+      ct_idx <- tar_dat$cellTypes == ct
+      rows[[ct]] <- data.frame(
+        x = tar_dat$locationData$x[ct_idx],
+        y = tar_dat$locationData$y[ct_idx],
+        cellScores = tar_scores[[ct_key]][, 1],
+        cellTypesSub = ct,
+        slide = slide_name
+      )
+    }
+  }
+  do.call(rbind, rows)
+}
+
+# Build target data using the original dat split by slide indices
+tar1_dat <- list(
+  locationData = dat$locationData[tar1_idx, ],
+  cellTypes = dat$cellTypes[tar1_idx]
+)
+tar2_dat <- list(
+  locationData = dat$locationData[tar2_idx, ],
+  cellTypes = dat$cellTypes[tar2_idx]
+)
+
+tar1_cs <- build_transfer_df(tar1_dat, tar1_scores, tar_slides[1], sigma_opt)
+tar2_cs <- build_transfer_df(tar2_dat, tar2_scores, tar_slides[2], sigma_opt)
+
+# Add slide label to reference
+cs_ref$slide <- ref_slide
+
+all_cs <- rbind(
+  cs_ref[, c("x", "y", "cellScores", "cellTypesSub", "slide")],
+  tar1_cs,
+  tar2_cs
+)
+
+ggplot(all_cs) +
+  geom_point(aes(x = x, y = y, color = cellScores), size = 0.5) +
+  scale_color_viridis_c() +
+  facet_grid(slide ~ cellTypesSub) +
+  coord_fixed() +
+  ggtitle("CC1 scores: reference (top) vs transferred (bottom)") +
+  theme_minimal() +
+  theme(strip.text = element_text(size = 8))
+```
+
+## Step 5: Transferred scores vs MU labels on target slides
+
+Check whether the transferred disease scores also separate MU labels.
+Here we show the reference slide MU boxplot (already computed above)
+alongside the MU labels in spatial context for a target slide:
+
+```{r transfer-mu-spatial, fig.width=7, fig.height=6}
+# Show MU labels spatially on target slide 1
+tar1_mu <- data.frame(
+  x = dat$locationData$x[tar1_idx],
+  y = dat$locationData$y[tar1_idx],
+  MU = dat$metaData$Leiden_neigh[tar1_idx]
+)
+tar1_mu$MU_grouped <- as.character(tar1_mu$MU)
+tar1_mu$MU_grouped[tar1_mu$MU_grouped %in% c("MU1", "MU11")] <- "MU1-3"
+tar1_mu <- tar1_mu[tar1_mu$MU_grouped %in%
+                    c("MU1-3", "MU5", "MU6", "MU7", "MU8"), ]
+tar1_mu$MU_grouped <- factor(tar1_mu$MU_grouped,
+                              levels = c("MU1-3", "MU5", "MU6", "MU7", "MU8"))
+
+ggplot(tar1_mu, aes(x = x, y = y, color = MU_grouped)) +
+  geom_point(size = 0.5) +
+  scale_color_manual(values = mu_colors) +
+  coord_fixed() +
+  ggtitle(paste("MU labels --", tar_slides[1])) +
+  theme_classic() +
+  theme(legend.title = element_blank())
+```
+
+## Step 6: Assess transfer consistency
+
+Compare the normalized correlation between the reference and transferred
+slides to assess whether the co-progression pattern is consistent:
+
+```{r transfer-ncorr}
+tar1_ncorr <- getTransferNormCorr(
+  tar_obj = tar1_obj,
+  transfer_cell_scores = tar1_scores,
+  sigma_choice = sigma_opt
+)
+
+tar2_ncorr <- getTransferNormCorr(
+  tar_obj = tar2_obj,
+  transfer_cell_scores = tar2_scores,
+  sigma_choice = sigma_opt
+)
+
+cat("Reference norm. corr.:\n")
+ref_ncorr <- getNormCorr(ref_obj)
+print(ref_ncorr[ref_ncorr$sigmaValues == sigma_opt, ])
+
+cat("\nTarget 1 transferred norm. corr.:\n")
+print(tar1_ncorr)
+
+cat("\nTarget 2 transferred norm. corr.:\n")
+print(tar2_ncorr)
+```
+
+High transferred normalized correlations indicate that the co-progression
+pattern learned from the reference generalizes well to independent slides.
+
+## Alternative: Multi-slide CoPro
+
+For joint analysis across all slides simultaneously, use `newCoProMulti`:
+
+```{r multi-slide}
+multi_obj <- newCoProMulti(
+  normalizedData = dat$normalizedData,
+  locationData = dat$locationData,
+  metaData = dat$metaData,
+  cellTypes = dat$cellTypes,
+  slideID = dat$slideID
+)
+multi_obj <- subsetData(multi_obj, cellTypesOfInterest = cell_types)
+
+# The rest of the pipeline is identical
+multi_obj <- computePCA(multi_obj, nPCA = 40, center = TRUE, scale. = TRUE)
+multi_obj <- computeDistance(multi_obj, distType = "Euclidean2D")
+multi_obj <- computeKernelMatrix(multi_obj, sigmaValues = sigma_choice)
+multi_obj <- runSkrCCA(multi_obj, scalePCs = TRUE, maxIter = 500, nCC = 2)
+multi_obj <- computeNormalizedCorrelation(multi_obj)
+multi_obj <- computeGeneAndCellScores(multi_obj)
+```
+
+The multi-slide approach optimizes CCA weights jointly across all slides,
+while the transfer approach trains on one slide and evaluates generalization.
+Both are useful depending on your analytical question.
+
+## Session info
+
+```{r session-info}
+sessionInfo()
+```

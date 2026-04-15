@@ -1,0 +1,150 @@
+---
+title: "Cross-cell-type co-progression (Brain MERFISH)"
+output: rmarkdown::html_vignette
+date: "`r Sys.Date()`"
+vignette: >
+  %\VignetteIndexEntry{Cross-cell-type co-progression (Brain MERFISH)}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, eval = TRUE,
+                      fig.width = 6, fig.height = 5)
+```
+
+## Overview
+
+This vignette demonstrates **cross-cell-type co-progression** using brain
+MERFISH data from Zhang et al. *Nature* 2023. We analyze D1 and D2
+GABAergic neurons in the striatum, detecting coordinated spatial gene
+expression patterns between these two cell populations.
+
+## Load packages
+
+```{r load-packages, message=FALSE, warning=FALSE}
+library(CoPro)
+library(ggplot2)
+```
+
+## Download and load data
+
+```{r download-data}
+data_path <- copro_download_data("brain_merfish")
+dat <- readRDS(data_path)
+```
+
+## Visualize spatial layout
+
+```{r plot-layout}
+ggplot(dat$metaData) +
+  geom_point(aes(x = x, y = y, color = subclass), size = 0.5) +
+  coord_fixed() +
+  theme_minimal() +
+  ggtitle("D1 and D2 neurons in the striatum")
+```
+
+## Create CoPro object and run pipeline
+
+```{r run-pipeline}
+cell_types <- c("061 STR D1 Gaba", "062 STR D2 Gaba")
+
+obj <- newCoProSingle(
+  normalizedData = dat$normalizedData,
+  locationData = dat$locationData,
+  metaData = dat$metaData,
+  cellTypes = dat$cellTypes
+)
+obj <- subsetData(obj, cellTypesOfInterest = cell_types)
+
+# Core pipeline
+obj <- computePCA(obj, nPCA = 40, center = TRUE, scale. = TRUE)
+obj <- computeDistance(obj, distType = "Euclidean2D",
+                       normalizeDistance = FALSE)
+obj <- computeKernelMatrix(obj, sigmaValues = c(0.1, 0.14, 0.2, 0.5))
+obj <- runSkrCCA(obj, scalePCs = TRUE, maxIter = 500)
+obj <- computeNormalizedCorrelation(obj)
+obj <- computeGeneAndCellScores(obj)
+```
+
+## Select optimal sigma
+
+```{r plot-ncorr}
+ncorr <- getNormCorr(obj)
+
+ggplot(ncorr, aes(x = sigmaValues, y = normalizedCorrelation)) +
+  geom_point() +
+  geom_line() +
+  facet_wrap(~ ct12 + CC_index) +
+  xlab("Sigma") +
+  ylab("Normalized Correlation") +
+  ggtitle("Normalized correlation across sigma values") +
+  theme_minimal()
+```
+
+## Cross-type correlation
+
+Visualize how cell scores in D1 neurons (smoothed by the spatial kernel)
+correlate with D2 neuron scores:
+
+```{r plot-cross-corr}
+df_corr <- getCorrTwoTypes(obj,
+  sigmaValueChoice = 0.14,
+  cellTypeA = "061 STR D1 Gaba",
+  cellTypeB = "062 STR D2 Gaba"
+)
+
+ggplot(df_corr) +
+  geom_point(aes(x = AK, y = B), size = 0.5, alpha = 0.5) +
+  xlab("D1 score (spatially smoothed)") +
+  ylab("D2 score") +
+  ggtitle("Cross-type correlation: D1 vs D2") +
+  theme_minimal()
+```
+
+## In situ visualization
+
+```{r plot-insitu}
+cs <- getCellScoresInSitu(obj, sigmaValueChoice = 0.14)
+
+ggplot(cs) +
+  geom_point(aes(x = x, y = y, color = cellScores_b), size = 0.8) +
+  scale_color_manual(values = c("darkgreen", "#d4f8d4",
+                                 "darkred", "#ffd8d8")) +
+  coord_fixed() +
+  ggtitle("Cell scores in situ (D1 and D2 neurons)") +
+  theme_minimal()
+
+# Continuous scores
+ggplot(cs) +
+  geom_point(aes(x = x, y = y, color = cellScores), size = 0.8) +
+  scale_color_viridis_c() +
+  coord_fixed() +
+  ggtitle("Continuous cell scores in situ") +
+  theme_minimal()
+```
+
+## Permutation test
+
+Establish statistical significance with spatial permutations:
+
+```{r permutation}
+obj <- runSkrCCAPermu(obj, nPermu = 5L, permu_method = "bin",
+                       num_bins_x = 10, num_bins_y = 10)
+obj <- computeNormalizedCorrelationPermu(obj, tol = 1e-3)
+
+nc_permu <- do.call(rbind, obj@normalizedCorrelationPermu)
+print(nc_permu)
+```
+
+## References
+
+Zhang, M., Pan, X., Jung, W. *et al.* Molecularly defined and spatially
+resolved cell atlas of the whole mouse brain. *Nature* 624, 343--354
+(2023). <https://doi.org/10.1038/s41586-023-06808-9>
+
+## Session info
+
+```{r session-info}
+sessionInfo()
+```

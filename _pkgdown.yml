@@ -1,4 +1,113 @@
-url: ~
+url: https://zhen-miao.github.io/CoPro/
+
 template:
   bootstrap: 5
+  bootswatch: flatly
 
+navbar:
+  structure:
+    left:  [intro, reference, articles, news]
+    right: [search, github]
+
+reference:
+  - title: "Object Creation"
+    desc: "Create CoPro objects from spatial transcriptomics data"
+    contents:
+      - newCoProSingle
+      - newCoProMulti
+      - CreateCoPro
+      - CoPro-class
+      - subsetData
+
+  - title: "Core Pipeline"
+    desc: "The main CoPro analysis workflow"
+    contents:
+      - computePCA
+      - computeDistance
+      - computeKernelMatrix
+      - runSkrCCA
+      - computeNormalizedCorrelation
+      - computeGeneAndCellScores
+      - computeRegressionGeneScores
+
+  - title: "Results Access"
+    desc: "Retrieve analysis results"
+    contents:
+      - getCellScores
+      - getCellScoresInSitu
+      - getNormCorr
+      - getCorrOneType
+      - getCorrTwoTypes
+      - getDistMat
+      - getSelfDistMat
+      - getKernelMatrix
+      - getSelfKernelMatrix
+      - getColocScores
+      - getSlideID
+      - getSlideList
+      - isMultiSlide
+
+  - title: "Score Transfer"
+    desc: "Transfer learned patterns to new slides or datasets"
+    contents:
+      - getTransferCellScores
+      - getTransferNormCorr
+      - getTransferBidirCorr
+      - getTransferSelfBidirCorr
+      - quantile_normalize
+
+  - title: "Within-Cell-Type Analysis"
+    desc: "Self-correlation and single cell type spatial patterns"
+    contents:
+      - computeSelfDistance
+      - computeSelfKernel
+      - computeSelfBidirCorr
+      - computeBidirCorrelation
+      - ensureBidirCorrelationSlot
+
+  - title: "Gene-Level Analysis"
+    desc: "Gene scoring, testing, and regression"
+    contents:
+      - testGeneGLM
+      - smoothCellScoresMatrix
+
+  - title: "Permutation Testing"
+    desc: "Statistical significance via spatial permutations"
+    contents:
+      - runSkrCCAPermu
+      - runSkrCCAPermu_FairSigma
+      - computeNormalizedCorrelationPermu
+      - resample_spatial
+      - generate_toroidal_permutations
+      - compute_ground_truth_ncorr
+      - calculate_pvalue
+
+  - title: "Visualization"
+    desc: "Plotting functions"
+    contents:
+      - plotG12Functions
+      - diagnose_bin_distribution
+
+  - title: "Utilities"
+    desc: "Helper and optimization functions"
+    contents:
+      - copro_download_data
+      - assignDistanceManually
+      - optimize_bilinear
+      - optimize_bilinear_multi_slides
+      - optimize_bilinear_n
+      - optimize_bilinear_n_multi_slides
+
+articles:
+  - title: "Getting Started"
+    navbar: "Getting Started"
+    contents:
+      - organoid_one_type
+      - brain_merfish_two_type
+
+  - title: "Advanced Analyses"
+    navbar: "Advanced"
+    contents:
+      - colon_d3_cross_type
+      - colon_d9_multi_slide
+      - kidney_guided_gradient

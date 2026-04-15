@@ -4,3 +4,8 @@ docs
 .DS_Store
 .upload
 CLAUDE.md
+data-raw/vignette_data/
+README.html
+README.knit.md
+*.tar.gz
+*.Rcheck/

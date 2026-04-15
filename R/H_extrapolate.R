@@ -142,7 +142,7 @@ utils::globalVariables(c("getKernelMatrix", "getSlideList"))
 #'
 #' @seealso [getTransferCellScores]
 #'
-#' @keywords internal
+#' @export
 transfer_scores <- function(mat_A, mat_B, gs_ct,
                             use_quantile_normalization = TRUE,
                             gs_weight_threshold = 0,

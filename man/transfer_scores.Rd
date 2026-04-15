@@ -63,4 +63,3 @@ on the same set and ordering of genes (columns of \code{mat_A}/\code{mat_B}, row
 \seealso{
 \link{getTransferCellScores}
 }
-\keyword{internal}

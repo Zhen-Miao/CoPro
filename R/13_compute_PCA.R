@@ -298,6 +298,8 @@ setGeneric("computePCA",
 #' @param nPCA Number of principal components to compute for each cell type.
 #' @param center Whether to center the matrix before PCA
 #' @param scale. Whether to scale the matrix before PCA
+#' @param scalePCs Whether to scale (whiten) PCs by their standard deviation
+#'   before downstream CCA optimization. Default \code{TRUE} (recommended).
 #' @param dataUse What data to use, choices between "raw" and "integrated".
 #'   Default is "raw". For single slide, this argument is ignored.
 #' @param center_per_slide After the global PCA, do we do center per slide

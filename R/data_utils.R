@@ -1,0 +1,94 @@
+#' Download example datasets for CoPro vignettes
+#'
+#' Downloads pre-processed, subsampled datasets from GitHub Releases
+#' for use in vignettes and tutorials. The datasets are attached to
+#' GitHub releases via the \code{piggyback} package.
+#'
+#' @param dataset Character string specifying which dataset to download.
+#'   One of \code{"colon_d3"}, \code{"colon_d9"}, \code{"kidney"},
+#'   \code{"organoid"}, or \code{"brain_merfish"}.
+#' @param destdir Directory to save the downloaded file. Defaults to
+#'   a package-specific cache directory via \code{tools::R_user_dir()}.
+#' @param tag The GitHub release tag to download from. Defaults to
+#'   \code{"data-v1"}.
+#' @param overwrite Logical; if \code{TRUE}, re-download even if the
+#'   file already exists locally. Default \code{FALSE}.
+#'
+#' @return The file path to the downloaded RDS file (invisibly).
+#'
+#' @details
+#' Available datasets:
+#' \describe{
+#'   \item{\code{colon_d3}}{Colon Day 3 organoid data (Epithelial,
+#'     Fibroblast, Immune). Demonstrates cross-cell-type co-progression
+#'     with orthogonal CCA axes.}
+#'   \item{\code{colon_d9}}{Colon Day 9 organoid data (multiple slides).
+#'     Demonstrates multi-slide analysis and score transfer.}
+#'   \item{\code{kidney}}{Kidney seqFISH data (tubular and vascular
+#'     cells). Demonstrates supervised/guided spatial gradient detection.}
+#'   \item{\code{organoid}}{72hr organoid culture (single cell type).
+#'     Demonstrates within-cell-type spatial pattern detection.}
+#'   \item{\code{brain_merfish}}{Brain MERFISH data (D1/D2 neurons).
+#'     Demonstrates two-cell-type co-progression.}
+#' }
+#'
+#' The data files are hosted as GitHub Release assets and are typically
+#' 5--30 MB each. They are subsampled from the full datasets to allow
+#' fast vignette execution while preserving biological signal.
+#'
+#' @examples
+#' \dontrun{
+#' # Download and load the colon D3 dataset
+#' path <- copro_download_data("colon_d3")
+#' dat <- readRDS(path)
+#' }
+#'
+#' @export
+copro_download_data <- function(
+    dataset = c("colon_d3", "colon_d9", "kidney", "organoid", "brain_merfish"),
+    destdir = NULL,
+    tag = "data-v1",
+    overwrite = FALSE
+) {
+  dataset <- match.arg(dataset)
+
+  if (!requireNamespace("piggyback", quietly = TRUE)) {
+    stop(
+      "Package 'piggyback' is required to download example data.\n",
+      "Install it with: install.packages('piggyback')",
+      call. = FALSE
+    )
+  }
+
+  file_name <- paste0("copro_", dataset, ".rds")
+
+  if (is.null(destdir)) {
+    destdir <- tools::R_user_dir("CoPro", which = "cache")
+  }
+  if (!dir.exists(destdir)) {
+    dir.create(destdir, recursive = TRUE)
+  }
+
+  dest_file <- file.path(destdir, file_name)
+
+  if (file.exists(dest_file) && !overwrite) {
+    message("Using cached file: ", dest_file)
+    return(invisible(dest_file))
+  }
+
+  message("Downloading ", file_name, " from GitHub Release '", tag, "'...")
+  piggyback::pb_download(
+    file = file_name,
+    repo = "Zhen-Miao/CoPro",
+    tag = tag,
+    dest = destdir,
+    overwrite = overwrite
+  )
+
+  if (!file.exists(dest_file)) {
+    stop("Download failed. File not found: ", dest_file, call. = FALSE)
+  }
+
+  message("Downloaded to: ", dest_file)
+  invisible(dest_file)
+}

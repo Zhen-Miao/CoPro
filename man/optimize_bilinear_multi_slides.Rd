@@ -36,6 +36,9 @@ optimize_bilinear_multi_slides(
 
 \item{step_size}{Step size for damped power iteration (default 1).
 Values in (0,1) blend old and new weights for smoother convergence.}
+
+\item{sdev2_list}{Optional named list of squared standard deviations per
+cell type for weighted normalization. Default \code{NULL}.}
 }
 \value{
 Named list of weight vectors (first component)
