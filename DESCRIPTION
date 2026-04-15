@@ -38,7 +38,9 @@ Suggests:
     igraph,
     knitr,
     rmarkdown,
-    piggyback
+    piggyback,
+    scales,
+    ggrepel
 VignetteBuilder: knitr
 Config/testthat/edition: 3
 URL: https://zhen-miao.github.io/CoPro/, https://github.com/Zhen-Miao/CoPro

@@ -31,7 +31,14 @@ jobs:
       - uses: r-lib/actions/setup-r-dependencies@v2
         with:
           extra-packages: any::pkgdown, local::.
+          dependencies: '"hard"'
           needs: website
+
+      - name: Install vignette extras
+        run: |
+          pak::pkg_install(c("knitr", "rmarkdown", "piggyback", "viridis",
+                             "scales", "ggrepel"))
+        shell: Rscript {0}
 
       - name: Build site
         run: pkgdown::build_site_github_pages(new_process = FALSE, install = FALSE)
