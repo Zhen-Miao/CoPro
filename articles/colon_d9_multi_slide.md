@@ -187,27 +187,27 @@ ref_obj <- runSkrCCA(ref_obj, scalePCs = TRUE, maxIter = 500, nCC = 2)
 
     ## Running skrCCA for sigma = 0.005
 
-    ## [1] "Convergence reached at 10 iterations (Max diff = 8.855e-06 )"
-    ## [1] "Convergence reached at 40 iterations (Max diff = 8.130e-06 )"
+    ## [1] "Convergence reached at 11 iterations (Max diff = 3.187e-06 )"
+    ## [1] "Convergence reached at 40 iterations (Max diff = 8.129e-06 )"
 
     ## Running skrCCA for sigma = 0.01
 
-    ## [1] "Convergence reached at 10 iterations (Max diff = 7.128e-06 )"
-    ## [1] "Convergence reached at 9 iterations (Max diff = 3.697e-06 )"
+    ## [1] "Convergence reached at 12 iterations (Max diff = 5.198e-06 )"
+    ## [1] "Convergence reached at 10 iterations (Max diff = 5.522e-06 )"
 
     ## Running skrCCA for sigma = 0.02
 
-    ## [1] "Convergence reached at 9 iterations (Max diff = 6.981e-06 )"
+    ## [1] "Convergence reached at 12 iterations (Max diff = 8.371e-06 )"
     ## [1] "Convergence reached at 8 iterations (Max diff = 5.635e-06 )"
 
     ## Running skrCCA for sigma = 0.05
 
-    ## [1] "Convergence reached at 8 iterations (Max diff = 4.572e-06 )"
+    ## [1] "Convergence reached at 8 iterations (Max diff = 8.270e-06 )"
     ## [1] "Convergence reached at 9 iterations (Max diff = 2.760e-06 )"
 
     ## Running skrCCA for sigma = 0.1
 
-    ## [1] "Convergence reached at 6 iterations (Max diff = 5.352e-06 )"
+    ## [1] "Convergence reached at 8 iterations (Max diff = 4.178e-06 )"
     ## [1] "Convergence reached at 7 iterations (Max diff = 2.794e-06 )"
 
     ## Optimization succeeded for 5 sigma value(s): sigma_0.005, sigma_0.01, sigma_0.02, sigma_0.05, sigma_0.1
@@ -754,12 +754,12 @@ print(ref_ncorr[ref_ncorr$sigmaValues == sigma_opt, ])
 ```
 
     ##              sigmaValues  cellType1  cellType2 CC_index normalizedCorrelation
-    ## sigma_0.01.1        0.01 Epithelial Fibroblast        1             0.1347933
-    ## sigma_0.01.2        0.01 Epithelial     Immune        1             0.1172362
-    ## sigma_0.01.3        0.01 Fibroblast     Immune        1             0.2806241
-    ## sigma_0.01.4        0.01 Epithelial Fibroblast        2             0.1584864
-    ## sigma_0.01.5        0.01 Epithelial     Immune        2            -0.0046844
-    ## sigma_0.01.6        0.01 Fibroblast     Immune        2             0.1101345
+    ## sigma_0.01.1        0.01 Epithelial Fibroblast        1           0.134793378
+    ## sigma_0.01.2        0.01 Epithelial     Immune        1           0.117236137
+    ## sigma_0.01.3        0.01 Fibroblast     Immune        1           0.280624049
+    ## sigma_0.01.4        0.01 Epithelial Fibroblast        2           0.158486309
+    ## sigma_0.01.5        0.01 Epithelial     Immune        2          -0.004684542
+    ## sigma_0.01.6        0.01 Fibroblast     Immune        2           0.110134653
     ##                               ct12
     ## sigma_0.01.1 Epithelial-Fibroblast
     ## sigma_0.01.2     Epithelial-Immune
@@ -782,11 +782,11 @@ print(tar1_ncorr)
     ## $sigma_0.01
     ##   sigmaValue  cellType1  cellType2 CC_index normalizedCorrelation
     ## 1       0.01 Epithelial Fibroblast        1            0.11110711
-    ## 2       0.01 Epithelial Fibroblast        2            0.07360585
-    ## 3       0.01 Epithelial     Immune        1            0.10573678
-    ## 4       0.01 Epithelial     Immune        2           -0.07005265
-    ## 5       0.01 Fibroblast     Immune        1            0.29851289
-    ## 6       0.01 Fibroblast     Immune        2            0.10033653
+    ## 2       0.01 Epithelial Fibroblast        2            0.07360603
+    ## 3       0.01 Epithelial     Immune        1            0.10573677
+    ## 4       0.01 Epithelial     Immune        2           -0.07005256
+    ## 5       0.01 Fibroblast     Immune        1            0.29851287
+    ## 6       0.01 Fibroblast     Immune        2            0.10033684
 
 ``` r
 cat("\nTarget 2 transferred norm. corr.:\n")
@@ -802,11 +802,11 @@ print(tar2_ncorr)
     ## $sigma_0.01
     ##   sigmaValue  cellType1  cellType2 CC_index normalizedCorrelation
     ## 1       0.01 Epithelial Fibroblast        1            0.06226175
-    ## 2       0.01 Epithelial Fibroblast        2            0.08658253
-    ## 3       0.01 Epithelial     Immune        1            0.07693582
-    ## 4       0.01 Epithelial     Immune        2           -0.02331899
+    ## 2       0.01 Epithelial Fibroblast        2            0.08658255
+    ## 3       0.01 Epithelial     Immune        1            0.07693579
+    ## 4       0.01 Epithelial     Immune        2           -0.02331903
     ## 5       0.01 Fibroblast     Immune        1            0.26800977
-    ## 6       0.01 Fibroblast     Immune        2            0.09241650
+    ## 6       0.01 Fibroblast     Immune        2            0.09241641
 
 High transferred normalized correlations indicate that the
 co-progression pattern learned from the reference generalizes well to
@@ -909,33 +909,33 @@ multi_obj <- runSkrCCA(multi_obj, scalePCs = TRUE, maxIter = 500, nCC = 2)
 
     ## Running skrCCA for sigma = 0.005
 
-    ## Convergence reached at 8 iterations (Max diff = 6.856e-06 )
+    ## Convergence reached at 7 iterations (Max diff = 9.917e-06 )
 
-    ## [1] "Convergence reached at 19 iterations (Max diff = 8.112e-06 )"
+    ## [1] "Convergence reached at 19 iterations (Max diff = 8.109e-06 )"
 
     ## Running skrCCA for sigma = 0.01
 
-    ## Convergence reached at 8 iterations (Max diff = 2.045e-06 )
+    ## Convergence reached at 7 iterations (Max diff = 9.255e-06 )
 
-    ## [1] "Convergence reached at 74 iterations (Max diff = 9.409e-06 )"
+    ## [1] "Convergence reached at 38 iterations (Max diff = 9.377e-06 )"
 
     ## Running skrCCA for sigma = 0.02
 
-    ## Convergence reached at 7 iterations (Max diff = 4.600e-06 )
+    ## Convergence reached at 8 iterations (Max diff = 2.642e-06 )
 
-    ## [1] "Convergence reached at 33 iterations (Max diff = 7.607e-06 )"
+    ## [1] "Convergence reached at 33 iterations (Max diff = 7.609e-06 )"
 
     ## Running skrCCA for sigma = 0.05
 
-    ## Convergence reached at 7 iterations (Max diff = 7.622e-06 )
+    ## Convergence reached at 7 iterations (Max diff = 5.801e-06 )
 
-    ## [1] "Convergence reached at 18 iterations (Max diff = 8.816e-06 )"
+    ## [1] "Convergence reached at 26 iterations (Max diff = 7.235e-06 )"
 
     ## Running skrCCA for sigma = 0.1
 
-    ## Convergence reached at 10 iterations (Max diff = 1.994e-06 )
+    ## Convergence reached at 6 iterations (Max diff = 7.853e-06 )
 
-    ## [1] "Convergence reached at 20 iterations (Max diff = 8.645e-06 )"
+    ## [1] "Convergence reached at 24 iterations (Max diff = 7.432e-06 )"
 
     ## Optimization succeeded for 5 sigma value(s): sigma_0.005, sigma_0.01, sigma_0.02, sigma_0.05, sigma_0.1
 

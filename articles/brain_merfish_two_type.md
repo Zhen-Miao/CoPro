@@ -84,23 +84,23 @@ obj <- runSkrCCA(obj, scalePCs = TRUE, maxIter = 500)
 
     ## Running skrCCA for sigma = 0.1
 
-    ## [1] "Convergence reached at 27 iterations (Max diff = 8.929e-06 )"
-    ## [1] "Convergence reached at 0 iterations (Max diff = 3.417e-14 )"
+    ## [1] "Convergence reached at 26 iterations (Max diff = 7.515e-06 )"
+    ## [1] "Convergence reached at 1 iterations (Max diff = 1.233e-14 )"
 
     ## Running skrCCA for sigma = 0.14
 
-    ## [1] "Convergence reached at 21 iterations (Max diff = 6.632e-06 )"
-    ## [1] "Convergence reached at 1 iterations (Max diff = 4.441e-16 )"
+    ## [1] "Convergence reached at 20 iterations (Max diff = 9.619e-06 )"
+    ## [1] "Convergence reached at 1 iterations (Max diff = 1.665e-16 )"
 
     ## Running skrCCA for sigma = 0.2
 
-    ## [1] "Convergence reached at 17 iterations (Max diff = 6.454e-06 )"
-    ## [1] "Convergence reached at 1 iterations (Max diff = 4.302e-16 )"
+    ## [1] "Convergence reached at 14 iterations (Max diff = 9.461e-06 )"
+    ## [1] "Convergence reached at 1 iterations (Max diff = 3.886e-16 )"
 
     ## Running skrCCA for sigma = 0.5
 
-    ## [1] "Convergence reached at 11 iterations (Max diff = 7.408e-06 )"
-    ## [1] "Convergence reached at 0 iterations (Max diff = 1.480e-15 )"
+    ## [1] "Convergence reached at 13 iterations (Max diff = 7.491e-06 )"
+    ## [1] "Convergence reached at 0 iterations (Max diff = 2.949e-15 )"
 
     ## Optimization succeeded for 4 sigma value(s): sigma_0.1, sigma_0.14, sigma_0.2, sigma_0.5
 
@@ -207,16 +207,16 @@ obj <- runSkrCCAPermu(obj, nPermu = 5L, permu_method = "bin",
     ## Cell permutation indices generated.
     ## 
     ## Running CCA optimization for 5 permutations...
-    ## [1] "Convergence reached at 22 iterations (Max diff = 8.787e-06 )"
-    ## [1] "Convergence reached at 0 iterations (Max diff = 5.763e-13 )"
-    ## [1] "Convergence reached at 47 iterations (Max diff = 9.597e-06 )"
-    ## [1] "Convergence reached at 1 iterations (Max diff = 4.108e-15 )"
-    ## [1] "Convergence reached at 21 iterations (Max diff = 9.612e-06 )"
-    ## [1] "Convergence reached at 0 iterations (Max diff = 3.344e-11 )"
-    ## [1] "Convergence reached at 54 iterations (Max diff = 8.615e-06 )"
-    ## [1] "Convergence reached at 1 iterations (Max diff = 7.380e-15 )"
-    ## [1] "Convergence reached at 16 iterations (Max diff = 9.050e-06 )"
-    ## [1] "Convergence reached at 0 iterations (Max diff = 3.650e-12 )"
+    ## [1] "Convergence reached at 23 iterations (Max diff = 7.942e-06 )"
+    ## [1] "Convergence reached at 1 iterations (Max diff = 3.662e-13 )"
+    ## [1] "Convergence reached at 15 iterations (Max diff = 7.143e-06 )"
+    ## [1] "Convergence reached at 1 iterations (Max diff = 7.903e-15 )"
+    ## [1] "Convergence reached at 19 iterations (Max diff = 5.864e-06 )"
+    ## [1] "Convergence reached at 1 iterations (Max diff = 1.582e-11 )"
+    ## [1] "Convergence reached at 14 iterations (Max diff = 4.520e-06 )"
+    ## [1] "Convergence reached at 0 iterations (Max diff = 1.848e-10 )"
+    ## [1] "Convergence reached at 8 iterations (Max diff = 4.634e-06 )"
+    ## [1] "Convergence reached at 0 iterations (Max diff = 4.876e-11 )"
     ##   Completed 5 of 5 permutations
     ## 
     ## Permutation testing complete.
@@ -251,16 +251,16 @@ print(nc_permu)
     ## permu_5.1         0.1 061 STR D1 Gaba 062 STR D2 Gaba        1
     ## permu_5.2         0.1 061 STR D1 Gaba 062 STR D2 Gaba        2
     ##           normalizedCorrelation
-    ## permu_1.1             0.2822854
-    ## permu_1.2             0.2208827
-    ## permu_2.1             0.2703554
-    ## permu_2.2             0.2507406
-    ## permu_3.1             0.2523586
-    ## permu_3.2             0.1980277
-    ## permu_4.1             0.2575950
-    ## permu_4.2             0.2257873
-    ## permu_5.1             0.2828030
-    ## permu_5.2             0.2102234
+    ## permu_1.1             0.2691072
+    ## permu_1.2             0.2106740
+    ## permu_2.1             0.2511427
+    ## permu_2.2             0.2057824
+    ## permu_3.1             0.2402538
+    ## permu_3.2             0.1765175
+    ## permu_4.1             0.2841232
+    ## permu_4.2             0.1786754
+    ## permu_5.1             0.3707562
+    ## permu_5.2             0.1871863
 
 ## References
 
