@@ -207,6 +207,7 @@ setMethod(
 #' @param n target number of blocks (>= 1)
 #' @param maxCell maximum cells per block (>= 1)
 #' @return character vector of block labels length nrow(locationData)
+#' @keywords internal
 .partitionByLocation <- function(locationData, n, maxCell) {
   stopifnot(is.data.frame(locationData))
   cn <- tolower(colnames(locationData))

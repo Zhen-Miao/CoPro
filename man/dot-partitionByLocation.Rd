@@ -20,3 +20,4 @@ character vector of block labels length nrow(locationData)
 Uses k-means on coordinates x, y, (and z) and recursively subdivides any cluster
 that still exceeds maxCell.
 }
+\keyword{internal}

@@ -18,11 +18,13 @@ reference:
       - CreateCoPro
       - CoPro-class
       - subsetData
+      - "`show,CoPro-method`"
 
   - title: "Core Pipeline"
     desc: "The main CoPro analysis workflow"
     contents:
       - computePCA
+      - "`computePCA,CoProSingle-method`"
       - computeDistance
       - computeKernelMatrix
       - runSkrCCA
@@ -55,6 +57,7 @@ reference:
       - getTransferBidirCorr
       - getTransferSelfBidirCorr
       - quantile_normalize
+      - transfer_scores
 
   - title: "Within-Cell-Type Analysis"
     desc: "Self-correlation and single cell type spatial patterns"
