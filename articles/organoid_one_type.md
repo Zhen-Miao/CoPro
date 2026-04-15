@@ -135,38 +135,38 @@ obj <- runSkrCCA(obj, scalePCs = TRUE, maxIter = 500, nCC = 4)
 
     ## Running skrCCA for sigma = 0.02
 
-    ## [1] "Convergence reached at 18 iterations (Max diff = 7.655e-06 )"
-    ## [1] "Convergence reached at 0 iterations (Max diff = 2.776e-16 )"
+    ## [1] "Convergence reached at 18 iterations (Max diff = 6.102e-06 )"
+    ## [1] "Convergence reached at 0 iterations (Max diff = 4.163e-16 )"
     ## [1] "Convergence reached at 0 iterations (Max diff = 2.220e-16 )"
-    ## [1] "Convergence reached at 0 iterations (Max diff = 3.886e-16 )"
+    ## [1] "Convergence reached at 0 iterations (Max diff = 4.441e-16 )"
 
     ## Running skrCCA for sigma = 0.05
 
-    ## [1] "Convergence reached at 19 iterations (Max diff = 6.332e-06 )"
-    ## [1] "Convergence reached at 0 iterations (Max diff = 1.943e-16 )"
-    ## [1] "Convergence reached at 0 iterations (Max diff = 4.718e-16 )"
+    ## [1] "Convergence reached at 19 iterations (Max diff = 9.844e-06 )"
+    ## [1] "Convergence reached at 0 iterations (Max diff = 2.498e-16 )"
+    ## [1] "Convergence reached at 0 iterations (Max diff = 2.776e-16 )"
     ## [1] "Convergence reached at 0 iterations (Max diff = 4.441e-16 )"
 
     ## Running skrCCA for sigma = 0.1
 
-    ## [1] "Convergence reached at 18 iterations (Max diff = 7.512e-06 )"
-    ## [1] "Convergence reached at 0 iterations (Max diff = 7.772e-16 )"
-    ## [1] "Convergence reached at 0 iterations (Max diff = 4.996e-16 )"
-    ## [1] "Convergence reached at 0 iterations (Max diff = 7.910e-16 )"
+    ## [1] "Convergence reached at 20 iterations (Max diff = 8.907e-06 )"
+    ## [1] "Convergence reached at 0 iterations (Max diff = 3.747e-16 )"
+    ## [1] "Convergence reached at 0 iterations (Max diff = 4.580e-16 )"
+    ## [1] "Convergence reached at 0 iterations (Max diff = 5.412e-16 )"
 
     ## Running skrCCA for sigma = 0.15
 
-    ## [1] "Convergence reached at 18 iterations (Max diff = 7.144e-06 )"
-    ## [1] "Convergence reached at 0 iterations (Max diff = 3.331e-16 )"
-    ## [1] "Convergence reached at 0 iterations (Max diff = 2.290e-16 )"
-    ## [1] "Convergence reached at 0 iterations (Max diff = 2.359e-16 )"
+    ## [1] "Convergence reached at 18 iterations (Max diff = 8.992e-06 )"
+    ## [1] "Convergence reached at 0 iterations (Max diff = 2.220e-16 )"
+    ## [1] "Convergence reached at 0 iterations (Max diff = 4.025e-16 )"
+    ## [1] "Convergence reached at 0 iterations (Max diff = 1.665e-16 )"
 
     ## Running skrCCA for sigma = 0.2
 
-    ## [1] "Convergence reached at 20 iterations (Max diff = 7.353e-06 )"
-    ## [1] "Convergence reached at 0 iterations (Max diff = 2.776e-16 )"
-    ## [1] "Convergence reached at 0 iterations (Max diff = 2.776e-16 )"
-    ## [1] "Convergence reached at 0 iterations (Max diff = 2.359e-16 )"
+    ## [1] "Convergence reached at 19 iterations (Max diff = 7.082e-06 )"
+    ## [1] "Convergence reached at 0 iterations (Max diff = 1.943e-16 )"
+    ## [1] "Convergence reached at 0 iterations (Max diff = 2.220e-16 )"
+    ## [1] "Convergence reached at 0 iterations (Max diff = 1.388e-16 )"
 
     ## Optimization succeeded for 5 sigma value(s): sigma_0.02, sigma_0.05, sigma_0.1, sigma_0.15, sigma_0.2
 
