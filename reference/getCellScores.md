@@ -1,0 +1,110 @@
+# Get cell scores from CoPro object
+
+This function provides a safe way to access cell scores from CoPro
+objects, using the flat structure for efficient access. It works with
+both single-slide (CoProSingle) and multi-slide (CoProMulti) objects.
+
+## Usage
+
+``` r
+getCellScores(
+  object,
+  sigma,
+  cellType,
+  slide = NULL,
+  ccIndex = NULL,
+  cells = NULL,
+  verbose = TRUE
+)
+
+# S4 method for class 'CoProSingle'
+getCellScores(
+  object,
+  sigma,
+  cellType,
+  slide = NULL,
+  ccIndex = NULL,
+  cells = NULL,
+  verbose = TRUE
+)
+
+# S4 method for class 'CoProMulti'
+getCellScores(
+  object,
+  sigma,
+  cellType,
+  slide = NULL,
+  ccIndex = NULL,
+  cells = NULL,
+  verbose = TRUE
+)
+```
+
+## Arguments
+
+- object:
+
+  A CoPro object (CoProSingle or CoProMulti)
+
+- sigma:
+
+  Numeric sigma value for which to retrieve cell scores
+
+- cellType:
+
+  Character string specifying the cell type
+
+- slide:
+
+  Character string specifying slide ID (only for CoProMulti objects,
+  ignored for CoProSingle)
+
+- ccIndex:
+
+  Optional integer specifying which canonical component to extract
+  (1-based). If NULL (default), returns the entire matrix
+
+- cells:
+
+  Optional character vector of specific cell IDs to extract. If NULL
+  (default), returns all cells
+
+- verbose:
+
+  Logical indicating whether to print informative messages (default:
+  TRUE)
+
+## Value
+
+A matrix of cell scores with cells as rows and canonical components as
+columns. If ccIndex is specified, returns a vector of scores for that
+component. If cells is specified, returns only those specific cells.
+
+## Details
+
+The function uses a flat structure for efficient access:
+
+- Cell scores are stored with names like "cellScores\|sigma0.1\|TypeA"
+
+For multi-slide objects, cell scores are aggregated across slides and
+specific slide filtering is done using the metaDataSub slot.
+
+## Examples
+
+``` r
+if (FALSE) { # \dontrun{
+# Get all cell scores for a specific sigma and cell type
+scores <- getCellScores(object, sigma = 0.1, cellType = "TypeA")
+
+# Get scores for a specific canonical component
+cc1_scores <- getCellScores(object, sigma = 0.1, cellType = "TypeA", ccIndex = 1)
+
+# Get scores for specific cells
+specific_scores <- getCellScores(object, sigma = 0.1, cellType = "TypeA", 
+                                 cells = c("cell_1", "cell_2"))
+
+# For multi-slide object, specify slide
+slide_scores <- getCellScores(object, sigma = 0.1, cellType = "TypeA", 
+                              slide = "slide1")
+} # }
+```

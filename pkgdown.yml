@@ -1,0 +1,13 @@
+pandoc: 3.1.11
+pkgdown: 2.2.0
+pkgdown_sha: ~
+articles:
+  brain_merfish_two_type: brain_merfish_two_type.html
+  colon_d3_cross_type: colon_d3_cross_type.html
+  colon_d9_multi_slide: colon_d9_multi_slide.html
+  kidney_guided_gradient: kidney_guided_gradient.html
+  organoid_one_type: organoid_one_type.html
+last_built: 2026-04-15T20:45Z
+urls:
+  reference: https://zhen-miao.github.io/CoPro/reference
+  article: https://zhen-miao.github.io/CoPro/articles
