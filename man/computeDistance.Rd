@@ -13,6 +13,7 @@ computeDistance(
   yDistScale = 1,
   zDistScale = 1,
   normalizeDistance = TRUE,
+  normalizeTarget = 0.01,
   truncateLowDist = TRUE,
   verbose = TRUE,
   knn_k = 10,
@@ -27,6 +28,7 @@ computeDistance(
   yDistScale = 1,
   zDistScale = 1,
   normalizeDistance = TRUE,
+  normalizeTarget = 0.01,
   truncateLowDist = TRUE,
   verbose = TRUE,
   knn_k = 10,
@@ -41,6 +43,7 @@ computeDistance(
   yDistScale = 1,
   zDistScale = 1,
   normalizeDistance = TRUE,
+  normalizeTarget = 0.01,
   truncateLowDist = TRUE,
   verbose = TRUE,
   knn_k = 10,
@@ -61,10 +64,17 @@ computeDistance(
 \item{zDistScale}{Scale for z distance}
 
 \item{normalizeDistance}{Whether to normalize distance? The normalization
-will make sure that the 0.01\% cell-cell distance will become 0.01, thus
-ensuring no matter which input scale is used for the distance matrix,
-the output will roughly be in mm^3. This ensures that the kernel sizes
-from 0.001 to 0.1 will make sense. Default = TRUE}
+will make sure that the low-percentile cell-cell distance will become
+\code{normalizeTarget} (default 0.01), thus ensuring no matter which
+input scale is used for the distance matrix, the output will roughly be
+in mm^3. This ensures that the kernel sizes from 0.001 to 0.1 will make
+sense. Default = TRUE.}
+
+\item{normalizeTarget}{Numeric scalar. The target value that the
+low-percentile cell-cell distance is rescaled to when
+\code{normalizeDistance = TRUE}. Default = 0.01 (preserves historical
+behavior). Advanced users can tune this alongside \code{sigmaValues}
+passed to \code{\link[=computeKernelMatrix]{computeKernelMatrix()}}.}
 
 \item{truncateLowDist}{Whether to truncate small distances so that the cells
 that are nearly overlapping with each other do not have a super small

@@ -164,6 +164,65 @@ test_that("newCoProMulti checks for unique cell IDs", {
   )
 })
 
+test_that("newCoProSingle rejects NA / NaN / Inf in normalizedData", {
+  test_data <- generate_test_data_single(n_cells = 50, n_genes = 20, seed = 1)
+
+  bad_na <- test_data$normalizedData
+  bad_na[3, 4] <- NA_real_
+  expect_error(
+    newCoProSingle(
+      normalizedData = bad_na,
+      locationData   = test_data$locationData,
+      metaData       = test_data$metaData,
+      cellTypes      = test_data$cellTypes
+    ),
+    "NA, NaN, or Inf"
+  )
+
+  bad_inf <- test_data$normalizedData
+  bad_inf[1, 1] <- Inf
+  expect_error(
+    newCoProSingle(
+      normalizedData = bad_inf,
+      locationData   = test_data$locationData,
+      metaData       = test_data$metaData,
+      cellTypes      = test_data$cellTypes
+    ),
+    "NA, NaN, or Inf"
+  )
+})
+
+test_that("newCoProSingle standardizes uppercase coordinate column names", {
+  test_data <- generate_test_data_single(n_cells = 50, n_genes = 20, seed = 2)
+  upper_loc <- test_data$locationData
+  colnames(upper_loc) <- c("X", "Y")
+
+  expect_message(
+    obj <- newCoProSingle(
+      normalizedData = test_data$normalizedData,
+      locationData   = upper_loc,
+      metaData       = test_data$metaData,
+      cellTypes      = test_data$cellTypes
+    ),
+    "Standardizing locationData column names"
+  )
+  expect_equal(colnames(obj@locationData), c("x", "y"))
+})
+
+test_that("show() reports approximate object size", {
+  obj <- create_test_copro_single()
+  out <- utils::capture.output(show(obj))
+  expect_true(any(grepl("Approx\\. object size", out)))
+})
+
+test_that("subsetData error names the requested cell types", {
+  obj <- create_test_copro_single()
+  expect_error(
+    subsetData(obj, cellTypesOfInterest = "NoSuchType"),
+    "NoSuchType"
+  )
+})
+
 test_that("isMultiSlide returns correct values", {
   single_obj <- create_test_copro_single()
   multi_obj <- create_test_copro_multi()

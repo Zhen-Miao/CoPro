@@ -503,17 +503,26 @@
   cca_out <- setNames(vector("list", length = length(sigmas_to_run)), sigma_names_run)
   
   # Run optimization for each sigma value
+  n_sigmas <- length(sigmas_to_run)
+  t_start <- Sys.time()
   for (idx in seq_along(sigmas_to_run)) {
     sig_val <- sigmas_to_run[idx]
     sig_name <- sigma_names_run[idx]
-    message(paste("Running skrCCA for sigma =", sig_val))
-    
+    message(sprintf(
+      "Running skrCCA [%d/%d] for sigma = %g ...",
+      idx, n_sigmas, sig_val
+    ))
+
     # Run optimization for this sigma
     cca_out[[sig_name]] <- .runSingleSigmaOptimization(
       object, sig_val, sig_name, data_matrices, transferred_weight_1,
       is_multi, cts, nCC, maxIter, tol, n_cores, step_size
     )
   }
+  message(sprintf(
+    "skrCCA finished %d sigma value(s) in %.1f s.",
+    n_sigmas, as.numeric(difftime(Sys.time(), t_start, units = "secs"))
+  ))
   
   # Process results and generate summary
   .processOptimizationResults(cca_out, sigma_names_run)
@@ -542,6 +551,24 @@
 #'   convergence, which can help with many cells or many CCs.
 #'
 #' @return CoPro object with skrCCA results computed
+#' @family spatial-pipeline
+#' @seealso [computePCA()], [computeKernelMatrix()],
+#'   [computeNormalizedCorrelation()], [computeGeneAndCellScores()]
+#' @examples
+#' \donttest{
+#' toy <- readRDS(system.file("extdata", "toy_copro_data.rds", package = "CoPro"))
+#' obj <- newCoProSingle(
+#'   normalizedData = toy$normalizedData,
+#'   locationData   = toy$locationData,
+#'   metaData       = toy$metaData,
+#'   cellTypes      = toy$cellTypes
+#' )
+#' obj <- subsetData(obj, cellTypesOfInterest = unique(toy$cellTypes))
+#' obj <- computePCA(obj, nPCA = 10)
+#' obj <- computeDistance(obj, distType = "Euclidean2D", verbose = FALSE)
+#' obj <- computeKernelMatrix(obj, sigmaValues = c(0.05, 0.1), verbose = FALSE)
+#' obj <- runSkrCCA(obj, scalePCs = TRUE, nCC = 2)
+#' }
 #' @export
 #'
 setGeneric(

@@ -13,6 +13,17 @@
 #' @rdname newCoProSingle
 #' @aliases newCoProSingle,CoPro-method
 #' @return A `CoPro` object
+#' @family object-creation
+#' @seealso [newCoProMulti()], [CreateCoPro()], [asCoProSingle()]
+#' @examples
+#' toy <- readRDS(system.file("extdata", "toy_copro_data.rds", package = "CoPro"))
+#' obj <- newCoProSingle(
+#'   normalizedData = toy$normalizedData,
+#'   locationData   = toy$locationData,
+#'   metaData       = toy$metaData,
+#'   cellTypes      = toy$cellTypes
+#' )
+#' obj
 #' @export
 #'
 setGeneric(
@@ -37,6 +48,9 @@ setMethod(
       stop("normalizedData must be a matrix, sparse matrix, or BPCells IterableMatrix")
     }
 
+    ## reject NA / NaN / Inf early with a targeted error
+    .validateNormalizedData(normalizedData)
+
     ## check dimension of input
     if (length(cellTypes) != nrow(normalizedData) ||
         nrow(normalizedData) != nrow(metaData) ||
@@ -50,7 +64,25 @@ setMethod(
                  "axis info and colnames should be named accordingly"
       ))
     }
+    loc_colnames <- colnames(locationData)
+    if (!identical(loc_colnames, tolower(loc_colnames))) {
+      message(
+        "Standardizing locationData column names to lowercase: ",
+        paste(loc_colnames, collapse = ", "), " -> ",
+        paste(tolower(loc_colnames), collapse = ", ")
+      )
+    }
     colnames(locationData) <- tolower(colnames(locationData))
+
+    ## warn if metaData contains a reserved column we would overwrite
+    reserved_cols <- intersect("cellType", colnames(metaData))
+    if (length(reserved_cols) > 0) {
+      warning(
+        "metaData contains reserved column(s) that may be referenced by ",
+        "downstream CoPro code: ", paste(reserved_cols, collapse = ", "),
+        ". Consider renaming to avoid confusion."
+      )
+    }
 
     ## convert cellTypes to characters
     if (!is.character(cellTypes)) {
@@ -108,6 +140,8 @@ setMethod(
 #' @param slideID Combined slide/sample identifier vector for all cells. Length must match `nrow(normalizedData)`.
 #'
 #' @return A `CoProMulti` object.
+#' @family object-creation
+#' @seealso [newCoProSingle()], [CreateCoPro()], [asCoProMulti()]
 #' @export
 #' @rdname newCoProMulti
 #' @aliases newCoProMulti,CoProMulti-method
@@ -134,6 +168,9 @@ setMethod(
       stop("normalizedData must be a matrix, sparse matrix, or BPCells IterableMatrix")
     }
 
+    ## reject NA / NaN / Inf early with a targeted error
+    .validateNormalizedData(normalizedData)
+
     n_cells <- nrow(normalizedData)
     if (length(cellTypes) != n_cells || nrow(metaData) != n_cells ||
         nrow(locationData) != n_cells || length(slideID) != n_cells) {
@@ -143,6 +180,14 @@ setMethod(
     # Check required columns in locationData
     if (!all(c("x", "y") %in% tolower(colnames(locationData)))) {
       stop("locationData requires columns named 'x' and 'y'.")
+    }
+    loc_colnames <- colnames(locationData)
+    if (!identical(loc_colnames, tolower(loc_colnames))) {
+      message(
+        "Standardizing locationData column names to lowercase: ",
+        paste(loc_colnames, collapse = ", "), " -> ",
+        paste(tolower(loc_colnames), collapse = ", ")
+      )
     }
     colnames(locationData) <- tolower(colnames(locationData))
 
@@ -425,3 +470,301 @@ CreateCoPro <- function(normalizedData, locationData, metaData, cellTypes,
 
   invisible(NULL)
 }
+
+
+# ---------------------------------------------------------------------------
+# Coercion constructors from common single-cell objects
+# ---------------------------------------------------------------------------
+
+#' Coerce a single-cell object into a CoPro object
+#'
+#' One-call coercion from `SingleCellExperiment` or `Seurat` objects into
+#' `CoProSingle` (`asCoProSingle()`) or `CoProMulti` (`asCoProMulti()`)
+#' objects. These helpers extract the relevant expression matrix, spatial
+#' coordinates, cell metadata, and cell-type labels, then delegate to
+#' [newCoProSingle()] / [newCoProMulti()] so all validation stays
+#' single-sourced.
+#'
+#' For `SingleCellExperiment` objects:
+#' * `normalizedData` comes from `SummarizedExperiment::assay(x, assay)`
+#'   (default `"logcounts"` if present, else the first assay), transposed
+#'   into cells-by-genes orientation.
+#' * `locationData` comes from `SingleCellExperiment::reducedDim(x, spatialDim)`
+#'   (expected to have 2 or 3 columns renamed to `x`, `y`, optionally `z`).
+#' * `metaData` comes from `SummarizedExperiment::colData(x)` as a data.frame.
+#' * `cellTypes` comes from the column of `colData(x)` named `cellTypeCol`.
+#'
+#' For `Seurat` objects:
+#' * `normalizedData` comes from `SeuratObject::GetAssayData(x, layer = layer,
+#'   assay = assay)`, transposed into cells-by-genes orientation.
+#' * `locationData` comes from either `x[[spatialDim]]@coordinates` (when
+#'   `spatialDim` refers to a spatial image/slice) or
+#'   `SeuratObject::Embeddings(x, reduction = spatialDim)` (when it refers
+#'   to a dimensionality reduction).
+#' * `metaData` comes from the object's `[[]]` slot.
+#' * `cellTypes` comes from `x[[cellTypeCol]][, 1]`.
+#'
+#' Both conversions require the corresponding package to be installed
+#' (`SingleCellExperiment` / `SummarizedExperiment` or `SeuratObject`) and
+#' will error with an install hint otherwise.
+#'
+#' @param x A `SingleCellExperiment` or `Seurat` object.
+#' @param spatialDim Name of the reducedDim / image / reduction that holds
+#'   2-D (or 3-D) spatial coordinates. Default `"spatial"`.
+#' @param cellTypeCol Name of the column in the object's cell-level metadata
+#'   that holds cell type labels. Required.
+#' @param slideCol (`asCoProMulti()` only) Name of the column in the
+#'   object's cell-level metadata that holds the slide/sample identifier.
+#' @param assay Optional assay name. For `SingleCellExperiment` defaults to
+#'   `"logcounts"` when available, otherwise the first assay. For `Seurat`
+#'   defaults to `SeuratObject::DefaultAssay(x)`.
+#' @param layer Seurat-only. Layer (formerly "slot") to pull expression data
+#'   from. Default `"data"`.
+#' @param ... Additional arguments passed through to [newCoProSingle()] /
+#'   [newCoProMulti()] (for example for future extensions).
+#'
+#' @return A `CoProSingle` or `CoProMulti` object.
+#' @family object-creation
+#' @seealso [newCoProSingle()], [newCoProMulti()], [CreateCoPro()]
+#' @rdname asCoPro
+#' @name asCoPro
+#' @aliases asCoProSingle asCoProMulti
+#' @export
+setGeneric(
+  "asCoProSingle",
+  function(x, spatialDim = "spatial", cellTypeCol,
+           assay = NULL, layer = "data", ...) standardGeneric("asCoProSingle")
+)
+
+#' @rdname asCoPro
+#' @export
+setGeneric(
+  "asCoProMulti",
+  function(x, spatialDim = "spatial", cellTypeCol, slideCol,
+           assay = NULL, layer = "data", ...) standardGeneric("asCoProMulti")
+)
+
+
+# -- Internal extractors ----------------------------------------------------
+
+.require_pkg <- function(pkg, purpose) {
+  if (!requireNamespace(pkg, quietly = TRUE)) {
+    stop(
+      "Package '", pkg, "' is required to ", purpose,
+      ". Install it and try again.",
+      call. = FALSE
+    )
+  }
+  invisible(TRUE)
+}
+
+.renameSpatialCols <- function(mat) {
+  if (is.null(mat)) stop("Failed to extract spatial coordinates.", call. = FALSE)
+  if (ncol(mat) < 2 || ncol(mat) > 3) {
+    stop(
+      "Spatial coordinates must have 2 or 3 columns; got ", ncol(mat), ".",
+      call. = FALSE
+    )
+  }
+  df <- as.data.frame(mat, stringsAsFactors = FALSE)
+  colnames(df) <- c("x", "y", "z")[seq_len(ncol(df))]
+  df
+}
+
+.extractFromSCE <- function(x, spatialDim, cellTypeCol, assay,
+                            slideCol = NULL) {
+  .require_pkg("SingleCellExperiment", "coerce a SingleCellExperiment")
+  .require_pkg("SummarizedExperiment", "coerce a SingleCellExperiment")
+
+  assay_names <- SummarizedExperiment::assayNames(x)
+  if (is.null(assay)) {
+    assay <- if ("logcounts" %in% assay_names) "logcounts" else assay_names[1]
+  }
+  if (!assay %in% assay_names) {
+    stop(
+      "Assay '", assay, "' not found. Available: ",
+      paste(assay_names, collapse = ", "),
+      call. = FALSE
+    )
+  }
+
+  expr <- SummarizedExperiment::assay(x, assay)
+  normalizedData <- Matrix::t(expr)
+
+  red_names <- SingleCellExperiment::reducedDimNames(x)
+  if (!spatialDim %in% red_names) {
+    stop(
+      "reducedDim '", spatialDim, "' not found. Available: ",
+      paste(red_names, collapse = ", "),
+      call. = FALSE
+    )
+  }
+  coords <- SingleCellExperiment::reducedDim(x, spatialDim)
+  locationData <- .renameSpatialCols(coords)
+  rownames(locationData) <- colnames(x)
+
+  col_df <- as.data.frame(
+    SummarizedExperiment::colData(x),
+    stringsAsFactors = FALSE
+  )
+  rownames(col_df) <- colnames(x)
+
+  if (!cellTypeCol %in% colnames(col_df)) {
+    stop(
+      "cellTypeCol '", cellTypeCol, "' not found in colData.",
+      call. = FALSE
+    )
+  }
+  cellTypes <- as.character(col_df[[cellTypeCol]])
+
+  slideID <- NULL
+  if (!is.null(slideCol)) {
+    if (!slideCol %in% colnames(col_df)) {
+      stop(
+        "slideCol '", slideCol, "' not found in colData.",
+        call. = FALSE
+      )
+    }
+    slideID <- as.character(col_df[[slideCol]])
+  }
+
+  list(
+    normalizedData = normalizedData,
+    locationData = locationData,
+    metaData = col_df,
+    cellTypes = cellTypes,
+    slideID = slideID
+  )
+}
+
+.extractFromSeurat <- function(x, spatialDim, cellTypeCol, assay, layer,
+                               slideCol = NULL) {
+  .require_pkg("SeuratObject", "coerce a Seurat object")
+
+  if (is.null(assay)) assay <- SeuratObject::DefaultAssay(x)
+  expr <- SeuratObject::GetAssayData(x, layer = layer, assay = assay)
+  normalizedData <- Matrix::t(expr)
+
+  # Try image-style coordinates first; fall back to reduction embeddings.
+  images <- tryCatch(names(x@images), error = function(e) character())
+  if (!is.null(images) && spatialDim %in% images) {
+    coords <- SeuratObject::GetTissueCoordinates(x[[spatialDim]])
+    # GetTissueCoordinates() returns different formats across Seurat versions;
+    # coerce to a plain data.frame and pick x/y (and optional z) columns.
+    coord_df <- as.data.frame(coords, stringsAsFactors = FALSE)
+    # Drop any cell-id column if present and keep numeric columns only.
+    num_cols <- vapply(coord_df, is.numeric, logical(1))
+    coord_df <- coord_df[, num_cols, drop = FALSE]
+    locationData <- .renameSpatialCols(as.matrix(coord_df))
+  } else {
+    reductions <- tryCatch(
+      SeuratObject::Reductions(x),
+      error = function(e) character()
+    )
+    if (!spatialDim %in% reductions) {
+      stop(
+        "'", spatialDim, "' is neither a Seurat image nor a reduction. ",
+        "Available images: ", paste(images, collapse = ", "),
+        "; reductions: ", paste(reductions, collapse = ", "),
+        call. = FALSE
+      )
+    }
+    locationData <- .renameSpatialCols(
+      SeuratObject::Embeddings(x, reduction = spatialDim)
+    )
+  }
+  rownames(locationData) <- colnames(x)
+
+  meta_df <- as.data.frame(x[[]], stringsAsFactors = FALSE)
+  rownames(meta_df) <- colnames(x)
+
+  if (!cellTypeCol %in% colnames(meta_df)) {
+    stop(
+      "cellTypeCol '", cellTypeCol,
+      "' not found in object metadata (x[[]]).",
+      call. = FALSE
+    )
+  }
+  cellTypes <- as.character(meta_df[[cellTypeCol]])
+
+  slideID <- NULL
+  if (!is.null(slideCol)) {
+    if (!slideCol %in% colnames(meta_df)) {
+      stop(
+        "slideCol '", slideCol,
+        "' not found in object metadata (x[[]]).",
+        call. = FALSE
+      )
+    }
+    slideID <- as.character(meta_df[[slideCol]])
+  }
+
+  list(
+    normalizedData = normalizedData,
+    locationData = locationData,
+    metaData = meta_df,
+    cellTypes = cellTypes,
+    slideID = slideID
+  )
+}
+
+
+# -- Methods ----------------------------------------------------------------
+
+#' @rdname asCoPro
+#' @export
+setMethod(
+  "asCoProSingle", "ANY",
+  function(x, spatialDim = "spatial", cellTypeCol,
+           assay = NULL, layer = "data", ...) {
+    if (inherits(x, "SingleCellExperiment")) {
+      parts <- .extractFromSCE(x, spatialDim, cellTypeCol, assay)
+    } else if (inherits(x, "Seurat")) {
+      parts <- .extractFromSeurat(x, spatialDim, cellTypeCol, assay, layer)
+    } else {
+      stop(
+        "asCoProSingle() supports SingleCellExperiment or Seurat inputs; ",
+        "got class '", paste(class(x), collapse = "/"), "'.",
+        call. = FALSE
+      )
+    }
+    newCoProSingle(
+      normalizedData = parts$normalizedData,
+      locationData   = parts$locationData,
+      metaData       = parts$metaData,
+      cellTypes      = parts$cellTypes
+    )
+  }
+)
+
+#' @rdname asCoPro
+#' @export
+setMethod(
+  "asCoProMulti", "ANY",
+  function(x, spatialDim = "spatial", cellTypeCol, slideCol,
+           assay = NULL, layer = "data", ...) {
+    if (missing(slideCol) || is.null(slideCol)) {
+      stop("slideCol is required for asCoProMulti().", call. = FALSE)
+    }
+    if (inherits(x, "SingleCellExperiment")) {
+      parts <- .extractFromSCE(x, spatialDim, cellTypeCol, assay,
+                               slideCol = slideCol)
+    } else if (inherits(x, "Seurat")) {
+      parts <- .extractFromSeurat(x, spatialDim, cellTypeCol, assay, layer,
+                                  slideCol = slideCol)
+    } else {
+      stop(
+        "asCoProMulti() supports SingleCellExperiment or Seurat inputs; ",
+        "got class '", paste(class(x), collapse = "/"), "'.",
+        call. = FALSE
+      )
+    }
+    newCoProMulti(
+      normalizedData = parts$normalizedData,
+      locationData   = parts$locationData,
+      metaData       = parts$metaData,
+      cellTypes      = parts$cellTypes,
+      slideID        = parts$slideID
+    )
+  }
+)

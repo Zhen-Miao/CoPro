@@ -12,11 +12,13 @@
 #' @param verbose Whether to print detailed error messages
 #'
 #' @return Kernel matrix as a numeric matrix
+#' @family accessors
+#' @seealso [computeKernelMatrix()], [getDistMat()]
 #' @export
 #' @rdname getKernelMatrix
 #' @aliases getKernelMatrix,CoProSingle-method
 #' @aliases getKernelMatrix,CoProMulti-method
-setGeneric("getKernelMatrix", 
+setGeneric("getKernelMatrix",
            function(object, sigma, cellType1, cellType2, slide = NULL, 
                    returnTranspose = FALSE, verbose = TRUE) 
              standardGeneric("getKernelMatrix"))

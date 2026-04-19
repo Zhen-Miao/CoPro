@@ -68,11 +68,31 @@ setMethod("show", "CoPro",
             }
 
             # Additional information
-            if(length(object@metaData) > 0 && ncol(object@metaData) > 0) {
-              cat("\nAvailable metadata fields:\n")
-              cat(paste("-", names(object@metaData), collapse = "\n"))
-              cat("\n")
+            has_meta_sub <- "metaDataSub" %in% methods::slotNames(object)
+            meta_source <- if (ncol(object@metaData) > 0) {
+              object@metaData
+            } else if (has_meta_sub && ncol(object@metaDataSub) > 0) {
+              object@metaDataSub
+            } else {
+              NULL
             }
+            if (!is.null(meta_source)) {
+              field_names <- names(meta_source)
+              n_fields <- length(field_names)
+              truncate_at <- 10L
+              cat("\nAvailable metadata fields:\n")
+              if (n_fields > truncate_at) {
+                cat(paste("-", field_names[seq_len(truncate_at)], collapse = "\n"))
+                cat(sprintf("\n- ... %d more field(s)\n", n_fields - truncate_at))
+              } else {
+                cat(paste("-", field_names, collapse = "\n"))
+                cat("\n")
+              }
+            }
+
+            # Approximate in-memory size
+            obj_size_bytes <- as.numeric(utils::object.size(object))
+            cat(sprintf("\nApprox. object size: %.2f MB\n", obj_size_bytes / 1024 / 1024))
 
             invisible(x = object)
           }

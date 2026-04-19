@@ -52,9 +52,13 @@ test_that("plotG12Functions works with valid input", {
   # Check return structure
   expect_type(result, "list")
   expect_named(result, c("plot", "data", "summary"))
-  
-  # Check plot is a ggplot object
-  expect_s3_class(result$plot, "ggplot")
+
+  # result$plot is a stable list(combined, individual); combined is present
+  # by default since plot_type defaults to "combined".
+  expect_type(result$plot, "list")
+  expect_named(result$plot, c("combined", "individual"))
+  expect_s3_class(result$plot$combined, "ggplot")
+  expect_null(result$plot$individual)
   
   # Check data structure
   expect_s3_class(result$data, "data.frame")

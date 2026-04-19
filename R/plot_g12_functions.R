@@ -37,10 +37,14 @@ utils::globalVariables(c("r_um", "g12_obs", "pair_label", "g12_lower", "g12_uppe
 #' @param alpha_bands Numeric; transparency for confidence bands (default: 0.3).
 #' @param verbose Logical; whether to print progress messages (default: TRUE).
 #'
-#' @return A list containing:
-#'   - `plot`: ggplot object(s) with the g_12(r) plots
-#'   - `data`: data.frame with g_12(r) values, confidence intervals, and metadata
-#'   - `summary`: summary statistics for each cell type pair
+#' @return A list with a stable shape regardless of `plot_type`:
+#'   - `plot$combined`: a single-panel ggplot object, or `NULL` when
+#'     `plot_type == "individual"`.
+#'   - `plot$individual`: a facetted ggplot object, or `NULL` when
+#'     `plot_type == "combined"`.
+#'   - `data`: data.frame with g_12(r) values, confidence intervals, and
+#'     metadata.
+#'   - `summary`: summary statistics for each cell type pair.
 #'
 #' @details The function computes the inhomogeneous cross pair-correlation function
 #' g_12(r) for each cell type pair and plots the observed values along with 
@@ -67,11 +71,13 @@ utils::globalVariables(c("r_um", "g12_obs", "pair_label", "g12_lower", "g12_uppe
 #' head(g12_plots$data)
 #' }
 #'
+#' @family visualization
+#' @seealso [getCellScoresInSitu()], [getColocScores()]
 #' @export
-#' @importFrom ggplot2 ggplot aes geom_line geom_ribbon geom_hline facet_wrap 
+#' @importFrom ggplot2 ggplot aes geom_line geom_ribbon geom_hline facet_wrap
 #'   labs theme_minimal theme element_text scale_color_manual scale_fill_manual
 #' @importFrom dplyr bind_rows mutate
-#' @importFrom grDevices rainbow
+#' @importFrom grDevices hcl.colors
 #' @importFrom stats quantile
 plotG12Functions <- function(object,
                             r_um_range = c(10, 60),
@@ -158,24 +164,30 @@ plotG12Functions <- function(object,
   )
   
   if (verbose) {
-    cat("Computing g_12(r) functions for", nrow(all_pairs), "cell type pairs\n")
+    message(sprintf(
+      "Computing g_12(r) functions for %d cell type pair(s).",
+      nrow(all_pairs)
+    ))
   }
-  
+
   # Determine window range
   window_range <- list(
     xrange = range(object@locationDataSub$x, na.rm = TRUE),
     yrange = range(object@locationDataSub$y, na.rm = TRUE)
   )
-  
+
   # Process each pair
   all_results <- vector("list", length = nrow(all_pairs))
-  
+
   for (i in seq_len(nrow(all_pairs))) {
     ct1 <- all_pairs$cellType1[i]
     ct2 <- all_pairs$cellType2[i]
-    
+
     if (verbose) {
-      cat("Processing pair", i, "of", nrow(all_pairs), ":", ct1, "vs", ct2, "\n")
+      message(sprintf(
+        "Processing pair %d of %d: %s vs %s",
+        i, nrow(all_pairs), ct1, ct2
+      ))
     }
     
     # Extract cell locations for each type
@@ -246,18 +258,23 @@ plotG12Functions <- function(object,
   )
   
   if (verbose) {
-    cat("Computing g_12(r) functions for", length(slides), "slides and", 
-        nrow(all_pairs), "cell type pairs\n")
+    message(sprintf(
+      "Computing g_12(r) functions for %d slide(s) and %d cell type pair(s).",
+      length(slides), nrow(all_pairs)
+    ))
   }
-  
+
   # Process each slide
   all_slide_results <- vector("list", length = length(slides))
-  
+
   for (slide_idx in seq_along(slides)) {
     slide_id <- slides[slide_idx]
-    
+
     if (verbose) {
-      cat("Processing slide", slide_idx, "of", length(slides), ":", slide_id, "\n")
+      message(sprintf(
+        "Processing slide %d of %d: %s",
+        slide_idx, length(slides), slide_id
+      ))
     }
     
     # Get slide-specific indices
@@ -418,18 +435,26 @@ plotG12Functions <- function(object,
 .generateG12Plots <- function(plot_data, plot_type, colors, line_width, 
                              alpha_bands, include_confidence, r_um_range) {
   
-  # Set up colors
+  # Set up colors (colorblind-safe)
+  okabe_ito <- c("#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2",
+                 "#D55E00", "#CC79A7", "#999999")
   n_pairs <- length(unique(plot_data$pair_label))
+  fallback_palette <- function(n) {
+    if (requireNamespace("viridis", quietly = TRUE)) {
+      viridis::viridis(n)
+    } else {
+      grDevices::hcl.colors(n, palette = "viridis")
+    }
+  }
   if (is.null(colors)) {
-    # Use a colorblind-friendly palette
-    colors <- c("#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", 
-               "#D55E00", "#CC79A7", "#999999")[1:n_pairs]
-    if (n_pairs > 8) {
-      colors <- rainbow(n_pairs)
+    colors <- if (n_pairs <= length(okabe_ito)) {
+      okabe_ito[seq_len(n_pairs)]
+    } else {
+      fallback_palette(n_pairs)
     }
   } else if (length(colors) < n_pairs) {
-    warning("Not enough colors provided, using default palette")
-    colors <- rainbow(n_pairs)
+    warning("Not enough colors provided, using default colorblind-safe palette.")
+    colors <- fallback_palette(n_pairs)
   }
   
   names(colors) <- unique(plot_data$pair_label)
@@ -473,24 +498,27 @@ plotG12Functions <- function(object,
     p <- p + ggplot2::scale_fill_manual(values = colors, name = "Cell Type Pairs")
   }
   
-  # Handle different plot types
-  if (plot_type == "individual") {
-    # Check if we have slides
-    if ("slideID" %in% colnames(plot_data)) {
-      p <- p + ggplot2::facet_wrap(~ pair_label + slideID, scales = "free_y")
-    } else {
-      p <- p + ggplot2::facet_wrap(~ pair_label, scales = "free_y")
-    }
-    p <- p + ggplot2::theme(legend.position = "none")
-  } else if (plot_type == "both") {
-    # Return both combined and individual plots
-    p_individual <- p + ggplot2::facet_wrap(~ pair_label, scales = "free_y") +
+  # Always return a consistent list shape:
+  #   list(combined = <ggplot|NULL>, individual = <ggplot|NULL>)
+  combined_plot <- p
+  individual_plot <- p + ggplot2::facet_wrap(~ pair_label, scales = "free_y") +
+    ggplot2::theme(legend.position = "none")
+  if ("slideID" %in% colnames(plot_data)) {
+    individual_plot <- p +
+      ggplot2::facet_wrap(~ pair_label + slideID, scales = "free_y") +
       ggplot2::theme(legend.position = "none")
-    
-    return(list(combined = p, individual = p_individual))
   }
-  
-  return(p)
+
+  result <- list(combined = NULL, individual = NULL)
+  if (plot_type == "combined") {
+    result$combined <- combined_plot
+  } else if (plot_type == "individual") {
+    result$individual <- individual_plot
+  } else {
+    result$combined <- combined_plot
+    result$individual <- individual_plot
+  }
+  return(result)
 }
 
 #' Generate summary statistics for g_12(r) data
