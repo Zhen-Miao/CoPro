@@ -53,3 +53,12 @@ Distance matrix as a numeric matrix
 A unified accessor function for distance matrices that uses flat structure
 for efficient access.
 }
+\seealso{
+\code{\link[=computeDistance]{computeDistance()}}, \code{\link[=getKernelMatrix]{getKernelMatrix()}}
+
+Other accessors: 
+\code{\link{getCellScores}()},
+\code{\link{getCellScoresInSitu}()},
+\code{\link{getKernelMatrix}()}
+}
+\concept{accessors}

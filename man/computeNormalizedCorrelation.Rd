@@ -30,3 +30,11 @@ This method calculates the normalized correlation between pairs of cell types
 based on CCA weights and the respective kernel matrix. It uses
 the spectral norm of the kernel matrix for normalization.
 }
+\seealso{
+\code{\link[=runSkrCCA]{runSkrCCA()}}, \code{\link[=computeBidirCorrelation]{computeBidirCorrelation()}},
+\code{\link[=computeGeneAndCellScores]{computeGeneAndCellScores()}}
+
+Other scores-and-correlation: 
+\code{\link{computeGeneAndCellScores}()}
+}
+\concept{scores-and-correlation}

@@ -65,16 +65,16 @@ computeDistance(
 
 \item{normalizeDistance}{Whether to normalize distance? The normalization
 will make sure that the low-percentile cell-cell distance will become
-\code{normalizeTarget} (default 0.01), thus ensuring no matter which
-input scale is used for the distance matrix, the output will roughly be
-in mm^3. This ensures that the kernel sizes from 0.001 to 0.1 will make
+\code{normalizeTarget} (default 0.01), thus ensuring no matter which input
+scale is used for the distance matrix, the output will roughly be in
+mm^3. This ensures that the kernel sizes from 0.001 to 0.1 will make
 sense. Default = TRUE.}
 
 \item{normalizeTarget}{Numeric scalar. The target value that the
 low-percentile cell-cell distance is rescaled to when
 \code{normalizeDistance = TRUE}. Default = 0.01 (preserves historical
-behavior). Advanced users can tune this alongside \code{sigmaValues}
-passed to \code{\link[=computeKernelMatrix]{computeKernelMatrix()}}.}
+behavior). Advanced users can tune this alongside \code{sigmaValues} passed
+to \code{\link[=computeKernelMatrix]{computeKernelMatrix()}}.}
 
 \item{truncateLowDist}{Whether to truncate small distances so that the cells
 that are nearly overlapping with each other do not have a super small
@@ -119,3 +119,23 @@ set distance to the maximum distance in the matrix
 
 This requires the igraph package to be installed.
 }
+\examples{
+toy <- readRDS(system.file("extdata", "toy_copro_data.rds", package = "CoPro"))
+obj <- newCoProSingle(
+  normalizedData = toy$normalizedData,
+  locationData   = toy$locationData,
+  metaData       = toy$metaData,
+  cellTypes      = toy$cellTypes
+)
+obj <- subsetData(obj, cellTypesOfInterest = unique(toy$cellTypes))
+obj <- computeDistance(obj, distType = "Euclidean2D", verbose = FALSE)
+}
+\seealso{
+\code{\link[=computeKernelMatrix]{computeKernelMatrix()}}, \code{\link[=computePCA]{computePCA()}}, \code{\link[=runSkrCCA]{runSkrCCA()}}
+
+Other spatial-pipeline: 
+\code{\link{computeKernelMatrix}()},
+\code{\link{computePCA}()},
+\code{\link{runSkrCCA}()}
+}
+\concept{spatial-pipeline}

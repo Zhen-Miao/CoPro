@@ -90,3 +90,12 @@ slide_scores <- getCellScores(object, sigma = 0.1, cellType = "TypeA",
 }
 
 }
+\seealso{
+\code{\link[=getCellScoresInSitu]{getCellScoresInSitu()}}, \code{\link[=getDistMat]{getDistMat()}}, \code{\link[=getKernelMatrix]{getKernelMatrix()}}
+
+Other accessors: 
+\code{\link{getCellScoresInSitu}()},
+\code{\link{getDistMat}()},
+\code{\link{getKernelMatrix}()}
+}
+\concept{accessors}

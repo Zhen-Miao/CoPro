@@ -58,3 +58,12 @@ Kernel matrix as a numeric matrix
 A unified accessor function for kernel matrices that handles the complex
 nested structure and provides symmetric access when needed.
 }
+\seealso{
+\code{\link[=computeKernelMatrix]{computeKernelMatrix()}}, \code{\link[=getDistMat]{getDistMat()}}
+
+Other accessors: 
+\code{\link{getCellScores}()},
+\code{\link{getCellScoresInSitu}()},
+\code{\link{getDistMat}()}
+}
+\concept{accessors}

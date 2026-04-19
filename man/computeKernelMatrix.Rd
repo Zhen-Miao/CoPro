@@ -91,3 +91,24 @@ within the object.
 \note{
 To-do: Shall we include row or column normalization of the kernel?
 }
+\examples{
+toy <- readRDS(system.file("extdata", "toy_copro_data.rds", package = "CoPro"))
+obj <- newCoProSingle(
+  normalizedData = toy$normalizedData,
+  locationData   = toy$locationData,
+  metaData       = toy$metaData,
+  cellTypes      = toy$cellTypes
+)
+obj <- subsetData(obj, cellTypesOfInterest = unique(toy$cellTypes))
+obj <- computeDistance(obj, distType = "Euclidean2D", verbose = FALSE)
+obj <- computeKernelMatrix(obj, sigmaValues = c(0.05, 0.1), verbose = FALSE)
+}
+\seealso{
+\code{\link[=computeDistance]{computeDistance()}}, \code{\link[=computePCA]{computePCA()}}, \code{\link[=runSkrCCA]{runSkrCCA()}}
+
+Other spatial-pipeline: 
+\code{\link{computeDistance}()},
+\code{\link{computePCA}()},
+\code{\link{runSkrCCA}()}
+}
+\concept{spatial-pipeline}
