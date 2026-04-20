@@ -7,9 +7,9 @@
   objects. Conversions are gated on their respective packages being
   installed and delegate to the existing `newCoProSingle()` /
   `newCoProMulti()` constructors so validation stays single-sourced.
-* Exposed `normalizePercentile` argument on `computeDistance()` for users
-  who want to control the distance-normalization quantile. Default
-  preserves existing behavior.
+* Exposed `normalizeTarget` argument on `computeDistance()` for users
+  who want to control the target value that the low-percentile cell-cell
+  distance is rescaled to. Default preserves existing behavior.
 
 ## User experience
 
