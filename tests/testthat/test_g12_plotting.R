@@ -136,3 +136,48 @@ test_that("plotG12Functions parameter validation works", {
     "object must be a CoProSingle or CoProMulti object"
   )
 })
+
+test_that("plotG12Functions returns stable list shape for all plot_type values", {
+  skip_if_not_installed("ggplot2")
+  skip_if_not_installed("dplyr")
+  skip_if_not_installed("spatstat.geom")
+  skip_if_not_installed("spatstat.explore")
+  skip_if_not_installed("spatstat.random")
+
+  # Mirror the fixture from the first happy-path test so spatstat reliably
+  # produces non-empty g_12 results.
+  set.seed(123)
+  n_cells <- 60
+  cell_ids <- paste0("Cell_", seq_len(n_cells))
+  coords <- data.frame(x = runif(n_cells, 0, 100), y = runif(n_cells, 0, 100))
+  rownames(coords) <- cell_ids
+  cell_types <- sample(c("TypeA", "TypeB", "TypeC"), n_cells, replace = TRUE)
+  meta_data <- data.frame(cellID = cell_ids); rownames(meta_data) <- cell_ids
+  expr_data <- matrix(rnorm(n_cells * 20), nrow = n_cells, ncol = 20)
+  rownames(expr_data) <- cell_ids
+  colnames(expr_data) <- paste0("Gene_", seq_len(20))
+
+  test_obj <- newCoProSingle(
+    normalizedData = expr_data, locationData = coords,
+    metaData = meta_data, cellTypes = cell_types
+  )
+  test_obj <- subsetData(
+    test_obj, cellTypesOfInterest = c("TypeA", "TypeB", "TypeC")
+  )
+
+  run_pt <- function(pt) plotG12Functions(
+    test_obj, r_um_range = c(5, 25), nsim = 10, verbose = FALSE, plot_type = pt
+  )
+
+  # individual: combined is NULL, individual is a facetted ggplot
+  r_ind <- run_pt("individual")
+  expect_named(r_ind$plot, c("combined", "individual"))
+  expect_null(r_ind$plot$combined)
+  expect_s3_class(r_ind$plot$individual, "ggplot")
+
+  # both: combined and individual are both ggplots
+  r_both <- run_pt("both")
+  expect_named(r_both$plot, c("combined", "individual"))
+  expect_s3_class(r_both$plot$combined, "ggplot")
+  expect_s3_class(r_both$plot$individual, "ggplot")
+})

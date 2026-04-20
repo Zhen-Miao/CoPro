@@ -526,6 +526,49 @@ CreateCoPro <- function(normalizedData, locationData, metaData, cellTypes,
 #' @return A `CoProSingle` or `CoProMulti` object.
 #' @family object-creation
 #' @seealso [newCoProSingle()], [newCoProMulti()], [CreateCoPro()]
+#' @examples
+#' toy <- readRDS(
+#'   system.file("extdata", "toy_copro_data.rds", package = "CoPro")
+#' )
+#'
+#' ## --- From a SingleCellExperiment -----------------------------------------
+#' if (requireNamespace("SingleCellExperiment", quietly = TRUE) &&
+#'     requireNamespace("SummarizedExperiment", quietly = TRUE) &&
+#'     requireNamespace("S4Vectors", quietly = TRUE)) {
+#'   sce <- SingleCellExperiment::SingleCellExperiment(
+#'     assays = list(logcounts = t(toy$normalizedData))
+#'   )
+#'   SummarizedExperiment::colData(sce) <- S4Vectors::DataFrame(
+#'     toy$metaData, cellType = toy$cellTypes
+#'   )
+#'   SingleCellExperiment::reducedDim(sce, "spatial") <-
+#'     as.matrix(toy$locationData)
+#'   obj_sce <- asCoProSingle(
+#'     sce, spatialDim = "spatial", cellTypeCol = "cellType"
+#'   )
+#' }
+#'
+#' ## --- From a Seurat object -----------------------------------------------
+#' if (requireNamespace("SeuratObject", quietly = TRUE)) {
+#'   expr_gbc <- t(toy$normalizedData)  # genes x cells
+#'   srt <- SeuratObject::CreateSeuratObject(
+#'     counts = expr_gbc, min.cells = 0, min.features = 0
+#'   )
+#'   srt <- SeuratObject::SetAssayData(
+#'     srt, layer = "data", new.data = expr_gbc
+#'   )
+#'   srt[["cellType"]] <- toy$cellTypes
+#'   coords <- as.matrix(toy$locationData)
+#'   rownames(coords) <- colnames(srt)
+#'   colnames(coords) <- c("spatial_1", "spatial_2")
+#'   srt[["spatial"]] <- SeuratObject::CreateDimReducObject(
+#'     embeddings = coords, key = "spatial_", assay = "RNA"
+#'   )
+#'   obj_srt <- asCoProSingle(
+#'     srt, spatialDim = "spatial", cellTypeCol = "cellType"
+#'   )
+#' }
+#'
 #' @rdname asCoPro
 #' @name asCoPro
 #' @aliases asCoProSingle asCoProMulti
@@ -652,9 +695,29 @@ setGeneric(
     # GetTissueCoordinates() returns different formats across Seurat versions;
     # coerce to a plain data.frame and pick x/y (and optional z) columns.
     coord_df <- as.data.frame(coords, stringsAsFactors = FALSE)
-    # Drop any cell-id column if present and keep numeric columns only.
+    # Recover cell ids (either as a "cell"/"cells" column or rownames) so we
+    # can reorder rows to match colnames(x); Seurat versions differ on which
+    # is populated.
+    id_col <- intersect(c("cell", "cells"), colnames(coord_df))
+    cell_ids <- if (length(id_col) == 1) {
+      as.character(coord_df[[id_col[1]]])
+    } else {
+      rownames(coord_df)
+    }
+    # Keep numeric x/y(/z) columns only.
     num_cols <- vapply(coord_df, is.numeric, logical(1))
     coord_df <- coord_df[, num_cols, drop = FALSE]
+    if (!is.null(cell_ids) && length(cell_ids) == nrow(coord_df) &&
+        all(colnames(x) %in% cell_ids)) {
+      coord_df <- coord_df[match(colnames(x), cell_ids), , drop = FALSE]
+    } else if (nrow(coord_df) != ncol(x)) {
+      stop(
+        "GetTissueCoordinates() returned ", nrow(coord_df),
+        " rows but the Seurat object has ", ncol(x),
+        " cells, and row labels could not be matched.",
+        call. = FALSE
+      )
+    }
     locationData <- .renameSpatialCols(as.matrix(coord_df))
   } else {
     reductions <- tryCatch(
@@ -669,9 +732,11 @@ setGeneric(
         call. = FALSE
       )
     }
-    locationData <- .renameSpatialCols(
-      SeuratObject::Embeddings(x, reduction = spatialDim)
-    )
+    emb <- SeuratObject::Embeddings(x, reduction = spatialDim)
+    if (!is.null(rownames(emb)) && all(colnames(x) %in% rownames(emb))) {
+      emb <- emb[colnames(x), , drop = FALSE]
+    }
+    locationData <- .renameSpatialCols(emb)
   }
   rownames(locationData) <- colnames(x)
 
