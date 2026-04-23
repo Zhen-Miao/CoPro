@@ -7,6 +7,8 @@
 #' @param ccIndex Canonical vector index, default = 1
 #'
 #' @return A data.frame object with cell scores and their locations
+#' @family accessors
+#' @seealso [getCellScores()], [computeGeneAndCellScores()]
 #' @rdname getCellScoresInSitu
 #' @aliases getCellScoresInSitu,CoProSingle-method
 #' @aliases getCellScoresInSitu,CoProMulti-method

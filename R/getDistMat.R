@@ -11,11 +11,13 @@
 #' @param verbose Whether to print detailed error messages
 #'
 #' @return Distance matrix as a numeric matrix
+#' @family accessors
+#' @seealso [computeDistance()], [getKernelMatrix()]
 #' @export
 #' @rdname getDistMat
 #' @aliases getDistMat,CoProSingle-method
 #' @aliases getDistMat,CoProMulti-method
-setGeneric("getDistMat", 
+setGeneric("getDistMat",
            function(object, cellType1, cellType2, slide = NULL, 
                    returnTranspose = FALSE, verbose = TRUE) 
              standardGeneric("getDistMat"))

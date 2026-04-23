@@ -29,3 +29,22 @@ A \code{CoPro} object
 \description{
 Function to create a new object
 }
+\examples{
+toy <- readRDS(system.file("extdata", "toy_copro_data.rds", package = "CoPro"))
+obj <- newCoProSingle(
+  normalizedData = toy$normalizedData,
+  locationData   = toy$locationData,
+  metaData       = toy$metaData,
+  cellTypes      = toy$cellTypes
+)
+obj
+}
+\seealso{
+\code{\link[=newCoProMulti]{newCoProMulti()}}, \code{\link[=CreateCoPro]{CreateCoPro()}}, \code{\link[=asCoProSingle]{asCoProSingle()}}
+
+Other object-creation: 
+\code{\link{asCoPro}},
+\code{\link{newCoProMulti}()},
+\code{\link{subsetData}()}
+}
+\concept{object-creation}

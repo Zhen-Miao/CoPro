@@ -69,11 +69,15 @@ uses default color palette.}
 \item{verbose}{Logical; whether to print progress messages (default: TRUE).}
 }
 \value{
-A list containing:
+A list with a stable shape regardless of \code{plot_type}:
 \itemize{
-\item \code{plot}: ggplot object(s) with the g_12(r) plots
-\item \code{data}: data.frame with g_12(r) values, confidence intervals, and metadata
-\item \code{summary}: summary statistics for each cell type pair
+\item \code{plot$combined}: a single-panel ggplot object, or \code{NULL} when
+\code{plot_type == "individual"}.
+\item \code{plot$individual}: a facetted ggplot object, or \code{NULL} when
+\code{plot_type == "combined"}.
+\item \code{data}: data.frame with g_12(r) values, confidence intervals, and
+metadata.
+\item \code{summary}: summary statistics for each cell type pair.
 }
 }
 \description{
@@ -110,3 +114,7 @@ head(g12_plots$data)
 }
 
 }
+\seealso{
+\code{\link[=getCellScoresInSitu]{getCellScoresInSitu()}}, \code{\link[=getColocScores]{getColocScores()}}
+}
+\concept{visualization}

@@ -44,3 +44,23 @@ A \code{CoProMulti} object with the \code{pcaResults} slot populated.
 Performs PCA on the integrated data stored within the \code{CoProMulti} object.
 Assumes integration has created a common space across slides.
 }
+\examples{
+toy <- readRDS(system.file("extdata", "toy_copro_data.rds", package = "CoPro"))
+obj <- newCoProSingle(
+  normalizedData = toy$normalizedData,
+  locationData   = toy$locationData,
+  metaData       = toy$metaData,
+  cellTypes      = toy$cellTypes
+)
+obj <- subsetData(obj, cellTypesOfInterest = unique(toy$cellTypes))
+obj <- computePCA(obj, nPCA = 10)
+}
+\seealso{
+\code{\link[=computeDistance]{computeDistance()}}, \code{\link[=computeKernelMatrix]{computeKernelMatrix()}}, \code{\link[=runSkrCCA]{runSkrCCA()}}
+
+Other spatial-pipeline: 
+\code{\link{computeDistance}()},
+\code{\link{computeKernelMatrix}()},
+\code{\link{runSkrCCA}()}
+}
+\concept{spatial-pipeline}

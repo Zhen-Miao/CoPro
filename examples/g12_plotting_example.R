@@ -10,8 +10,8 @@ library(CoPro)
 # Basic usage - combined plot for all cell type pairs
 g12_result <- plotG12Functions(your_object)
 
-# Display the plot
-print(g12_result$plot)
+# Display the plot (stable shape: always a list with $combined and $individual)
+print(g12_result$plot$combined)
 
 # View the raw data
 head(g12_result$data)
@@ -35,12 +35,14 @@ g12_result_custom <- plotG12Functions(
 # The resulting plots will show data aggregated across slides
 
 # Access individual components:
-# - g12_result$plot: The ggplot object
-# - g12_result$data: Raw g_12(r) values and confidence intervals
-# - g12_result$summary: Summary statistics per cell type pair
+# - g12_result$plot$combined:   ggplot with all pairs overlaid (or NULL)
+# - g12_result$plot$individual: list of per-pair ggplots (or NULL)
+# - g12_result$data:            Raw g_12(r) values and confidence intervals
+# - g12_result$summary:         Summary statistics per cell type pair
 
 # Save the plot
-# ggsave("g12_correlation_functions.pdf", g12_result$plot, width = 10, height = 6)
+# ggsave("g12_correlation_functions.pdf", g12_result$plot$combined,
+#        width = 10, height = 6)
 
 # Interpretation of g_12(r) values:
 # - g_12(r) = 1: Random spatial relationship at distance r
@@ -55,4 +57,4 @@ g12_colored <- plotG12Functions(
   plot_type = "combined"
 )
 
-print(g12_colored$plot)
+print(g12_colored$plot$combined)

@@ -24,3 +24,12 @@ A \code{CoPro} object with subset slots
 Take a subset of the original matrix based on cell types of interest. The
 original data are stored without being thrown away
 }
+\seealso{
+\code{\link[=newCoProSingle]{newCoProSingle()}}, \code{\link[=newCoProMulti]{newCoProMulti()}}, \code{\link[=CreateCoPro]{CreateCoPro()}}
+
+Other object-creation: 
+\code{\link{asCoPro}},
+\code{\link{newCoProMulti}()},
+\code{\link{newCoProSingle}()}
+}
+\concept{object-creation}

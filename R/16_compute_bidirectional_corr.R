@@ -372,9 +372,23 @@ setGeneric(
       } else {
         K <- K_orig
       }
-      
-      # Vectorized correlation calculation for all CC at once
-      corr_values <- .computeAllCCCorrelations(A_W1_all, B_W2_all, K, normalize_K)
+
+      # Guard against degenerate kernels (e.g. all mass filtered away) which
+      # would otherwise crash downstream correlation computation. Return zero
+      # correlation for this pair and warn the user.
+      if (nrow(K) == 0 || ncol(K) == 0 ||
+          nrow(A_W1_all) == 0 || nrow(B_W2_all) == 0) {
+        warning(sprintf(
+          paste0("Empty kernel matrix after filtering for pair '%s' x '%s' ",
+                 "at sigma=%g. Returning 0 correlations for this pair. ",
+                 "Consider lowering K_row_sum_cutoff / K_col_sum_cutoff."),
+          cellType1, cellType2, sigma_val
+        ))
+        corr_values <- numeric(nCC)
+      } else {
+        # Vectorized correlation calculation for all CC at once
+        corr_values <- .computeAllCCCorrelations(A_W1_all, B_W2_all, K, normalize_K)
+      }
       
       # Store results efficiently
       start_idx <- result_idx + 1L

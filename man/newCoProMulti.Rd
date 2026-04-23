@@ -27,3 +27,12 @@ A \code{CoProMulti} object.
 \description{
 Initializes a \code{CoProMulti} object with combined data from multiple slides.
 }
+\seealso{
+\code{\link[=newCoProSingle]{newCoProSingle()}}, \code{\link[=CreateCoPro]{CreateCoPro()}}, \code{\link[=asCoProMulti]{asCoProMulti()}}
+
+Other object-creation: 
+\code{\link{asCoPro}},
+\code{\link{newCoProSingle}()},
+\code{\link{subsetData}()}
+}
+\concept{object-creation}

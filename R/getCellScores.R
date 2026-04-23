@@ -42,9 +42,11 @@
 #'                               slide = "slide1")
 #' }
 #'
+#' @family accessors
+#' @seealso [getCellScoresInSitu()], [getDistMat()], [getKernelMatrix()]
 #' @export
 #' @rdname getCellScores
-setGeneric("getCellScores", function(object, sigma, cellType, slide = NULL, 
+setGeneric("getCellScores", function(object, sigma, cellType, slide = NULL,
                                      ccIndex = NULL, cells = NULL, verbose = TRUE) {
   standardGeneric("getCellScores")
 })

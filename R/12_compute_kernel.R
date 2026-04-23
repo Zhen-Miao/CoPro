@@ -457,6 +457,19 @@ kernel_from_distance <- function(
 #' matrices are organized into a three-layer nested list object. The first layer
 #' is indexed by the sigma value, and the second and the third layers are cell
 #' types
+#' @family spatial-pipeline
+#' @seealso [computeDistance()], [computePCA()], [runSkrCCA()]
+#' @examples
+#' toy <- readRDS(system.file("extdata", "toy_copro_data.rds", package = "CoPro"))
+#' obj <- newCoProSingle(
+#'   normalizedData = toy$normalizedData,
+#'   locationData   = toy$locationData,
+#'   metaData       = toy$metaData,
+#'   cellTypes      = toy$cellTypes
+#' )
+#' obj <- subsetData(obj, cellTypesOfInterest = unique(toy$cellTypes))
+#' obj <- computeDistance(obj, distType = "Euclidean2D", verbose = FALSE)
+#' obj <- computeKernelMatrix(obj, sigmaValues = c(0.05, 0.1), verbose = FALSE)
 #' @rdname computeKernelMatrix
 #' @aliases computeKernelMatrix,CoProSingle-method
 #' @aliases computeKernelMatrix,CoProMulti-method

@@ -71,3 +71,29 @@ CoPro object with skrCCA results computed
 \description{
 runSkrCCA
 }
+\examples{
+\donttest{
+toy <- readRDS(system.file("extdata", "toy_copro_data.rds", package = "CoPro"))
+obj <- newCoProSingle(
+  normalizedData = toy$normalizedData,
+  locationData   = toy$locationData,
+  metaData       = toy$metaData,
+  cellTypes      = toy$cellTypes
+)
+obj <- subsetData(obj, cellTypesOfInterest = unique(toy$cellTypes))
+obj <- computePCA(obj, nPCA = 10)
+obj <- computeDistance(obj, distType = "Euclidean2D", verbose = FALSE)
+obj <- computeKernelMatrix(obj, sigmaValues = c(0.05, 0.1), verbose = FALSE)
+obj <- runSkrCCA(obj, scalePCs = TRUE, nCC = 2)
+}
+}
+\seealso{
+\code{\link[=computePCA]{computePCA()}}, \code{\link[=computeKernelMatrix]{computeKernelMatrix()}},
+\code{\link[=computeNormalizedCorrelation]{computeNormalizedCorrelation()}}, \code{\link[=computeGeneAndCellScores]{computeGeneAndCellScores()}}
+
+Other spatial-pipeline: 
+\code{\link{computeDistance}()},
+\code{\link{computeKernelMatrix}()},
+\code{\link{computePCA}()}
+}
+\concept{spatial-pipeline}

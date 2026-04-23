@@ -11,6 +11,9 @@
 #' @return The object with the normalized correlation value
 #' between any pair of cell types
 #' added as a new slot, `normalizedCorrelation`.
+#' @family scores-and-correlation
+#' @seealso [runSkrCCA()], [computeBidirCorrelation()],
+#'   [computeGeneAndCellScores()]
 #' @export
 #'
 setGeneric(

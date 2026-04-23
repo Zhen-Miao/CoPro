@@ -22,3 +22,11 @@ A \code{CoPro} or \code{CoProMulti} object with gene and cell scores computed
 \description{
 computeGeneAndCellScores
 }
+\seealso{
+\code{\link[=runSkrCCA]{runSkrCCA()}}, \code{\link[=computeNormalizedCorrelation]{computeNormalizedCorrelation()}},
+\code{\link[=getCellScores]{getCellScores()}}, \code{\link[=getCellScoresInSitu]{getCellScoresInSitu()}}
+
+Other scores-and-correlation: 
+\code{\link{computeNormalizedCorrelation}()}
+}
+\concept{scores-and-correlation}

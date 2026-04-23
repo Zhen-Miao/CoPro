@@ -5,6 +5,9 @@
 #' and kernel matrices.
 #'
 #' @return A `CoPro` or `CoProMulti` object with gene and cell scores computed
+#' @family scores-and-correlation
+#' @seealso [runSkrCCA()], [computeNormalizedCorrelation()],
+#'   [getCellScores()], [getCellScoresInSitu()]
 #' @export
 #'
 setGeneric(

@@ -21,6 +21,18 @@
 #'
 #' @return A `CoProMulti` object with the `pcaResults` slot populated.
 #'         `pcaResults` structure: `list(slideID = list(cellType = pc_matrix))`.
+#' @family spatial-pipeline
+#' @seealso [computeDistance()], [computeKernelMatrix()], [runSkrCCA()]
+#' @examples
+#' toy <- readRDS(system.file("extdata", "toy_copro_data.rds", package = "CoPro"))
+#' obj <- newCoProSingle(
+#'   normalizedData = toy$normalizedData,
+#'   locationData   = toy$locationData,
+#'   metaData       = toy$metaData,
+#'   cellTypes      = toy$cellTypes
+#' )
+#' obj <- subsetData(obj, cellTypesOfInterest = unique(toy$cellTypes))
+#' obj <- computePCA(obj, nPCA = 10)
 #' @export
 #' @rdname computePCAMulti
 #' @aliases computePCAMulti,CoProMulti-method

@@ -13,6 +13,8 @@
 #' @aliases subsetData,CoProSingle-method
 #' @aliases subsetData,CoProMulti-method
 #' @return A `CoPro` object with subset slots
+#' @family object-creation
+#' @seealso [newCoProSingle()], [newCoProMulti()], [CreateCoPro()]
 #' @export
 #'
 setGeneric("subsetData",
@@ -26,12 +28,26 @@ setGeneric("subsetData",
     stop("Please specify at least one cell type of interest.")
   }
 
-  if (!all(ctoi %in% object@cellTypes)) {
-    stop("some cellTypesOfInterest are not in cellTypes, please check")
+  missing_types <- setdiff(ctoi, object@cellTypes)
+  if (length(missing_types) > 0) {
+    available <- utils::head(unique(as.character(object@cellTypes)), 20)
+    stop(
+      "some cellTypesOfInterest are not in cellTypes: ",
+      paste(missing_types, collapse = ", "),
+      ". Available cell types include: ",
+      paste(available, collapse = ", "),
+      if (length(unique(object@cellTypes)) > length(available)) " ..." else ""
+    )
   }
 
   idx <- object@cellTypes %in% ctoi
-  if (sum(idx) < min_n) stop("Fewer than ", min_n, " cells after subsetting.")
+  if (sum(idx) < min_n) {
+    stop(
+      "Fewer than ", min_n, " cells after subsetting to cell types: ",
+      paste(ctoi, collapse = ", "),
+      ". Found only ", sum(idx), " matching cell(s)."
+    )
+  }
 
   ## subset the data
   object@cellTypesOfInterest <- ctoi

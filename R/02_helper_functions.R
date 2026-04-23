@@ -150,6 +150,53 @@ utils::globalVariables(c(
   "y"
 ))
 
+#' Check normalizedData for NA / NaN / Inf values
+#'
+#' Fails fast with a targeted error naming the offending column(s) rather
+#' than letting the data flow into PCA or kernel computation where the
+#' failure mode is cryptic. BPCells `IterableMatrix` inputs are skipped
+#' because scanning on-disk data here would defeat their purpose; users of
+#' BPCells are expected to have validated their on-disk normalization.
+#'
+#' @param x A matrix, sparse matrix, or BPCells IterableMatrix.
+#' @return TRUE invisibly if valid, stops with an informative error otherwise.
+#' @noRd
+.validateNormalizedData <- function(x) {
+  if (inherits(x, "IterableMatrix")) {
+    return(invisible(TRUE))
+  }
+
+  if (inherits(x, "sparseMatrix")) {
+    vals <- x@x
+    if (length(vals) == 0) return(invisible(TRUE))
+    if (anyNA(vals) || any(!is.finite(vals))) {
+      stop(
+        "normalizedData contains NA, NaN, or Inf values. ",
+        "Please remove or impute these before constructing a CoPro object.",
+        call. = FALSE
+      )
+    }
+    return(invisible(TRUE))
+  }
+
+  if (is.matrix(x)) {
+    bad_cols <- which(colSums(!is.finite(x)) > 0)
+    if (length(bad_cols) > 0) {
+      preview <- utils::head(bad_cols, 5)
+      stop(
+        "normalizedData contains NA, NaN, or Inf values in ",
+        length(bad_cols), " column(s) (e.g. ",
+        paste(preview, collapse = ", "),
+        "). Please remove or impute these before constructing a CoPro object.",
+        call. = FALSE
+      )
+    }
+    return(invisible(TRUE))
+  }
+
+  invisible(TRUE)
+}
+
 #' Validate that cell types and slide IDs don't contain pipe characters
 #' @param cellTypes Character vector of cell type names
 #' @param slideIDs Character vector of slide IDs (optional)
