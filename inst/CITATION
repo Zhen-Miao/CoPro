@@ -6,13 +6,14 @@ bibentry(
   author   = c(
     person("Zhen", "Miao")
   ),
-  journal  = "In preparation",
+  journal  = "bioRxiv",
   year     = "2026",
-  url      = "https://github.com/Zhen-Miao/CoPro",
+  doi      = "10.64898/2026.04.17.719309",
+  url      = "https://www.biorxiv.org/content/10.64898/2026.04.17.719309v1",
   textVersion = paste(
     "Miao, Z. (2026).",
     "CoPro: Detecting co-progression between cell types in spatial transcriptomics data.",
-    "In preparation.",
-    "https://github.com/Zhen-Miao/CoPro"
+    "bioRxiv 2026.04.17.719309.",
+    "doi: 10.64898/2026.04.17.719309."
   )
 )
