@@ -1,6 +1,8 @@
 # CoPro Analysis Scripts
 
-Reproducibility scripts for the analyses in Miao (2026), *bioRxiv*
+Reproducibility scripts for the analyses in Miao et al. (2026),
+*Dissecting the coordinated progression of cell states in spatial
+transcriptomics with CoPro.* bioRxiv
 [10.64898/2026.04.17.719309](https://doi.org/10.64898/2026.04.17.719309).
 
 These scripts reproduce the main results and figures from the manuscript.
