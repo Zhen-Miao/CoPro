@@ -130,27 +130,21 @@ test_that("newCoProMulti warns with single slide", {
   )
 })
 
-test_that("newCoProMulti checks for unique cell IDs", {
-  # Test that the function properly validates cell IDs
-  # Note: R itself prevents duplicate row names in data.frames,
-
-  # but the function still checks for duplicates in normalizedData
-  
+test_that("newCoProMulti detects rownames mismatch", {
   test_data <- generate_test_data_multi(
-    n_cells_per_slide = 50, 
-    n_slides = 2, 
-    n_genes = 30, 
+    n_cells_per_slide = 50,
+    n_slides = 2,
+    n_genes = 30,
     seed = 42
   )
-  
-  # Create a matrix with duplicate rownames (matrices allow this)
+
   old_names <- rownames(test_data$normalizedData)
   new_names <- old_names
-  new_names[1] <- new_names[51]  # Create duplicate
-  
+  new_names[1] <- new_names[51]
+
   bad_matrix <- test_data$normalizedData
-  rownames(bad_matrix) <- new_names  # This works for matrices
-  
+  rownames(bad_matrix) <- new_names
+
   expect_error(
     newCoProMulti(
       normalizedData = bad_matrix,
@@ -159,7 +153,42 @@ test_that("newCoProMulti checks for unique cell IDs", {
       cellTypes = test_data$cellTypes,
       slideID = test_data$slideID
     ),
-    "Rownames mismatch|Cell IDs.*must be unique"
+    "Rownames mismatch"
+  )
+})
+
+test_that("newCoProMulti checks for unique cell IDs", {
+  test_data <- generate_test_data_multi(
+    n_cells_per_slide = 50,
+    n_slides = 2,
+    n_genes = 30,
+    seed = 42
+  )
+
+  dup_name <- "DuplicatedCell"
+  old_names <- rownames(test_data$normalizedData)
+  new_names <- old_names
+  new_names[1] <- dup_name
+  new_names[2] <- dup_name
+
+  bad_matrix <- test_data$normalizedData
+  rownames(bad_matrix) <- new_names
+
+  bad_loc <- test_data$locationData
+  attr(bad_loc, "row.names") <- new_names
+
+  bad_meta <- test_data$metaData
+  attr(bad_meta, "row.names") <- new_names
+
+  expect_error(
+    newCoProMulti(
+      normalizedData = bad_matrix,
+      locationData = bad_loc,
+      metaData = bad_meta,
+      cellTypes = test_data$cellTypes,
+      slideID = test_data$slideID
+    ),
+    "Cell IDs.*must be unique"
   )
 })
 
