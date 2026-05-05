@@ -583,7 +583,7 @@ setGeneric(
 #' @export
 setGeneric(
   "asCoProMulti",
-  function(x, spatialDim = "spatial", cellTypeCol, slideCol,
+  function(x, spatialDim = "spatial", cellTypeCol, slideCol = NULL,
            assay = NULL, layer = "data", ...) standardGeneric("asCoProMulti")
 )
 
@@ -670,6 +670,9 @@ setGeneric(
     }
     slideID <- as.character(col_df[[slideCol]])
   }
+
+  col_df[[cellTypeCol]] <- NULL
+  if (!is.null(slideCol)) col_df[[slideCol]] <- NULL
 
   list(
     normalizedData = normalizedData,
@@ -764,6 +767,9 @@ setGeneric(
     slideID <- as.character(meta_df[[slideCol]])
   }
 
+  meta_df[[cellTypeCol]] <- NULL
+  if (!is.null(slideCol)) meta_df[[slideCol]] <- NULL
+
   list(
     normalizedData = normalizedData,
     locationData = locationData,
@@ -806,9 +812,9 @@ setMethod(
 #' @export
 setMethod(
   "asCoProMulti", "ANY",
-  function(x, spatialDim = "spatial", cellTypeCol, slideCol,
+  function(x, spatialDim = "spatial", cellTypeCol, slideCol = NULL,
            assay = NULL, layer = "data", ...) {
-    if (missing(slideCol) || is.null(slideCol)) {
+    if (is.null(slideCol)) {
       stop("slideCol is required for asCoProMulti().", call. = FALSE)
     }
     if (inherits(x, "SingleCellExperiment")) {

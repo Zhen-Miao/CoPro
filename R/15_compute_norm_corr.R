@@ -68,8 +68,7 @@ setGeneric(
 .computeSpecNorm <- function(object, tol = 1e-4, cts, scalePCs,
  sigmaValues, nCC, pair_cell_types) {
   ## calculate all spectral norms
-  cat("Calculating spectral norms, ",
-      "depending on the data size, this may take a while. \n")
+  message("Calculating spectral norms, this may take a while.")
 
   sigma_names <- paste("sigma", sigmaValues, sep = "_")
   norm_K12 <- setNames(vector(mode = "list", length = length(sigma_names)),
@@ -102,7 +101,7 @@ setGeneric(
     }
   }
 
-  cat("Finished calculating spectral norms \n")
+  message("Finished calculating spectral norms.")
 
   return(norm_K12)
 }

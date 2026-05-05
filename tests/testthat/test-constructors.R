@@ -151,8 +151,6 @@ test_that("newCoProMulti checks for unique cell IDs", {
   bad_matrix <- test_data$normalizedData
   rownames(bad_matrix) <- new_names  # This works for matrices
   
-  # The error may come from R's data.frame or from newCoProMulti
-  # Either way, duplicate IDs should cause an error
   expect_error(
     newCoProMulti(
       normalizedData = bad_matrix,
@@ -160,7 +158,8 @@ test_that("newCoProMulti checks for unique cell IDs", {
       metaData = test_data$metaData,
       cellTypes = test_data$cellTypes,
       slideID = test_data$slideID
-    )
+    ),
+    "Rownames mismatch|Cell IDs.*must be unique"
   )
 })
 
@@ -190,6 +189,37 @@ test_that("newCoProSingle rejects NA / NaN / Inf in normalizedData", {
     ),
     "NA, NaN, or Inf"
   )
+
+  bad_nan <- test_data$normalizedData
+  bad_nan[2, 5] <- NaN
+  expect_error(
+    newCoProSingle(
+      normalizedData = bad_nan,
+      locationData   = test_data$locationData,
+      metaData       = test_data$metaData,
+      cellTypes      = test_data$cellTypes
+    ),
+    "NA, NaN, or Inf"
+  )
+})
+
+test_that("newCoProMulti rejects NA / NaN / Inf in normalizedData", {
+  test_data <- generate_test_data_multi(
+    n_cells_per_slide = 25, n_slides = 2, n_genes = 15, seed = 12
+  )
+
+  bad_na <- test_data$normalizedData
+  bad_na[3, 4] <- NA_real_
+  expect_error(
+    newCoProMulti(
+      normalizedData = bad_na,
+      locationData   = test_data$locationData,
+      metaData       = test_data$metaData,
+      cellTypes      = test_data$cellTypes,
+      slideID        = test_data$slideID
+    ),
+    "NA, NaN, or Inf"
+  )
 })
 
 test_that("newCoProSingle standardizes uppercase coordinate column names", {
@@ -207,6 +237,22 @@ test_that("newCoProSingle standardizes uppercase coordinate column names", {
     "Standardizing locationData column names"
   )
   expect_equal(colnames(obj@locationData), c("x", "y"))
+})
+
+test_that("newCoProSingle warns when metaData contains reserved cellType column", {
+  test_data <- generate_test_data_single(n_cells = 30, n_genes = 10, seed = 7)
+  meta_with_reserved <- test_data$metaData
+  meta_with_reserved$cellType <- test_data$cellTypes
+
+  expect_warning(
+    newCoProSingle(
+      normalizedData = test_data$normalizedData,
+      locationData   = test_data$locationData,
+      metaData       = meta_with_reserved,
+      cellTypes      = test_data$cellTypes
+    ),
+    "reserved column"
+  )
 })
 
 test_that("show() reports approximate object size", {

@@ -21,7 +21,7 @@ asCoProMulti(
   x,
   spatialDim = "spatial",
   cellTypeCol,
-  slideCol,
+  slideCol = NULL,
   assay = NULL,
   layer = "data",
   ...
@@ -40,7 +40,7 @@ asCoProMulti(
   x,
   spatialDim = "spatial",
   cellTypeCol,
-  slideCol,
+  slideCol = NULL,
   assay = NULL,
   layer = "data",
   ...
