@@ -26,9 +26,9 @@
 * `newCoProSingle()` / `newCoProMulti()` now reject `NA`, `NaN`, and `Inf`
   values in `normalizedData` at construction time with an informative
   error instead of producing cryptic downstream failures.
-* `newCoProMulti()` now warns when `metaData` already contains a
-  `slideID` column that matches the supplied `slideID` (instead of
-  silently overwriting).
+* `newCoProMulti()` now validates that when `metaData` already contains
+  a `slideID` column, its values match the supplied `slideID` argument
+  (errors on mismatch instead of silently overwriting).
 * `locationData` column standardization now emits a `message()` so silent
   case-folding of `x`/`y`/`z` headers is visible.
 * `subsetData()` error on too-few-matched cells now reports the requested

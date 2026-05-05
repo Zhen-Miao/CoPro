@@ -91,8 +91,12 @@ setMethod("show", "CoPro",
             }
 
             # Approximate in-memory size
-            obj_size_bytes <- as.numeric(utils::object.size(object))
-            cat(sprintf("\nApprox. object size: %.2f MB\n", obj_size_bytes / 1024 / 1024))
+            if (inherits(object@normalizedData, "IterableMatrix")) {
+              cat("\nApprox. object size: not reported (on-disk BPCells matrix)\n")
+            } else {
+              obj_size_bytes <- as.numeric(utils::object.size(object))
+              cat(sprintf("\nApprox. object size: %.2f MB\n", obj_size_bytes / 1024 / 1024))
+            }
 
             invisible(x = object)
           }

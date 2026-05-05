@@ -67,7 +67,7 @@ utils::globalVariables(c("r_um", "g12_obs", "pair_label", "g12_lower", "g12_uppe
 #'                              include_confidence = TRUE)
 #' 
 #' # Access the plot and data
-#' print(g12_plots$plot)
+#' print(g12_plots$plot$individual)
 #' head(g12_plots$data)
 #' }
 #'

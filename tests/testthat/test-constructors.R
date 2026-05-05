@@ -130,29 +130,21 @@ test_that("newCoProMulti warns with single slide", {
   )
 })
 
-test_that("newCoProMulti checks for unique cell IDs", {
-  # Test that the function properly validates cell IDs
-  # Note: R itself prevents duplicate row names in data.frames,
-
-  # but the function still checks for duplicates in normalizedData
-  
+test_that("newCoProMulti detects rownames mismatch", {
   test_data <- generate_test_data_multi(
-    n_cells_per_slide = 50, 
-    n_slides = 2, 
-    n_genes = 30, 
+    n_cells_per_slide = 50,
+    n_slides = 2,
+    n_genes = 30,
     seed = 42
   )
-  
-  # Create a matrix with duplicate rownames (matrices allow this)
+
   old_names <- rownames(test_data$normalizedData)
   new_names <- old_names
-  new_names[1] <- new_names[51]  # Create duplicate
-  
+  new_names[1] <- new_names[51]
+
   bad_matrix <- test_data$normalizedData
-  rownames(bad_matrix) <- new_names  # This works for matrices
-  
-  # The error may come from R's data.frame or from newCoProMulti
-  # Either way, duplicate IDs should cause an error
+  rownames(bad_matrix) <- new_names
+
   expect_error(
     newCoProMulti(
       normalizedData = bad_matrix,
@@ -160,7 +152,43 @@ test_that("newCoProMulti checks for unique cell IDs", {
       metaData = test_data$metaData,
       cellTypes = test_data$cellTypes,
       slideID = test_data$slideID
-    )
+    ),
+    "Rownames mismatch"
+  )
+})
+
+test_that("newCoProMulti checks for unique cell IDs", {
+  test_data <- generate_test_data_multi(
+    n_cells_per_slide = 50,
+    n_slides = 2,
+    n_genes = 30,
+    seed = 42
+  )
+
+  dup_name <- "DuplicatedCell"
+  old_names <- rownames(test_data$normalizedData)
+  new_names <- old_names
+  new_names[1] <- dup_name
+  new_names[2] <- dup_name
+
+  bad_matrix <- test_data$normalizedData
+  rownames(bad_matrix) <- new_names
+
+  bad_loc <- test_data$locationData
+  attr(bad_loc, "row.names") <- new_names
+
+  bad_meta <- test_data$metaData
+  attr(bad_meta, "row.names") <- new_names
+
+  expect_error(
+    newCoProMulti(
+      normalizedData = bad_matrix,
+      locationData = bad_loc,
+      metaData = bad_meta,
+      cellTypes = test_data$cellTypes,
+      slideID = test_data$slideID
+    ),
+    "Cell IDs.*must be unique"
   )
 })
 
@@ -190,6 +218,37 @@ test_that("newCoProSingle rejects NA / NaN / Inf in normalizedData", {
     ),
     "NA, NaN, or Inf"
   )
+
+  bad_nan <- test_data$normalizedData
+  bad_nan[2, 5] <- NaN
+  expect_error(
+    newCoProSingle(
+      normalizedData = bad_nan,
+      locationData   = test_data$locationData,
+      metaData       = test_data$metaData,
+      cellTypes      = test_data$cellTypes
+    ),
+    "NA, NaN, or Inf"
+  )
+})
+
+test_that("newCoProMulti rejects NA / NaN / Inf in normalizedData", {
+  test_data <- generate_test_data_multi(
+    n_cells_per_slide = 25, n_slides = 2, n_genes = 15, seed = 12
+  )
+
+  bad_na <- test_data$normalizedData
+  bad_na[3, 4] <- NA_real_
+  expect_error(
+    newCoProMulti(
+      normalizedData = bad_na,
+      locationData   = test_data$locationData,
+      metaData       = test_data$metaData,
+      cellTypes      = test_data$cellTypes,
+      slideID        = test_data$slideID
+    ),
+    "NA, NaN, or Inf"
+  )
 })
 
 test_that("newCoProSingle standardizes uppercase coordinate column names", {
@@ -207,6 +266,22 @@ test_that("newCoProSingle standardizes uppercase coordinate column names", {
     "Standardizing locationData column names"
   )
   expect_equal(colnames(obj@locationData), c("x", "y"))
+})
+
+test_that("newCoProSingle warns when metaData contains reserved cellType column", {
+  test_data <- generate_test_data_single(n_cells = 30, n_genes = 10, seed = 7)
+  meta_with_reserved <- test_data$metaData
+  meta_with_reserved$cellType <- test_data$cellTypes
+
+  expect_warning(
+    newCoProSingle(
+      normalizedData = test_data$normalizedData,
+      locationData   = test_data$locationData,
+      metaData       = meta_with_reserved,
+      cellTypes      = test_data$cellTypes
+    ),
+    "reserved column"
+  )
 })
 
 test_that("show() reports approximate object size", {
