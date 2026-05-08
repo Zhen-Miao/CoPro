@@ -166,17 +166,61 @@ test_that("computeDistance works for CoProMulti", {
 })
 
 test_that("computeKernelMatrix works for CoProMulti", {
-  obj <- create_test_copro_multi(n_cells_per_slide = 60, n_slides = 2, 
+  obj <- create_test_copro_multi(n_cells_per_slide = 60, n_slides = 2,
                                   n_cell_types = 2, seed = 42)
   obj <- subsetData(obj, cellTypesOfInterest = c("CellTypeA", "CellTypeB"))
-  obj <- computeDistance(obj, distType = "Euclidean2D", 
+  obj <- computeDistance(obj, distType = "Euclidean2D",
                          normalizeDistance = TRUE, verbose = FALSE)
-  
+
   obj <- computeKernelMatrix(obj, sigmaValues = c(0.1), verbose = FALSE)
-  
+
   # Should have kernels for each slide
   kernel_names <- names(obj@kernelMatrices)
   expect_true(any(grepl("Slide1", kernel_names)))
   expect_true(any(grepl("Slide2", kernel_names)))
+})
+
+test_that("computeDistance sets dimnames matching cell IDs", {
+  # Regression: runGeneSpaceCCA indexes K_ij[cells_i, cells_j] by name, so
+  # downstream code requires distance/kernel matrices to carry rownames and
+  # colnames. Earlier versions of computeDistance left fields::rdist output
+  # without dimnames, breaking runGeneSpaceCCA on a real CoProMulti object.
+  obj <- create_test_copro_multi(n_cells_per_slide = 40, n_slides = 2,
+                                  n_cell_types = 2, seed = 7)
+  obj <- subsetData(obj, cellTypesOfInterest = c("CellTypeA", "CellTypeB"))
+  obj <- computeDistance(obj, distType = "Euclidean2D",
+                         normalizeDistance = TRUE, verbose = FALSE)
+
+  for (nm in names(obj@distances)) {
+    d <- obj@distances[[nm]]
+    expect_false(is.null(rownames(d)),
+                 info = paste("missing rownames on distance:", nm))
+    expect_false(is.null(colnames(d)),
+                 info = paste("missing colnames on distance:", nm))
+    expect_equal(nrow(d), length(rownames(d)))
+    expect_equal(ncol(d), length(colnames(d)))
+  }
+})
+
+test_that("CoProMulti: computeDistance -> computeKernelMatrix -> runGeneSpaceCCA", {
+  # Regression: end-to-end smoke test that the full multi-slide gene-space
+  # CCA pipeline runs on a real CoProMulti, which exercises the kernel
+  # name-based indexing K_ij[cells_i, cells_j] inside runGeneSpaceCCA.
+  obj <- create_test_copro_multi(n_cells_per_slide = 60, n_slides = 2,
+                                  n_genes = 40, n_cell_types = 2, seed = 11)
+  obj <- subsetData(obj, cellTypesOfInterest = c("CellTypeA", "CellTypeB"))
+  obj <- computeDistance(obj, distType = "Euclidean2D",
+                         normalizeDistance = TRUE, verbose = FALSE)
+  obj <- computeKernelMatrix(obj, sigmaValues = c(0.1), verbose = FALSE)
+
+  # Should not raise "no 'dimnames' attribute for array".
+  obj <- runGeneSpaceCCA(obj, sigma = 0.1, nCC = 2,
+                         min_prevalence = 0, min_cells = 0,
+                         max_iter = 200, tol = 1e-5,
+                         verbose = FALSE)
+
+  expect_equal(obj@nCC, 2L)
+  expect_true(length(obj@geneScores) > 0)
+  expect_true(length(obj@cellScores) > 0)
 })
 
