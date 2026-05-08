@@ -109,11 +109,15 @@ optimize_genespace_avg_corr <- function(C_self_slide, C_cross_slide,
                                         slides, cell_types,
                                         max_iter = 3000, tol = 1e-6,
                                         verbose = TRUE) {
+  if (length(cell_types) < 2) {
+    stop("Gene-space CCA requires at least 2 cell types. Found: ",
+         paste(cell_types, collapse = ", "))
+  }
+
   S <- length(slides)
   n_genes <- nrow(C_self_slide[[slides[1]]][[cell_types[1]]])
 
   # Initialize with random unit vectors
-  set.seed(NULL)
   w_list <- setNames(
     lapply(cell_types, function(ct) {
       v <- matrix(rnorm(n_genes), ncol = 1)
@@ -139,7 +143,7 @@ optimize_genespace_avg_corr <- function(C_self_slide, C_cross_slide,
           if (ct_j == ct_i) next
           sig_j <- sigma_all[[s]][[ct_j]]
           C_ij <- .get_C_cross(C_cross_slide[[s]], ct_i, ct_j)
-          update <- update + (1 / sig_i) * C_ij %*% (w_list[[ct_j]] / sig_j)
+          update <- update + (1 / sig_i) * C_ij %*% (w_list_old[[ct_j]] / sig_j)
         }
       }
       update <- update / S
@@ -176,7 +180,6 @@ optimize_genespace_avg_corr <- function(C_self_slide, C_cross_slide,
   }
 
   # Ensure matrix format
-
   for (ct in cell_types) {
     if (!is.matrix(w_list[[ct]])) w_list[[ct]] <- matrix(w_list[[ct]], ncol = 1)
   }
@@ -243,7 +246,7 @@ optimize_genespace_avg_corr_n <- function(C_self_slide, C_cross_slide,
             if (ct_j == ct_i) next
             sig_j <- sigma_all[[s]][[ct_j]]
             C_ij <- .get_C_cross(C_cross_slide[[s]], ct_i, ct_j)
-            update <- update + (1 / sig_i) * C_ij %*% (w_current[[ct_j]] / sig_j)
+            update <- update + (1 / sig_i) * C_ij %*% (w_current_old[[ct_j]] / sig_j)
           }
         }
         update <- update / S
@@ -265,7 +268,7 @@ optimize_genespace_avg_corr_n <- function(C_self_slide, C_cross_slide,
       # Check convergence
       max_diff <- check_convergence(w_current, w_current_old, cell_types)
 
-      if (verbose && (iter %% 500 == 0)) {
+      if (verbose && (iter %% 500 == 0 || iter == 1)) {
         message(sprintf("    Iter %d: max_diff = %.2e", iter, max_diff))
       }
 

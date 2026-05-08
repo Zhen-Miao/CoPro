@@ -2,10 +2,23 @@
 % Please edit documentation in R/14b_run_gene_space_CCA.R
 \name{runGeneSpaceCCA}
 \alias{runGeneSpaceCCA}
+\alias{runGeneSpaceCCA,CoPro-method}
 \alias{runGeneSpaceCCA,CoProMulti-method}
 \title{Run gene-space canonical correlation analysis}
 \usage{
 runGeneSpaceCCA(
+  object,
+  sigma,
+  nCC = 2,
+  clip = "quantile",
+  min_prevalence = 0.008,
+  min_cells = 20,
+  max_iter = 3000,
+  tol = 1e-06,
+  verbose = TRUE
+)
+
+\S4method{runGeneSpaceCCA}{CoPro}(
   object,
   sigma,
   nCC = 2,

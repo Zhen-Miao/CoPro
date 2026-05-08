@@ -72,7 +72,10 @@ initialize_weights_svd <- function(X_list, cell_types) {
 check_convergence <- function(w_list_new, w_list_old, cell_types) {
   current_max_diff <- 0
   for (ct in cell_types) {
-    diff_val <- max(abs(w_list_new[[ct]] - w_list_old[[ct]]))
+    # Sign-invariant: power iteration can flip sign between iterations
+    diff_fwd <- max(abs(w_list_new[[ct]] - w_list_old[[ct]]))
+    diff_flip <- max(abs(w_list_new[[ct]] + w_list_old[[ct]]))
+    diff_val <- min(diff_fwd, diff_flip)
     if(is.nan(diff_val)) diff_val <- 0
     if(diff_val > current_max_diff) {
       current_max_diff <- diff_val

@@ -111,14 +111,9 @@
       Z_j <- Z_by_slide[[s]][[ct_j]]
       K_ij <- get_kernel_matrix_flat(flat_kernels, sigma, ct_i, ct_j, slide = s)
 
-      # Align kernel rows/cols to Z cell order
-      cells_i <- rownames(Z_i)
-      cells_j <- rownames(Z_j)
-      K_sub <- K_ij[cells_i, cells_j, drop = FALSE]
-
       n_i <- nrow(Z_i)
       n_j <- nrow(Z_j)
-      C_cross[[s]][[key]] <- crossprod(Z_i, K_sub %*% Z_j) / sqrt(n_i * n_j)
+      C_cross[[s]][[key]] <- crossprod(Z_i, K_ij %*% Z_j) / sqrt(n_i * n_j)
     }
   }
 
@@ -147,14 +142,14 @@
   slide_ids <- getSlideID(object)
   cell_names <- rownames(object@metaDataSub)
 
-  # Store raw weight vectors in skrCCAOut
-  cca_out <- list()
+  # Store raw weight vectors in skrCCAOut (merge, don't overwrite)
+  cca_out <- object@skrCCAOut
   cca_out[[sigma_name]] <- w_list
   object@skrCCAOut <- cca_out
   object@nCC <- nCC
 
   # Compute gene scores: for gene-space CCA, weights ARE gene scores directly
-  geneScores <- list()
+  geneScores <- object@geneScores
   for (ct in cts) {
     gene_flat_name <- .createGeneScoresName(sigma, ct, slide = NULL)
     gs_mat <- .createScoreMatrix(length(genes), nCC, row_names = genes)
@@ -166,7 +161,7 @@
   object@geneScores <- geneScores
 
   # Compute cell scores: Z %*% w, per-slide z-normalized
-  cellScores <- list()
+  cellScores <- object@cellScores
   for (ct in cts) {
     cell_flat_name <- .createCellScoresName(sigma, ct, slide = NULL)
     ct_idx <- cell_types_vec == ct
@@ -260,6 +255,20 @@ setGeneric(
 )
 
 #' @rdname runGeneSpaceCCA
+#' @aliases runGeneSpaceCCA,CoPro-method
+#' @export
+setMethod(
+  "runGeneSpaceCCA", "CoPro",
+  function(object, sigma, nCC = 2, clip = "quantile",
+           min_prevalence = 0.008, min_cells = 20,
+           max_iter = 3000, tol = 1e-6,
+           verbose = TRUE) {
+    stop("runGeneSpaceCCA requires a CoProMulti object (multi-slide data). ",
+         "Got: ", class(object))
+  }
+)
+
+#' @rdname runGeneSpaceCCA
 #' @aliases runGeneSpaceCCA,CoProMulti-method
 #' @export
 setMethod(
@@ -276,7 +285,13 @@ setMethod(
     if (!is.numeric(sigma) || length(sigma) != 1) {
       stop("sigma must be a single numeric value.")
     }
-    if (!is.numeric(nCC) || nCC < 1) {
+    if (!sigma %in% object@sigmaValues) {
+      stop(sprintf(
+        "sigma = %g not found in object@sigmaValues. Available: %s",
+        sigma, paste(object@sigmaValues, collapse = ", ")
+      ))
+    }
+    if (!is.numeric(nCC) || length(nCC) != 1 || nCC < 1 || nCC != as.integer(nCC)) {
       stop("nCC must be a positive integer.")
     }
 
@@ -284,6 +299,11 @@ setMethod(
       object@cellTypesOfInterest
     } else {
       unique(object@cellTypesSub)
+    }
+
+    if (length(cts) < 2) {
+      stop("runGeneSpaceCCA requires at least 2 cell types. Found: ",
+           paste(cts, collapse = ", "))
     }
 
     slides <- getSlideList(object)
