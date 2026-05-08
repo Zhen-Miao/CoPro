@@ -130,7 +130,7 @@ test_that("optimize_genespace_avg_corr converges and recovers planted signal", {
   }
 
   # Objective should be positive (non-trivial correlation found)
-  obj <- .compute_p1b_objective(
+  obj <- CoPro:::.compute_p1b_objective(
     result, dat$C_self, dat$C_cross, dat$slides, dat$cell_types
   )
   expect_gt(obj, 0)
@@ -208,10 +208,10 @@ test_that("P1b objective is invariant to per-slide covariance scaling", {
       C_cross_scaled[[target_slide]][[key]] * scale_factor
   }
 
-  obj_original <- .compute_p1b_objective(
+  obj_original <- CoPro:::.compute_p1b_objective(
     w1, dat$C_self, dat$C_cross, dat$slides, dat$cell_types
   )
-  obj_scaled <- .compute_p1b_objective(
+  obj_scaled <- CoPro:::.compute_p1b_objective(
     w1, C_self_scaled, C_cross_scaled, dat$slides, dat$cell_types
   )
 
@@ -294,7 +294,7 @@ test_that("three cell types work correctly", {
   expect_gt(signal_C, noise_C)
 
   # Objective should be positive
-  obj <- .compute_p1b_objective(
+  obj <- CoPro:::.compute_p1b_objective(
     result, dat$C_self, dat$C_cross, dat$slides, dat$cell_types
   )
   expect_gt(obj, 0)
@@ -398,11 +398,11 @@ test_that("runGeneSpaceCCA on CoProSingle gives informative error", {
 test_that("reverse-key lookup in .get_C_cross works", {
   C_cross_s <- list("B-A" = matrix(1:4, 2, 2))
 
-  result <- .get_C_cross(C_cross_s, "A", "B")
+  result <- CoPro:::.get_C_cross(C_cross_s, "A", "B")
   expect_equal(result, t(C_cross_s[["B-A"]]))
 
   expect_error(
-    .get_C_cross(C_cross_s, "A", "C"),
+    CoPro:::.get_C_cross(C_cross_s, "A", "C"),
     "Cross-covariance not found"
   )
 })
