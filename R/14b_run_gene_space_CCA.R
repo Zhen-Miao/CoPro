@@ -33,11 +33,14 @@
   expr <- expr[, genes, drop = FALSE]
 
   # Clip expression values
-  if (is.character(clip) && clip == "quantile") {
+  if (is.character(clip) && length(clip) == 1 && clip == "quantile") {
     q98 <- quantile(as.numeric(expr[expr > 0]), 0.98)
     expr[expr > q98] <- q98
-  } else if (is.numeric(clip)) {
+  } else if (is.numeric(clip) && length(clip) == 1) {
     expr[expr > clip] <- clip
+  } else {
+    stop("clip must be \"quantile\" or a single numeric threshold. Got: ",
+         deparse(clip))
   }
 
   # Build Z_by_slide: standardize per slide per cell type
@@ -60,10 +63,19 @@
     }
   }
 
-  # Filter slides that have all cell types present
+  # Filter slides that have all cell types present (min 3 cells per cell type)
   valid_slides <- slides[vapply(slides, function(s) {
     all(vapply(cts, function(ct) !is.null(Z_by_slide[[s]][[ct]]), logical(1)))
   }, logical(1))]
+
+  dropped <- setdiff(slides, valid_slides)
+  if (length(dropped) > 0) {
+    for (s in dropped) {
+      missing_cts <- cts[vapply(cts, function(ct) is.null(Z_by_slide[[s]][[ct]]), logical(1))]
+      warning(sprintf("Slide '%s' dropped: cell type(s) %s have fewer than 3 cells.",
+                       s, paste(missing_cts, collapse = ", ")))
+    }
+  }
 
   if (length(valid_slides) == 0) {
     stop("No slides have all cell types present after filtering.")
@@ -85,6 +97,7 @@
 #' @param slides Slide IDs
 #' @param cell_types Cell type names
 #' @return List with \code{C_self} and \code{C_cross}
+#' @importFrom utils combn
 #' @noRd
 .precomputeCovarianceMatrices <- function(Z_by_slide, flat_kernels, sigma,
                                          slides, cell_types) {
@@ -243,6 +256,10 @@
 #' per-slide score standard deviation. Subsequent components use Gram-Schmidt
 #' deflation in weight space.
 #'
+#' Memory scales as \eqn{O(G^2 \times S \times C^2)} for precomputed covariance
+#' matrices, where G = genes, S = slides, C = cell types. For example,
+#' G=5000, S=10, C=3 requires approximately 12 GB.
+#'
 #' @family spatial-pipeline
 #' @seealso [runSkrCCA()], [computeKernelMatrix()]
 #' @export
@@ -264,7 +281,7 @@ setMethod(
            max_iter = 3000, tol = 1e-6,
            verbose = TRUE) {
     stop("runGeneSpaceCCA requires a CoProMulti object (multi-slide data). ",
-         "Got: ", class(object))
+         "Got: ", class(object)[1])
   }
 )
 
@@ -308,7 +325,7 @@ setMethod(
 
     slides <- getSlideList(object)
 
-    if (verbose) message("=== Gene-Space CCA (P1b) ===")
+    if (verbose) message("=== Gene-Space CCA ===")
 
     # Step 1: Prepare gene-space data
     if (verbose) message("Step 1: Preparing gene-space data...")
@@ -331,8 +348,13 @@ setMethod(
       gsd$slides, cts
     )
 
-    # Step 3: Run P1b optimization
-    if (verbose) message("Step 3: P1b power iteration...")
+    # Step 3: Power iteration for canonical components
+    if (nCC > length(gsd$genes)) {
+      stop(sprintf("nCC (%d) exceeds number of genes after filtering (%d).",
+                    nCC, length(gsd$genes)))
+    }
+
+    if (verbose) message("Step 3: Power iteration for canonical components...")
 
     if (verbose) message("  Finding CC 1 ...")
     w_list <- optimize_genespace_avg_corr(

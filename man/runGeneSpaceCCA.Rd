@@ -86,6 +86,10 @@ The objective maximized is:
 where \eqn{\sigma_A^{(s)} = \sqrt{w_A^\top C_{AA}^{(s)} w_A}} is the
 per-slide score standard deviation. Subsequent components use Gram-Schmidt
 deflation in weight space.
+
+Memory scales as \eqn{O(G^2 \times S \times C^2)} for precomputed covariance
+matrices, where G = genes, S = slides, C = cell types. For example,
+G=5000, S=10, C=3 requires approximately 12 GB.
 }
 \seealso{
 \code{\link[=runSkrCCA]{runSkrCCA()}}, \code{\link[=computeKernelMatrix]{computeKernelMatrix()}}

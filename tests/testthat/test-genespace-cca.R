@@ -48,6 +48,15 @@ make_synthetic_data <- function(n_slides = 3, n_genes = 20, n_cells = 50,
   loading_B[1:5] <- c(0.2, 0.4, 0.6, 0.8, 1)
   loading_B <- loading_B / sqrt(sum(loading_B^2))
 
+  # Distinct loading for TypeC: signal in genes 6-10
+  loading_C <- rep(0, n_genes)
+  if (n_genes >= 10) {
+    loading_C[6:10] <- c(1, 0.7, 0.5, 0.3, 0.1)
+  } else {
+    loading_C[1:min(5, n_genes)] <- rev(loading_A[1:min(5, n_genes)])
+  }
+  loading_C <- loading_C / sqrt(sum(loading_C^2))
+
   for (s in slides) {
     Z_by_slide[[s]] <- list()
     K_by_slide[[s]] <- list()
@@ -61,7 +70,13 @@ make_synthetic_data <- function(n_slides = 3, n_genes = 20, n_cells = 50,
     spatial_factor <- (spatial_factor - mean(spatial_factor)) / sd(spatial_factor)
 
     for (ct in cell_types) {
-      loading <- if (ct == cell_types[1]) loading_A else loading_B
+      if (ct == cell_types[1]) {
+        loading <- loading_A
+      } else if (length(cell_types) >= 3 && ct == cell_types[3]) {
+        loading <- loading_C
+      } else {
+        loading <- loading_B
+      }
       noise <- matrix(rnorm(n_cells * n_genes), nrow = n_cells, ncol = n_genes)
       Z <- noise + signal_strength * outer(spatial_factor, loading)
       Z <- scale(Z)
@@ -86,7 +101,8 @@ make_synthetic_data <- function(n_slides = 3, n_genes = 20, n_cells = 50,
     cell_types = cell_types,
     n_genes = n_genes,
     loading_A = loading_A,
-    loading_B = loading_B
+    loading_B = loading_B,
+    loading_C = loading_C
   )
 }
 
@@ -202,6 +218,23 @@ test_that("P1b objective is invariant to per-slide covariance scaling", {
   # Uniform scaling of both C_self and C_cross cancels in the
   # per-slide normalized correlation: rho = w'C_cross w / (sigma * sigma)
   expect_equal(obj_original, obj_scaled, tolerance = 1e-10)
+
+  # Stronger test: run optimizer independently on scaled data and check
+  # that it recovers the same weights (batch-robustness property)
+  w_scaled <- optimize_genespace_avg_corr(
+    C_self_slide = C_self_scaled,
+    C_cross_slide = C_cross_scaled,
+    slides = dat$slides,
+    cell_types = dat$cell_types,
+    max_iter = 3000,
+    tol = 1e-6,
+    verbose = FALSE
+  )
+  for (ct in dat$cell_types) {
+    cosine <- abs(sum(w1[[ct]] * w_scaled[[ct]])) /
+      (sqrt(sum(w1[[ct]]^2)) * sqrt(sum(w_scaled[[ct]]^2)))
+    expect_gt(cosine, 0.99)
+  }
 })
 
 test_that("nCC validation works", {
@@ -250,6 +283,21 @@ test_that("three cell types work correctly", {
     expect_equal(ncol(result[[ct]]), 1)
     expect_equal(sqrt(sum(result[[ct]]^2)), 1, tolerance = 1e-8)
   }
+
+  # Signal recovery: TypeA signal in genes 1:5, TypeC signal in genes 6:10
+  signal_A <- mean(abs(result[["TypeA"]][1:5, 1]))
+  noise_A <- mean(abs(result[["TypeA"]][11:dat$n_genes, 1]))
+  expect_gt(signal_A, noise_A)
+
+  signal_C <- mean(abs(result[["TypeC"]][6:10, 1]))
+  noise_C <- mean(abs(result[["TypeC"]][11:dat$n_genes, 1]))
+  expect_gt(signal_C, noise_C)
+
+  # Objective should be positive
+  obj <- .compute_p1b_objective(
+    result, dat$C_self, dat$C_cross, dat$slides, dat$cell_types
+  )
+  expect_gt(obj, 0)
 })
 
 test_that("single cell type gives informative error", {
@@ -282,15 +330,21 @@ test_that("runGeneSpaceCCA integration test with CoProMulti object", {
   obj <- runGeneSpaceCCA(obj, sigma = 0.1, nCC = 2,
                          max_iter = 500, tol = 1e-4, verbose = FALSE)
 
-  # Gene scores populated
+  # Gene scores populated with no NAs
   expect_gt(length(obj@geneScores), 0)
   gs_key <- names(obj@geneScores)[1]
   expect_equal(ncol(obj@geneScores[[gs_key]]), 2)
+  expect_false(any(is.na(obj@geneScores[[gs_key]])))
 
-  # Cell scores populated
+  # Cell scores populated with no NAs and non-zero variance
   expect_gt(length(obj@cellScores), 0)
   cs_key <- names(obj@cellScores)[1]
   expect_equal(ncol(obj@cellScores[[cs_key]]), 2)
+  expect_false(any(is.na(obj@cellScores[[cs_key]])))
+  for (cc in seq_len(2)) {
+    scores_cc <- obj@cellScores[[cs_key]][, cc]
+    expect_gt(sd(scores_cc, na.rm = TRUE), 0)
+  }
 
   # CCA output populated
   expect_true(paste0("sigma_", 0.1) %in% names(obj@skrCCAOut))

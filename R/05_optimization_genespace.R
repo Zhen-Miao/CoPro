@@ -60,6 +60,7 @@ NULL
 #' @param slides Slide IDs
 #' @param cell_types Cell type names
 #' @return Scalar objective value
+#' @importFrom utils combn
 #' @noRd
 .compute_p1b_objective <- function(w_list, C_self_slide, C_cross_slide,
                                    slides, cell_types) {
