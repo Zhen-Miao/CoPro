@@ -28,7 +28,7 @@ optimize_genespace_avg_corr_n(
 \item{w_list}{Named list of weight matrices from previous components.
 Each entry is a G x k matrix where k = number of components already computed.}
 
-\item{nCC}{Total number of components desired (must be > ncol(w_list[\link{1}])).}
+\item{nCC}{Total number of components desired (must be > existing components).}
 
 \item{max_iter}{Maximum iterations per component.}
 

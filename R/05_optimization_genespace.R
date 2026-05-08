@@ -34,10 +34,11 @@ NULL
 
 #' Compute per-slide score standard deviations for all cell types
 #' @param w_list Named list of weight vectors (each G x 1 matrix)
-#' @param C_self_slide List of per-slide self-covariance: C_self_slide[[slide]][[ct]]
+#' @param C_self_slide List of per-slide self-covariance:
+#'   \code{C_self_slide[[slide]][[ct]]}
 #' @param slides Character vector of slide IDs
 #' @param cell_types Character vector of cell type names
-#' @return Named list: sigma_all[[slide]][[ct]] = scalar sigma value (floored at 1e-12)
+#' @return Named list: \code{sigma_all[[slide]][[ct]]} = scalar sigma value (floored at 1e-12)
 #' @noRd
 .compute_per_slide_sigma <- function(w_list, C_self_slide, slides, cell_types) {
   sigma_all <- setNames(vector("list", length(slides)), slides)
@@ -102,6 +103,7 @@ NULL
 #' @param verbose Print progress every 500 iterations (default TRUE).
 #'
 #' @return Named list of weight vectors, one per cell type (each a G x 1 matrix).
+#' @importFrom stats rnorm
 #' @export
 optimize_genespace_avg_corr <- function(C_self_slide, C_cross_slide,
                                         slides, cell_types,
@@ -193,7 +195,7 @@ optimize_genespace_avg_corr <- function(C_self_slide, C_cross_slide,
 #' @param cell_types Cell type names.
 #' @param w_list Named list of weight matrices from previous components.
 #'   Each entry is a G x k matrix where k = number of components already computed.
-#' @param nCC Total number of components desired (must be > ncol(w_list[[1]])).
+#' @param nCC Total number of components desired (must be > existing components).
 #' @param max_iter Maximum iterations per component.
 #' @param tol Convergence tolerance.
 #' @param verbose Print progress.

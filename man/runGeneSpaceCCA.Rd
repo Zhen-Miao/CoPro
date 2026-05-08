@@ -42,7 +42,7 @@ for which kernels were computed.}
 (e.g., 1 for count data).}
 
 \item{min_prevalence}{Minimum fraction of cells expressing a gene
-(default 0.008 = 0.8\\%).}
+(default 0.008 = 0.8 percent).}
 
 \item{min_cells}{Minimum number of cells expressing a gene (default 20).}
 

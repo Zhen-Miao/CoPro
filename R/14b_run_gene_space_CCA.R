@@ -231,7 +231,7 @@
 #'   98th percentile (default), or a numeric value for a fixed threshold
 #'   (e.g., 1 for count data).
 #' @param min_prevalence Minimum fraction of cells expressing a gene
-#'   (default 0.008 = 0.8\%).
+#'   (default 0.008 = 0.8 percent).
 #' @param min_cells Minimum number of cells expressing a gene (default 20).
 #' @param max_iter Maximum iterations per component (default 3000).
 #' @param tol Convergence tolerance (default 1e-6).

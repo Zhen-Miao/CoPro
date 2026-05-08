@@ -38,6 +38,7 @@ Suggests:
     spatstat.geom,
     spatstat.explore,
     spatstat.random,
+    MASS,
     igraph,
     knitr,
     rmarkdown,
