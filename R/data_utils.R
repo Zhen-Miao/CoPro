@@ -5,8 +5,8 @@
 #' GitHub releases via the \code{piggyback} package.
 #'
 #' @param dataset Character string specifying which dataset to download.
-#'   One of \code{"colon_d3"}, \code{"colon_d9"}, \code{"kidney"},
-#'   \code{"organoid"}, or \code{"brain_merfish"}.
+#'   One of \code{"colon_d3"}, \code{"colon_d3_multi"}, \code{"colon_d9"},
+#'   \code{"kidney"}, \code{"organoid"}, or \code{"brain_merfish"}.
 #' @param destdir Directory to save the downloaded file. Defaults to
 #'   a package-specific cache directory via \code{tools::R_user_dir()}.
 #' @param tag The GitHub release tag to download from. Defaults to
@@ -20,8 +20,11 @@
 #' Available datasets:
 #' \describe{
 #'   \item{\code{colon_d3}}{Colon Day 3 organoid data (Epithelial,
-#'     Fibroblast, Immune). Demonstrates cross-cell-type co-progression
-#'     with orthogonal CCA axes.}
+#'     Fibroblast, Immune). Single slide. Demonstrates cross-cell-type
+#'     co-progression with orthogonal CCA axes.}
+#'   \item{\code{colon_d3_multi}}{Colon Day 3 organoid data (3 slides).
+#'     Demonstrates multi-slide joint analysis with \code{newCoProMulti}
+#'     and score transfer across biological replicates.}
 #'   \item{\code{colon_d9}}{Colon Day 9 organoid data (multiple slides).
 #'     Demonstrates multi-slide analysis and score transfer.}
 #'   \item{\code{kidney}}{Kidney seqFISH data (tubular and vascular
@@ -45,7 +48,7 @@
 #'
 #' @export
 copro_download_data <- function(
-    dataset = c("colon_d3", "colon_d9", "kidney", "organoid", "brain_merfish"),
+    dataset = c("colon_d3", "colon_d3_multi", "colon_d9", "kidney", "organoid", "brain_merfish"),
     destdir = NULL,
     tag = "data-v1",
     overwrite = FALSE
