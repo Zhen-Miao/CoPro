@@ -34,6 +34,16 @@ setGeneric(
     if (length(object@skrCCAOut) == 0) {
       stop("CCA results are not available. Please run CCA first.")
     }
+    skr_keys <- grep("^sigma_", names(object@skrCCAOut), value = TRUE)
+    gscca_keys <- grep("^gscca_", names(object@skrCCAOut), value = TRUE)
+    if (length(skr_keys) == 0 && length(gscca_keys) > 0) {
+      stop("Only gene-space CCA results found in @skrCCAOut (keys: ",
+           paste(gscca_keys, collapse = ", "),
+           "). computeGeneAndCellScores() applies a PCA back-projection and ",
+           "is only valid for runSkrCCA (PCA-space) outputs. Gene-space CCA ",
+           "already populates @geneScores and @cellScores directly -- access ",
+           "them via getGeneScores() / getCellScores().")
+    }
     if (length(object@kernelMatrices) == 0) {
       stop(paste("Kernel matrices are not available.",
            "Please compute the kernel matrices first."))

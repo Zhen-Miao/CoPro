@@ -44,3 +44,4 @@ Computes components 2 through nCC using Gram-Schmidt deflation in weight
 space. After computing the gradient update for each cell type, the update
 is orthogonalized against all previous CC directions before normalizing.
 }
+\keyword{internal}

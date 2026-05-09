@@ -1,3 +1,8 @@
+# Per-slide minimum number of cells per cell type. Below this the
+# G x G covariance from the slide is too noisy to be useful (rank <= n-1).
+# Slides failing this for any requested cell type are dropped with a warning.
+.min_cells_per_slide <- 10
+
 #' Prepare standardized gene expression matrices per slide per cell type
 #'
 #' Extracts expression from the CoPro object, filters genes by prevalence,
@@ -52,18 +57,29 @@
 
     for (ct in cts) {
       ct_idx <- s_idx & (cell_types_vec == ct)
-      if (sum(ct_idx) < 3) next
+      # Require at least .min_cells_per_slide cells per (slide, cell-type).
+      # The threshold is a numerical-stability floor: with n cells, the
+      # G x G cross-covariance from this slide has rank <= n-1, so for
+      # G >> n the G x G estimate is dominated by sampling noise and the
+      # per-slide sigma floor (1e-12) starts to bite. 10 keeps the slide-
+      # level covariance well-defined while still admitting modest cell
+      # populations.
+      if (sum(ct_idx) < .min_cells_per_slide) next
 
       Z <- as.matrix(expr[ct_idx, genes, drop = FALSE])
       Z <- scale(Z, center = TRUE, scale = TRUE)
-      # Replace NaN columns (zero-variance genes on this slide) with 0
+      # Per-slide zero-variance handling: a gene with no expression variance
+      # on this (slide, ct) pair becomes a NaN column after scale(); we set
+      # it to 0 so the slide contributes nothing for that gene. The gene is
+      # still kept in the global gene set if it passes the prevalence filter,
+      # so its weight will be driven by other slides where it has variance.
       Z[is.nan(Z)] <- 0
       rownames(Z) <- cell_names[ct_idx]
       Z_by_slide[[s]][[ct]] <- Z
     }
   }
 
-  # Filter slides that have all cell types present (min 3 cells per cell type)
+  # Filter slides that have all cell types present (per-slide min-cell threshold)
   valid_slides <- slides[vapply(slides, function(s) {
     all(vapply(cts, function(ct) !is.null(Z_by_slide[[s]][[ct]]), logical(1)))
   }, logical(1))]
@@ -72,8 +88,9 @@
   if (length(dropped) > 0) {
     for (s in dropped) {
       missing_cts <- cts[vapply(cts, function(ct) is.null(Z_by_slide[[s]][[ct]]), logical(1))]
-      warning(sprintf("Slide '%s' dropped: cell type(s) %s have fewer than 3 cells.",
-                       s, paste(missing_cts, collapse = ", ")))
+      warning(sprintf("Slide '%s' dropped: cell type(s) %s have fewer than %d cells.",
+                       s, paste(missing_cts, collapse = ", "),
+                       .min_cells_per_slide))
     }
   }
 
@@ -106,6 +123,12 @@
 
   pairs <- combn(cell_types, 2, simplify = FALSE)
 
+  # Normalization convention: each side of every covariance is scaled by
+  # 1/sqrt(n_side). For self-covariance both sides are the same cell type
+  # so 1/sqrt(n)*1/sqrt(n) = 1/n. For cross-covariance the two sides have
+  # different counts, giving 1/sqrt(n_i * n_j). The ratio in the objective
+  # rho = w'C_cross w / (sigma_i * sigma_j) is therefore dimensionless and
+  # invariant to per-slide cell counts.
   for (s in slides) {
     C_self[[s]] <- setNames(vector("list", length(cell_types)), cell_types)
     C_cross[[s]] <- list()
@@ -278,6 +301,7 @@
   C_self <- setNames(vector("list", length(slides)), slides)
   C_cross <- setNames(vector("list", length(slides)), slides)
 
+  # See .precomputeCovarianceMatrices for the 1/n vs 1/sqrt(n_i*n_j) note.
   for (s in slides) {
     C_self[[s]] <- setNames(vector("list", length(cell_types)), cell_types)
     for (ct in cell_types) {
@@ -405,13 +429,21 @@
 .storeGeneSpaceCCAResults <- function(object, w_list, Z_by_slide, sigma,
                                       cts, nCC, genes, slides) {
   sigma_name <- paste("sigma", sigma, sep = "_")
+  # Gene-space CCA stores its weights in @skrCCAOut under a "gscca_"-prefixed
+  # key so they cannot collide with runSkrCCA's "sigma_"-prefixed keys. The
+  # two CCA flavors live in different spaces (PCA vs gene), so feeding
+  # gene-space weights to computeGeneAndCellScores() (which applies a PCA
+  # back-projection via @pcaGlobal$rotation) would silently produce garbage.
+  # The prefix prevents that by making the keys non-overlapping; the guard
+  # in .checkInputGAC catches the misuse with a clear error.
+  gscca_name <- paste0("gscca_", sigma_name)
   cell_types_vec <- object@cellTypesSub
   slide_ids <- getSlideID(object)
   cell_names <- rownames(object@metaDataSub)
 
   # Store raw weight vectors in skrCCAOut (merge, don't overwrite)
   cca_out <- object@skrCCAOut
-  cca_out[[sigma_name]] <- w_list
+  cca_out[[gscca_name]] <- w_list
   object@skrCCAOut <- cca_out
   object@nCC <- nCC
 
@@ -520,11 +552,33 @@
 #'   \frac{w_A^\top C_{AB}^{(s)} w_B}{\sigma_A^{(s)} \sigma_B^{(s)}}}
 #' where \eqn{\sigma_A^{(s)} = \sqrt{w_A^\top C_{AA}^{(s)} w_A}} is the
 #' per-slide score standard deviation. Subsequent components use Gram-Schmidt
-#' deflation in weight space.
+#' deflation in weight space. The power iteration uses a frozen-sigma
+#' surrogate (sigma values held fixed at the previous iterate when computing
+#' each weight update), making the algorithm an ALS-style alternating
+#' maximization rather than exact coordinate ascent.
 #'
-#' Memory scales as \eqn{O(G^2 \times S \times C^2)} for precomputed covariance
-#' matrices, where G = genes, S = slides, C = cell types. For example,
-#' G=5000, S=10, C=3 requires approximately 12 GB.
+#' Memory scales as
+#' \eqn{O(G^2 \times S \times (C + C(C-1)/2))}
+#' for precomputed covariance matrices: \eqn{S} slides, each storing \eqn{C}
+#' self-covariances and \eqn{C(C-1)/2} cross-covariances of size
+#' \eqn{G \times G}. For example G=5000, S=10, C=3 gives \eqn{10 \times 6}
+#' matrices of \eqn{200} MB each, approximately 12 GB.
+#'
+#' Per-slide gene handling: each (slide, cell type) expression matrix is
+#' independently centered and scaled. A gene with zero variance on a
+#' particular (slide, cell type) pair is set to zero on that slide and
+#' contributes nothing from it; the gene is still retained globally if it
+#' passes the prevalence filter, with its weight driven by other slides
+#' where it has variance. Slides where any requested cell type has fewer
+#' than 10 cells are dropped with a warning.
+#'
+#' Storage: gene-space CCA results live in \code{@@skrCCAOut} under the
+#' \code{gscca_sigma_<value>} key (distinct from \code{runSkrCCA}'s
+#' \code{sigma_<value>} keys) so the two CCA flavors do not collide.
+#' \code{computeGeneAndCellScores()} only operates on \code{runSkrCCA}
+#' (PCA-space) outputs; gene-space CCA already populates
+#' \code{@@geneScores} and \code{@@cellScores} directly, so no further call
+#' is needed.
 #'
 #' Streaming mode (\code{streaming = TRUE}) reduces peak memory to roughly
 #' one slide's pairwise n x n footprint at a time. Distance normalization

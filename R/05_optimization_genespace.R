@@ -99,12 +99,13 @@ NULL
 #'   Structure: \code{C_cross_slide[[slide]][["ctA-ctB"]]} = G x G matrix.
 #' @param slides Character vector of slide IDs.
 #' @param cell_types Character vector of cell type names.
-#' @param max_iter Maximum iterations (default 3000).
+#' @param max_iter Maximum iterations (default 3000). Must be >= 1.
 #' @param tol Convergence tolerance on max weight change (default 1e-6).
 #' @param verbose Print progress every 500 iterations (default TRUE).
 #'
 #' @return Named list of weight vectors, one per cell type (each a G x 1 matrix).
 #' @importFrom stats rnorm
+#' @keywords internal
 #' @export
 optimize_genespace_avg_corr <- function(C_self_slide, C_cross_slide,
                                         slides, cell_types,
@@ -113,6 +114,9 @@ optimize_genespace_avg_corr <- function(C_self_slide, C_cross_slide,
   if (length(cell_types) < 2) {
     stop("Gene-space CCA requires at least 2 cell types. Found: ",
          paste(cell_types, collapse = ", "))
+  }
+  if (!is.numeric(max_iter) || length(max_iter) != 1 || max_iter < 1) {
+    stop("max_iter must be a positive integer.")
   }
 
   S <- length(slides)
@@ -133,7 +137,13 @@ optimize_genespace_avg_corr <- function(C_self_slide, C_cross_slide,
     # Compute per-slide sigmas
     sigma_all <- .compute_per_slide_sigma(w_list, C_self_slide, slides, cell_types)
 
-    # Update each cell type
+    # Update each cell type. The update below is the gradient of f_avg w.r.t.
+    # w_i evaluated with sigma_i, sigma_j held FIXED at their previous-iterate
+    # values (frozen-sigma surrogate). The full gradient would also include
+    # a -rho * C_ii * w_i / sigma_i^2 correction term from differentiating
+    # 1/sigma_i; omitting it makes this an ALS-style alternating maximization,
+    # not exact coordinate ascent. Standard for generalized power methods
+    # (NIPALS treats denominators as fixed within a sweep).
     for (ct_i in cell_types) {
       update <- matrix(0, nrow = n_genes, ncol = 1)
 
@@ -149,10 +159,17 @@ optimize_genespace_avg_corr <- function(C_self_slide, C_cross_slide,
       }
       update <- update / S
 
-      # Normalize
+      # Normalize. Zero-norm means the cross-covariance with all other cell
+      # types vanished for w_i (degenerate). Keeping the previous iterate
+      # rather than overwriting with random noise; we warn so the user knows.
       norm_val <- sqrt(sum(update^2))
       if (norm_val > 0) {
         w_list[[ct_i]] <- update / norm_val
+      } else {
+        warning(sprintf(
+          "Zero gradient norm for cell type '%s' at iter %d; keeping previous weight.",
+          ct_i, iter
+        ))
       }
     }
 
@@ -205,12 +222,16 @@ optimize_genespace_avg_corr <- function(C_self_slide, C_cross_slide,
 #' @param verbose Print progress.
 #'
 #' @return Named list of weight matrices, each G x nCC.
+#' @keywords internal
 #' @export
 optimize_genespace_avg_corr_n <- function(C_self_slide, C_cross_slide,
                                           slides, cell_types,
                                           w_list, nCC = 2,
                                           max_iter = 3000, tol = 1e-6,
                                           verbose = TRUE) {
+  if (!is.numeric(max_iter) || length(max_iter) != 1 || max_iter < 1) {
+    stop("max_iter must be a positive integer.")
+  }
   S <- length(slides)
   n_genes <- nrow(C_self_slide[[slides[1]]][[cell_types[1]]])
   k_start <- ncol(w_list[[cell_types[1]]])
@@ -237,7 +258,10 @@ optimize_genespace_avg_corr_n <- function(C_self_slide, C_cross_slide,
       # Compute per-slide sigmas using current weights
       sigma_all <- .compute_per_slide_sigma(w_current, C_self_slide, slides, cell_types)
 
-      # Update each cell type
+      # Update each cell type. Same frozen-sigma surrogate as the first
+      # component: holding sigma_i, sigma_j fixed at the previous iterate.
+      # See the comment in optimize_genespace_avg_corr for why we omit the
+      # -rho * C_ii * w_i / sigma_i^2 correction term.
       for (ct_i in cell_types) {
         update <- matrix(0, nrow = n_genes, ncol = 1)
 
@@ -259,10 +283,20 @@ optimize_genespace_avg_corr_n <- function(C_self_slide, C_cross_slide,
           update <- update - proj * prev_w
         }
 
-        # Normalize
+        # Normalize. Zero-norm here means deflation has exhausted the signal
+        # subspace for this cell type — the random init from the start of
+        # this cc would otherwise be silently appended as a "canonical
+        # component". Warn and keep the deflated update at zero so the
+        # caller can detect the degenerate component (weight is all-zero).
         norm_val <- sqrt(sum(update^2))
         if (norm_val > 0) {
           w_current[[ct_i]] <- update / norm_val
+        } else {
+          warning(sprintf(
+            "Zero norm after Gram-Schmidt deflation for cell type '%s' at CC %d; signal subspace likely exhausted.",
+            ct_i, cc
+          ))
+          w_current[[ct_i]] <- matrix(0, nrow = n_genes, ncol = 1)
         }
       }
 

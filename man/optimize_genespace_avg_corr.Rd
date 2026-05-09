@@ -25,7 +25,7 @@ Structure: \code{C_cross_slide[[slide]][["ctA-ctB"]]} = G x G matrix.}
 
 \item{cell_types}{Character vector of cell type names.}
 
-\item{max_iter}{Maximum iterations (default 3000).}
+\item{max_iter}{Maximum iterations (default 3000). Must be >= 1.}
 
 \item{tol}{Convergence tolerance on max weight change (default 1e-6).}
 
@@ -39,3 +39,4 @@ Power iteration to find the first canonical component that maximizes
 the average per-slide canonical correlation across all slides. Each slide's
 contribution is self-normalized by its own score standard deviation.
 }
+\keyword{internal}

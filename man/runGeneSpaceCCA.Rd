@@ -109,11 +109,33 @@ The objective maximized is:
   \frac{w_A^\top C_{AB}^{(s)} w_B}{\sigma_A^{(s)} \sigma_B^{(s)}}}
 where \eqn{\sigma_A^{(s)} = \sqrt{w_A^\top C_{AA}^{(s)} w_A}} is the
 per-slide score standard deviation. Subsequent components use Gram-Schmidt
-deflation in weight space.
+deflation in weight space. The power iteration uses a frozen-sigma
+surrogate (sigma values held fixed at the previous iterate when computing
+each weight update), making the algorithm an ALS-style alternating
+maximization rather than exact coordinate ascent.
 
-Memory scales as \eqn{O(G^2 \times S \times C^2)} for precomputed covariance
-matrices, where G = genes, S = slides, C = cell types. For example,
-G=5000, S=10, C=3 requires approximately 12 GB.
+Memory scales as
+\eqn{O(G^2 \times S \times (C + C(C-1)/2))}
+for precomputed covariance matrices: \eqn{S} slides, each storing \eqn{C}
+self-covariances and \eqn{C(C-1)/2} cross-covariances of size
+\eqn{G \times G}. For example G=5000, S=10, C=3 gives \eqn{10 \times 6}
+matrices of \eqn{200} MB each, approximately 12 GB.
+
+Per-slide gene handling: each (slide, cell type) expression matrix is
+independently centered and scaled. A gene with zero variance on a
+particular (slide, cell type) pair is set to zero on that slide and
+contributes nothing from it; the gene is still retained globally if it
+passes the prevalence filter, with its weight driven by other slides
+where it has variance. Slides where any requested cell type has fewer
+than 10 cells are dropped with a warning.
+
+Storage: gene-space CCA results live in \code{@skrCCAOut} under the
+\code{gscca_sigma_<value>} key (distinct from \code{runSkrCCA}'s
+\code{sigma_<value>} keys) so the two CCA flavors do not collide.
+\code{computeGeneAndCellScores()} only operates on \code{runSkrCCA}
+(PCA-space) outputs; gene-space CCA already populates
+\code{@geneScores} and \code{@cellScores} directly, so no further call
+is needed.
 
 Streaming mode (\code{streaming = TRUE}) reduces peak memory to roughly
 one slide's pairwise n x n footprint at a time. Distance normalization

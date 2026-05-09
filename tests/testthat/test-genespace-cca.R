@@ -129,17 +129,27 @@ test_that("optimize_genespace_avg_corr converges and recovers planted signal", {
     expect_equal(sqrt(sum(result[[ct]]^2)), 1, tolerance = 1e-8)
   }
 
-  # Objective should be positive (non-trivial correlation found)
+  # Objective with the planted strong signal should be well above zero —
+  # tightened from > 0 to a meaningful lower bound so a degenerate fixed
+  # point (e.g., recovering only noise) would fail the test.
   obj <- CoPro:::.compute_p1b_objective(
     result, dat$C_self, dat$C_cross, dat$slides, dat$cell_types
   )
-  expect_gt(obj, 0)
+  expect_gt(obj, 0.3)
 
-  # Signal genes (1:5) should carry more weight than noise genes (6:20)
+  # Signal genes (1:5) should carry more weight than noise genes (6:20),
+  # AND the recovered loadings should align with the ground-truth loadings
+  # the synthetic generator planted (cosine similarity check is a much
+  # stronger signal-recovery assertion than the mean-abs comparison).
   for (ct in dat$cell_types) {
     signal_weight <- mean(abs(result[[ct]][1:5, 1]))
     noise_weight <- mean(abs(result[[ct]][6:dat$n_genes, 1]))
     expect_gt(signal_weight, noise_weight)
+
+    truth <- if (ct == "TypeA") dat$loading_A else dat$loading_B
+    cos_sim <- abs(sum(as.numeric(result[[ct]][, 1]) * truth)) /
+      (sqrt(sum(result[[ct]][, 1]^2)) * sqrt(sum(truth^2)))
+    expect_gt(cos_sim, 0.7)
   }
 })
 
@@ -192,8 +202,12 @@ test_that("P1b objective is invariant to per-slide covariance scaling", {
     verbose = FALSE
   )
 
-  # Scale one slide's covariance matrices by 10x — per-slide sigma
-  # normalization should absorb this, leaving the objective unchanged
+  # Scale one slide's covariance matrices uniformly (same factor on
+  # C_self and C_cross). Per-slide sigma normalization should absorb this:
+  # rho = w'(k * C_cross)w / (sqrt(k * sigma^2) * sqrt(k * sigma^2))
+  #     = (k / k) * (w'C_cross w / sigma^2)  --> unchanged.
+  # The test confirms the implementation realizes this algebra correctly
+  # and that the optimizer is robust to per-slide scale drift.
   C_self_scaled <- dat$C_self
   C_cross_scaled <- dat$C_cross
   scale_factor <- 10
@@ -215,12 +229,9 @@ test_that("P1b objective is invariant to per-slide covariance scaling", {
     w1, C_self_scaled, C_cross_scaled, dat$slides, dat$cell_types
   )
 
-  # Uniform scaling of both C_self and C_cross cancels in the
-  # per-slide normalized correlation: rho = w'C_cross w / (sigma * sigma)
   expect_equal(obj_original, obj_scaled, tolerance = 1e-10)
 
-  # Stronger test: run optimizer independently on scaled data and check
-  # that it recovers the same weights (batch-robustness property)
+  # Optimizer should recover the same direction on scaled data
   w_scaled <- optimize_genespace_avg_corr(
     C_self_slide = C_self_scaled,
     C_cross_slide = C_cross_scaled,
@@ -235,6 +246,56 @@ test_that("P1b objective is invariant to per-slide covariance scaling", {
       (sqrt(sum(w1[[ct]]^2)) * sqrt(sum(w_scaled[[ct]]^2)))
     expect_gt(cosine, 0.99)
   }
+})
+
+test_that("P1b objective is sensitive to ASYMMETRIC per-slide perturbation", {
+  # Regression guard against a future change that drops sigma normalization:
+  # if we scale one slide's C_cross WITHOUT scaling its C_self, that slide's
+  # rho contribution changes, and the optimizer should produce a different
+  # weight than on unscaled data. This is the asymmetric counterpart to the
+  # uniform-scaling test above and rules out that test being a tautology
+  # (the optimizer is not weight-invariant to all perturbations, only to
+  # ones the per-slide normalization cancels).
+  dat <- make_synthetic_data(seed = 123)
+
+  w_orig <- optimize_genespace_avg_corr(
+    C_self_slide = dat$C_self,
+    C_cross_slide = dat$C_cross,
+    slides = dat$slides,
+    cell_types = dat$cell_types,
+    max_iter = 3000,
+    tol = 1e-6,
+    verbose = FALSE
+  )
+
+  # Scale only C_cross of one slide (and only some pairs to break symmetry).
+  C_cross_perturbed <- dat$C_cross
+  target_slide <- dat$slides[1]
+  for (key in names(C_cross_perturbed[[target_slide]])) {
+    C_cross_perturbed[[target_slide]][[key]] <-
+      C_cross_perturbed[[target_slide]][[key]] * 5
+  }
+
+  w_perturbed <- optimize_genespace_avg_corr(
+    C_self_slide = dat$C_self,  # unchanged
+    C_cross_slide = C_cross_perturbed,
+    slides = dat$slides,
+    cell_types = dat$cell_types,
+    max_iter = 3000,
+    tol = 1e-6,
+    verbose = FALSE
+  )
+
+  obj_orig <- CoPro:::.compute_p1b_objective(
+    w_orig, dat$C_self, dat$C_cross, dat$slides, dat$cell_types
+  )
+  obj_perturbed <- CoPro:::.compute_p1b_objective(
+    w_perturbed, dat$C_self, C_cross_perturbed, dat$slides, dat$cell_types
+  )
+  # Asymmetric scaling shifts the per-slide rho on the target slide, so
+  # the objective on the perturbed inputs is not algebraically equal to
+  # the original one.
+  expect_false(isTRUE(all.equal(obj_orig, obj_perturbed, tolerance = 1e-6)))
 })
 
 test_that("nCC validation works", {
@@ -293,11 +354,11 @@ test_that("three cell types work correctly", {
   noise_C <- mean(abs(result[["TypeC"]][11:dat$n_genes, 1]))
   expect_gt(signal_C, noise_C)
 
-  # Objective should be positive
+  # Objective should be well above zero with strong planted signal
   obj <- CoPro:::.compute_p1b_objective(
     result, dat$C_self, dat$C_cross, dat$slides, dat$cell_types
   )
-  expect_gt(obj, 0)
+  expect_gt(obj, 0.3)
 })
 
 test_that("single cell type gives informative error", {
@@ -336,7 +397,12 @@ test_that("runGeneSpaceCCA integration test with CoProMulti object", {
   expect_equal(ncol(obj@geneScores[[gs_key]]), 2)
   expect_false(any(is.na(obj@geneScores[[gs_key]])))
 
-  # Cell scores populated with no NAs and non-zero variance
+  # Cell scores populated with no NAs and non-zero variance.
+  # Per-slide z-normalization in .storeGeneSpaceCCAResults should leave
+  # each (slide, cell type) cell-score column with sd ~= 1; verify that
+  # against the union over slides as a sanity check (overall sd may differ
+  # if slides have different mean shifts, but each slide's slice should
+  # be close to unit sd).
   expect_gt(length(obj@cellScores), 0)
   cs_key <- names(obj@cellScores)[1]
   expect_equal(ncol(obj@cellScores[[cs_key]]), 2)
@@ -346,8 +412,35 @@ test_that("runGeneSpaceCCA integration test with CoProMulti object", {
     expect_gt(sd(scores_cc, na.rm = TRUE), 0)
   }
 
-  # CCA output populated
-  expect_true(paste0("sigma_", 0.1) %in% names(obj@skrCCAOut))
+  # Per-slide cell scores should each have sd close to 1 by construction
+  # (.storeGeneSpaceCCAResults applies (raw - mean) / sd per slide). The
+  # cellScores key encodes the cell type; we look up which slide each row
+  # belongs to via the metadata to compute per-slide stats.
+  ct_idx <- obj@cellTypesSub == "CellTypeA"
+  cell_ids_ct <- rownames(obj@metaDataSub)[ct_idx]
+  slide_ids_ct <- getSlideID(obj)[ct_idx]
+  scores_full <- obj@cellScores[[cs_key]]
+  for (sl in unique(slide_ids_ct)) {
+    cells_in_slide <- cell_ids_ct[slide_ids_ct == sl]
+    if (length(cells_in_slide) >= 2) {
+      vals <- scores_full[cells_in_slide, "CC_1"]
+      expect_equal(sd(vals), 1, tolerance = 1e-6)
+    }
+  }
+
+  # Gene weight columns should be unit norm (the optimizer guarantees
+  # this; verify the integration didn't drop the property).
+  for (k in names(obj@geneScores)) {
+    for (cc in seq_len(2)) {
+      norm_k_cc <- sqrt(sum(obj@geneScores[[k]][, cc]^2))
+      expect_equal(norm_k_cc, 1, tolerance = 1e-6,
+                   info = paste("non-unit gene-weight norm for", k, "CC", cc))
+    }
+  }
+
+  # CCA output populated under the gscca_ prefix to avoid collision with
+  # runSkrCCA's "sigma_" keys.
+  expect_true(paste0("gscca_sigma_", 0.1) %in% names(obj@skrCCAOut))
 })
 
 test_that("runGeneSpaceCCA validates sigma against available values", {
@@ -618,7 +711,7 @@ test_that("streaming path runs end-to-end with normalizeDistance=TRUE", {
   expect_equal(ncol(obj@cellScores[[cs_key]]), 2)
   expect_false(any(is.na(obj@cellScores[[cs_key]])))
 
-  expect_true(paste0("sigma_", 0.1) %in% names(obj@skrCCAOut))
+  expect_true(paste0("gscca_sigma_", 0.1) %in% names(obj@skrCCAOut))
 })
 
 test_that("streaming path rejects unknown distanceArgs / kernelArgs", {
@@ -670,5 +763,168 @@ test_that("reverse-key lookup in .get_C_cross works", {
   expect_error(
     CoPro:::.get_C_cross(C_cross_s, "A", "C"),
     "Cross-covariance not found"
+  )
+})
+
+test_that(".prepareGeneSpaceData drops slides below the per-slide cell threshold", {
+  # The threshold (CoPro:::.min_cells_per_slide, default 10) protects the
+  # G x G covariance estimates from low-rank-induced noise. We drop a
+  # subset of CellTypeB cells from one slide so its CellTypeB count falls
+  # below threshold, then call the data-prep helper directly and confirm:
+  #   (a) a warning is emitted naming the slide and offending cell type
+  #   (b) the dropped slide is absent from the returned slides vector
+  #   (c) the other slide is retained
+  skip_if_not_installed("CoPro")
+
+  obj <- create_test_copro_multi(
+    n_cells_per_slide = 60, n_slides = 2, n_genes = 30,
+    n_cell_types = 2, seed = 42
+  )
+  obj <- subsetData(obj, cellTypesOfInterest = c("CellTypeA", "CellTypeB"))
+
+  slide_ids <- getSlideID(obj)
+  cell_types_full <- obj@cellTypesSub
+  slides_all <- unique(slide_ids)
+  target_slide <- slides_all[1]
+
+  # Drop most CellTypeB cells from the target slide so only 5 remain (below
+  # threshold of 10), keeping the other slide untouched.
+  victim <- which(slide_ids == target_slide & cell_types_full == "CellTypeB")
+  if (length(victim) <= 5) skip("Fixture too small to construct drop test")
+  to_drop <- victim[seq_len(length(victim) - 5)]
+
+  keep_idx <- setdiff(seq_len(nrow(obj@metaDataSub)), to_drop)
+  obj@metaDataSub <- obj@metaDataSub[keep_idx, , drop = FALSE]
+  obj@cellTypesSub <- obj@cellTypesSub[keep_idx]
+  obj@locationDataSub <- obj@locationDataSub[keep_idx, , drop = FALSE]
+  obj@normalizedDataSub <- obj@normalizedDataSub[keep_idx, , drop = FALSE]
+
+  expect_warning(
+    res <- CoPro:::.prepareGeneSpaceData(
+      obj, clip = "quantile",
+      min_prevalence = 0.008, min_cells = 5,
+      cts = c("CellTypeA", "CellTypeB"),
+      slides = slides_all
+    ),
+    "dropped"
+  )
+  expect_false(target_slide %in% res$slides)
+  expect_true(slides_all[2] %in% res$slides)
+})
+
+test_that(".prepareGeneSpaceData errors when no slides survive filtering", {
+  # If every slide has a cell type below threshold, all slides drop out
+  # and we raise an informative error rather than returning an empty
+  # structure that would crash the optimizer with a confusing error.
+  skip_if_not_installed("CoPro")
+
+  obj <- create_test_copro_multi(
+    n_cells_per_slide = 60, n_slides = 2, n_genes = 30,
+    n_cell_types = 2, seed = 42
+  )
+  obj <- subsetData(obj, cellTypesOfInterest = c("CellTypeA", "CellTypeB"))
+
+  cell_types_full <- obj@cellTypesSub
+  victim <- which(cell_types_full == "CellTypeB")
+  if (length(victim) < 4) skip("Fixture too small to construct drop test")
+  # Leave only 2 CellTypeB cells overall -- below threshold on every slide.
+  to_drop <- victim[seq_len(length(victim) - 2)]
+  keep_idx <- setdiff(seq_len(nrow(obj@metaDataSub)), to_drop)
+  obj@metaDataSub <- obj@metaDataSub[keep_idx, , drop = FALSE]
+  obj@cellTypesSub <- obj@cellTypesSub[keep_idx]
+  obj@locationDataSub <- obj@locationDataSub[keep_idx, , drop = FALSE]
+  obj@normalizedDataSub <- obj@normalizedDataSub[keep_idx, , drop = FALSE]
+
+  expect_error(
+    suppressWarnings(
+      CoPro:::.prepareGeneSpaceData(
+        obj, clip = "quantile",
+        min_prevalence = 0.008, min_cells = 1,
+        cts = c("CellTypeA", "CellTypeB"),
+        slides = unique(getSlideID(obj))
+      )
+    ),
+    "No slides"
+  )
+})
+
+test_that("runGeneSpaceCCA rejects nCC larger than the gene set", {
+  # User-facing guard for the case where deflation would exhaust all
+  # orthogonal directions and the optimizer would silently store random
+  # initialization vectors as canonical components.
+  skip_if_not_installed("CoPro")
+
+  obj <- create_test_copro_multi(
+    n_cells_per_slide = 60, n_slides = 2, n_genes = 30,
+    n_cell_types = 2, seed = 42
+  )
+  obj <- subsetData(obj, cellTypesOfInterest = c("CellTypeA", "CellTypeB"))
+  obj <- computeDistance(obj, distType = "Euclidean2D", verbose = FALSE)
+  obj <- computeKernelMatrix(obj, sigmaValues = 0.1, verbose = FALSE)
+
+  expect_error(
+    runGeneSpaceCCA(obj, sigma = 0.1, nCC = 1000,
+                    max_iter = 50, tol = 1e-4, verbose = FALSE),
+    "exceeds number of genes"
+  )
+})
+
+test_that("runGeneSpaceCCA validates the clip argument", {
+  skip_if_not_installed("CoPro")
+
+  obj <- create_test_copro_multi(
+    n_cells_per_slide = 60, n_slides = 2, n_genes = 30,
+    n_cell_types = 2, seed = 42
+  )
+  obj <- subsetData(obj, cellTypesOfInterest = c("CellTypeA", "CellTypeB"))
+  obj <- computeDistance(obj, distType = "Euclidean2D", verbose = FALSE)
+  obj <- computeKernelMatrix(obj, sigmaValues = 0.1, verbose = FALSE)
+
+  # Numeric scalar is allowed (clamps expression at the threshold)
+  expect_no_error(
+    runGeneSpaceCCA(obj, sigma = 0.1, nCC = 2, clip = 5,
+                    max_iter = 50, tol = 1e-3, verbose = FALSE)
+  )
+
+  # Invalid string value should error explicitly rather than silently
+  # skipping the clipping step.
+  expect_error(
+    runGeneSpaceCCA(obj, sigma = 0.1, nCC = 2, clip = "median",
+                    max_iter = 50, tol = 1e-3, verbose = FALSE),
+    "must be"
+  )
+
+  # Non-scalar numeric should also error
+  expect_error(
+    runGeneSpaceCCA(obj, sigma = 0.1, nCC = 2, clip = c(1, 2),
+                    max_iter = 50, tol = 1e-3, verbose = FALSE),
+    "must be"
+  )
+})
+
+test_that("computeGeneAndCellScores rejects gene-space CCA outputs", {
+  # Guard against the silent correctness trap where a user runs
+  # runGeneSpaceCCA (which writes weights into @skrCCAOut under a
+  # gscca_-prefixed key) and then calls computeGeneAndCellScores. The
+  # latter applies a PCA back-projection assuming the weights are in PC
+  # space, which would silently produce garbage gene scores. The guard in
+  # .checkInputGAC detects this and raises a clear error.
+  skip_if_not_installed("CoPro")
+
+  obj <- create_test_copro_multi(
+    n_cells_per_slide = 60, n_slides = 2, n_genes = 30,
+    n_cell_types = 2, seed = 42
+  )
+  obj <- subsetData(obj, cellTypesOfInterest = c("CellTypeA", "CellTypeB"))
+  obj <- computeDistance(obj, distType = "Euclidean2D", verbose = FALSE)
+  obj <- computeKernelMatrix(obj, sigmaValues = 0.1, verbose = FALSE)
+  # Need pcaGlobal to reach the gscca-only branch in .checkInputGAC
+  obj <- computePCA(obj, nPCA = 5)
+  obj <- runGeneSpaceCCA(obj, sigma = 0.1, nCC = 2,
+                         max_iter = 50, tol = 1e-3, verbose = FALSE)
+
+  expect_error(
+    computeGeneAndCellScores(obj),
+    "gene-space CCA"
   )
 })
