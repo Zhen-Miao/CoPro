@@ -136,6 +136,7 @@ obj <- computeDistance(obj, distType = "Euclidean2D", verbose = FALSE)
 Other spatial-pipeline: 
 \code{\link{computeKernelMatrix}()},
 \code{\link{computePCA}()},
+\code{\link{runGeneSpaceCCA}()},
 \code{\link{runSkrCCA}()}
 }
 \concept{spatial-pipeline}

@@ -72,7 +72,14 @@ initialize_weights_svd <- function(X_list, cell_types) {
 check_convergence <- function(w_list_new, w_list_old, cell_types) {
   current_max_diff <- 0
   for (ct in cell_types) {
-    diff_val <- max(abs(w_list_new[[ct]] - w_list_old[[ct]]))
+    # Power iteration of a symmetric eigenvalue problem has sign ambiguity:
+    # if w is a fixed point so is -w, and the iterate may flip sign between
+    # sweeps. Take min(||w_new - w_old||_inf, ||w_new + w_old||_inf) so a
+    # pure sign flip reads as zero change rather than a spurious "change of
+    # 2" that would prevent convergence forever.
+    diff_fwd <- max(abs(w_list_new[[ct]] - w_list_old[[ct]]))
+    diff_flip <- max(abs(w_list_new[[ct]] + w_list_old[[ct]]))
+    diff_val <- min(diff_fwd, diff_flip)
     if(is.nan(diff_val)) diff_val <- 0
     if(diff_val > current_max_diff) {
       current_max_diff <- diff_val

@@ -109,6 +109,7 @@ obj <- computeKernelMatrix(obj, sigmaValues = c(0.05, 0.1), verbose = FALSE)
 Other spatial-pipeline: 
 \code{\link{computeDistance}()},
 \code{\link{computePCA}()},
+\code{\link{runGeneSpaceCCA}()},
 \code{\link{runSkrCCA}()}
 }
 \concept{spatial-pipeline}

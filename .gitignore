@@ -9,3 +9,4 @@ README.html
 README.knit.md
 *.tar.gz
 *.Rcheck/
+experiments/

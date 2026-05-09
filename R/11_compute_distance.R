@@ -496,7 +496,8 @@ setGeneric(
     
     # Compute Euclidean distance
     distances_ij <- fields::rdist(mat1, mat2)
-    
+    dimnames(distances_ij) <- list(rownames(mat1), rownames(mat2))
+
     # Apply morphology-aware filtering if requested
     if (distType == "Morphology-Aware") {
       # Extract geodesic distances for this cell type pair
@@ -578,7 +579,8 @@ setGeneric(
   
   # Compute Euclidean distance matrix
   distances_ij <- fields::rdist(mat1)
-  
+  dimnames(distances_ij) <- list(rownames(mat1), rownames(mat1))
+
   # Apply morphology-aware filtering if requested
   if (distType == "Morphology-Aware") {
     if (verbose) message("Computing KNN graph and geodesic distances for all cells...")
@@ -791,7 +793,8 @@ setMethod("computeDistance", "CoProMulti", function(object, distType = c("Euclid
     
     # Compute Euclidean distance matrix
     distances_ij <- fields::rdist(mat1)
-    
+    dimnames(distances_ij) <- list(rownames(mat1), rownames(mat1))
+
     # Apply morphology-aware filtering if requested
     if (distType == "Morphology-Aware") {
       if (verbose) message("Computing KNN graph and geodesic distances for slide...")
@@ -927,7 +930,8 @@ setMethod("computeDistance", "CoProMulti", function(object, distType = c("Euclid
       
       # Compute Euclidean distance matrix
       distances_ij <- fields::rdist(mat1, mat2)
-      
+      dimnames(distances_ij) <- list(rownames(mat1), rownames(mat2))
+
       # Apply morphology-aware filtering if requested
       if (distType == "Morphology-Aware") {
         # Extract geodesic distances for this cell type pair

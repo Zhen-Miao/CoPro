@@ -8,6 +8,8 @@
 #   pb_new_release("Zhen-Miao/CoPro", tag = "data-v1")
 #   pb_upload("data-raw/vignette_data/copro_colon_d3.rds",
 #             repo = "Zhen-Miao/CoPro", tag = "data-v1")
+#   pb_upload("data-raw/vignette_data/copro_colon_d3_multi.rds",
+#             repo = "Zhen-Miao/CoPro", tag = "data-v1")
 #   pb_upload("data-raw/vignette_data/copro_colon_d9.rds",
 #             repo = "Zhen-Miao/CoPro", tag = "data-v1")
 #   pb_upload("data-raw/vignette_data/copro_kidney.rds",
@@ -106,6 +108,94 @@ saveRDS(d3_data, "data-raw/vignette_data/copro_colon_d3.rds", compress = "xz")
 message("  Saved: ", round(file.size("data-raw/vignette_data/copro_colon_d3.rds") / 1e6, 1), " MB")
 
 rm(d3_ra, d3_meta)
+gc()
+
+# ============================================================
+# 1b. Colon Day 3 (multi-slide) -- joint multi-slide analysis
+#     Uses the same preprocessed data as 1, but keeps 3 slides
+#     Preprocessing matches: CoPro colon D3 all slides_by_region 2.R
+# ============================================================
+message("\n=== Preparing Colon D3 (multi-slide) ===")
+
+d3m_ra <- readRDS(file.path(DATA_ROOT,
+  "ra_filtered_DSS3_colon_all_slides.rds"))
+d3m_meta <- readRDS(file.path(DATA_ROOT,
+  "meta_filtered_DSS3_colon_all_slides.rds"))
+d3m_meta <- as.data.frame(d3m_meta)
+
+# Gene filter: >= 0.8% cells with expression > 0 (matching original)
+d3m_bin <- d3m_ra
+d3m_bin@x <- as.numeric(d3m_bin@x > 0)
+nz_genes <- Matrix::colSums(d3m_bin)
+d3m_ra <- d3m_ra[, nz_genes >= 0.008 * nrow(d3m_bin)]
+
+# Cell filter: >= 20 genes with expression > 0
+nz_cells <- Matrix::rowSums(d3m_bin)
+d3m_ra <- d3m_ra[nz_cells >= 20, ]
+
+# Match meta to data
+rownames(d3m_meta) <- d3m_meta$Cell_ID
+d3m_meta <- d3m_meta[rownames(d3m_ra), ]
+rm(d3m_bin); gc()
+
+# Cap at 99th percentile (matching original D3 script)
+quant_99 <- quantile(d3m_ra@x, probs = 0.99)
+d3m_ra@x[d3m_ra@x > quant_99] <- quant_99
+message("  99th percentile cap: ", quant_99)
+
+# Select 3 slides with reasonable cell counts
+slide_counts <- table(d3m_meta$Slice_ID)
+selected_slides <- c("092421_D3_m1_1_slice_1",
+                      "092421_D3_m1_1_slice_3",
+                      "092421_D3_m2_1_slice_1")
+selected_slides <- intersect(selected_slides, names(slide_counts))
+message("  Selected slides: ", paste(selected_slides, collapse = ", "))
+
+keep <- d3m_meta$Slice_ID %in% selected_slides
+d3m_ra <- d3m_ra[keep, ]
+d3m_meta <- d3m_meta[keep, ]
+
+# Subset to cell types
+ct_keep <- d3m_meta$Tier1 %in% c("Epithelial", "Fibroblast", "Immune")
+d3m_ra <- d3m_ra[ct_keep, ]
+d3m_meta <- d3m_meta[ct_keep, ]
+
+# Convert to dense
+d3m_ra <- as.matrix(d3m_ra)
+
+# Consistent cell IDs
+cell_ids_d3m <- paste0("cell_", seq_len(nrow(d3m_ra)))
+rownames(d3m_ra) <- cell_ids_d3m
+rownames(d3m_meta) <- cell_ids_d3m
+
+message("  Total cells: ", nrow(d3m_ra))
+for (sl in selected_slides) {
+  n_sl <- sum(d3m_meta$Slice_ID == sl)
+  message("    ", sl, ": ", n_sl, " cells")
+}
+message("  Genes: ", ncol(d3m_ra))
+
+d3m_location <- data.frame(
+  x = d3m_meta$x / 10,
+  y = d3m_meta$y / 10,
+  row.names = cell_ids_d3m
+)
+
+d3m_data <- list(
+  normalizedData = d3m_ra,
+  locationData = d3m_location,
+  metaData = d3m_meta,
+  cellTypes = d3m_meta$Tier1,
+  slideID = d3m_meta$Slice_ID,
+  selectedSlides = selected_slides,
+  description = "Colon Day 3 organoid (3 slides). Log-normalized seqFISH data. Gene filter >= 0.8%, cell filter >= 20 genes, 99th percentile cap. Coordinates /10.",
+  source = "Miao et al. CoPro manuscript"
+)
+
+saveRDS(d3m_data, "data-raw/vignette_data/copro_colon_d3_multi.rds", compress = "xz")
+message("  Saved: ", round(file.size("data-raw/vignette_data/copro_colon_d3_multi.rds") / 1e6, 1), " MB")
+
+rm(d3m_ra, d3m_meta)
 gc()
 
 # ============================================================

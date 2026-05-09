@@ -94,6 +94,7 @@ obj <- runSkrCCA(obj, scalePCs = TRUE, nCC = 2)
 Other spatial-pipeline: 
 \code{\link{computeDistance}()},
 \code{\link{computeKernelMatrix}()},
-\code{\link{computePCA}()}
+\code{\link{computePCA}()},
+\code{\link{runGeneSpaceCCA}()}
 }
 \concept{spatial-pipeline}
