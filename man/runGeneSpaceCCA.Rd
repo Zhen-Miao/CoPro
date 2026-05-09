@@ -15,6 +15,9 @@ runGeneSpaceCCA(
   min_cells = 20,
   max_iter = 3000,
   tol = 1e-06,
+  streaming = FALSE,
+  distanceArgs = list(),
+  kernelArgs = list(),
   verbose = TRUE
 )
 
@@ -27,6 +30,9 @@ runGeneSpaceCCA(
   min_cells = 20,
   max_iter = 3000,
   tol = 1e-06,
+  streaming = FALSE,
+  distanceArgs = list(),
+  kernelArgs = list(),
   verbose = TRUE
 )
 
@@ -39,6 +45,9 @@ runGeneSpaceCCA(
   min_cells = 20,
   max_iter = 3000,
   tol = 1e-06,
+  streaming = FALSE,
+  distanceArgs = list(),
+  kernelArgs = list(),
   verbose = TRUE
 )
 }
@@ -62,6 +71,21 @@ for which kernels were computed.}
 \item{max_iter}{Maximum iterations per component (default 3000).}
 
 \item{tol}{Convergence tolerance (default 1e-6).}
+
+\item{streaming}{Logical. If \code{TRUE}, fuse distance + kernel +
+covariance reduction into a per-slide loop and free the n x n matrices
+between slides. Bypasses \code{\link{computeDistance}} and
+\code{\link{computeKernelMatrix}}: \code{object@distances} and
+\code{object@kernelMatrices} are not populated. Default \code{FALSE}.}
+
+\item{distanceArgs}{Named list of distance parameters passed through to
+the streaming path (e.g., \code{distType}, \code{normalizeDistance},
+\code{normalizeTarget}, \code{truncateLowDist}, scaling factors,
+morphology-aware parameters). Ignored when \code{streaming = FALSE}.}
+
+\item{kernelArgs}{Named list of kernel parameters passed through to the
+streaming path (e.g., \code{lowerLimit}, \code{upperQuantile},
+\code{normalizeKernel}). Ignored when \code{streaming = FALSE}.}
 
 \item{verbose}{Print progress messages (default TRUE).}
 }
@@ -90,6 +114,19 @@ deflation in weight space.
 Memory scales as \eqn{O(G^2 \times S \times C^2)} for precomputed covariance
 matrices, where G = genes, S = slides, C = cell types. For example,
 G=5000, S=10, C=3 requires approximately 12 GB.
+
+Streaming mode (\code{streaming = TRUE}) reduces peak memory to roughly
+one slide's pairwise n x n footprint at a time. Distance normalization
+defaults to \code{normalizationScope = "global"} (a single factor across
+all slides, matching the slot-based pipeline's semantics under
+\code{normalizeDistance = TRUE}); under a fixed RNG seed the streaming
+result is bit-identical to the slot-based path. Pass
+\code{distanceArgs = list(normalizationScope = "per_slide")} to opt into
+per-slide factors instead -- useful when slides have different coordinate
+scales, but be aware the per-slide percentile jitter can perturb
+degenerate canonical components on heterogeneous datasets. Use
+\code{streaming = FALSE} when downstream code reads
+\code{object@distances} or \code{object@kernelMatrices}.
 }
 \seealso{
 \code{\link[=runSkrCCA]{runSkrCCA()}}, \code{\link[=computeKernelMatrix]{computeKernelMatrix()}}

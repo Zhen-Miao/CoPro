@@ -395,6 +395,272 @@ test_that("runGeneSpaceCCA on CoProSingle gives informative error", {
   )
 })
 
+test_that("streaming path matches slot-based path with normalizeDistance=FALSE", {
+  # Without distance normalization there is no cross-slide coupling, so the
+  # streaming and slot-based paths must produce identical covariance matrices
+  # and (with the same seed) identical optimization output.
+  # Sigma is chosen to match the raw (un-normalized) distance scale on the
+  # synthetic fixture (median pairwise distance ~5 units).
+  skip_if_not_installed("CoPro")
+
+  obj <- create_test_copro_multi(
+    n_cells_per_slide = 60, n_slides = 2, n_genes = 30,
+    n_cell_types = 2, seed = 42
+  )
+  obj <- subsetData(obj, cellTypesOfInterest = c("CellTypeA", "CellTypeB"))
+  test_sigma <- 5
+
+  # Slot-based path
+  obj_slot <- computeDistance(obj, distType = "Euclidean2D",
+                              normalizeDistance = FALSE, verbose = FALSE)
+  obj_slot <- computeKernelMatrix(obj_slot, sigmaValues = test_sigma,
+                                  verbose = FALSE)
+  set.seed(123)
+  obj_slot <- runGeneSpaceCCA(obj_slot, sigma = test_sigma, nCC = 2,
+                              max_iter = 500, tol = 1e-6, verbose = FALSE)
+
+  # Streaming path
+  set.seed(123)
+  obj_stream <- runGeneSpaceCCA(
+    obj, sigma = test_sigma, nCC = 2,
+    max_iter = 500, tol = 1e-6,
+    streaming = TRUE,
+    distanceArgs = list(distType = "Euclidean2D", normalizeDistance = FALSE),
+    verbose = FALSE
+  )
+
+  expect_equal(names(obj_slot@geneScores), names(obj_stream@geneScores))
+  for (k in names(obj_slot@geneScores)) {
+    expect_equal(obj_stream@geneScores[[k]], obj_slot@geneScores[[k]],
+                 tolerance = 1e-10,
+                 info = paste("geneScores mismatch for:", k))
+  }
+
+  expect_equal(names(obj_slot@cellScores), names(obj_stream@cellScores))
+  for (k in names(obj_slot@cellScores)) {
+    expect_equal(obj_stream@cellScores[[k]], obj_slot@cellScores[[k]],
+                 tolerance = 1e-10,
+                 info = paste("cellScores mismatch for:", k))
+  }
+
+  # Streaming should NOT populate the slot-based caches
+  expect_length(obj_stream@distances, 0)
+  expect_length(obj_stream@kernelMatrices, 0)
+
+  # ...but should record the sigma so downstream lookups work
+  expect_true(test_sigma %in% obj_stream@sigmaValues)
+})
+
+test_that("streaming path matches slot-based path with 3 cell types (multiple pairs)", {
+  # Multi-pair regression: with 3 cell types the per-slide pair loop has
+  # to handle 3 cross-pairs. An earlier draft of the streaming code freed
+  # pair_distances using `lst[[k]] <- NULL`, which shrinks the list and
+  # shifts indices, producing a non-conformable kernel %*% Z error on the
+  # second pair. This test is the smallest fixture that exercises >1 pair.
+  skip_if_not_installed("CoPro")
+
+  obj <- create_test_copro_multi(
+    n_cells_per_slide = 90, n_slides = 2, n_genes = 30,
+    n_cell_types = 3, seed = 42
+  )
+  obj <- subsetData(obj,
+                    cellTypesOfInterest = c("CellTypeA", "CellTypeB", "CellTypeC"))
+  test_sigma <- 5
+
+  obj_slot <- computeDistance(obj, distType = "Euclidean2D",
+                              normalizeDistance = FALSE, verbose = FALSE)
+  obj_slot <- computeKernelMatrix(obj_slot, sigmaValues = test_sigma,
+                                  verbose = FALSE)
+  set.seed(123)
+  obj_slot <- runGeneSpaceCCA(obj_slot, sigma = test_sigma, nCC = 2,
+                              max_iter = 500, tol = 1e-6, verbose = FALSE)
+
+  set.seed(123)
+  obj_stream <- runGeneSpaceCCA(
+    obj, sigma = test_sigma, nCC = 2,
+    max_iter = 500, tol = 1e-6,
+    streaming = TRUE,
+    distanceArgs = list(distType = "Euclidean2D", normalizeDistance = FALSE),
+    verbose = FALSE
+  )
+
+  for (k in names(obj_slot@geneScores)) {
+    expect_equal(obj_stream@geneScores[[k]], obj_slot@geneScores[[k]],
+                 tolerance = 1e-10,
+                 info = paste("geneScores mismatch for:", k))
+  }
+  for (k in names(obj_slot@cellScores)) {
+    expect_equal(obj_stream@cellScores[[k]], obj_slot@cellScores[[k]],
+                 tolerance = 1e-10,
+                 info = paste("cellScores mismatch for:", k))
+  }
+})
+
+test_that("streaming default (no normalizationScope arg) matches slot under normalizeDistance=TRUE", {
+  # Pins the new default: normalizationScope = "global". With a fixed seed,
+  # streaming should be bit-identical to the slot-based path even when the
+  # caller does not specify normalizationScope. This guards against an
+  # accidental regression to the old "per_slide" default, which was found
+  # to perturb degenerate canonical components on heterogeneous datasets
+  # (NSCLC macrophage CC2: cor 0.596 vs 0.038; Issue #14).
+  skip_if_not_installed("CoPro")
+
+  obj <- create_test_copro_multi(
+    n_cells_per_slide = 90, n_slides = 2, n_genes = 30,
+    n_cell_types = 3, seed = 42
+  )
+  obj <- subsetData(obj,
+                    cellTypesOfInterest = c("CellTypeA", "CellTypeB", "CellTypeC"))
+  test_sigma <- 5
+
+  obj_slot <- computeDistance(obj, distType = "Euclidean2D",
+                              normalizeDistance = TRUE, verbose = FALSE)
+  obj_slot <- computeKernelMatrix(obj_slot, sigmaValues = test_sigma,
+                                  verbose = FALSE)
+  set.seed(123)
+  obj_slot <- runGeneSpaceCCA(obj_slot, sigma = test_sigma, nCC = 2,
+                              max_iter = 500, tol = 1e-6, verbose = FALSE)
+
+  set.seed(123)
+  obj_stream <- runGeneSpaceCCA(
+    obj, sigma = test_sigma, nCC = 2,
+    max_iter = 500, tol = 1e-6,
+    streaming = TRUE,
+    distanceArgs = list(distType = "Euclidean2D",
+                        normalizeDistance = TRUE),  # no normalizationScope -> default
+    verbose = FALSE
+  )
+
+  for (k in names(obj_slot@geneScores)) {
+    expect_equal(obj_stream@geneScores[[k]], obj_slot@geneScores[[k]],
+                 tolerance = 1e-10,
+                 info = paste("geneScores mismatch for:", k))
+  }
+  for (k in names(obj_slot@cellScores)) {
+    expect_equal(obj_stream@cellScores[[k]], obj_slot@cellScores[[k]],
+                 tolerance = 1e-10,
+                 info = paste("cellScores mismatch for:", k))
+  }
+})
+
+test_that("streaming with normalizationScope='global' matches slot under normalizeDistance=TRUE", {
+  # Slot path uses global distance normalization (single factor across all
+  # slides). Streaming with scope='global' replicates that exact factor by
+  # taking the min low-percentile across all (slide, pair) before scaling.
+  # With a fixed seed, results should be bit-identical to the slot path.
+  skip_if_not_installed("CoPro")
+
+  obj <- create_test_copro_multi(
+    n_cells_per_slide = 90, n_slides = 2, n_genes = 30,
+    n_cell_types = 3, seed = 42
+  )
+  obj <- subsetData(obj,
+                    cellTypesOfInterest = c("CellTypeA", "CellTypeB", "CellTypeC"))
+  test_sigma <- 5
+
+  obj_slot <- computeDistance(obj, distType = "Euclidean2D",
+                              normalizeDistance = TRUE, verbose = FALSE)
+  obj_slot <- computeKernelMatrix(obj_slot, sigmaValues = test_sigma,
+                                  verbose = FALSE)
+  set.seed(123)
+  obj_slot <- runGeneSpaceCCA(obj_slot, sigma = test_sigma, nCC = 2,
+                              max_iter = 500, tol = 1e-6, verbose = FALSE)
+
+  set.seed(123)
+  obj_stream <- runGeneSpaceCCA(
+    obj, sigma = test_sigma, nCC = 2,
+    max_iter = 500, tol = 1e-6,
+    streaming = TRUE,
+    distanceArgs = list(distType = "Euclidean2D",
+                        normalizeDistance = TRUE,
+                        normalizationScope = "global"),
+    verbose = FALSE
+  )
+
+  for (k in names(obj_slot@geneScores)) {
+    expect_equal(obj_stream@geneScores[[k]], obj_slot@geneScores[[k]],
+                 tolerance = 1e-10,
+                 info = paste("geneScores mismatch for:", k))
+  }
+  for (k in names(obj_slot@cellScores)) {
+    expect_equal(obj_stream@cellScores[[k]], obj_slot@cellScores[[k]],
+                 tolerance = 1e-10,
+                 info = paste("cellScores mismatch for:", k))
+  }
+})
+
+test_that("streaming path runs end-to-end with normalizeDistance=TRUE", {
+  skip_if_not_installed("CoPro")
+
+  obj <- create_test_copro_multi(
+    n_cells_per_slide = 60, n_slides = 2, n_genes = 30,
+    n_cell_types = 2, seed = 42
+  )
+  obj <- subsetData(obj, cellTypesOfInterest = c("CellTypeA", "CellTypeB"))
+
+  set.seed(7)
+  obj <- runGeneSpaceCCA(
+    obj, sigma = 0.1, nCC = 2,
+    max_iter = 500, tol = 1e-6,
+    streaming = TRUE,
+    distanceArgs = list(distType = "Euclidean2D", normalizeDistance = TRUE,
+                        normalizeTarget = 0.01),
+    verbose = FALSE
+  )
+
+  expect_gt(length(obj@geneScores), 0)
+  gs_key <- names(obj@geneScores)[1]
+  expect_equal(ncol(obj@geneScores[[gs_key]]), 2)
+  expect_false(any(is.na(obj@geneScores[[gs_key]])))
+
+  expect_gt(length(obj@cellScores), 0)
+  cs_key <- names(obj@cellScores)[1]
+  expect_equal(ncol(obj@cellScores[[cs_key]]), 2)
+  expect_false(any(is.na(obj@cellScores[[cs_key]])))
+
+  expect_true(paste0("sigma_", 0.1) %in% names(obj@skrCCAOut))
+})
+
+test_that("streaming path rejects unknown distanceArgs / kernelArgs", {
+  skip_if_not_installed("CoPro")
+
+  obj <- create_test_copro_multi(
+    n_cells_per_slide = 60, n_slides = 2, n_genes = 30,
+    n_cell_types = 2, seed = 42
+  )
+  obj <- subsetData(obj, cellTypesOfInterest = c("CellTypeA", "CellTypeB"))
+
+  expect_error(
+    runGeneSpaceCCA(obj, sigma = 0.1, streaming = TRUE,
+                    distanceArgs = list(noSuchArg = 1), verbose = FALSE),
+    "Unknown distanceArgs"
+  )
+  expect_error(
+    runGeneSpaceCCA(obj, sigma = 0.1, streaming = TRUE,
+                    kernelArgs = list(noSuchArg = 1), verbose = FALSE),
+    "Unknown kernelArgs"
+  )
+})
+
+test_that("streaming = FALSE warns when distanceArgs / kernelArgs are passed", {
+  skip_if_not_installed("CoPro")
+
+  obj <- create_test_copro_multi(
+    n_cells_per_slide = 60, n_slides = 2, n_genes = 30,
+    n_cell_types = 2, seed = 42
+  )
+  obj <- subsetData(obj, cellTypesOfInterest = c("CellTypeA", "CellTypeB"))
+  obj <- computeDistance(obj, distType = "Euclidean2D", verbose = FALSE)
+  obj <- computeKernelMatrix(obj, sigmaValues = 0.1, verbose = FALSE)
+
+  expect_warning(
+    runGeneSpaceCCA(obj, sigma = 0.1, streaming = FALSE,
+                    distanceArgs = list(distType = "Euclidean2D"),
+                    max_iter = 50, verbose = FALSE),
+    "ignored when streaming = FALSE"
+  )
+})
+
 test_that("reverse-key lookup in .get_C_cross works", {
   C_cross_s <- list("B-A" = matrix(1:4, 2, 2))
 

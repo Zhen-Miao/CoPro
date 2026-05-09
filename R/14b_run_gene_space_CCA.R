@@ -133,6 +133,260 @@
   list(C_self = C_self, C_cross = C_cross)
 }
 
+#' Resolve streaming distance / kernel argument lists with defaults
+#' @noRd
+.resolveStreamingArgs <- function(distanceArgs, kernelArgs) {
+  d_def <- list(
+    distType = "Euclidean2D",
+    xDistScale = 1, yDistScale = 1, zDistScale = 1,
+    normalizeDistance = TRUE,
+    normalizeTarget = 0.01,
+    normalizationScope = "global",  # or "per_slide"
+    truncateLowDist = TRUE,
+    knn_k = 10,
+    geodesic_threshold = 10,
+    geodesic_cutoff = 7
+  )
+  k_def <- list(
+    lowerLimit = 1e-7,
+    upperQuantile = 0.85,
+    normalizeKernel = FALSE,
+    minAveCellNeighor = 2,
+    rowNormalizeKernel = FALSE,
+    colNormalizeKernel = FALSE
+  )
+
+  unknown_d <- setdiff(names(distanceArgs), names(d_def))
+  unknown_k <- setdiff(names(kernelArgs), names(k_def))
+  if (length(unknown_d) > 0) {
+    stop("Unknown distanceArgs: ", paste(unknown_d, collapse = ", "),
+         ". Allowed: ", paste(names(d_def), collapse = ", "))
+  }
+  if (length(unknown_k) > 0) {
+    stop("Unknown kernelArgs: ", paste(unknown_k, collapse = ", "),
+         ". Allowed: ", paste(names(k_def), collapse = ", "))
+  }
+
+  d <- modifyList(d_def, distanceArgs)
+  k <- modifyList(k_def, kernelArgs)
+
+  d$distType <- match.arg(d$distType,
+                          c("Euclidean2D", "Euclidean3D", "Morphology-Aware"))
+  d$normalizationScope <- match.arg(d$normalizationScope,
+                                    c("per_slide", "global"))
+  if (any(c(d$xDistScale, d$yDistScale, d$zDistScale) <= 0)) {
+    stop("Distance scales must be positive.")
+  }
+  if (!is.numeric(d$normalizeTarget) || length(d$normalizeTarget) != 1 ||
+      !is.finite(d$normalizeTarget) || d$normalizeTarget <= 0) {
+    stop("normalizeTarget must be a positive finite scalar.")
+  }
+  if (k$rowNormalizeKernel && k$colNormalizeKernel) {
+    stop("Cannot do both row-wise and column-wise normalization.")
+  }
+  if (k$lowerLimit <= 0 || k$lowerLimit >= 1) {
+    stop("lowerLimit must be in (0, 1).")
+  }
+  if (k$upperQuantile <= 0 || k$upperQuantile >= 1) {
+    stop("upperQuantile must be in (0, 1).")
+  }
+
+  list(dist = d, kern = k)
+}
+
+#' Compute one slide's pairwise distance matrix, on demand
+#' Used by the streaming covariance precompute. No slot storage.
+#' @noRd
+.streamingPairDistance <- function(object, slide, ct_i, ct_j, dist_args) {
+  d <- dist_args
+  mat1 <- .getCoordinateMatrix(object, ct_i, d$distType,
+                               d$xDistScale, d$yDistScale, d$zDistScale,
+                               slideID = slide)
+  mat2 <- .getCoordinateMatrix(object, ct_j, d$distType,
+                               d$xDistScale, d$yDistScale, d$zDistScale,
+                               slideID = slide)
+
+  distances_ij <- fields::rdist(mat1, mat2)
+  dimnames(distances_ij) <- list(rownames(mat1), rownames(mat2))
+
+  if (d$distType == "Morphology-Aware") {
+    slide_indices <- which(.getSlideIndices(object, slide))
+    all_coords <- cbind(
+      object@locationDataSub$x[slide_indices] * d$xDistScale,
+      object@locationDataSub$y[slide_indices] * d$yDistScale
+    )
+    rownames(all_coords) <- rownames(object@locationDataSub)[slide_indices]
+    knn_adj <- .computeKnnGraph(all_coords, k = d$knn_k)
+    geodesic_all <- .computeGeodesicDistance(knn_adj)
+    idx_i <- match(rownames(mat1), rownames(all_coords))
+    idx_j <- match(rownames(mat2), rownames(all_coords))
+    distances_ij <- .applyMorphologyFilter(
+      d_E = distances_ij,
+      d_g = geodesic_all[idx_i, idx_j, drop = FALSE],
+      geodesic_threshold = d$geodesic_threshold,
+      geodesic_cutoff = d$geodesic_cutoff,
+      verbose = FALSE
+    )
+  }
+
+  distances_ij
+}
+
+#' Streaming per-slide covariance precompute (no slot storage)
+#'
+#' Single-pass over slides. For each slide and each cell-type pair, computes
+#' the pairwise distance, derives a per-slide scaling factor from the
+#' minimum low-percentile across that slide's pairs, builds the kernel,
+#' and reduces to a G x G cross-covariance. The n x n distance and kernel
+#' matrices are released before the next slide is processed, so the
+#' resident n x n footprint stays at one slide's worth of pairs at a time.
+#'
+#' Differs from \code{.precomputeCovarianceMatrices + computeDistance +
+#' computeKernelMatrix}: distance normalization is computed per slide
+#' rather than globally across slides. For datasets where all slides
+#' share the same coordinate scale (e.g., the same imaging modality
+#' across patients), the per-slide factors are nearly identical and the
+#' cross-covariances differ only at the level of the per-slide percentile
+#' jitter.
+#'
+#' @param object CoProMulti object (already subsetted to cells of interest)
+#' @param Z_by_slide Standardized expression list from \code{.prepareGeneSpaceData}
+#' @param sigma Numeric scalar, kernel bandwidth
+#' @param slides Slide IDs to process
+#' @param cell_types Cell type names
+#' @param distanceArgs Named list overriding distance defaults
+#' @param kernelArgs Named list overriding kernel defaults
+#' @param verbose Logical
+#' @return List with \code{C_self} and \code{C_cross}, identical structure
+#'   to \code{.precomputeCovarianceMatrices}.
+#' @importFrom utils combn
+#' @noRd
+.streamingCovariancePrecompute <- function(object, Z_by_slide, sigma,
+                                           slides, cell_types,
+                                           distanceArgs = list(),
+                                           kernelArgs = list(),
+                                           verbose = TRUE) {
+  args <- .resolveStreamingArgs(distanceArgs, kernelArgs)
+  d <- args$dist
+  k <- args$kern
+
+  .check_dist_type(d$distType, object)
+
+  pairs <- combn(cell_types, 2, simplify = FALSE)
+  scope <- d$normalizationScope
+
+  C_self <- setNames(vector("list", length(slides)), slides)
+  C_cross <- setNames(vector("list", length(slides)), slides)
+
+  for (s in slides) {
+    C_self[[s]] <- setNames(vector("list", length(cell_types)), cell_types)
+    for (ct in cell_types) {
+      Z <- Z_by_slide[[s]][[ct]]
+      C_self[[s]][[ct]] <- crossprod(Z) / nrow(Z)
+    }
+  }
+
+  # ---- Phase 1: low-percentile estimation ----
+  # In all cases, each (slide, pair) distance is materialized once, its low
+  # percentile is recorded, then the matrix is freed. The only difference
+  # between scopes is what we do with the percentiles afterwards.
+  per_slide_percentiles <- vector("list", length(slides))
+  names(per_slide_percentiles) <- slides
+
+  if (isTRUE(d$normalizeDistance)) {
+    if (verbose && scope == "global") {
+      message("  Streaming phase 1: per-pair percentiles (global scope)...")
+    }
+    for (s in slides) {
+      pcts <- numeric(length(pairs))
+      for (pp in seq_along(pairs)) {
+        ct_i <- pairs[[pp]][1]
+        ct_j <- pairs[[pp]][2]
+        dist_mat <- .streamingPairDistance(object, s, ct_i, ct_j, d)
+        proc <- .processDistanceMatrix(dist_mat, d$truncateLowDist)
+        pcts[pp] <- proc$percentile
+        rm(dist_mat, proc)
+        gc(verbose = FALSE, full = TRUE)
+      }
+      per_slide_percentiles[[s]] <- pcts
+    }
+
+    if (scope == "global") {
+      all_pcts <- unlist(per_slide_percentiles)
+      finite_pcts <- all_pcts[is.finite(all_pcts) & !is.na(all_pcts)]
+      if (length(finite_pcts) == 0) {
+        stop("Streaming: no valid distance percentile across slides.")
+      }
+      global_scaling <- d$normalizeTarget / min(finite_pcts)
+      if (verbose) {
+        message(sprintf("  Streaming GLOBAL scaling factor = %g", global_scaling))
+      }
+    }
+  }
+
+  # ---- Phase 2: per-slide kernel + G x G reduction ----
+  for (s in slides) {
+    if (verbose) message(sprintf("  Streaming slide: %s", s))
+
+    if (isTRUE(d$normalizeDistance)) {
+      if (scope == "per_slide") {
+        finite_pcts <- per_slide_percentiles[[s]]
+        finite_pcts <- finite_pcts[is.finite(finite_pcts) & !is.na(finite_pcts)]
+        if (length(finite_pcts) == 0) {
+          stop(sprintf("Streaming: no valid distance percentile for slide '%s'.", s))
+        }
+        slide_scaling <- d$normalizeTarget / min(finite_pcts)
+        if (verbose) {
+          message(sprintf("    per-slide scaling factor = %g", slide_scaling))
+        }
+      } else {  # "global"
+        slide_scaling <- global_scaling
+      }
+    } else {
+      slide_scaling <- 1
+    }
+
+    # Per-pair distance + kernel + reduction; each pair's n x n matrices
+    # live only until that pair's G x G covariance is computed.
+    C_cross[[s]] <- list()
+    for (pp in seq_along(pairs)) {
+      ct_i <- pairs[[pp]][1]
+      ct_j <- pairs[[pp]][2]
+      key <- paste0(ct_i, "-", ct_j)
+
+      dist_mat <- .streamingPairDistance(object, s, ct_i, ct_j, d)
+      proc <- .processDistanceMatrix(dist_mat, d$truncateLowDist)
+      dist_mat <- proc$distances * slide_scaling
+      rm(proc)
+
+      kernel_mat <- kernel_from_distance(
+        sigma = sigma, dist_mat = dist_mat,
+        lower_limit = k$lowerLimit
+      )
+      rm(dist_mat)
+      gc(verbose = FALSE, full = TRUE)
+
+      kernel_mat <- .processKernelMatrix(
+        kernel_mat, k$lowerLimit, k$upperQuantile,
+        k$normalizeKernel, k$rowNormalizeKernel, k$colNormalizeKernel
+      )
+
+      Z_i <- Z_by_slide[[s]][[ct_i]]
+      Z_j <- Z_by_slide[[s]][[ct_j]]
+      n_i <- nrow(Z_i)
+      n_j <- nrow(Z_j)
+
+      C_cross[[s]][[key]] <- crossprod(Z_i, kernel_mat %*% Z_j) /
+        sqrt(n_i * n_j)
+
+      rm(kernel_mat)
+      gc(verbose = FALSE, full = TRUE)
+    }
+  }
+
+  list(C_self = C_self, C_cross = C_cross)
+}
+
 #' Store gene-space CCA results into CoPro object slots
 #'
 #' Computes cell scores from gene weights and stores gene weights, cell scores,
@@ -243,6 +497,18 @@
 #' @param min_cells Minimum number of cells expressing a gene (default 20).
 #' @param max_iter Maximum iterations per component (default 3000).
 #' @param tol Convergence tolerance (default 1e-6).
+#' @param streaming Logical. If \code{TRUE}, fuse distance + kernel +
+#'   covariance reduction into a per-slide loop and free the n x n matrices
+#'   between slides. Bypasses \code{\link{computeDistance}} and
+#'   \code{\link{computeKernelMatrix}}: \code{object@@distances} and
+#'   \code{object@@kernelMatrices} are not populated. Default \code{FALSE}.
+#' @param distanceArgs Named list of distance parameters passed through to
+#'   the streaming path (e.g., \code{distType}, \code{normalizeDistance},
+#'   \code{normalizeTarget}, \code{truncateLowDist}, scaling factors,
+#'   morphology-aware parameters). Ignored when \code{streaming = FALSE}.
+#' @param kernelArgs Named list of kernel parameters passed through to the
+#'   streaming path (e.g., \code{lowerLimit}, \code{upperQuantile},
+#'   \code{normalizeKernel}). Ignored when \code{streaming = FALSE}.
 #' @param verbose Print progress messages (default TRUE).
 #'
 #' @return The CoPro object with gene weights in \code{geneScores},
@@ -260,6 +526,19 @@
 #' matrices, where G = genes, S = slides, C = cell types. For example,
 #' G=5000, S=10, C=3 requires approximately 12 GB.
 #'
+#' Streaming mode (\code{streaming = TRUE}) reduces peak memory to roughly
+#' one slide's pairwise n x n footprint at a time. Distance normalization
+#' defaults to \code{normalizationScope = "global"} (a single factor across
+#' all slides, matching the slot-based pipeline's semantics under
+#' \code{normalizeDistance = TRUE}); under a fixed RNG seed the streaming
+#' result is bit-identical to the slot-based path. Pass
+#' \code{distanceArgs = list(normalizationScope = "per_slide")} to opt into
+#' per-slide factors instead -- useful when slides have different coordinate
+#' scales, but be aware the per-slide percentile jitter can perturb
+#' degenerate canonical components on heterogeneous datasets. Use
+#' \code{streaming = FALSE} when downstream code reads
+#' \code{object@@distances} or \code{object@@kernelMatrices}.
+#'
 #' @family spatial-pipeline
 #' @seealso [runSkrCCA()], [computeKernelMatrix()]
 #' @export
@@ -268,6 +547,9 @@ setGeneric(
   function(object, sigma, nCC = 2, clip = "quantile",
            min_prevalence = 0.008, min_cells = 20,
            max_iter = 3000, tol = 1e-6,
+           streaming = FALSE,
+           distanceArgs = list(),
+           kernelArgs = list(),
            verbose = TRUE) standardGeneric("runGeneSpaceCCA")
 )
 
@@ -279,6 +561,9 @@ setMethod(
   function(object, sigma, nCC = 2, clip = "quantile",
            min_prevalence = 0.008, min_cells = 20,
            max_iter = 3000, tol = 1e-6,
+           streaming = FALSE,
+           distanceArgs = list(),
+           kernelArgs = list(),
            verbose = TRUE) {
     stop("runGeneSpaceCCA requires a CoProMulti object (multi-slide data). ",
          "Got: ", class(object)[1])
@@ -293,20 +578,42 @@ setMethod(
   function(object, sigma, nCC = 2, clip = "quantile",
            min_prevalence = 0.008, min_cells = 20,
            max_iter = 3000, tol = 1e-6,
+           streaming = FALSE,
+           distanceArgs = list(),
+           kernelArgs = list(),
            verbose = TRUE) {
 
     # Validate inputs
-    if (length(object@kernelMatrices) == 0) {
-      stop("Kernel matrices not found. Run computeKernelMatrix() first.")
+    if (!is.logical(streaming) || length(streaming) != 1 || is.na(streaming)) {
+      stop("streaming must be a single logical value.")
     }
-    if (!is.numeric(sigma) || length(sigma) != 1) {
-      stop("sigma must be a single numeric value.")
+    if (!is.list(distanceArgs)) {
+      stop("distanceArgs must be a named list.")
     }
-    if (!sigma %in% object@sigmaValues) {
-      stop(sprintf(
-        "sigma = %g not found in object@sigmaValues. Available: %s",
-        sigma, paste(object@sigmaValues, collapse = ", ")
-      ))
+    if (!is.list(kernelArgs)) {
+      stop("kernelArgs must be a named list.")
+    }
+    if (!streaming) {
+      if (length(object@kernelMatrices) == 0) {
+        stop("Kernel matrices not found. Run computeKernelMatrix() first, ",
+             "or call with streaming = TRUE.")
+      }
+      if (!is.numeric(sigma) || length(sigma) != 1) {
+        stop("sigma must be a single numeric value.")
+      }
+      if (!sigma %in% object@sigmaValues) {
+        stop(sprintf(
+          "sigma = %g not found in object@sigmaValues. Available: %s",
+          sigma, paste(object@sigmaValues, collapse = ", ")
+        ))
+      }
+      if (length(distanceArgs) > 0 || length(kernelArgs) > 0) {
+        warning("distanceArgs / kernelArgs are ignored when streaming = FALSE.")
+      }
+    } else {
+      if (!is.numeric(sigma) || length(sigma) != 1) {
+        stop("sigma must be a single numeric value.")
+      }
     }
     if (!is.numeric(nCC) || length(nCC) != 1 || nCC < 1 || nCC != as.integer(nCC)) {
       stop("nCC must be a positive integer.")
@@ -342,11 +649,25 @@ setMethod(
     }
 
     # Step 2: Precompute G x G covariance matrices
-    if (verbose) message("Step 2: Precomputing covariance matrices...")
-    covmats <- .precomputeCovarianceMatrices(
-      gsd$Z_by_slide, object@kernelMatrices, sigma,
-      gsd$slides, cts
-    )
+    if (streaming) {
+      if (verbose) message("Step 2: Streaming covariance precompute...")
+      covmats <- .streamingCovariancePrecompute(
+        object, gsd$Z_by_slide, sigma,
+        gsd$slides, cts,
+        distanceArgs = distanceArgs,
+        kernelArgs = kernelArgs,
+        verbose = verbose
+      )
+      if (!sigma %in% object@sigmaValues) {
+        object@sigmaValues <- c(object@sigmaValues, sigma)
+      }
+    } else {
+      if (verbose) message("Step 2: Precomputing covariance matrices...")
+      covmats <- .precomputeCovarianceMatrices(
+        gsd$Z_by_slide, object@kernelMatrices, sigma,
+        gsd$slides, cts
+      )
+    }
 
     # Step 3: Power iteration for canonical components
     if (nCC > length(gsd$genes)) {
