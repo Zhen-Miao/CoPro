@@ -17,3 +17,4 @@
 ^examples$
 ^data-raw$
 ^scripts$
+^\.claude$

@@ -157,6 +157,7 @@
 }
 
 #' Resolve streaming distance / kernel argument lists with defaults
+#' @importFrom utils modifyList
 #' @noRd
 .resolveStreamingArgs <- function(distanceArgs, kernelArgs) {
   d_def <- list(
