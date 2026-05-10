@@ -37,7 +37,7 @@ library(ggplot2)
 
 ## Download and load data
 
-```{r download-data}
+```{r download-data, message=FALSE}
 data_path <- copro_download_data("colon_d3")
 dat <- readRDS(data_path)
 
@@ -97,7 +97,7 @@ ggplot(mu_df, aes(x = x, y = y, color = MU_grouped)) +
 
 ## Create CoPro object
 
-```{r create-object}
+```{r create-object, message=FALSE}
 obj <- newCoProSingle(
   normalizedData = dat$normalizedData,
   locationData = dat$locationData,
@@ -111,7 +111,7 @@ obj <- subsetData(obj, cellTypesOfInterest = cell_types)
 
 ## Run the CoPro pipeline
 
-```{r run-pipeline}
+```{r run-pipeline, message=FALSE, results='hide'}
 # PCA
 obj <- computePCA(obj, nPCA = 40, center = TRUE, scale. = TRUE)
 

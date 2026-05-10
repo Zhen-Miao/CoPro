@@ -40,7 +40,7 @@ library(ggplot2)
 
 ## Download and load data
 
-```{r download-data}
+```{r download-data, message=FALSE}
 data_path <- copro_download_data("colon_d9")
 dat <- readRDS(data_path)
 
@@ -126,7 +126,7 @@ tar2_idx <- dat$slideID == tar_slides[2]
 
 ## Step 1: Run CoPro on the reference slide
 
-```{r run-reference}
+```{r run-reference, message=FALSE, results='hide'}
 cell_types <- c("Epithelial", "Fibroblast", "Immune")
 
 # Create reference CoPro object
@@ -261,7 +261,7 @@ ggplot(top_imm_df, aes(x = gene, y = weight, fill = direction)) +
 
 ## Step 2: Create target CoPro objects
 
-```{r create-targets}
+```{r create-targets, message=FALSE, results='hide'}
 # Target slide 1
 tar1_obj <- newCoProSingle(
   normalizedData = dat$normalizedData[tar1_idx, ],
@@ -291,7 +291,7 @@ tar2_obj <- computeKernelMatrix(tar2_obj, sigmaValues = sigma_choice)
 
 Transfer the learned gene weights from the reference to each target slide:
 
-```{r transfer-scores}
+```{r transfer-scores, message=FALSE}
 # Transfer to target 1
 tar1_scores <- getTransferCellScores(
   ref_obj = ref_obj,
@@ -397,7 +397,7 @@ ggplot(tar1_mu, aes(x = x, y = y, color = MU_grouped)) +
 Compare the normalized correlation between the reference and transferred
 slides to assess whether the co-progression pattern is consistent:
 
-```{r transfer-ncorr}
+```{r transfer-ncorr, message=FALSE}
 tar1_ncorr <- getTransferNormCorr(
   tar_obj = tar1_obj,
   transfer_cell_scores = tar1_scores,
@@ -428,7 +428,7 @@ pattern learned from the reference generalizes well to independent slides.
 
 For joint analysis across all slides simultaneously, use `newCoProMulti`:
 
-```{r multi-slide}
+```{r multi-slide, message=FALSE, results='hide'}
 multi_obj <- newCoProMulti(
   normalizedData = dat$normalizedData,
   locationData = dat$locationData,

@@ -36,13 +36,6 @@ library(ggplot2)
 
 ``` r
 data_path <- copro_download_data("colon_d3")
-```
-
-```
-## Using cached file: /Users/zhenmiao/Library/Caches/org.R-project.R/R/CoPro/copro_colon_d3.rds
-```
-
-``` r
 dat <- readRDS(data_path)
 
 str(dat[c("normalizedData", "locationData", "cellTypes")], max.level = 1)
@@ -134,132 +127,18 @@ obj <- subsetData(obj, cellTypesOfInterest = cell_types)
 ``` r
 # PCA
 obj <- computePCA(obj, nPCA = 40, center = TRUE, scale. = TRUE)
-```
 
-```
-## Input is dense (matrixarray), performing irlba pca...
-## Input is dense (matrixarray), performing irlba pca...
-## Input is dense (matrixarray), performing irlba pca...
-```
-
-``` r
 # Distance and kernel
 obj <- computeDistance(obj, distType = "Euclidean2D")
-```
 
-```
-## normalizeDistance = TRUE: low-percentile distance will be scaled to 0.01.
-```
-
-```
-##          0%         25%         50%         75%        100% 
-##   0.9705014  37.5605433  59.8000973  82.3149151 148.3187211 
-##         0%        25%        50%        75%       100% 
-##   1.044265  37.159523  59.872983  82.261799 147.622508 
-##         0%        25%        50%        75%       100% 
-##   1.036319  37.135140  59.598056  82.079873 147.257437
-```
-
-```
-## Distance normalization scaling factor: 0.010304
-```
-
-``` r
 sigma_choice <- c(0.005, 0.01, 0.02, 0.05, 0.1)
 obj <- computeKernelMatrix(obj, sigmaValues = sigma_choice)
-```
 
-```
-## Computing pairwise kernel matrix for 3 cell types
-## current sigma value is 0.005 
-## current sigma value is 0.01 
-## current sigma value is 0.02 
-## current sigma value is 0.05 
-## current sigma value is 0.1
-```
-
-``` r
 # Sparse kernel CCA -- request 4 CCs to capture multiple axes
 obj <- runSkrCCA(obj, scalePCs = TRUE, maxIter = 500, nCC = 4)
-```
 
-```
-## Running skrCCA [1/5] for sigma = 0.005 ...
-```
-
-```
-## [1] "Convergence reached at 13 iterations (Max diff = 3.941e-06 )"
-## [1] "Convergence reached at 7 iterations (Max diff = 7.893e-06 )"
-## [1] "Convergence reached at 35 iterations (Max diff = 8.949e-06 )"
-## [1] "Convergence reached at 83 iterations (Max diff = 9.653e-06 )"
-```
-
-```
-## Running skrCCA [2/5] for sigma = 0.01 ...
-```
-
-```
-## [1] "Convergence reached at 9 iterations (Max diff = 3.584e-06 )"
-## [1] "Convergence reached at 7 iterations (Max diff = 3.522e-06 )"
-## [1] "Convergence reached at 30 iterations (Max diff = 9.196e-06 )"
-## [1] "Convergence reached at 22 iterations (Max diff = 8.581e-06 )"
-```
-
-```
-## Running skrCCA [3/5] for sigma = 0.02 ...
-```
-
-```
-## [1] "Convergence reached at 13 iterations (Max diff = 4.323e-06 )"
-## [1] "Convergence reached at 6 iterations (Max diff = 4.960e-06 )"
-## [1] "Convergence reached at 17 iterations (Max diff = 7.331e-06 )"
-## [1] "Convergence reached at 7 iterations (Max diff = 9.876e-06 )"
-```
-
-```
-## Running skrCCA [4/5] for sigma = 0.05 ...
-```
-
-```
-## [1] "Convergence reached at 16 iterations (Max diff = 9.472e-06 )"
-## [1] "Convergence reached at 8 iterations (Max diff = 4.803e-06 )"
-## [1] "Convergence reached at 6 iterations (Max diff = 6.401e-06 )"
-## [1] "Convergence reached at 27 iterations (Max diff = 8.978e-06 )"
-```
-
-```
-## Running skrCCA [5/5] for sigma = 0.1 ...
-```
-
-```
-## [1] "Convergence reached at 25 iterations (Max diff = 7.524e-06 )"
-## [1] "Convergence reached at 15 iterations (Max diff = 7.443e-06 )"
-## [1] "Convergence reached at 7 iterations (Max diff = 4.532e-06 )"
-## [1] "Convergence reached at 86 iterations (Max diff = 9.343e-06 )"
-```
-
-```
-## skrCCA finished 5 sigma value(s) in 5.7 s.
-```
-
-```
-## Optimization succeeded for 5 sigma value(s): sigma_0.005, sigma_0.01, sigma_0.02, sigma_0.05, sigma_0.1
-```
-
-``` r
 # Normalized correlation and scores
 obj <- computeNormalizedCorrelation(obj)
-```
-
-```
-## Calculating spectral norms, this may take a while.
-```
-
-```
-## Finished calculating spectral norms.
-```
-
-``` r
 obj <- computeGeneAndCellScores(obj)
 ```
 
@@ -553,7 +432,7 @@ sessionInfo()
 ## [1] stats     graphics  grDevices utils     datasets  methods   base     
 ## 
 ## other attached packages:
-## [1] ggplot2_4.0.1  CoPro_1.1.0    testthat_3.3.2
+## [1] patchwork_1.3.2 ggplot2_4.0.1   CoPro_1.1.0     testthat_3.3.2 
 ## 
 ## loaded via a namespace (and not attached):
 ##  [1] generics_0.1.4     renv_1.1.7         lattice_0.22-9     magrittr_2.0.4    

@@ -30,13 +30,6 @@ library(ggplot2)
 
 ``` r
 data_path <- copro_download_data("brain_merfish")
-```
-
-```
-## Using cached file: /Users/zhenmiao/Library/Caches/org.R-project.R/R/CoPro/copro_brain_merfish.rds
-```
-
-``` r
 dat <- readRDS(data_path)
 ```
 
@@ -69,96 +62,11 @@ obj <- subsetData(obj, cellTypesOfInterest = cell_types)
 
 # Core pipeline
 obj <- computePCA(obj, nPCA = 40, center = TRUE, scale. = TRUE)
-```
-
-```
-## Input is dense (matrixarray), performing irlba pca...
-## Input is dense (matrixarray), performing irlba pca...
-```
-
-``` r
 obj <- computeDistance(obj, distType = "Euclidean2D",
                        normalizeDistance = FALSE)
-```
-
-```
-##         0%        25%        50%        75%       100% 
-## 0.03333036 0.77980408 1.21734420 1.70564639 3.10426158
-```
-
-``` r
 obj <- computeKernelMatrix(obj, sigmaValues = c(0.1, 0.14, 0.2, 0.5))
-```
-
-```
-## Computing pairwise kernel matrix for 2 cell types
-## current sigma value is 0.1 
-## current sigma value is 0.14 
-## current sigma value is 0.2 
-## current sigma value is 0.5
-```
-
-``` r
 obj <- runSkrCCA(obj, scalePCs = TRUE, maxIter = 500)
-```
-
-```
-## Running skrCCA [1/4] for sigma = 0.1 ...
-```
-
-```
-## [1] "Convergence reached at 27 iterations (Max diff = 7.193e-06 )"
-## [1] "Convergence reached at 0 iterations (Max diff = 6.170e-14 )"
-```
-
-```
-## Running skrCCA [2/4] for sigma = 0.14 ...
-```
-
-```
-## [1] "Convergence reached at 17 iterations (Max diff = 9.888e-06 )"
-## [1] "Convergence reached at 0 iterations (Max diff = 2.000e-14 )"
-```
-
-```
-## Running skrCCA [3/4] for sigma = 0.2 ...
-```
-
-```
-## [1] "Convergence reached at 23 iterations (Max diff = 7.209e-06 )"
-## [1] "Convergence reached at 0 iterations (Max diff = 8.882e-16 )"
-```
-
-```
-## Running skrCCA [4/4] for sigma = 0.5 ...
-```
-
-```
-## [1] "Convergence reached at 18 iterations (Max diff = 4.656e-06 )"
-## [1] "Convergence reached at 0 iterations (Max diff = 8.153e-16 )"
-```
-
-```
-## skrCCA finished 4 sigma value(s) in 1.9 s.
-```
-
-```
-## Optimization succeeded for 4 sigma value(s): sigma_0.1, sigma_0.14, sigma_0.2, sigma_0.5
-```
-
-``` r
 obj <- computeNormalizedCorrelation(obj)
-```
-
-```
-## Calculating spectral norms, this may take a while.
-```
-
-```
-## Finished calculating spectral norms.
-```
-
-``` r
 obj <- computeGeneAndCellScores(obj)
 ```
 
@@ -261,16 +169,16 @@ obj <- runSkrCCAPermu(obj, nPermu = 5L, permu_method = "bin",
 ## Cell permutation indices generated.
 ## 
 ## Running CCA optimization for 5 permutations...
-## [1] "Convergence reached at 19 iterations (Max diff = 7.583e-06 )"
-## [1] "Convergence reached at 0 iterations (Max diff = 6.731e-12 )"
-## [1] "Convergence reached at 18 iterations (Max diff = 7.933e-06 )"
-## [1] "Convergence reached at 0 iterations (Max diff = 1.524e-12 )"
-## [1] "Convergence reached at 31 iterations (Max diff = 9.599e-06 )"
-## [1] "Convergence reached at 0 iterations (Max diff = 4.108e-15 )"
-## [1] "Convergence reached at 10 iterations (Max diff = 6.908e-06 )"
-## [1] "Convergence reached at 0 iterations (Max diff = 4.217e-08 )"
-## [1] "Convergence reached at 20 iterations (Max diff = 6.656e-06 )"
-## [1] "Convergence reached at 0 iterations (Max diff = 2.223e-11 )"
+## [1] "Convergence reached at 15 iterations (Max diff = 6.601e-06 )"
+## [1] "Convergence reached at 0 iterations (Max diff = 1.368e-10 )"
+## [1] "Convergence reached at 28 iterations (Max diff = 8.467e-06 )"
+## [1] "Convergence reached at 0 iterations (Max diff = 9.963e-13 )"
+## [1] "Convergence reached at 56 iterations (Max diff = 8.786e-06 )"
+## [1] "Convergence reached at 0 iterations (Max diff = 1.361e-10 )"
+## [1] "Convergence reached at 11 iterations (Max diff = 9.432e-06 )"
+## [1] "Convergence reached at 0 iterations (Max diff = 2.243e-09 )"
+## [1] "Convergence reached at 11 iterations (Max diff = 4.301e-06 )"
+## [1] "Convergence reached at 0 iterations (Max diff = 1.132e-10 )"
 ##   Completed 5 of 5 permutations
 ## 
 ## Permutation testing complete.
@@ -309,16 +217,16 @@ print(nc_permu)
 ## permu_5.1         0.1 061 STR D1 Gaba 062 STR D2 Gaba        1
 ## permu_5.2         0.1 061 STR D1 Gaba 062 STR D2 Gaba        2
 ##           normalizedCorrelation
-## permu_1.1             0.2695892
-## permu_1.2             0.2083104
-## permu_2.1             0.3129111
-## permu_2.2             0.2412813
-## permu_3.1             0.2786942
-## permu_3.2             0.2338593
-## permu_4.1             0.3016413
-## permu_4.2             0.1944972
-## permu_5.1             0.3188699
-## permu_5.2             0.2347236
+## permu_1.1             0.3317592
+## permu_1.2             0.2306265
+## permu_2.1             0.2711081
+## permu_2.2             0.2218264
+## permu_3.1             0.2693285
+## permu_3.2             0.2543175
+## permu_4.1             0.2839825
+## permu_4.2             0.1828652
+## permu_5.1             0.3245313
+## permu_5.2             0.2109768
 ```
 
 ## References
@@ -353,7 +261,7 @@ sessionInfo()
 ## [1] stats     graphics  grDevices utils     datasets  methods   base     
 ## 
 ## other attached packages:
-## [1] ggplot2_4.0.1  CoPro_1.1.0    testthat_3.3.2
+## [1] patchwork_1.3.2 ggplot2_4.0.1   CoPro_1.1.0     testthat_3.3.2 
 ## 
 ## loaded via a namespace (and not attached):
 ##  [1] generics_0.1.4     renv_1.1.7         lattice_0.22-9     magrittr_2.0.4    

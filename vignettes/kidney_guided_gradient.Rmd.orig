@@ -119,7 +119,7 @@ ggplot(tub_df, aes(x = x, y = y, color = subtype)) +
 
 ## Step 1: Create CoPro object and compute PCA
 
-```{r create-object}
+```{r create-object, message=FALSE, results='hide'}
 obj <- newCoProSingle(
   normalizedData = dat$normalizedData,
   locationData = dat$locationData,
@@ -172,7 +172,7 @@ vascular cell, and then regress vascular PCA scores against these
 smoothed scores. This finds the vascular gene program that co-varies
 with the nephron axis.
 
-```{r supervised-vasc-weight}
+```{r supervised-vasc-weight, message=FALSE, results='hide'}
 sigma_choice <- c(0.04, 0.08, 0.1, 0.15)
 obj <- computeDistance(obj, distType = "Euclidean2D")
 obj <- computeKernelMatrix(obj, sigmaValues = sigma_choice)
@@ -206,7 +206,7 @@ w1_vasc <- w1_vasc_raw / sqrt(sum(w1_vasc_raw^2))  # unit-normalize
 
 ## Step 4: Run supervised CCA
 
-```{r run-supervised-cca}
+```{r run-supervised-cca, message=FALSE, results='hide'}
 obj <- runSkrCCA(obj, scalePCs = TRUE, maxIter = 500, nCC = 4,
                  transferred_weight_1 = list(
                    Tubular  = matrix(w1_tubular, ncol = 1),
@@ -408,7 +408,7 @@ transcriptome.
 
 ### Step 1: Extract gene weights and spatial expression
 
-```{r transfer-setup}
+```{r transfer-setup, message=FALSE}
 # Get regression gene weights for vascular cells (CC1)
 gs_vasc_cc1 <- gs_vasc[, 1, drop = FALSE]  # genes x 1 matrix
 
@@ -430,7 +430,7 @@ gs_shared <- gs_vasc_cc1[shared_genes, , drop = FALSE]
 
 ### Step 2: Transfer scores
 
-```{r transfer-vasc}
+```{r transfer-vasc, message=FALSE}
 # transfer_scores: quantile normalize scRNA-seq to seqFISH,
 # standardize, then multiply by gene weights
 vasc_transferred <- transfer_scores(
@@ -448,7 +448,7 @@ cat("Score range:", round(range(vasc_transferred), 2), "\n")
 
 ### Step 3: Transfer nephron scores
 
-```{r transfer-neph}
+```{r transfer-neph, message=FALSE}
 # Same procedure for nephron/tubular cells
 gs_tub_cc1 <- gs_tub[, 1, drop = FALSE]
 

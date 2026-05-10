@@ -39,13 +39,6 @@ library(ggplot2)
 
 ``` r
 data_path <- copro_download_data("colon_d9")
-```
-
-```
-## Using cached file: /Users/zhenmiao/Library/Caches/org.R-project.R/R/CoPro/copro_colon_d9.rds
-```
-
-``` r
 dat <- readRDS(data_path)
 
 # Three slides are included
@@ -172,181 +165,14 @@ ref_obj <- subsetData(ref_obj, cellTypesOfInterest = cell_types)
 
 # Run pipeline
 ref_obj <- computePCA(ref_obj, nPCA = 40, center = TRUE, scale. = TRUE)
-```
-
-```
-## Input is dense (matrixarray), performing irlba pca...
-## Input is dense (matrixarray), performing irlba pca...
-## Input is dense (matrixarray), performing irlba pca...
-```
-
-``` r
 ref_obj <- computeDistance(ref_obj, distType = "Euclidean2D")
-```
 
-```
-## normalizeDistance = TRUE: low-percentile distance will be scaled to 0.01.
-```
-
-```
-##         0%        25%        50%        75%       100% 
-##   1.559086  54.812663  95.648432 126.009495 191.917943 
-##         0%        25%        50%        75%       100% 
-##   1.723399  61.128716 100.304344 127.403172 191.878277 
-##         0%        25%        50%        75%       100% 
-##   1.033183  59.470179 102.405454 133.908593 194.179085
-```
-
-```
-## Distance normalization scaling factor: 0.00967883
-```
-
-``` r
 sigma_choice <- c(0.005, 0.01, 0.02, 0.05, 0.1)
 ref_obj <- computeKernelMatrix(ref_obj, sigmaValues = sigma_choice)
-```
-
-```
-## Computing pairwise kernel matrix for 3 cell types
-## current sigma value is 0.005 
-## current sigma value is 0.01 
-## current sigma value is 0.02 
-## current sigma value is 0.05 
-## current sigma value is 0.1
-```
-
-``` r
 ref_obj <- runSkrCCA(ref_obj, scalePCs = TRUE, maxIter = 500, nCC = 2)
-```
-
-```
-## Running skrCCA [1/5] for sigma = 0.005 ...
-```
-
-```
-## [1] "Convergence reached at 13 iterations (Max diff = 2.633e-06 )"
-## [1] "Convergence reached at 40 iterations (Max diff = 8.175e-06 )"
-```
-
-```
-## Running skrCCA [2/5] for sigma = 0.01 ...
-```
-
-```
-## [1] "Convergence reached at 10 iterations (Max diff = 6.270e-06 )"
-## [1] "Convergence reached at 10 iterations (Max diff = 5.534e-06 )"
-```
-
-```
-## Running skrCCA [3/5] for sigma = 0.02 ...
-```
-
-```
-## [1] "Convergence reached at 9 iterations (Max diff = 6.718e-06 )"
-## [1] "Convergence reached at 9 iterations (Max diff = 6.414e-06 )"
-```
-
-```
-## Running skrCCA [4/5] for sigma = 0.05 ...
-```
-
-```
-## [1] "Convergence reached at 8 iterations (Max diff = 2.083e-06 )"
-## [1] "Convergence reached at 7 iterations (Max diff = 5.368e-06 )"
-```
-
-```
-## Running skrCCA [5/5] for sigma = 0.1 ...
-```
-
-```
-## [1] "Convergence reached at 7 iterations (Max diff = 2.468e-06 )"
-## [1] "Convergence reached at 6 iterations (Max diff = 3.710e-06 )"
-```
-
-```
-## skrCCA finished 5 sigma value(s) in 2.9 s.
-```
-
-```
-## Optimization succeeded for 5 sigma value(s): sigma_0.005, sigma_0.01, sigma_0.02, sigma_0.05, sigma_0.1
-```
-
-``` r
 ref_obj <- computeNormalizedCorrelation(ref_obj)
-```
-
-```
-## Calculating spectral norms, this may take a while.
-```
-
-```
-## Finished calculating spectral norms.
-```
-
-``` r
 ref_obj <- computeGeneAndCellScores(ref_obj)
 ref_obj <- computeRegressionGeneScores(ref_obj)
-```
-
-```
-## Computed regression gene scores for sigma=0.005, cellType='Epithelial'
-```
-
-```
-## Computed regression gene scores for sigma=0.005, cellType='Fibroblast'
-```
-
-```
-## Computed regression gene scores for sigma=0.005, cellType='Immune'
-```
-
-```
-## Computed regression gene scores for sigma=0.01, cellType='Epithelial'
-```
-
-```
-## Computed regression gene scores for sigma=0.01, cellType='Fibroblast'
-```
-
-```
-## Computed regression gene scores for sigma=0.01, cellType='Immune'
-```
-
-```
-## Computed regression gene scores for sigma=0.02, cellType='Epithelial'
-```
-
-```
-## Computed regression gene scores for sigma=0.02, cellType='Fibroblast'
-```
-
-```
-## Computed regression gene scores for sigma=0.02, cellType='Immune'
-```
-
-```
-## Computed regression gene scores for sigma=0.05, cellType='Epithelial'
-```
-
-```
-## Computed regression gene scores for sigma=0.05, cellType='Fibroblast'
-```
-
-```
-## Computed regression gene scores for sigma=0.05, cellType='Immune'
-```
-
-```
-## Computed regression gene scores for sigma=0.1, cellType='Epithelial'
-```
-
-```
-## Computed regression gene scores for sigma=0.1, cellType='Fibroblast'
-```
-
-```
-## Computed regression gene scores for sigma=0.1, cellType='Immune'
 ```
 
 ### Reference slide results
@@ -487,49 +313,9 @@ tar1_obj <- newCoProSingle(
 )
 tar1_obj <- subsetData(tar1_obj, cellTypesOfInterest = cell_types)
 tar1_obj <- computePCA(tar1_obj, nPCA = 40, center = TRUE, scale. = TRUE)
-```
-
-```
-## Input is dense (matrixarray), performing irlba pca...
-## Input is dense (matrixarray), performing irlba pca...
-## Input is dense (matrixarray), performing irlba pca...
-```
-
-``` r
 tar1_obj <- computeDistance(tar1_obj, distType = "Euclidean2D")
-```
-
-```
-## normalizeDistance = TRUE: low-percentile distance will be scaled to 0.01.
-```
-
-```
-##         0%        25%        50%        75%       100% 
-##   1.547908  40.150567  71.639135  99.196604 145.064234 
-##         0%        25%        50%        75%       100% 
-##   1.839067  46.588659  74.794733 100.618483 144.602279 
-##         0%        25%        50%        75%       100% 
-##   1.077755  44.939240  73.568954  97.010170 146.985239
-```
-
-```
-## Distance normalization scaling factor: 0.00927854
-```
-
-``` r
 tar1_obj <- computeKernelMatrix(tar1_obj, sigmaValues = sigma_choice)
-```
 
-```
-## Computing pairwise kernel matrix for 3 cell types
-## current sigma value is 0.005 
-## current sigma value is 0.01 
-## current sigma value is 0.02 
-## current sigma value is 0.05 
-## current sigma value is 0.1
-```
-
-``` r
 # Target slide 2
 tar2_obj <- newCoProSingle(
   normalizedData = dat$normalizedData[tar2_idx, ],
@@ -539,46 +325,8 @@ tar2_obj <- newCoProSingle(
 )
 tar2_obj <- subsetData(tar2_obj, cellTypesOfInterest = cell_types)
 tar2_obj <- computePCA(tar2_obj, nPCA = 40, center = TRUE, scale. = TRUE)
-```
-
-```
-## Input is dense (matrixarray), performing irlba pca...
-## Input is dense (matrixarray), performing irlba pca...
-## Input is dense (matrixarray), performing irlba pca...
-```
-
-``` r
 tar2_obj <- computeDistance(tar2_obj, distType = "Euclidean2D")
-```
-
-```
-## normalizeDistance = TRUE: low-percentile distance will be scaled to 0.01.
-```
-
-```
-##        0%       25%       50%       75%      100% 
-##   1.65134  41.19449  71.21469  94.13571 147.60112 
-##         0%        25%        50%        75%       100% 
-##   2.021933  50.297768  74.971212  97.972906 148.666374 
-##         0%        25%        50%        75%       100% 
-##   1.162089  43.393514  70.036161  92.718582 149.327113
-```
-
-```
-## Distance normalization scaling factor: 0.0086052
-```
-
-``` r
 tar2_obj <- computeKernelMatrix(tar2_obj, sigmaValues = sigma_choice)
-```
-
-```
-## Computing pairwise kernel matrix for 3 cell types
-## current sigma value is 0.005 
-## current sigma value is 0.01 
-## current sigma value is 0.02 
-## current sigma value is 0.05 
-## current sigma value is 0.1
 ```
 
 ## Step 3: Transfer scores
@@ -602,135 +350,15 @@ tar1_scores <- getTransferCellScores(
 ```
 
 ```
-## Processing feature 94/940
-```
-
-```
-## Processing feature 188/940
-```
-
-```
-## Processing feature 282/940
-```
-
-```
-## Processing feature 376/940
-```
-
-```
-## Processing feature 470/940
-```
-
-```
-## Processing feature 564/940
-```
-
-```
-## Processing feature 658/940
-```
-
-```
-## Processing feature 752/940
-```
-
-```
-## Processing feature 846/940
-```
-
-```
-## Processing feature 940/940
-```
-
-```
 ## retaining 940 genes for CC_1 with threshold 0 
 ## retaining 940 genes for CC_2 with threshold 0 
 ## transferring gene scores for cell type Fibroblast
 ```
 
 ```
-## Processing feature 94/940
-```
-
-```
-## Processing feature 188/940
-```
-
-```
-## Processing feature 282/940
-```
-
-```
-## Processing feature 376/940
-```
-
-```
-## Processing feature 470/940
-```
-
-```
-## Processing feature 564/940
-```
-
-```
-## Processing feature 658/940
-```
-
-```
-## Processing feature 752/940
-```
-
-```
-## Processing feature 846/940
-```
-
-```
-## Processing feature 940/940
-```
-
-```
 ## retaining 940 genes for CC_1 with threshold 0 
 ## retaining 940 genes for CC_2 with threshold 0 
 ## transferring gene scores for cell type Immune
-```
-
-```
-## Processing feature 94/940
-```
-
-```
-## Processing feature 188/940
-```
-
-```
-## Processing feature 282/940
-```
-
-```
-## Processing feature 376/940
-```
-
-```
-## Processing feature 470/940
-```
-
-```
-## Processing feature 564/940
-```
-
-```
-## Processing feature 658/940
-```
-
-```
-## Processing feature 752/940
-```
-
-```
-## Processing feature 846/940
-```
-
-```
-## Processing feature 940/940
 ```
 
 ```
@@ -754,135 +382,15 @@ tar2_scores <- getTransferCellScores(
 ```
 
 ```
-## Processing feature 94/940
-```
-
-```
-## Processing feature 188/940
-```
-
-```
-## Processing feature 282/940
-```
-
-```
-## Processing feature 376/940
-```
-
-```
-## Processing feature 470/940
-```
-
-```
-## Processing feature 564/940
-```
-
-```
-## Processing feature 658/940
-```
-
-```
-## Processing feature 752/940
-```
-
-```
-## Processing feature 846/940
-```
-
-```
-## Processing feature 940/940
-```
-
-```
 ## retaining 940 genes for CC_1 with threshold 0 
 ## retaining 940 genes for CC_2 with threshold 0 
 ## transferring gene scores for cell type Fibroblast
 ```
 
 ```
-## Processing feature 94/940
-```
-
-```
-## Processing feature 188/940
-```
-
-```
-## Processing feature 282/940
-```
-
-```
-## Processing feature 376/940
-```
-
-```
-## Processing feature 470/940
-```
-
-```
-## Processing feature 564/940
-```
-
-```
-## Processing feature 658/940
-```
-
-```
-## Processing feature 752/940
-```
-
-```
-## Processing feature 846/940
-```
-
-```
-## Processing feature 940/940
-```
-
-```
 ## retaining 940 genes for CC_1 with threshold 0 
 ## retaining 940 genes for CC_2 with threshold 0 
 ## transferring gene scores for cell type Immune
-```
-
-```
-## Processing feature 94/940
-```
-
-```
-## Processing feature 188/940
-```
-
-```
-## Processing feature 282/940
-```
-
-```
-## Processing feature 376/940
-```
-
-```
-## Processing feature 470/940
-```
-
-```
-## Processing feature 564/940
-```
-
-```
-## Processing feature 658/940
-```
-
-```
-## Processing feature 752/940
-```
-
-```
-## Processing feature 846/940
-```
-
-```
-## Processing feature 940/940
 ```
 
 ```
@@ -991,30 +499,13 @@ tar1_ncorr <- getTransferNormCorr(
   transfer_cell_scores = tar1_scores,
   sigma_choice = sigma_opt
 )
-```
 
-```
-## Calculating spectral norms, this may take a while.
-```
-
-```
-## Finished calculating spectral norms.
-```
-
-``` r
 tar2_ncorr <- getTransferNormCorr(
   tar_obj = tar2_obj,
   transfer_cell_scores = tar2_scores,
   sigma_choice = sigma_opt
 )
-```
 
-```
-## Calculating spectral norms, this may take a while.
-## Finished calculating spectral norms.
-```
-
-``` r
 cat("Reference norm. corr.:\n")
 ```
 
@@ -1029,12 +520,12 @@ print(ref_ncorr[ref_ncorr$sigmaValues == sigma_opt, ])
 
 ```
 ##              sigmaValues  cellType1  cellType2 CC_index normalizedCorrelation
-## sigma_0.01.1        0.01 Epithelial Fibroblast        1           0.134793330
-## sigma_0.01.2        0.01 Epithelial     Immune        1           0.117235228
-## sigma_0.01.3        0.01 Fibroblast     Immune        1           0.280624491
-## sigma_0.01.4        0.01 Epithelial Fibroblast        2           0.158483841
-## sigma_0.01.5        0.01 Epithelial     Immune        2          -0.004677438
-## sigma_0.01.6        0.01 Fibroblast     Immune        2           0.110138028
+## sigma_0.01.1        0.01 Epithelial Fibroblast        1           0.134793392
+## sigma_0.01.2        0.01 Epithelial     Immune        1           0.117235133
+## sigma_0.01.3        0.01 Fibroblast     Immune        1           0.280624926
+## sigma_0.01.4        0.01 Epithelial Fibroblast        2           0.158483276
+## sigma_0.01.5        0.01 Epithelial     Immune        2          -0.004675123
+## sigma_0.01.6        0.01 Fibroblast     Immune        2           0.110139642
 ##                               ct12
 ## sigma_0.01.1 Epithelial-Fibroblast
 ## sigma_0.01.2     Epithelial-Immune
@@ -1060,12 +551,12 @@ print(tar1_ncorr)
 ```
 ## $sigma_0.01
 ##   sigmaValue  cellType1  cellType2 CC_index normalizedCorrelation
-## 1       0.01 Epithelial Fibroblast        1            0.11110715
-## 2       0.01 Epithelial Fibroblast        2            0.07360373
-## 3       0.01 Epithelial     Immune        1            0.10573664
-## 4       0.01 Epithelial     Immune        2           -0.07005138
-## 5       0.01 Fibroblast     Immune        1            0.29851305
-## 6       0.01 Fibroblast     Immune        2            0.10033667
+## 1       0.01 Epithelial Fibroblast        1            0.11110720
+## 2       0.01 Epithelial Fibroblast        2            0.07360244
+## 3       0.01 Epithelial     Immune        1            0.10573655
+## 4       0.01 Epithelial     Immune        2           -0.07005068
+## 5       0.01 Fibroblast     Immune        1            0.29851303
+## 6       0.01 Fibroblast     Immune        2            0.10033685
 ```
 
 ``` r
@@ -1084,12 +575,12 @@ print(tar2_ncorr)
 ```
 ## $sigma_0.01
 ##   sigmaValue  cellType1  cellType2 CC_index normalizedCorrelation
-## 1       0.01 Epithelial Fibroblast        1            0.06226162
-## 2       0.01 Epithelial Fibroblast        2            0.08658079
-## 3       0.01 Epithelial     Immune        1            0.07693568
-## 4       0.01 Epithelial     Immune        2           -0.02331750
-## 5       0.01 Fibroblast     Immune        1            0.26801035
-## 6       0.01 Fibroblast     Immune        2            0.09242119
+## 1       0.01 Epithelial Fibroblast        1            0.06226154
+## 2       0.01 Epithelial Fibroblast        2            0.08658003
+## 3       0.01 Epithelial     Immune        1            0.07693560
+## 4       0.01 Epithelial     Immune        2           -0.02331688
+## 5       0.01 Fibroblast     Immune        1            0.26801049
+## 6       0.01 Fibroblast     Immune        2            0.09242352
 ```
 
 High transferred normalized correlations indicate that the co-progression
@@ -1112,247 +603,10 @@ multi_obj <- subsetData(multi_obj, cellTypesOfInterest = cell_types)
 
 # The rest of the pipeline is identical
 multi_obj <- computePCA(multi_obj, nPCA = 40, center = TRUE, scale. = TRUE)
-```
-
-```
-## Performing PCA for cell type: Epithelial
-```
-
-```
-## Data centered and/or scaled
-```
-
-```
-## PCA computed for cell type: Epithelial
-```
-
-```
-## Performing PCA for cell type: Fibroblast
-```
-
-```
-## Data centered and/or scaled
-```
-
-```
-## PCA computed for cell type: Fibroblast
-```
-
-```
-## Performing PCA for cell type: Immune
-```
-
-```
-## Data centered and/or scaled
-```
-
-```
-## PCA computed for cell type: Immune
-```
-
-``` r
 multi_obj <- computeDistance(multi_obj, distType = "Euclidean2D")
-```
-
-```
-## normalizeDistance = TRUE: low-percentile distance will be normalized across all slides and scaled to 0.01.
-```
-
-```
-## Computing pairwise distances for slide: 062221_D9_m3_2_slice_3
-```
-
-```
-## Slide: 062221_D9_m3_2_slice_3, Pair: Epithelial - Fibroblast
-```
-
-```
-##        0%       25%       50%       75%      100% 
-##   1.65134  41.19449  71.21469  94.13571 147.60112
-```
-
-```
-## Slide: 062221_D9_m3_2_slice_3, Pair: Epithelial - Immune
-```
-
-```
-##         0%        25%        50%        75%       100% 
-##   2.021933  50.297768  74.971212  97.972906 148.666374
-```
-
-```
-## Slide: 062221_D9_m3_2_slice_3, Pair: Fibroblast - Immune
-```
-
-```
-##         0%        25%        50%        75%       100% 
-##   1.162089  43.393514  70.036161  92.718582 149.327113
-```
-
-```
-## Computing pairwise distances for slide: 062221_D9_m3_2_slice_2
-```
-
-```
-## Slide: 062221_D9_m3_2_slice_2, Pair: Epithelial - Fibroblast
-```
-
-```
-##         0%        25%        50%        75%       100% 
-##   1.547908  40.150567  71.639135  99.196604 145.064234
-```
-
-```
-## Slide: 062221_D9_m3_2_slice_2, Pair: Epithelial - Immune
-```
-
-```
-##         0%        25%        50%        75%       100% 
-##   1.839067  46.588659  74.794733 100.618483 144.602279
-```
-
-```
-## Slide: 062221_D9_m3_2_slice_2, Pair: Fibroblast - Immune
-```
-
-```
-##         0%        25%        50%        75%       100% 
-##   1.077755  44.939240  73.568954  97.010170 146.985239
-```
-
-```
-## Computing pairwise distances for slide: 062221_D9_m3_2_slice_1
-```
-
-```
-## Slide: 062221_D9_m3_2_slice_1, Pair: Epithelial - Fibroblast
-```
-
-```
-##         0%        25%        50%        75%       100% 
-##   1.559086  54.812663  95.648432 126.009495 191.917943
-```
-
-```
-## Slide: 062221_D9_m3_2_slice_1, Pair: Epithelial - Immune
-```
-
-```
-##         0%        25%        50%        75%       100% 
-##   1.723399  61.128716 100.304344 127.403172 191.878277
-```
-
-```
-## Slide: 062221_D9_m3_2_slice_1, Pair: Fibroblast - Immune
-```
-
-```
-##         0%        25%        50%        75%       100% 
-##   1.033183  59.470179 102.405454 133.908593 194.179085
-```
-
-```
-## Global distance scaling factor: 0.00967883
-```
-
-``` r
 multi_obj <- computeKernelMatrix(multi_obj, sigmaValues = sigma_choice)
-```
-
-```
-## Computing pairwise kernel matrix for 3 cell types across 3 slides
-## current sigma value is 0.005 
-## current sigma value is 0.01 
-## current sigma value is 0.02 
-## current sigma value is 0.05 
-## current sigma value is 0.1
-```
-
-``` r
 multi_obj <- runSkrCCA(multi_obj, scalePCs = TRUE, maxIter = 500, nCC = 2)
-```
-
-```
-## Running skrCCA [1/5] for sigma = 0.005 ...
-```
-
-```
-## Convergence reached at 8 iterations (Max diff = 2.798e-06 )
-```
-
-```
-## [1] "Convergence reached at 22 iterations (Max diff = 7.514e-06 )"
-```
-
-```
-## Running skrCCA [2/5] for sigma = 0.01 ...
-```
-
-```
-## Convergence reached at 8 iterations (Max diff = 3.313e-06 )
-```
-
-```
-## [1] "Convergence reached at 74 iterations (Max diff = 9.432e-06 )"
-```
-
-```
-## Running skrCCA [3/5] for sigma = 0.02 ...
-```
-
-```
-## Convergence reached at 7 iterations (Max diff = 5.994e-06 )
-```
-
-```
-## [1] "Convergence reached at 31 iterations (Max diff = 7.752e-06 )"
-```
-
-```
-## Running skrCCA [4/5] for sigma = 0.05 ...
-```
-
-```
-## Convergence reached at 6 iterations (Max diff = 7.485e-06 )
-```
-
-```
-## [1] "Convergence reached at 26 iterations (Max diff = 7.233e-06 )"
-```
-
-```
-## Running skrCCA [5/5] for sigma = 0.1 ...
-```
-
-```
-## Convergence reached at 9 iterations (Max diff = 3.941e-06 )
-```
-
-```
-## [1] "Convergence reached at 20 iterations (Max diff = 8.643e-06 )"
-```
-
-```
-## skrCCA finished 5 sigma value(s) in 8.1 s.
-```
-
-```
-## Optimization succeeded for 5 sigma value(s): sigma_0.005, sigma_0.01, sigma_0.02, sigma_0.05, sigma_0.1
-```
-
-``` r
 multi_obj <- computeNormalizedCorrelation(multi_obj)
-```
-
-```
-## Calculating spectral norms (can take time)...
-```
-
-```
-## Finished calculating spectral norms.
-```
-
-``` r
 multi_obj <- computeGeneAndCellScores(multi_obj)
 ```
 
@@ -1386,7 +640,7 @@ sessionInfo()
 ## [1] stats     graphics  grDevices utils     datasets  methods   base     
 ## 
 ## other attached packages:
-## [1] ggplot2_4.0.1  CoPro_1.1.0    testthat_3.3.2
+## [1] patchwork_1.3.2 ggplot2_4.0.1   CoPro_1.1.0     testthat_3.3.2 
 ## 
 ## loaded via a namespace (and not attached):
 ##  [1] generics_0.1.4     renv_1.1.7         lattice_0.22-9     magrittr_2.0.4    

@@ -31,7 +31,7 @@ library(ggplot2)
 
 ## Download and load data
 
-```{r download-data}
+```{r download-data, message=FALSE}
 data_path <- copro_download_data("brain_merfish")
 dat <- readRDS(data_path)
 ```
@@ -48,7 +48,7 @@ ggplot(dat$metaData) +
 
 ## Create CoPro object and run pipeline
 
-```{r run-pipeline}
+```{r run-pipeline, message=FALSE, results='hide'}
 cell_types <- c("061 STR D1 Gaba", "062 STR D2 Gaba")
 
 obj <- newCoProSingle(

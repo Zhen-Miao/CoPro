@@ -49,13 +49,6 @@ library(patchwork)
 
 ``` r
 data_path <- copro_download_data("colon_d0_multi")
-```
-
-```
-## Using cached file: /Users/zhenmiao/Library/Caches/org.R-project.R/R/CoPro/copro_colon_d0_multi.rds
-```
-
-``` r
 dat <- readRDS(data_path)
 
 cat("Slides:", paste(dat$selectedSlides, collapse = "\n  "), "\n")
@@ -176,161 +169,11 @@ matrices.
 
 ``` r
 multi_obj <- computeDistance(multi_obj, distType = "Euclidean2D")
-```
 
-```
-## normalizeDistance = TRUE: low-percentile distance will be normalized across all slides and scaled to 0.01.
-```
-
-```
-## Computing pairwise distances for slide: 062921_D0_m3a_1_slice_1
-```
-
-```
-## Slide: 062921_D0_m3a_1_slice_1, Pair: Epithelial - Fibroblast
-```
-
-```
-##          0%         25%         50%         75%        100% 
-##   0.9150834  41.4190861  72.5593539  98.1957631 159.7293411
-```
-
-```
-## Slide: 062921_D0_m3a_1_slice_1, Pair: Epithelial - Immune
-```
-
-```
-##          0%         25%         50%         75%        100% 
-##   0.9851965  41.4681935  73.3319560  99.0585847 159.2877904
-```
-
-```
-## Slide: 062921_D0_m3a_1_slice_1, Pair: Fibroblast - Immune
-```
-
-```
-##          0%         25%         50%         75%        100% 
-##   0.9859394  40.8869691  73.2390276  99.5563905 160.1859939
-```
-
-```
-## Computing pairwise distances for slide: 082421_D0_m7_1_slice_1
-```
-
-```
-## Slide: 082421_D0_m7_1_slice_1, Pair: Epithelial - Fibroblast
-```
-
-```
-##        0%       25%       50%       75%      100% 
-##   1.01939  64.73114 116.20744 152.12709 202.54443
-```
-
-```
-## Slide: 082421_D0_m7_1_slice_1, Pair: Epithelial - Immune
-```
-
-```
-##         0%        25%        50%        75%       100% 
-##   1.086058  65.163774 116.308534 152.393061 200.136268
-```
-
-```
-## Slide: 082421_D0_m7_1_slice_1, Pair: Fibroblast - Immune
-```
-
-```
-##         0%        25%        50%        75%       100% 
-##   1.087197  65.211714 117.128692 154.023001 200.501970
-```
-
-```
-## Computing pairwise distances for slide: 082421_D0_m6_1_slice_1
-```
-
-```
-## Slide: 082421_D0_m6_1_slice_1, Pair: Epithelial - Fibroblast
-```
-
-```
-##         0%        25%        50%        75%       100% 
-##   1.074126  44.622594  71.141559  99.208995 171.807503
-```
-
-```
-## Slide: 082421_D0_m6_1_slice_1, Pair: Epithelial - Immune
-```
-
-```
-##         0%        25%        50%        75%       100% 
-##   1.144968  44.188186  70.541333  98.910669 169.934710
-```
-
-```
-## Slide: 082421_D0_m6_1_slice_1, Pair: Fibroblast - Immune
-```
-
-```
-##         0%        25%        50%        75%       100% 
-##   1.135812  43.393369  71.140463 100.027923 170.588839
-```
-
-```
-## Global distance scaling factor: 0.010928
-```
-
-``` r
 sigma_choice <- 0.01
 multi_obj <- computeKernelMatrix(multi_obj, sigmaValues = sigma_choice)
-```
 
-```
-## Computing pairwise kernel matrix for 3 cell types across 3 slides
-## current sigma value is 0.01
-```
-
-``` r
 multi_obj <- runGeneSpaceCCA(multi_obj, sigma = sigma_choice, nCC = 1)
-```
-
-```
-## === Gene-Space CCA ===
-```
-
-```
-## Step 1: Preparing gene-space data...
-```
-
-```
-##   Genes: 928, Slides: 3, Cell types: Epithelial, Fibroblast, Immune
-```
-
-```
-## Step 2: Precomputing covariance matrices...
-```
-
-```
-## Step 3: Power iteration for canonical components...
-```
-
-```
-##   Finding CC 1 ...
-```
-
-```
-##   Iter 1: max_diff = 1.62e-01, objective = 0.0552
-```
-
-```
-##   Converged at iteration 15 (max_diff = 4.57e-07, objective = 0.8931)
-```
-
-```
-## Step 4: Storing results...
-```
-
-```
-## Done.
 ```
 
 ## Visualize cell scores per slide

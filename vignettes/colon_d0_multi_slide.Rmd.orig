@@ -50,7 +50,7 @@ library(patchwork)
 
 ## Download and load data
 
-```{r download-data}
+```{r download-data, message=FALSE}
 data_path <- copro_download_data("colon_d0_multi")
 dat <- readRDS(data_path)
 
@@ -115,7 +115,7 @@ belong to which slide. The pipeline computes distance and kernel matrices
 spatial neighbors), while gene-space CCA optimizes a shared set of gene
 weights across all slides jointly.
 
-```{r create-object}
+```{r create-object, message=FALSE}
 cell_types <- c("Epithelial", "Fibroblast", "Immune")
 
 multi_obj <- newCoProMulti(
@@ -136,7 +136,7 @@ expression per slide per cell type, filters genes by prevalence, and
 clips extreme values. The only prerequisites are distance and kernel
 matrices.
 
-```{r run-pipeline}
+```{r run-pipeline, message=FALSE, results='hide'}
 multi_obj <- computeDistance(multi_obj, distType = "Euclidean2D")
 
 sigma_choice <- 0.01
@@ -153,7 +153,7 @@ indicate a robust biological signal.
 
 ### CC1 scores across all slides
 
-```{r insitu-cc1, fig.width=8, fig.height=3.2}
+```{r insitu-cc1, fig.width=8, fig.height=3.2, message=FALSE}
 cs <- getCellScoresInSitu(multi_obj, sigmaValueChoice = sigma_choice,
                            ccIndex = 1)
 
@@ -199,7 +199,7 @@ Here we plot the spatially smoothed epithelial score against the raw
 fibroblast score --- strong correlation confirms genuine cross-cell-type
 co-progression.
 
-```{r cross-corr, fig.width=5, fig.height=4}
+```{r cross-corr, fig.width=5, fig.height=4, message=FALSE}
 df_cc1 <- getCorrTwoTypes(multi_obj,
   sigmaValueChoice = sigma_choice,
   cellTypeA = "Epithelial",
