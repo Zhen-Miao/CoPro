@@ -16,6 +16,7 @@ reference:
       - newCoProSingle
       - newCoProMulti
       - CreateCoPro
+      - asCoPro
       - CoPro-class
       - subsetData
       - "`show,CoPro-method`"
@@ -28,6 +29,7 @@ reference:
       - computeDistance
       - computeKernelMatrix
       - runSkrCCA
+      - runGeneSpaceCCA
       - computeNormalizedCorrelation
       - computeGeneAndCellScores
       - computeRegressionGeneScores
