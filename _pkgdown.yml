@@ -114,6 +114,6 @@ articles:
     navbar: "Advanced"
     contents:
       - colon_d3_cross_type
-      - colon_d3_multi_slide
+      - colon_d0_multi_slide
       - colon_d9_multi_slide
       - kidney_guided_gradient

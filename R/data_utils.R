@@ -22,6 +22,9 @@
 #'   \item{\code{colon_d3}}{Colon Day 3 organoid data (Epithelial,
 #'     Fibroblast, Immune). Single slide. Demonstrates cross-cell-type
 #'     co-progression with orthogonal CCA axes.}
+#'   \item{\code{colon_d0_multi}}{Colon Day 0 healthy organoid data
+#'     (3 slides from different regions). Demonstrates multi-slide
+#'     gene-space CCA with \code{runGeneSpaceCCA}.}
 #'   \item{\code{colon_d3_multi}}{Colon Day 3 organoid data (3 slides).
 #'     Demonstrates multi-slide joint analysis with \code{newCoProMulti}
 #'     and score transfer across biological replicates.}
@@ -48,20 +51,12 @@
 #'
 #' @export
 copro_download_data <- function(
-    dataset = c("colon_d3", "colon_d3_multi", "colon_d9", "kidney", "organoid", "brain_merfish"),
+    dataset = c("colon_d3", "colon_d0_multi", "colon_d3_multi", "colon_d9", "kidney", "organoid", "brain_merfish"),
     destdir = NULL,
     tag = "data-v1",
     overwrite = FALSE
 ) {
   dataset <- match.arg(dataset)
-
-  if (!requireNamespace("piggyback", quietly = TRUE)) {
-    stop(
-      "Package 'piggyback' is required to download example data.\n",
-      "Install it with: install.packages('piggyback')",
-      call. = FALSE
-    )
-  }
 
   file_name <- paste0("copro_", dataset, ".rds")
 
@@ -77,6 +72,14 @@ copro_download_data <- function(
   if (file.exists(dest_file) && !overwrite) {
     message("Using cached file: ", dest_file)
     return(invisible(dest_file))
+  }
+
+  if (!requireNamespace("piggyback", quietly = TRUE)) {
+    stop(
+      "Package 'piggyback' is required to download example data.\n",
+      "Install it with: install.packages('piggyback')",
+      call. = FALSE
+    )
   }
 
   message("Downloading ", file_name, " from GitHub Release '", tag, "'...")
