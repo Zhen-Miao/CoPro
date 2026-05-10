@@ -10,6 +10,7 @@ expression patterns between these two cell populations.
 ## Load packages
 
 ``` r
+
 library(CoPro)
 library(ggplot2)
 ```
@@ -17,6 +18,7 @@ library(ggplot2)
 ## Download and load data
 
 ``` r
+
 data_path <- copro_download_data("brain_merfish")
 ```
 
@@ -25,12 +27,14 @@ data_path <- copro_download_data("brain_merfish")
     ## Downloaded to: /home/runner/.cache/R/CoPro/copro_brain_merfish.rds
 
 ``` r
+
 dat <- readRDS(data_path)
 ```
 
 ## Visualize spatial layout
 
 ``` r
+
 ggplot(dat$metaData) +
   geom_point(aes(x = x, y = y, color = subclass), size = 0.5) +
   coord_fixed() +
@@ -43,6 +47,7 @@ ggplot(dat$metaData) +
 ## Create CoPro object and run pipeline
 
 ``` r
+
 cell_types <- c("061 STR D1 Gaba", "062 STR D2 Gaba")
 
 obj <- newCoProSingle(
@@ -61,6 +66,7 @@ obj <- computePCA(obj, nPCA = 40, center = TRUE, scale. = TRUE)
     ## Input is dense (matrixarray), performing irlba pca...
 
 ``` r
+
 obj <- computeDistance(obj, distType = "Euclidean2D",
                        normalizeDistance = FALSE)
 ```
@@ -69,6 +75,7 @@ obj <- computeDistance(obj, distType = "Euclidean2D",
     ## 0.03333036 0.77980408 1.21734420 1.70564639 3.10426158
 
 ``` r
+
 obj <- computeKernelMatrix(obj, sigmaValues = c(0.1, 0.14, 0.2, 0.5))
 ```
 
@@ -79,45 +86,52 @@ obj <- computeKernelMatrix(obj, sigmaValues = c(0.1, 0.14, 0.2, 0.5))
     ## current sigma value is 0.5
 
 ``` r
+
 obj <- runSkrCCA(obj, scalePCs = TRUE, maxIter = 500)
 ```
 
-    ## Running skrCCA for sigma = 0.1
+    ## Running skrCCA [1/4] for sigma = 0.1 ...
 
     ## [1] "Convergence reached at 27 iterations (Max diff = 8.929e-06 )"
     ## [1] "Convergence reached at 0 iterations (Max diff = 3.417e-14 )"
 
-    ## Running skrCCA for sigma = 0.14
+    ## Running skrCCA [2/4] for sigma = 0.14 ...
 
     ## [1] "Convergence reached at 21 iterations (Max diff = 6.632e-06 )"
-    ## [1] "Convergence reached at 1 iterations (Max diff = 4.441e-16 )"
+    ## [1] "Convergence reached at 0 iterations (Max diff = 2.481e-14 )"
 
-    ## Running skrCCA for sigma = 0.2
+    ## Running skrCCA [3/4] for sigma = 0.2 ...
 
     ## [1] "Convergence reached at 17 iterations (Max diff = 6.454e-06 )"
-    ## [1] "Convergence reached at 1 iterations (Max diff = 4.302e-16 )"
+    ## [1] "Convergence reached at 0 iterations (Max diff = 1.846e-15 )"
 
-    ## Running skrCCA for sigma = 0.5
+    ## Running skrCCA [4/4] for sigma = 0.5 ...
 
     ## [1] "Convergence reached at 11 iterations (Max diff = 7.408e-06 )"
     ## [1] "Convergence reached at 0 iterations (Max diff = 1.480e-15 )"
 
+    ## skrCCA finished 4 sigma value(s) in 2.8 s.
+
     ## Optimization succeeded for 4 sigma value(s): sigma_0.1, sigma_0.14, sigma_0.2, sigma_0.5
 
 ``` r
+
 obj <- computeNormalizedCorrelation(obj)
 ```
 
-    ## Calculating spectral norms,  depending on the data size, this may take a while. 
-    ## Finished calculating spectral norms
+    ## Calculating spectral norms, this may take a while.
+
+    ## Finished calculating spectral norms.
 
 ``` r
+
 obj <- computeGeneAndCellScores(obj)
 ```
 
 ## Select optimal sigma
 
 ``` r
+
 ncorr <- getNormCorr(obj)
 
 ggplot(ncorr, aes(x = sigmaValues, y = normalizedCorrelation)) +
@@ -138,6 +152,7 @@ Visualize how cell scores in D1 neurons (smoothed by the spatial kernel)
 correlate with D2 neuron scores:
 
 ``` r
+
 df_corr <- getCorrTwoTypes(obj,
   sigmaValueChoice = 0.14,
   cellTypeA = "061 STR D1 Gaba",
@@ -157,6 +172,7 @@ ggplot(df_corr) +
 ## In situ visualization
 
 ``` r
+
 cs <- getCellScoresInSitu(obj, sigmaValueChoice = 0.14)
 
 ggplot(cs) +
@@ -171,6 +187,7 @@ ggplot(cs) +
 ![](brain_merfish_two_type_files/figure-html/plot-insitu-1.png)
 
 ``` r
+
 # Continuous scores
 ggplot(cs) +
   geom_point(aes(x = x, y = y, color = cellScores), size = 0.8) +
@@ -187,6 +204,7 @@ ggplot(cs) +
 Establish statistical significance with spatial permutations:
 
 ``` r
+
 obj <- runSkrCCAPermu(obj, nPermu = 5L, permu_method = "bin",
                        num_bins_x = 10, num_bins_y = 10)
 ```
@@ -210,11 +228,11 @@ obj <- runSkrCCAPermu(obj, nPermu = 5L, permu_method = "bin",
     ## [1] "Convergence reached at 22 iterations (Max diff = 8.787e-06 )"
     ## [1] "Convergence reached at 0 iterations (Max diff = 5.763e-13 )"
     ## [1] "Convergence reached at 47 iterations (Max diff = 9.597e-06 )"
-    ## [1] "Convergence reached at 1 iterations (Max diff = 4.108e-15 )"
+    ## [1] "Convergence reached at 0 iterations (Max diff = 1.873e-14 )"
     ## [1] "Convergence reached at 21 iterations (Max diff = 9.612e-06 )"
     ## [1] "Convergence reached at 0 iterations (Max diff = 3.344e-11 )"
     ## [1] "Convergence reached at 54 iterations (Max diff = 8.615e-06 )"
-    ## [1] "Convergence reached at 1 iterations (Max diff = 7.380e-15 )"
+    ## [1] "Convergence reached at 0 iterations (Max diff = 2.520e-14 )"
     ## [1] "Convergence reached at 16 iterations (Max diff = 9.050e-06 )"
     ## [1] "Convergence reached at 0 iterations (Max diff = 3.650e-12 )"
     ##   Completed 5 of 5 permutations
@@ -223,6 +241,7 @@ obj <- runSkrCCAPermu(obj, nPermu = 5L, permu_method = "bin",
     ## Run computeNormalizedCorrelationPermu() to compute p-values.
 
 ``` r
+
 obj <- computeNormalizedCorrelationPermu(obj, tol = 1e-3)
 ```
 
@@ -235,6 +254,7 @@ obj <- computeNormalizedCorrelationPermu(obj, tol = 1e-3)
     ## Normalized correlation computation complete.
 
 ``` r
+
 nc_permu <- do.call(rbind, obj@normalizedCorrelationPermu)
 print(nc_permu)
 ```
@@ -271,10 +291,11 @@ resolved cell atlas of the whole mouse brain. *Nature* 624, 343–354
 ## Session info
 
 ``` r
+
 sessionInfo()
 ```
 
-    ## R version 4.5.3 (2026-03-11)
+    ## R version 4.6.0 (2026-04-24)
     ## Platform: x86_64-pc-linux-gnu
     ## Running under: Ubuntu 24.04.4 LTS
     ## 
@@ -295,22 +316,22 @@ sessionInfo()
     ## [1] stats     graphics  grDevices utils     datasets  methods   base     
     ## 
     ## other attached packages:
-    ## [1] ggplot2_4.0.2 CoPro_0.6.1  
+    ## [1] ggplot2_4.0.3 CoPro_1.1.0  
     ## 
     ## loaded via a namespace (and not attached):
     ##  [1] rappdirs_0.3.4     sass_0.4.10        generics_0.1.4     lattice_0.22-9    
     ##  [5] digest_0.6.39      magrittr_2.0.5     timechange_0.4.0   evaluate_1.0.5    
-    ##  [9] grid_4.5.3         RColorBrewer_1.1-3 fastmap_1.2.0      maps_3.4.3        
-    ## [13] jsonlite_2.0.0     Matrix_1.7-4       httr_1.4.8         spam_2.11-3       
+    ##  [9] grid_4.6.0         RColorBrewer_1.1-3 fastmap_1.2.0      maps_3.4.3        
+    ## [13] jsonlite_2.0.0     Matrix_1.7-5       httr_1.4.8         spam_2.11-3       
     ## [17] viridisLite_0.4.3  scales_1.4.0       httr2_1.2.2        textshaping_1.0.5 
     ## [21] jquerylib_0.1.4    cli_3.6.6          rlang_1.2.0        gitcreds_0.1.2    
-    ## [25] withr_3.0.2        cachem_1.1.0       yaml_2.3.12        tools_4.5.3       
-    ## [29] parallel_4.5.3     memoise_2.0.1      dplyr_1.2.1        curl_7.0.0        
+    ## [25] withr_3.0.2        cachem_1.1.0       yaml_2.3.12        tools_4.6.0       
+    ## [29] parallel_4.6.0     memoise_2.0.1      dplyr_1.2.1        curl_7.1.0        
     ## [33] vctrs_0.7.3        R6_2.6.1           lubridate_1.9.5    matrixStats_1.5.0 
-    ## [37] lifecycle_1.0.5    fs_2.0.1           ragg_1.5.2         irlba_2.3.7       
+    ## [37] lifecycle_1.0.5    fs_2.1.0           ragg_1.5.2         irlba_2.3.7       
     ## [41] pkgconfig_2.0.3    desc_1.4.3         pkgdown_2.2.0      pillar_1.11.1     
-    ## [45] bslib_0.10.0       gtable_0.3.6       glue_1.8.0         gh_1.5.0          
-    ## [49] Rcpp_1.1.1-1       fields_17.1        systemfonts_1.3.2  xfun_0.57         
+    ## [45] bslib_0.10.0       gtable_0.3.6       glue_1.8.1         gh_1.5.0          
+    ## [49] Rcpp_1.1.1-1.1     fields_17.3        systemfonts_1.3.2  xfun_0.57         
     ## [53] tibble_3.3.1       tidyselect_1.2.1   knitr_1.51         farver_2.1.2      
     ## [57] htmltools_0.5.9    labeling_0.4.3     rmarkdown_2.31     piggyback_0.1.5   
-    ## [61] dotCall64_1.2      compiler_4.5.3     S7_0.2.1-1
+    ## [61] dotCall64_1.2      compiler_4.6.0     S7_0.2.2

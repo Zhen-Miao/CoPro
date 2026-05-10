@@ -28,3 +28,14 @@ subsetData(object, cellTypesOfInterest, saveOriginal = FALSE)
 ## Value
 
 A `CoPro` object with subset slots
+
+## See also
+
+[`newCoProSingle()`](https://zhen-miao.github.io/CoPro/reference/newCoProSingle.md),
+[`newCoProMulti()`](https://zhen-miao.github.io/CoPro/reference/newCoProMulti.md),
+[`CreateCoPro()`](https://zhen-miao.github.io/CoPro/reference/CreateCoPro.md)
+
+Other object-creation:
+[`asCoPro`](https://zhen-miao.github.io/CoPro/reference/asCoPro.md),
+[`newCoProMulti()`](https://zhen-miao.github.io/CoPro/reference/newCoProMulti.md),
+[`newCoProSingle()`](https://zhen-miao.github.io/CoPro/reference/newCoProSingle.md)

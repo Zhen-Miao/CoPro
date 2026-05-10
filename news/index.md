@@ -1,5 +1,94 @@
 # Changelog
 
+## CoPro 1.1.0
+
+### Citation
+
+- The CoPro preprint is now available on bioRxiv: Miao Z, Qu Y, Huang S,
+  Laux L, Peters S, Aristel A, Zhang Z, Niedernhofer L, McMahon A, Kim
+  J, Zhang NR (2026). *Dissecting the coordinated progression of cell
+  states in spatial transcriptomics with CoPro.* bioRxiv
+  2026.04.17.719309. doi:
+  [10.64898/2026.04.17.719309](https://doi.org/10.64898/2026.04.17.719309).
+  `inst/CITATION` and the README have been updated accordingly.
+
+### New features
+
+- Added
+  [`asCoProSingle()`](https://zhen-miao.github.io/CoPro/reference/asCoPro.md)
+  and
+  [`asCoProMulti()`](https://zhen-miao.github.io/CoPro/reference/asCoPro.md)
+  S4 generics for one-call coercion from `SingleCellExperiment` and
+  `Seurat` objects into CoPro objects. Conversions are gated on their
+  respective packages being installed and delegate to the existing
+  [`newCoProSingle()`](https://zhen-miao.github.io/CoPro/reference/newCoProSingle.md)
+  /
+  [`newCoProMulti()`](https://zhen-miao.github.io/CoPro/reference/newCoProMulti.md)
+  constructors so validation stays single-sourced.
+- Exposed `normalizeTarget` argument on
+  [`computeDistance()`](https://zhen-miao.github.io/CoPro/reference/computeDistance.md)
+  for users who want to control the target value that the low-percentile
+  cell-cell distance is rescaled to. Default preserves existing
+  behavior.
+
+### User experience
+
+- [`newCoProSingle()`](https://zhen-miao.github.io/CoPro/reference/newCoProSingle.md)
+  /
+  [`newCoProMulti()`](https://zhen-miao.github.io/CoPro/reference/newCoProMulti.md)
+  now reject `NA`, `NaN`, and `Inf` values in `normalizedData` at
+  construction time with an informative error instead of producing
+  cryptic downstream failures.
+- [`newCoProMulti()`](https://zhen-miao.github.io/CoPro/reference/newCoProMulti.md)
+  now validates that when `metaData` already contains a `slideID`
+  column, its values match the supplied `slideID` argument (errors on
+  mismatch instead of silently overwriting).
+- `locationData` column standardization now emits a
+  [`message()`](https://rdrr.io/r/base/message.html) so silent
+  case-folding of `x`/`y`/`z` headers is visible.
+- [`subsetData()`](https://zhen-miao.github.io/CoPro/reference/subsetData.md)
+  error on too-few-matched cells now reports the requested cell types
+  and the count that was actually found.
+- [`computeBidirCorrelation()`](https://zhen-miao.github.io/CoPro/reference/computeBidirCorrelation.md)
+  guards against empty filtered matrices (returns zero correlation with
+  a warning rather than crashing).
+- `show()` for CoPro objects now reports approximate object size in MB
+  and truncates the metadata field list when there are many columns.
+- [`runSkrCCA()`](https://zhen-miao.github.io/CoPro/reference/runSkrCCA.md)
+  optimization loop now reports progress via
+  [`message()`](https://rdrr.io/r/base/message.html) that can be
+  silenced with
+  [`suppressMessages()`](https://rdrr.io/r/base/message.html).
+- [`plotG12Functions()`](https://zhen-miao.github.io/CoPro/reference/plotG12Functions.md)
+  now always returns a stable `list(plot, data, summary)` shape where
+  `plot` is always a list with `combined` and `individual` elements (one
+  of which may be `NULL`), regardless of `plot_type`. Default fallback
+  palette for \>8 cell-type pairs now uses the colorblind-friendly
+  viridis palette rather than
+  [`rainbow()`](https://rdrr.io/r/grDevices/palettes.html).
+- Replaced several [`cat()`](https://rdrr.io/r/base/cat.html) progress
+  prints in
+  [`computeDistance()`](https://zhen-miao.github.io/CoPro/reference/computeDistance.md)
+  and
+  [`plotG12Functions()`](https://zhen-miao.github.io/CoPro/reference/plotG12Functions.md)
+  with [`message()`](https://rdrr.io/r/base/message.html) gated on
+  `verbose`, so users can suppress output cleanly.
+
+### Documentation
+
+- Added `@examples`, `@family`, and `@seealso` annotations across the
+  main pipeline functions so the pkgdown reference auto-cross-links
+  related steps.
+- New `CONTRIBUTING.md` covering test runs, vignette render workflow,
+  and roxygen regeneration.
+
+### Internal
+
+- Renamed `R/80_get_cs_in_situ.r` to `R/80_get_cs_in_situ.R` for
+  cross-platform portability on case-sensitive filesystems.
+- Bumped `actions/checkout` to v6 in the lint workflow to match the
+  other CI jobs.
+
 ## CoPro 1.0.0
 
 ### Major changes

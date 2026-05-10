@@ -108,3 +108,30 @@ are cell types
 ## Note
 
 To-do: Shall we include row or column normalization of the kernel?
+
+## See also
+
+[`computeDistance()`](https://zhen-miao.github.io/CoPro/reference/computeDistance.md),
+[`computePCA()`](https://zhen-miao.github.io/CoPro/reference/computePCAMulti.md),
+[`runSkrCCA()`](https://zhen-miao.github.io/CoPro/reference/runSkrCCA.md)
+
+Other spatial-pipeline:
+[`computeDistance()`](https://zhen-miao.github.io/CoPro/reference/computeDistance.md),
+[`computePCA()`](https://zhen-miao.github.io/CoPro/reference/computePCAMulti.md),
+[`runGeneSpaceCCA()`](https://zhen-miao.github.io/CoPro/reference/runGeneSpaceCCA.md),
+[`runSkrCCA()`](https://zhen-miao.github.io/CoPro/reference/runSkrCCA.md)
+
+## Examples
+
+``` r
+toy <- readRDS(system.file("extdata", "toy_copro_data.rds", package = "CoPro"))
+obj <- newCoProSingle(
+  normalizedData = toy$normalizedData,
+  locationData   = toy$locationData,
+  metaData       = toy$metaData,
+  cellTypes      = toy$cellTypes
+)
+obj <- subsetData(obj, cellTypesOfInterest = unique(toy$cellTypes))
+obj <- computeDistance(obj, distType = "Euclidean2D", verbose = FALSE)
+obj <- computeKernelMatrix(obj, sigmaValues = c(0.05, 0.1), verbose = FALSE)
+```

@@ -108,14 +108,18 @@ plotG12Functions(
 
 ## Value
 
-A list containing:
+A list with a stable shape regardless of `plot_type`:
 
-- `plot`: ggplot object(s) with the g_12(r) plots
+- `plot$combined`: a single-panel ggplot object, or `NULL` when
+  `plot_type == "individual"`.
+
+- `plot$individual`: a facetted ggplot object, or `NULL` when
+  `plot_type == "combined"`.
 
 - `data`: data.frame with g_12(r) values, confidence intervals, and
-  metadata
+  metadata.
 
-- `summary`: summary statistics for each cell type pair
+- `summary`: summary statistics for each cell type pair.
 
 ## Details
 
@@ -131,6 +135,11 @@ Values of g_12(r):
 
 - g_12(r) \< 1: Repulsion/segregation at distance r
 
+## See also
+
+[`getCellScoresInSitu()`](https://zhen-miao.github.io/CoPro/reference/getCellScoresInSitu.md),
+[`getColocScores()`](https://zhen-miao.github.io/CoPro/reference/getColocScores.md)
+
 ## Examples
 
 ``` r
@@ -145,7 +154,7 @@ g12_plots <- plotG12Functions(object,
                              include_confidence = TRUE)
 
 # Access the plot and data
-print(g12_plots$plot)
+print(g12_plots$plot$individual)
 head(g12_plots$data)
 } # }
 ```

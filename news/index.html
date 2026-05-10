@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">CoPro</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.1.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -25,6 +25,7 @@
     <li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Advanced</h6></li>
     <li><a class="dropdown-item" href="../articles/colon_d3_cross_type.html">Cross-cell-type co-progression with orthogonal axes (Colon Day 3)</a></li>
+    <li><a class="dropdown-item" href="../articles/colon_d3_multi_slide.html">Multi-slide joint analysis (Colon Day 3)</a></li>
     <li><a class="dropdown-item" href="../articles/colon_d9_multi_slide.html">Multi-slide analysis and score transfer (Colon Day 9)</a></li>
     <li><a class="dropdown-item" href="../articles/kidney_guided_gradient.html">Supervised detection of spatial gradients (Kidney)</a></li>
   </ul></li>
@@ -44,6 +45,48 @@
       <small>Source: <a href="https://github.com/Zhen-Miao/CoPro/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="1.1.0" id="copro-110">CoPro 1.1.0<a class="anchor" aria-label="anchor" href="#copro-110"></a></h2>
+<div class="section level3">
+<h3 id="citation-1-1-0">Citation<a class="anchor" aria-label="anchor" href="#citation-1-1-0"></a></h3>
+<ul><li>The CoPro preprint is now available on bioRxiv: Miao Z, Qu Y, Huang S, Laux L, Peters S, Aristel A, Zhang Z, Niedernhofer L, McMahon A, Kim J, Zhang NR (2026). <em>Dissecting the coordinated progression of cell states in spatial transcriptomics with CoPro.</em> bioRxiv 2026.04.17.719309. doi: <a href="https://doi.org/10.64898/2026.04.17.719309" class="external-link">10.64898/2026.04.17.719309</a>. <code>inst/CITATION</code> and the README have been updated accordingly.</li>
+</ul></div>
+<div class="section level3">
+<h3 id="new-features-1-1-0">New features<a class="anchor" aria-label="anchor" href="#new-features-1-1-0"></a></h3>
+<ul><li>Added <code><a href="../reference/asCoPro.html">asCoProSingle()</a></code> and <code><a href="../reference/asCoPro.html">asCoProMulti()</a></code> S4 generics for one-call coercion from <code>SingleCellExperiment</code> and <code>Seurat</code> objects into CoPro objects. Conversions are gated on their respective packages being installed and delegate to the existing <code><a href="../reference/newCoProSingle.html">newCoProSingle()</a></code> / <code><a href="../reference/newCoProMulti.html">newCoProMulti()</a></code> constructors so validation stays single-sourced.</li>
+<li>Exposed <code>normalizeTarget</code> argument on <code><a href="../reference/computeDistance.html">computeDistance()</a></code> for users who want to control the target value that the low-percentile cell-cell distance is rescaled to. Default preserves existing behavior.</li>
+</ul></div>
+<div class="section level3">
+<h3 id="user-experience-1-1-0">User experience<a class="anchor" aria-label="anchor" href="#user-experience-1-1-0"></a></h3>
+<ul><li>
+<code><a href="../reference/newCoProSingle.html">newCoProSingle()</a></code> / <code><a href="../reference/newCoProMulti.html">newCoProMulti()</a></code> now reject <code>NA</code>, <code>NaN</code>, and <code>Inf</code> values in <code>normalizedData</code> at construction time with an informative error instead of producing cryptic downstream failures.</li>
+<li>
+<code><a href="../reference/newCoProMulti.html">newCoProMulti()</a></code> now validates that when <code>metaData</code> already contains a <code>slideID</code> column, its values match the supplied <code>slideID</code> argument (errors on mismatch instead of silently overwriting).</li>
+<li>
+<code>locationData</code> column standardization now emits a <code><a href="https://rdrr.io/r/base/message.html" class="external-link">message()</a></code> so silent case-folding of <code>x</code>/<code>y</code>/<code>z</code> headers is visible.</li>
+<li>
+<code><a href="../reference/subsetData.html">subsetData()</a></code> error on too-few-matched cells now reports the requested cell types and the count that was actually found.</li>
+<li>
+<code><a href="../reference/computeBidirCorrelation.html">computeBidirCorrelation()</a></code> guards against empty filtered matrices (returns zero correlation with a warning rather than crashing).</li>
+<li>
+<code>show()</code> for CoPro objects now reports approximate object size in MB and truncates the metadata field list when there are many columns.</li>
+<li>
+<code><a href="../reference/runSkrCCA.html">runSkrCCA()</a></code> optimization loop now reports progress via <code><a href="https://rdrr.io/r/base/message.html" class="external-link">message()</a></code> that can be silenced with <code><a href="https://rdrr.io/r/base/message.html" class="external-link">suppressMessages()</a></code>.</li>
+<li>
+<code><a href="../reference/plotG12Functions.html">plotG12Functions()</a></code> now always returns a stable <code>list(plot, data, summary)</code> shape where <code>plot</code> is always a list with <code>combined</code> and <code>individual</code> elements (one of which may be <code>NULL</code>), regardless of <code>plot_type</code>. Default fallback palette for &gt;8 cell-type pairs now uses the colorblind-friendly viridis palette rather than <code><a href="https://rdrr.io/r/grDevices/palettes.html" class="external-link">rainbow()</a></code>.</li>
+<li>Replaced several <code><a href="https://rdrr.io/r/base/cat.html" class="external-link">cat()</a></code> progress prints in <code><a href="../reference/computeDistance.html">computeDistance()</a></code> and <code><a href="../reference/plotG12Functions.html">plotG12Functions()</a></code> with <code><a href="https://rdrr.io/r/base/message.html" class="external-link">message()</a></code> gated on <code>verbose</code>, so users can suppress output cleanly.</li>
+</ul></div>
+<div class="section level3">
+<h3 id="documentation-1-1-0">Documentation<a class="anchor" aria-label="anchor" href="#documentation-1-1-0"></a></h3>
+<ul><li>Added <code>@examples</code>, <code>@family</code>, and <code>@seealso</code> annotations across the main pipeline functions so the pkgdown reference auto-cross-links related steps.</li>
+<li>New <code>CONTRIBUTING.md</code> covering test runs, vignette render workflow, and roxygen regeneration.</li>
+</ul></div>
+<div class="section level3">
+<h3 id="internal-1-1-0">Internal<a class="anchor" aria-label="anchor" href="#internal-1-1-0"></a></h3>
+<ul><li>Renamed <code>R/80_get_cs_in_situ.r</code> to <code>R/80_get_cs_in_situ.R</code> for cross-platform portability on case-sensitive filesystems.</li>
+<li>Bumped <code>actions/checkout</code> to v6 in the lint workflow to match the other CI jobs.</li>
+</ul></div>
+</div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="1.0.0" id="copro-100">CoPro 1.0.0<a class="anchor" aria-label="anchor" href="#copro-100"></a></h2>
 <div class="section level3">

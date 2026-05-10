@@ -19,6 +19,7 @@ When multiple tissue slides are available, CoPro can:
 ## Load packages
 
 ``` r
+
 library(CoPro)
 library(ggplot2)
 ```
@@ -26,6 +27,7 @@ library(ggplot2)
 ## Download and load data
 
 ``` r
+
 data_path <- copro_download_data("colon_d9")
 ```
 
@@ -34,6 +36,7 @@ data_path <- copro_download_data("colon_d9")
     ## Downloaded to: /home/runner/.cache/R/CoPro/copro_colon_d9.rds
 
 ``` r
+
 dat <- readRDS(data_path)
 
 # Three slides are included
@@ -43,12 +46,14 @@ cat("Slides:", paste(dat$selectedSlides, collapse = ", "), "\n")
     ## Slides: 062221_D9_m3_2_slice_1, 062221_D9_m3_2_slice_2, 062221_D9_m3_2_slice_3
 
 ``` r
+
 cat("Total cells:", nrow(dat$normalizedData), "\n")
 ```
 
     ## Total cells: 21436
 
 ``` r
+
 table(dat$slideID)
 ```
 
@@ -61,6 +66,7 @@ table(dat$slideID)
 ### Cell types
 
 ``` r
+
 plot_df <- data.frame(
   x = dat$locationData$x,
   y = dat$locationData$y,
@@ -89,6 +95,7 @@ labels via Leiden clustering. **MU8** marks the most severely inflamed
 niche, while MU1–3 are grouped as relatively normal crypt neighborhoods:
 
 ``` r
+
 mu_df <- data.frame(
   x = dat$locationData$x,
   y = dat$locationData$y,
@@ -125,6 +132,7 @@ We use the first slide as the **reference** to learn co-progression
 patterns, then transfer scores to the other two slides.
 
 ``` r
+
 ref_slide <- dat$selectedSlides[1]
 tar_slides <- dat$selectedSlides[2:3]
 
@@ -137,6 +145,7 @@ tar2_idx <- dat$slideID == tar_slides[2]
 ## Step 1: Run CoPro on the reference slide
 
 ``` r
+
 cell_types <- c("Epithelial", "Fibroblast", "Immune")
 
 # Create reference CoPro object
@@ -157,19 +166,23 @@ ref_obj <- computePCA(ref_obj, nPCA = 40, center = TRUE, scale. = TRUE)
     ## Input is dense (matrixarray), performing irlba pca...
 
 ``` r
+
 ref_obj <- computeDistance(ref_obj, distType = "Euclidean2D")
 ```
 
-    ## normalizeDistance is set to TRUE, so distance will be normalized, so that 0.01 percentile distance will be scaled to 0.01
+    ## normalizeDistance = TRUE: low-percentile distance will be scaled to 0.01.
+
     ##         0%        25%        50%        75%       100% 
     ##   1.559086  54.812663  95.648432 126.009495 191.917943 
     ##         0%        25%        50%        75%       100% 
     ##   1.723399  61.128716 100.304344 127.403172 191.878277 
     ##         0%        25%        50%        75%       100% 
-    ##   1.033183  59.470179 102.405454 133.908593 194.179085 
-    ## The scaling factor for normalizing distance is 0.009678831
+    ##   1.033183  59.470179 102.405454 133.908593 194.179085
+
+    ## Distance normalization scaling factor: 0.00967883
 
 ``` r
+
 sigma_choice <- c(0.005, 0.01, 0.02, 0.05, 0.1)
 ref_obj <- computeKernelMatrix(ref_obj, sigmaValues = sigma_choice)
 ```
@@ -182,44 +195,50 @@ ref_obj <- computeKernelMatrix(ref_obj, sigmaValues = sigma_choice)
     ## current sigma value is 0.1
 
 ``` r
+
 ref_obj <- runSkrCCA(ref_obj, scalePCs = TRUE, maxIter = 500, nCC = 2)
 ```
 
-    ## Running skrCCA for sigma = 0.005
+    ## Running skrCCA [1/5] for sigma = 0.005 ...
 
     ## [1] "Convergence reached at 10 iterations (Max diff = 8.855e-06 )"
     ## [1] "Convergence reached at 40 iterations (Max diff = 8.130e-06 )"
 
-    ## Running skrCCA for sigma = 0.01
+    ## Running skrCCA [2/5] for sigma = 0.01 ...
 
     ## [1] "Convergence reached at 10 iterations (Max diff = 7.128e-06 )"
     ## [1] "Convergence reached at 9 iterations (Max diff = 3.697e-06 )"
 
-    ## Running skrCCA for sigma = 0.02
+    ## Running skrCCA [3/5] for sigma = 0.02 ...
 
     ## [1] "Convergence reached at 9 iterations (Max diff = 6.981e-06 )"
     ## [1] "Convergence reached at 8 iterations (Max diff = 5.635e-06 )"
 
-    ## Running skrCCA for sigma = 0.05
+    ## Running skrCCA [4/5] for sigma = 0.05 ...
 
     ## [1] "Convergence reached at 8 iterations (Max diff = 4.572e-06 )"
     ## [1] "Convergence reached at 9 iterations (Max diff = 2.760e-06 )"
 
-    ## Running skrCCA for sigma = 0.1
+    ## Running skrCCA [5/5] for sigma = 0.1 ...
 
     ## [1] "Convergence reached at 6 iterations (Max diff = 5.352e-06 )"
     ## [1] "Convergence reached at 7 iterations (Max diff = 2.794e-06 )"
 
+    ## skrCCA finished 5 sigma value(s) in 5.8 s.
+
     ## Optimization succeeded for 5 sigma value(s): sigma_0.005, sigma_0.01, sigma_0.02, sigma_0.05, sigma_0.1
 
 ``` r
+
 ref_obj <- computeNormalizedCorrelation(ref_obj)
 ```
 
-    ## Calculating spectral norms,  depending on the data size, this may take a while. 
-    ## Finished calculating spectral norms
+    ## Calculating spectral norms, this may take a while.
+
+    ## Finished calculating spectral norms.
 
 ``` r
+
 ref_obj <- computeGeneAndCellScores(ref_obj)
 ref_obj <- computeRegressionGeneScores(ref_obj)
 ```
@@ -257,6 +276,7 @@ ref_obj <- computeRegressionGeneScores(ref_obj)
 ### Reference slide results
 
 ``` r
+
 sigma_opt <- 0.01  # adjust based on normalized correlation
 
 cs_ref <- getCellScoresInSitu(ref_obj, sigmaValueChoice = sigma_opt)
@@ -278,6 +298,7 @@ The CoPro disease axis should correlate with MU labels, with **MU8**
 cells showing the highest scores:
 
 ``` r
+
 ref_meta <- ref_obj@metaDataSub
 ref_meta$cell_score <- ref_meta[, paste0("cellScore_sigma_", sigma_opt,
                                           "_cc_index_1")]
@@ -307,6 +328,7 @@ As disease severity increases, the cell type composition shifts—immune
 cell proportion increases while epithelial proportion decreases:
 
 ``` r
+
 ref_meta_all <- ref_obj@metaDataSub
 ref_meta_all$cell_score <- ref_meta_all[, paste0("cellScore_sigma_",
                                                    sigma_opt, "_cc_index_1")]
@@ -349,6 +371,7 @@ ggplot(prop_long, aes(x = score_mid, y = proportion, color = celltype)) +
 ### Top genes associated with the disease axis
 
 ``` r
+
 # Immune genes on the disease axis
 key_imm <- paste0("geneScores|sigma", sigma_opt, "|Immune")
 gs_imm <- ref_obj@geneScoresRegression[[key_imm]]
@@ -376,6 +399,7 @@ ggplot(top_imm_df, aes(x = gene, y = weight, fill = direction)) +
 ## Step 2: Create target CoPro objects
 
 ``` r
+
 # Target slide 1
 tar1_obj <- newCoProSingle(
   normalizedData = dat$normalizedData[tar1_idx, ],
@@ -392,19 +416,23 @@ tar1_obj <- computePCA(tar1_obj, nPCA = 40, center = TRUE, scale. = TRUE)
     ## Input is dense (matrixarray), performing irlba pca...
 
 ``` r
+
 tar1_obj <- computeDistance(tar1_obj, distType = "Euclidean2D")
 ```
 
-    ## normalizeDistance is set to TRUE, so distance will be normalized, so that 0.01 percentile distance will be scaled to 0.01
+    ## normalizeDistance = TRUE: low-percentile distance will be scaled to 0.01.
+
     ##         0%        25%        50%        75%       100% 
     ##   1.547908  40.150567  71.639135  99.196604 145.064234 
     ##         0%        25%        50%        75%       100% 
     ##   1.839067  46.588659  74.794733 100.618483 144.602279 
     ##         0%        25%        50%        75%       100% 
-    ##   1.077755  44.939240  73.568954  97.010170 146.985239 
-    ## The scaling factor for normalizing distance is 0.009278545
+    ##   1.077755  44.939240  73.568954  97.010170 146.985239
+
+    ## Distance normalization scaling factor: 0.00927854
 
 ``` r
+
 tar1_obj <- computeKernelMatrix(tar1_obj, sigmaValues = sigma_choice)
 ```
 
@@ -416,6 +444,7 @@ tar1_obj <- computeKernelMatrix(tar1_obj, sigmaValues = sigma_choice)
     ## current sigma value is 0.1
 
 ``` r
+
 # Target slide 2
 tar2_obj <- newCoProSingle(
   normalizedData = dat$normalizedData[tar2_idx, ],
@@ -432,19 +461,23 @@ tar2_obj <- computePCA(tar2_obj, nPCA = 40, center = TRUE, scale. = TRUE)
     ## Input is dense (matrixarray), performing irlba pca...
 
 ``` r
+
 tar2_obj <- computeDistance(tar2_obj, distType = "Euclidean2D")
 ```
 
-    ## normalizeDistance is set to TRUE, so distance will be normalized, so that 0.01 percentile distance will be scaled to 0.01
+    ## normalizeDistance = TRUE: low-percentile distance will be scaled to 0.01.
+
     ##        0%       25%       50%       75%      100% 
     ##   1.65134  41.19449  71.21469  94.13571 147.60112 
     ##         0%        25%        50%        75%       100% 
     ##   2.021933  50.297768  74.971212  97.972906 148.666374 
     ##         0%        25%        50%        75%       100% 
-    ##   1.162089  43.393514  70.036161  92.718582 149.327113 
-    ## The scaling factor for normalizing distance is 0.008605196
+    ##   1.162089  43.393514  70.036161  92.718582 149.327113
+
+    ## Distance normalization scaling factor: 0.0086052
 
 ``` r
+
 tar2_obj <- computeKernelMatrix(tar2_obj, sigmaValues = sigma_choice)
 ```
 
@@ -461,6 +494,7 @@ Transfer the learned gene weights from the reference to each target
 slide:
 
 ``` r
+
 # Transfer to target 1
 tar1_scores <- getTransferCellScores(
   ref_obj = ref_obj,
@@ -545,6 +579,7 @@ tar1_scores <- getTransferCellScores(
     ## retaining 940 genes for CC_2 with threshold 0
 
 ``` r
+
 # Transfer to target 2
 tar2_scores <- getTransferCellScores(
   ref_obj = ref_obj,
@@ -631,6 +666,7 @@ tar2_scores <- getTransferCellScores(
 ## Step 4: Visualize transferred scores
 
 ``` r
+
 # Build data frames for target slides from transferred scores
 build_transfer_df <- function(tar_dat, tar_scores, slide_name, sigma) {
   rows <- list()
@@ -691,6 +727,7 @@ Here we show the reference slide MU boxplot (already computed above)
 alongside the MU labels in spatial context for a target slide:
 
 ``` r
+
 # Show MU labels spatially on target slide 1
 tar1_mu <- data.frame(
   x = dat$locationData$x[tar1_idx],
@@ -721,6 +758,7 @@ Compare the normalized correlation between the reference and transferred
 slides to assess whether the co-progression pattern is consistent:
 
 ``` r
+
 tar1_ncorr <- getTransferNormCorr(
   tar_obj = tar1_obj,
   transfer_cell_scores = tar1_scores,
@@ -728,10 +766,12 @@ tar1_ncorr <- getTransferNormCorr(
 )
 ```
 
-    ## Calculating spectral norms,  depending on the data size, this may take a while. 
-    ## Finished calculating spectral norms
+    ## Calculating spectral norms, this may take a while.
+
+    ## Finished calculating spectral norms.
 
 ``` r
+
 tar2_ncorr <- getTransferNormCorr(
   tar_obj = tar2_obj,
   transfer_cell_scores = tar2_scores,
@@ -739,16 +779,18 @@ tar2_ncorr <- getTransferNormCorr(
 )
 ```
 
-    ## Calculating spectral norms,  depending on the data size, this may take a while. 
-    ## Finished calculating spectral norms
+    ## Calculating spectral norms, this may take a while.
+    ## Finished calculating spectral norms.
 
 ``` r
+
 cat("Reference norm. corr.:\n")
 ```
 
     ## Reference norm. corr.:
 
 ``` r
+
 ref_ncorr <- getNormCorr(ref_obj)
 print(ref_ncorr[ref_ncorr$sigmaValues == sigma_opt, ])
 ```
@@ -769,6 +811,7 @@ print(ref_ncorr[ref_ncorr$sigmaValues == sigma_opt, ])
     ## sigma_0.01.6     Fibroblast-Immune
 
 ``` r
+
 cat("\nTarget 1 transferred norm. corr.:\n")
 ```
 
@@ -776,6 +819,7 @@ cat("\nTarget 1 transferred norm. corr.:\n")
     ## Target 1 transferred norm. corr.:
 
 ``` r
+
 print(tar1_ncorr)
 ```
 
@@ -789,6 +833,7 @@ print(tar1_ncorr)
     ## 6       0.01 Fibroblast     Immune        2            0.10033653
 
 ``` r
+
 cat("\nTarget 2 transferred norm. corr.:\n")
 ```
 
@@ -796,6 +841,7 @@ cat("\nTarget 2 transferred norm. corr.:\n")
     ## Target 2 transferred norm. corr.:
 
 ``` r
+
 print(tar2_ncorr)
 ```
 
@@ -818,6 +864,7 @@ For joint analysis across all slides simultaneously, use
 `newCoProMulti`:
 
 ``` r
+
 multi_obj <- newCoProMulti(
   normalizedData = dat$normalizedData,
   locationData = dat$locationData,
@@ -850,49 +897,67 @@ multi_obj <- computePCA(multi_obj, nPCA = 40, center = TRUE, scale. = TRUE)
     ## PCA computed for cell type: Immune
 
 ``` r
+
 multi_obj <- computeDistance(multi_obj, distType = "Euclidean2D")
 ```
 
-    ## normalizeDistance is set to TRUE, so distance will be normalized across all slides, so that 0.01 percentile distance will be scaled to 0.01
+    ## normalizeDistance = TRUE: low-percentile distance will be normalized across all slides and scaled to 0.01.
 
     ## Computing pairwise distances for slide: 062221_D9_m3_2_slice_3
 
-    ## Slide: 062221_D9_m3_2_slice_3 , Pair: Epithelial - Fibroblast 
+    ## Slide: 062221_D9_m3_2_slice_3, Pair: Epithelial - Fibroblast
+
     ##        0%       25%       50%       75%      100% 
-    ##   1.65134  41.19449  71.21469  94.13571 147.60112 
-    ## Slide: 062221_D9_m3_2_slice_3 , Pair: Epithelial - Immune 
+    ##   1.65134  41.19449  71.21469  94.13571 147.60112
+
+    ## Slide: 062221_D9_m3_2_slice_3, Pair: Epithelial - Immune
+
     ##         0%        25%        50%        75%       100% 
-    ##   2.021933  50.297768  74.971212  97.972906 148.666374 
-    ## Slide: 062221_D9_m3_2_slice_3 , Pair: Fibroblast - Immune 
+    ##   2.021933  50.297768  74.971212  97.972906 148.666374
+
+    ## Slide: 062221_D9_m3_2_slice_3, Pair: Fibroblast - Immune
+
     ##         0%        25%        50%        75%       100% 
     ##   1.162089  43.393514  70.036161  92.718582 149.327113
 
     ## Computing pairwise distances for slide: 062221_D9_m3_2_slice_2
 
-    ## Slide: 062221_D9_m3_2_slice_2 , Pair: Epithelial - Fibroblast 
+    ## Slide: 062221_D9_m3_2_slice_2, Pair: Epithelial - Fibroblast
+
     ##         0%        25%        50%        75%       100% 
-    ##   1.547908  40.150567  71.639135  99.196604 145.064234 
-    ## Slide: 062221_D9_m3_2_slice_2 , Pair: Epithelial - Immune 
+    ##   1.547908  40.150567  71.639135  99.196604 145.064234
+
+    ## Slide: 062221_D9_m3_2_slice_2, Pair: Epithelial - Immune
+
     ##         0%        25%        50%        75%       100% 
-    ##   1.839067  46.588659  74.794733 100.618483 144.602279 
-    ## Slide: 062221_D9_m3_2_slice_2 , Pair: Fibroblast - Immune 
+    ##   1.839067  46.588659  74.794733 100.618483 144.602279
+
+    ## Slide: 062221_D9_m3_2_slice_2, Pair: Fibroblast - Immune
+
     ##         0%        25%        50%        75%       100% 
     ##   1.077755  44.939240  73.568954  97.010170 146.985239
 
     ## Computing pairwise distances for slide: 062221_D9_m3_2_slice_1
 
-    ## Slide: 062221_D9_m3_2_slice_1 , Pair: Epithelial - Fibroblast 
+    ## Slide: 062221_D9_m3_2_slice_1, Pair: Epithelial - Fibroblast
+
     ##         0%        25%        50%        75%       100% 
-    ##   1.559086  54.812663  95.648432 126.009495 191.917943 
-    ## Slide: 062221_D9_m3_2_slice_1 , Pair: Epithelial - Immune 
+    ##   1.559086  54.812663  95.648432 126.009495 191.917943
+
+    ## Slide: 062221_D9_m3_2_slice_1, Pair: Epithelial - Immune
+
     ##         0%        25%        50%        75%       100% 
-    ##   1.723399  61.128716 100.304344 127.403172 191.878277 
-    ## Slide: 062221_D9_m3_2_slice_1 , Pair: Fibroblast - Immune 
+    ##   1.723399  61.128716 100.304344 127.403172 191.878277
+
+    ## Slide: 062221_D9_m3_2_slice_1, Pair: Fibroblast - Immune
+
     ##         0%        25%        50%        75%       100% 
-    ##   1.033183  59.470179 102.405454 133.908593 194.179085 
-    ## Global distance scaling factor: 0.009678831
+    ##   1.033183  59.470179 102.405454 133.908593 194.179085
+
+    ## Global distance scaling factor: 0.00967883
 
 ``` r
+
 multi_obj <- computeKernelMatrix(multi_obj, sigmaValues = sigma_choice)
 ```
 
@@ -904,42 +969,46 @@ multi_obj <- computeKernelMatrix(multi_obj, sigmaValues = sigma_choice)
     ## current sigma value is 0.1
 
 ``` r
+
 multi_obj <- runSkrCCA(multi_obj, scalePCs = TRUE, maxIter = 500, nCC = 2)
 ```
 
-    ## Running skrCCA for sigma = 0.005
+    ## Running skrCCA [1/5] for sigma = 0.005 ...
 
     ## Convergence reached at 8 iterations (Max diff = 6.856e-06 )
 
     ## [1] "Convergence reached at 19 iterations (Max diff = 8.112e-06 )"
 
-    ## Running skrCCA for sigma = 0.01
+    ## Running skrCCA [2/5] for sigma = 0.01 ...
 
     ## Convergence reached at 8 iterations (Max diff = 2.045e-06 )
 
     ## [1] "Convergence reached at 74 iterations (Max diff = 9.409e-06 )"
 
-    ## Running skrCCA for sigma = 0.02
+    ## Running skrCCA [3/5] for sigma = 0.02 ...
 
     ## Convergence reached at 7 iterations (Max diff = 4.600e-06 )
 
     ## [1] "Convergence reached at 33 iterations (Max diff = 7.607e-06 )"
 
-    ## Running skrCCA for sigma = 0.05
+    ## Running skrCCA [4/5] for sigma = 0.05 ...
 
     ## Convergence reached at 7 iterations (Max diff = 7.622e-06 )
 
     ## [1] "Convergence reached at 18 iterations (Max diff = 8.816e-06 )"
 
-    ## Running skrCCA for sigma = 0.1
+    ## Running skrCCA [5/5] for sigma = 0.1 ...
 
     ## Convergence reached at 10 iterations (Max diff = 1.994e-06 )
 
     ## [1] "Convergence reached at 20 iterations (Max diff = 8.645e-06 )"
 
+    ## skrCCA finished 5 sigma value(s) in 14.8 s.
+
     ## Optimization succeeded for 5 sigma value(s): sigma_0.005, sigma_0.01, sigma_0.02, sigma_0.05, sigma_0.1
 
 ``` r
+
 multi_obj <- computeNormalizedCorrelation(multi_obj)
 ```
 
@@ -948,6 +1017,7 @@ multi_obj <- computeNormalizedCorrelation(multi_obj)
     ## Finished calculating spectral norms.
 
 ``` r
+
 multi_obj <- computeGeneAndCellScores(multi_obj)
 ```
 
@@ -958,10 +1028,11 @@ generalization. Both are useful depending on your analytical question.
 ## Session info
 
 ``` r
+
 sessionInfo()
 ```
 
-    ## R version 4.5.3 (2026-03-11)
+    ## R version 4.6.0 (2026-04-24)
     ## Platform: x86_64-pc-linux-gnu
     ## Running under: Ubuntu 24.04.4 LTS
     ## 
@@ -982,23 +1053,23 @@ sessionInfo()
     ## [1] stats     graphics  grDevices utils     datasets  methods   base     
     ## 
     ## other attached packages:
-    ## [1] ggplot2_4.0.2 CoPro_0.6.1  
+    ## [1] ggplot2_4.0.3 CoPro_1.1.0  
     ## 
     ## loaded via a namespace (and not attached):
     ##  [1] rappdirs_0.3.4     sass_0.4.10        generics_0.1.4     lattice_0.22-9    
     ##  [5] digest_0.6.39      magrittr_2.0.5     timechange_0.4.0   evaluate_1.0.5    
-    ##  [9] grid_4.5.3         RColorBrewer_1.1-3 fastmap_1.2.0      maps_3.4.3        
-    ## [13] jsonlite_2.0.0     Matrix_1.7-4       mgcv_1.9-4         httr_1.4.8        
+    ##  [9] grid_4.6.0         RColorBrewer_1.1-3 fastmap_1.2.0      maps_3.4.3        
+    ## [13] jsonlite_2.0.0     Matrix_1.7-5       mgcv_1.9-4         httr_1.4.8        
     ## [17] spam_2.11-3        viridisLite_0.4.3  scales_1.4.0       httr2_1.2.2       
     ## [21] textshaping_1.0.5  jquerylib_0.1.4    cli_3.6.6          rlang_1.2.0       
-    ## [25] gitcreds_0.1.2     splines_4.5.3      withr_3.0.2        cachem_1.1.0      
-    ## [29] yaml_2.3.12        tools_4.5.3        parallel_4.5.3     memoise_2.0.1     
-    ## [33] dplyr_1.2.1        curl_7.0.0         vctrs_0.7.3        R6_2.6.1          
-    ## [37] lubridate_1.9.5    matrixStats_1.5.0  lifecycle_1.0.5    fs_2.0.1          
+    ## [25] gitcreds_0.1.2     splines_4.6.0      withr_3.0.2        cachem_1.1.0      
+    ## [29] yaml_2.3.12        tools_4.6.0        parallel_4.6.0     memoise_2.0.1     
+    ## [33] dplyr_1.2.1        curl_7.1.0         vctrs_0.7.3        R6_2.6.1          
+    ## [37] lubridate_1.9.5    matrixStats_1.5.0  lifecycle_1.0.5    fs_2.1.0          
     ## [41] ragg_1.5.2         irlba_2.3.7        pkgconfig_2.0.3    desc_1.4.3        
     ## [45] pkgdown_2.2.0      pillar_1.11.1      bslib_0.10.0       gtable_0.3.6      
-    ## [49] glue_1.8.0         gh_1.5.0           Rcpp_1.1.1-1       fields_17.1       
+    ## [49] glue_1.8.1         gh_1.5.0           Rcpp_1.1.1-1.1     fields_17.3       
     ## [53] systemfonts_1.3.2  xfun_0.57          tibble_3.3.1       tidyselect_1.2.1  
-    ## [57] knitr_1.51         farver_2.1.2       nlme_3.1-168       htmltools_0.5.9   
+    ## [57] knitr_1.51         farver_2.1.2       nlme_3.1-169       htmltools_0.5.9   
     ## [61] labeling_0.4.3     rmarkdown_2.31     piggyback_0.1.5    dotCall64_1.2     
-    ## [65] compiler_4.5.3     S7_0.2.1-1
+    ## [65] compiler_4.6.0     S7_0.2.2

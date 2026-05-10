@@ -15,6 +15,7 @@ same developmental trajectory cluster spatially.
 ## Load packages
 
 ``` r
+
 library(CoPro)
 library(ggplot2)
 ```
@@ -22,6 +23,7 @@ library(ggplot2)
 ## Download and load data
 
 ``` r
+
 data_path <- copro_download_data("organoid")
 ```
 
@@ -30,6 +32,7 @@ data_path <- copro_download_data("organoid")
     ## Downloaded to: /home/runner/.cache/R/CoPro/copro_organoid.rds
 
 ``` r
+
 dat <- readRDS(data_path)
 
 cat("Cells:", nrow(dat$normalizedData), "\n")
@@ -38,6 +41,7 @@ cat("Cells:", nrow(dat$normalizedData), "\n")
     ## Cells: 9140
 
 ``` r
+
 cat("Genes:", ncol(dat$normalizedData), "\n")
 ```
 
@@ -54,6 +58,7 @@ The dataset contains:
 ## Visualize tissue layout
 
 ``` r
+
 plot_df <- data.frame(
   x = dat$locationData$x,
   y = dat$locationData$y
@@ -72,6 +77,7 @@ ggplot(plot_df, aes(x = x, y = y)) +
 ## Create CoPro object
 
 ``` r
+
 obj <- newCoProSingle(
   normalizedData = dat$normalizedData,
   locationData = dat$locationData,
@@ -85,6 +91,7 @@ obj <- subsetData(obj, cellTypesOfInterest = "Epithelial")
 ## Run the CoPro pipeline
 
 ``` r
+
 # PCA
 obj <- computePCA(obj, nPCA = 30, center = TRUE, scale. = TRUE)
 ```
@@ -92,6 +99,7 @@ obj <- computePCA(obj, nPCA = 30, center = TRUE, scale. = TRUE)
     ## Input is dense (matrixarray), performing irlba pca...
 
 ``` r
+
 # Spatial distance (no normalization for this dataset)
 obj <- computeDistance(obj, distType = "Euclidean2D",
                        normalizeDistance = FALSE)
@@ -101,6 +109,7 @@ obj <- computeDistance(obj, distType = "Euclidean2D",
     ##  0.0412587  2.8279594  4.4908040  6.1964445 12.1367594
 
 ``` r
+
 # Test multiple sigma values
 sigma_choice <- c(0.01, 0.02, 0.05, 0.1, 0.15, 0.2)
 obj <- computeKernelMatrix(obj, sigmaValues = sigma_choice,
@@ -129,56 +138,62 @@ obj <- computeKernelMatrix(obj, sigmaValues = sigma_choice,
     ## removing 1 sigma values
 
 ``` r
+
 # Sparse kernel CCA
 obj <- runSkrCCA(obj, scalePCs = TRUE, maxIter = 500, nCC = 4)
 ```
 
-    ## Running skrCCA for sigma = 0.02
+    ## Running skrCCA [1/5] for sigma = 0.02 ...
 
     ## [1] "Convergence reached at 18 iterations (Max diff = 6.102e-06 )"
     ## [1] "Convergence reached at 0 iterations (Max diff = 4.163e-16 )"
     ## [1] "Convergence reached at 0 iterations (Max diff = 2.220e-16 )"
     ## [1] "Convergence reached at 0 iterations (Max diff = 4.441e-16 )"
 
-    ## Running skrCCA for sigma = 0.05
+    ## Running skrCCA [2/5] for sigma = 0.05 ...
 
     ## [1] "Convergence reached at 19 iterations (Max diff = 9.844e-06 )"
     ## [1] "Convergence reached at 0 iterations (Max diff = 2.498e-16 )"
     ## [1] "Convergence reached at 0 iterations (Max diff = 2.776e-16 )"
     ## [1] "Convergence reached at 0 iterations (Max diff = 4.441e-16 )"
 
-    ## Running skrCCA for sigma = 0.1
+    ## Running skrCCA [3/5] for sigma = 0.1 ...
 
     ## [1] "Convergence reached at 20 iterations (Max diff = 8.907e-06 )"
     ## [1] "Convergence reached at 0 iterations (Max diff = 3.747e-16 )"
     ## [1] "Convergence reached at 0 iterations (Max diff = 4.580e-16 )"
     ## [1] "Convergence reached at 0 iterations (Max diff = 5.412e-16 )"
 
-    ## Running skrCCA for sigma = 0.15
+    ## Running skrCCA [4/5] for sigma = 0.15 ...
 
     ## [1] "Convergence reached at 18 iterations (Max diff = 8.992e-06 )"
     ## [1] "Convergence reached at 0 iterations (Max diff = 2.220e-16 )"
     ## [1] "Convergence reached at 0 iterations (Max diff = 4.025e-16 )"
     ## [1] "Convergence reached at 0 iterations (Max diff = 1.665e-16 )"
 
-    ## Running skrCCA for sigma = 0.2
+    ## Running skrCCA [5/5] for sigma = 0.2 ...
 
     ## [1] "Convergence reached at 19 iterations (Max diff = 7.082e-06 )"
     ## [1] "Convergence reached at 0 iterations (Max diff = 1.943e-16 )"
     ## [1] "Convergence reached at 0 iterations (Max diff = 2.220e-16 )"
     ## [1] "Convergence reached at 0 iterations (Max diff = 1.388e-16 )"
 
+    ## skrCCA finished 5 sigma value(s) in 6.6 s.
+
     ## Optimization succeeded for 5 sigma value(s): sigma_0.02, sigma_0.05, sigma_0.1, sigma_0.15, sigma_0.2
 
 ``` r
+
 # Normalized correlation and scores
 obj <- computeNormalizedCorrelation(obj, tol = 1e-3)
 ```
 
-    ## Calculating spectral norms,  depending on the data size, this may take a while. 
-    ## Finished calculating spectral norms
+    ## Calculating spectral norms, this may take a while.
+
+    ## Finished calculating spectral norms.
 
 ``` r
+
 obj <- computeGeneAndCellScores(obj)
 ```
 
@@ -189,6 +204,7 @@ correlation. We visualize the normalized correlation across all sigma
 values and canonical components:
 
 ``` r
+
 ncorr <- getNormCorr(obj)
 
 ggplot(ncorr, aes(x = sigmaValues, y = normalizedCorrelation)) +
@@ -204,6 +220,7 @@ ggplot(ncorr, aes(x = sigmaValues, y = normalizedCorrelation)) +
 ![](organoid_one_type_files/figure-html/plot-ncorr-1.png)
 
 ``` r
+
 # Use the automatically selected sigma
 sigma_opt <- obj@sigmaValueChoice
 cat("Selected sigma:", sigma_opt, "\n")
@@ -219,6 +236,7 @@ should have similar scores. The kernel-smoothed scores (K \* scores) vs
 raw cell scores should show a positive correlation:
 
 ``` r
+
 df_corr <- getCorrOneType(obj,
   sigmaValueChoice = sigma_opt,
   cellTypeA = "Epithelial",
@@ -241,6 +259,7 @@ ggplot(df_corr) +
 ### Continuous scores
 
 ``` r
+
 cs <- getCellScoresInSitu(obj, sigmaValueChoice = sigma_opt)
 
 # Clamp color scale for contrast
@@ -268,6 +287,7 @@ Binarizing at the median highlights the two spatial groups—high vs low
 scoring cells, revealing the organoid’s spatial compartments:
 
 ``` r
+
 cs$group <- ifelse(cs$cellScores > median(cs$cellScores), "High", "Low")
 
 ggplot(cs) +
@@ -293,6 +313,7 @@ Gene scores reflect how strongly each gene contributes to the spatial
 co-progression axis:
 
 ``` r
+
 key <- paste0("geneScores|sigma", sigma_opt, "|Epithelial")
 gs <- obj@geneScores[[key]][, 1]
 
@@ -328,10 +349,11 @@ Intestinal Epithelial Zonation.* bioRxiv 2025.11.14.688372; doi:
 ## Session info
 
 ``` r
+
 sessionInfo()
 ```
 
-    ## R version 4.5.3 (2026-03-11)
+    ## R version 4.6.0 (2026-04-24)
     ## Platform: x86_64-pc-linux-gnu
     ## Running under: Ubuntu 24.04.4 LTS
     ## 
@@ -352,22 +374,22 @@ sessionInfo()
     ## [1] stats     graphics  grDevices utils     datasets  methods   base     
     ## 
     ## other attached packages:
-    ## [1] ggplot2_4.0.2 CoPro_0.6.1  
+    ## [1] ggplot2_4.0.3 CoPro_1.1.0  
     ## 
     ## loaded via a namespace (and not attached):
     ##  [1] rappdirs_0.3.4     sass_0.4.10        generics_0.1.4     lattice_0.22-9    
     ##  [5] digest_0.6.39      magrittr_2.0.5     timechange_0.4.0   evaluate_1.0.5    
-    ##  [9] grid_4.5.3         RColorBrewer_1.1-3 fastmap_1.2.0      maps_3.4.3        
-    ## [13] jsonlite_2.0.0     Matrix_1.7-4       httr_1.4.8         spam_2.11-3       
+    ##  [9] grid_4.6.0         RColorBrewer_1.1-3 fastmap_1.2.0      maps_3.4.3        
+    ## [13] jsonlite_2.0.0     Matrix_1.7-5       httr_1.4.8         spam_2.11-3       
     ## [17] viridisLite_0.4.3  scales_1.4.0       httr2_1.2.2        textshaping_1.0.5 
     ## [21] jquerylib_0.1.4    cli_3.6.6          rlang_1.2.0        gitcreds_0.1.2    
-    ## [25] withr_3.0.2        cachem_1.1.0       yaml_2.3.12        tools_4.5.3       
-    ## [29] parallel_4.5.3     memoise_2.0.1      dplyr_1.2.1        curl_7.0.0        
+    ## [25] withr_3.0.2        cachem_1.1.0       yaml_2.3.12        tools_4.6.0       
+    ## [29] parallel_4.6.0     memoise_2.0.1      dplyr_1.2.1        curl_7.1.0        
     ## [33] vctrs_0.7.3        R6_2.6.1           lubridate_1.9.5    matrixStats_1.5.0 
-    ## [37] lifecycle_1.0.5    fs_2.0.1           ragg_1.5.2         irlba_2.3.7       
+    ## [37] lifecycle_1.0.5    fs_2.1.0           ragg_1.5.2         irlba_2.3.7       
     ## [41] pkgconfig_2.0.3    desc_1.4.3         pkgdown_2.2.0      pillar_1.11.1     
-    ## [45] bslib_0.10.0       gtable_0.3.6       glue_1.8.0         gh_1.5.0          
-    ## [49] Rcpp_1.1.1-1       fields_17.1        systemfonts_1.3.2  xfun_0.57         
+    ## [45] bslib_0.10.0       gtable_0.3.6       glue_1.8.1         gh_1.5.0          
+    ## [49] Rcpp_1.1.1-1.1     fields_17.3        systemfonts_1.3.2  xfun_0.57         
     ## [53] tibble_3.3.1       tidyselect_1.2.1   knitr_1.51         farver_2.1.2      
     ## [57] htmltools_0.5.9    labeling_0.4.3     rmarkdown_2.31     piggyback_0.1.5   
-    ## [61] dotCall64_1.2      compiler_4.5.3     S7_0.2.1-1
+    ## [61] dotCall64_1.2      compiler_4.6.0     S7_0.2.2

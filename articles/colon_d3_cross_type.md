@@ -16,6 +16,7 @@ that the unsupervised axes recover known tissue structure.
 ## Load packages
 
 ``` r
+
 library(CoPro)
 library(ggplot2)
 ```
@@ -23,6 +24,7 @@ library(ggplot2)
 ## Download and load data
 
 ``` r
+
 data_path <- copro_download_data("colon_d3")
 ```
 
@@ -31,6 +33,7 @@ data_path <- copro_download_data("colon_d3")
     ## Downloaded to: /home/runner/.cache/R/CoPro/copro_colon_d3.rds
 
 ``` r
+
 dat <- readRDS(data_path)
 
 str(dat[c("normalizedData", "locationData", "cellTypes")], max.level = 1)
@@ -45,6 +48,7 @@ str(dat[c("normalizedData", "locationData", "cellTypes")], max.level = 1)
 ## Visualize the tissue
 
 ``` r
+
 plot_df <- data.frame(
   x = dat$locationData$x,
   y = dat$locationData$y,
@@ -72,6 +76,7 @@ represents an inflammation-associated microenvironment distinct from
 MU1–3 (crypt-associated neighborhoods):
 
 ``` r
+
 mu_df <- data.frame(
   x = dat$locationData$x,
   y = dat$locationData$y,
@@ -100,6 +105,7 @@ ggplot(mu_df, aes(x = x, y = y, color = MU_grouped)) +
 ## Create CoPro object
 
 ``` r
+
 obj <- newCoProSingle(
   normalizedData = dat$normalizedData,
   locationData = dat$locationData,
@@ -114,6 +120,7 @@ obj <- subsetData(obj, cellTypesOfInterest = cell_types)
 ## Run the CoPro pipeline
 
 ``` r
+
 # PCA
 obj <- computePCA(obj, nPCA = 40, center = TRUE, scale. = TRUE)
 ```
@@ -123,20 +130,24 @@ obj <- computePCA(obj, nPCA = 40, center = TRUE, scale. = TRUE)
     ## Input is dense (matrixarray), performing irlba pca...
 
 ``` r
+
 # Distance and kernel
 obj <- computeDistance(obj, distType = "Euclidean2D")
 ```
 
-    ## normalizeDistance is set to TRUE, so distance will be normalized, so that 0.01 percentile distance will be scaled to 0.01
+    ## normalizeDistance = TRUE: low-percentile distance will be scaled to 0.01.
+
     ##          0%         25%         50%         75%        100% 
     ##   0.9705014  37.5605433  59.8000973  82.3149151 148.3187211 
     ##         0%        25%        50%        75%       100% 
     ##   1.044265  37.159523  59.872983  82.261799 147.622508 
     ##         0%        25%        50%        75%       100% 
-    ##   1.036319  37.135140  59.598056  82.079873 147.257437 
-    ## The scaling factor for normalizing distance is 0.01030395
+    ##   1.036319  37.135140  59.598056  82.079873 147.257437
+
+    ## Distance normalization scaling factor: 0.010304
 
 ``` r
+
 sigma_choice <- c(0.005, 0.01, 0.02, 0.05, 0.1)
 obj <- computeKernelMatrix(obj, sigmaValues = sigma_choice)
 ```
@@ -149,62 +160,69 @@ obj <- computeKernelMatrix(obj, sigmaValues = sigma_choice)
     ## current sigma value is 0.1
 
 ``` r
+
 # Sparse kernel CCA -- request 4 CCs to capture multiple axes
 obj <- runSkrCCA(obj, scalePCs = TRUE, maxIter = 500, nCC = 4)
 ```
 
-    ## Running skrCCA for sigma = 0.005
+    ## Running skrCCA [1/5] for sigma = 0.005 ...
 
     ## [1] "Convergence reached at 9 iterations (Max diff = 6.837e-06 )"
     ## [1] "Convergence reached at 9 iterations (Max diff = 4.406e-06 )"
     ## [1] "Convergence reached at 35 iterations (Max diff = 8.970e-06 )"
     ## [1] "Convergence reached at 51 iterations (Max diff = 9.957e-06 )"
 
-    ## Running skrCCA for sigma = 0.01
+    ## Running skrCCA [2/5] for sigma = 0.01 ...
 
     ## [1] "Convergence reached at 11 iterations (Max diff = 3.749e-06 )"
     ## [1] "Convergence reached at 6 iterations (Max diff = 3.491e-06 )"
     ## [1] "Convergence reached at 22 iterations (Max diff = 8.516e-06 )"
     ## [1] "Convergence reached at 18 iterations (Max diff = 9.325e-06 )"
 
-    ## Running skrCCA for sigma = 0.02
+    ## Running skrCCA [3/5] for sigma = 0.02 ...
 
     ## [1] "Convergence reached at 11 iterations (Max diff = 3.220e-06 )"
     ## [1] "Convergence reached at 6 iterations (Max diff = 4.958e-06 )"
     ## [1] "Convergence reached at 17 iterations (Max diff = 7.344e-06 )"
     ## [1] "Convergence reached at 7 iterations (Max diff = 9.868e-06 )"
 
-    ## Running skrCCA for sigma = 0.05
+    ## Running skrCCA [4/5] for sigma = 0.05 ...
 
     ## [1] "Convergence reached at 17 iterations (Max diff = 5.965e-06 )"
     ## [1] "Convergence reached at 8 iterations (Max diff = 8.780e-06 )"
     ## [1] "Convergence reached at 6 iterations (Max diff = 6.403e-06 )"
     ## [1] "Convergence reached at 22 iterations (Max diff = 8.899e-06 )"
 
-    ## Running skrCCA for sigma = 0.1
+    ## Running skrCCA [5/5] for sigma = 0.1 ...
 
     ## [1] "Convergence reached at 24 iterations (Max diff = 7.534e-06 )"
     ## [1] "Convergence reached at 12 iterations (Max diff = 7.206e-06 )"
     ## [1] "Convergence reached at 7 iterations (Max diff = 4.527e-06 )"
     ## [1] "Convergence reached at 86 iterations (Max diff = 9.381e-06 )"
 
+    ## skrCCA finished 5 sigma value(s) in 9.0 s.
+
     ## Optimization succeeded for 5 sigma value(s): sigma_0.005, sigma_0.01, sigma_0.02, sigma_0.05, sigma_0.1
 
 ``` r
+
 # Normalized correlation and scores
 obj <- computeNormalizedCorrelation(obj)
 ```
 
-    ## Calculating spectral norms,  depending on the data size, this may take a while. 
-    ## Finished calculating spectral norms
+    ## Calculating spectral norms, this may take a while.
+
+    ## Finished calculating spectral norms.
 
 ``` r
+
 obj <- computeGeneAndCellScores(obj)
 ```
 
 ## Select optimal sigma
 
 ``` r
+
 ncorr <- getNormCorr(obj)
 
 ggplot(ncorr, aes(x = sigmaValues, y = normalizedCorrelation)) +
@@ -227,6 +245,7 @@ Each CC captures a distinct pattern of spatial co-variation:
 ### CC1 cell scores in situ
 
 ``` r
+
 sigma_opt <- 0.01  # adjust based on ncorr plot
 
 cs_cc1 <- getCellScoresInSitu(obj, sigmaValueChoice = sigma_opt,
@@ -246,6 +265,7 @@ ggplot(cs_cc1) +
 ### CC2 cell scores in situ
 
 ``` r
+
 cs_cc2 <- getCellScoresInSitu(obj, sigmaValueChoice = sigma_opt,
                                ccIndex = 2)
 
@@ -272,6 +292,7 @@ by MU label, showing that MU4 (inflammation) occupies a distinct region
 of the CoPro score space:
 
 ``` r
+
 lmeta <- obj@metaDataSub
 lmeta$cc1 <- lmeta[, paste0("cellScore_sigma_", sigma_opt, "_cc_index_1")]
 lmeta$cc2 <- lmeta[, paste0("cellScore_sigma_", sigma_opt, "_cc_index_2")]
@@ -304,6 +325,7 @@ the inflammation/CC2 axis) and **Mki67** (proliferation marker, enriched
 in crypt base/CC1 axis):
 
 ``` r
+
 expr_df <- data.frame(
   x = dat$locationData$x,
   y = dat$locationData$y,
@@ -326,6 +348,7 @@ ggplot(expr_df, aes(x = x, y = y, color = Egr1)) +
 ![](colon_d3_cross_type_files/figure-html/gene-insitu-egr1-1.png)
 
 ``` r
+
 # Mki67 (proliferation marker)
 expr_df <- expr_df[order(expr_df$Mki67), ]
 ggplot(expr_df, aes(x = x, y = y, color = Mki67)) +
@@ -346,6 +369,7 @@ The correlation between cell types shows how strongly their spatial
 programs are coupled:
 
 ``` r
+
 # CC1: Epithelial vs Fibroblast
 df_cc1 <- getCorrTwoTypes(obj,
   sigmaValueChoice = sigma_opt,
@@ -365,6 +389,7 @@ ggplot(df_cc1) +
 ![](colon_d3_cross_type_files/figure-html/cross-corr-1.png)
 
 ``` r
+
 # CC2: Epithelial vs Fibroblast
 df_cc2 <- getCorrTwoTypes(obj,
   sigmaValueChoice = sigma_opt,
@@ -388,6 +413,7 @@ ggplot(df_cc2) +
 Identify which genes drive each co-progression axis:
 
 ``` r
+
 # Compute regression-based gene scores (recommended)
 obj <- computeRegressionGeneScores(obj, sigma = sigma_opt)
 ```
@@ -401,6 +427,7 @@ obj <- computeRegressionGeneScores(obj, sigma = sigma_opt)
 ### Visualize top genes for CC1
 
 ``` r
+
 # Extract regression gene scores for Epithelial CC1
 key <- paste0("geneScores|sigma", sigma_opt, "|Epithelial")
 gs_epi <- obj@geneScoresRegression[[key]]
@@ -429,6 +456,7 @@ ggplot(top_df, aes(x = gene, y = weight, fill = direction)) +
 ### Visualize top genes for CC2
 
 ``` r
+
 # Top 20 genes by absolute weight for CC2
 gs_cc2 <- gs_epi[, 2]
 top_genes_cc2 <- head(sort(abs(gs_cc2), decreasing = TRUE), 20)
@@ -453,10 +481,11 @@ ggplot(top_df_cc2, aes(x = gene, y = weight, fill = direction)) +
 ## Session info
 
 ``` r
+
 sessionInfo()
 ```
 
-    ## R version 4.5.3 (2026-03-11)
+    ## R version 4.6.0 (2026-04-24)
     ## Platform: x86_64-pc-linux-gnu
     ## Running under: Ubuntu 24.04.4 LTS
     ## 
@@ -477,23 +506,23 @@ sessionInfo()
     ## [1] stats     graphics  grDevices utils     datasets  methods   base     
     ## 
     ## other attached packages:
-    ## [1] ggplot2_4.0.2 CoPro_0.6.1  
+    ## [1] ggplot2_4.0.3 CoPro_1.1.0  
     ## 
     ## loaded via a namespace (and not attached):
     ##  [1] rappdirs_0.3.4     sass_0.4.10        generics_0.1.4     lattice_0.22-9    
     ##  [5] digest_0.6.39      magrittr_2.0.5     timechange_0.4.0   evaluate_1.0.5    
-    ##  [9] grid_4.5.3         RColorBrewer_1.1-3 fastmap_1.2.0      maps_3.4.3        
-    ## [13] jsonlite_2.0.0     Matrix_1.7-4       httr_1.4.8         spam_2.11-3       
+    ##  [9] grid_4.6.0         RColorBrewer_1.1-3 fastmap_1.2.0      maps_3.4.3        
+    ## [13] jsonlite_2.0.0     Matrix_1.7-5       httr_1.4.8         spam_2.11-3       
     ## [17] viridisLite_0.4.3  scales_1.4.0       isoband_0.3.0      httr2_1.2.2       
     ## [21] textshaping_1.0.5  jquerylib_0.1.4    cli_3.6.6          rlang_1.2.0       
     ## [25] gitcreds_0.1.2     withr_3.0.2        cachem_1.1.0       yaml_2.3.12       
-    ## [29] tools_4.5.3        parallel_4.5.3     memoise_2.0.1      dplyr_1.2.1       
-    ## [33] curl_7.0.0         vctrs_0.7.3        R6_2.6.1           lubridate_1.9.5   
-    ## [37] matrixStats_1.5.0  lifecycle_1.0.5    fs_2.0.1           MASS_7.3-65       
+    ## [29] tools_4.6.0        parallel_4.6.0     memoise_2.0.1      dplyr_1.2.1       
+    ## [33] curl_7.1.0         vctrs_0.7.3        R6_2.6.1           lubridate_1.9.5   
+    ## [37] matrixStats_1.5.0  lifecycle_1.0.5    fs_2.1.0           MASS_7.3-65       
     ## [41] ragg_1.5.2         irlba_2.3.7        pkgconfig_2.0.3    desc_1.4.3        
     ## [45] pkgdown_2.2.0      pillar_1.11.1      bslib_0.10.0       gtable_0.3.6      
-    ## [49] glue_1.8.0         gh_1.5.0           Rcpp_1.1.1-1       fields_17.1       
+    ## [49] glue_1.8.1         gh_1.5.0           Rcpp_1.1.1-1.1     fields_17.3       
     ## [53] systemfonts_1.3.2  xfun_0.57          tibble_3.3.1       tidyselect_1.2.1  
     ## [57] knitr_1.51         farver_2.1.2       htmltools_0.5.9    labeling_0.4.3    
-    ## [61] rmarkdown_2.31     piggyback_0.1.5    dotCall64_1.2      compiler_4.5.3    
-    ## [65] S7_0.2.1-1
+    ## [61] rmarkdown_2.31     piggyback_0.1.5    dotCall64_1.2      compiler_4.6.0    
+    ## [65] S7_0.2.2

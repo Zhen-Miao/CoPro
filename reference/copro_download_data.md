@@ -8,7 +8,8 @@ releases via the `piggyback` package.
 
 ``` r
 copro_download_data(
-  dataset = c("colon_d3", "colon_d9", "kidney", "organoid", "brain_merfish"),
+  dataset = c("colon_d3", "colon_d3_multi", "colon_d9", "kidney", "organoid",
+    "brain_merfish"),
   destdir = NULL,
   tag = "data-v1",
   overwrite = FALSE
@@ -20,8 +21,8 @@ copro_download_data(
 - dataset:
 
   Character string specifying which dataset to download. One of
-  `"colon_d3"`, `"colon_d9"`, `"kidney"`, `"organoid"`, or
-  `"brain_merfish"`.
+  `"colon_d3"`, `"colon_d3_multi"`, `"colon_d9"`, `"kidney"`,
+  `"organoid"`, or `"brain_merfish"`.
 
 - destdir:
 
@@ -48,8 +49,15 @@ Available datasets:
 
 - `colon_d3`:
 
-  Colon Day 3 organoid data (Epithelial, Fibroblast, Immune).
-  Demonstrates cross-cell-type co-progression with orthogonal CCA axes.
+  Colon Day 3 organoid data (Epithelial, Fibroblast, Immune). Single
+  slide. Demonstrates cross-cell-type co-progression with orthogonal CCA
+  axes.
+
+- `colon_d3_multi`:
+
+  Colon Day 3 organoid data (3 slides). Demonstrates multi-slide joint
+  analysis with `newCoProMulti` and score transfer across biological
+  replicates.
 
 - `colon_d9`:
 

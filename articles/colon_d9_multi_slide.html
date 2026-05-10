@@ -20,7 +20,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">CoPro</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.1.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -40,6 +40,7 @@
     <li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Advanced</h6></li>
     <li><a class="dropdown-item" href="../articles/colon_d3_cross_type.html">Cross-cell-type co-progression with orthogonal axes (Colon Day 3)</a></li>
+    <li><a class="dropdown-item" href="../articles/colon_d3_multi_slide.html">Multi-slide joint analysis (Colon Day 3)</a></li>
     <li><a class="dropdown-item" href="../articles/colon_d9_multi_slide.html">Multi-slide analysis and score transfer (Colon Day 9)</a></li>
     <li><a class="dropdown-item" href="../articles/kidney_guided_gradient.html">Supervised detection of spatial gradients (Kidney)</a></li>
   </ul>
@@ -66,7 +67,7 @@
 
       <h1>Multi-slide analysis and score transfer (Colon Day 9)</h1>
             
-            <h4 data-toc-skip class="date">2026-04-15</h4>
+            <h4 data-toc-skip class="date">2026-05-10</h4>
       
       <small class="dont-index">Source: <a href="https://github.com/Zhen-Miao/CoPro/blob/main/vignettes/colon_d9_multi_slide.Rmd" class="external-link"><code>vignettes/colon_d9_multi_slide.Rmd</code></a></small>
       <div class="d-none name"><code>colon_d9_multi_slide.Rmd</code></div>
@@ -225,15 +226,15 @@ slides.</p>
 <span><span class="co">## Input is dense (matrixarray), performing irlba pca...</span></span></code></pre>
 <div class="sourceCode" id="cb16"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">ref_obj</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/computeDistance.html">computeDistance</a></span><span class="op">(</span><span class="va">ref_obj</span>, distType <span class="op">=</span> <span class="st">"Euclidean2D"</span><span class="op">)</span></span></code></pre></div>
-<pre><code><span><span class="co">## normalizeDistance is set to TRUE, so distance will be normalized, so that 0.01 percentile distance will be scaled to 0.01</span></span>
-<span><span class="co">##         0%        25%        50%        75%       100% </span></span>
+<pre><code><span><span class="co">## normalizeDistance = TRUE: low-percentile distance will be scaled to 0.01.</span></span></code></pre>
+<pre><code><span><span class="co">##         0%        25%        50%        75%       100% </span></span>
 <span><span class="co">##   1.559086  54.812663  95.648432 126.009495 191.917943 </span></span>
 <span><span class="co">##         0%        25%        50%        75%       100% </span></span>
 <span><span class="co">##   1.723399  61.128716 100.304344 127.403172 191.878277 </span></span>
 <span><span class="co">##         0%        25%        50%        75%       100% </span></span>
-<span><span class="co">##   1.033183  59.470179 102.405454 133.908593 194.179085 </span></span>
-<span><span class="co">## The scaling factor for normalizing distance is 0.009678831</span></span></code></pre>
-<div class="sourceCode" id="cb18"><pre class="downlit sourceCode r">
+<span><span class="co">##   1.033183  59.470179 102.405454 133.908593 194.179085</span></span></code></pre>
+<pre><code><span><span class="co">## Distance normalization scaling factor: 0.00967883</span></span></code></pre>
+<div class="sourceCode" id="cb20"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">sigma_choice</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.005</span>, <span class="fl">0.01</span>, <span class="fl">0.02</span>, <span class="fl">0.05</span>, <span class="fl">0.1</span><span class="op">)</span></span>
 <span><span class="va">ref_obj</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/computeKernelMatrix.html">computeKernelMatrix</a></span><span class="op">(</span><span class="va">ref_obj</span>, sigmaValues <span class="op">=</span> <span class="va">sigma_choice</span><span class="op">)</span></span></code></pre></div>
 <pre><code><span><span class="co">## Computing pairwise kernel matrix for 3 cell types</span></span>
@@ -242,29 +243,30 @@ slides.</p>
 <span><span class="co">## current sigma value is 0.02 </span></span>
 <span><span class="co">## current sigma value is 0.05 </span></span>
 <span><span class="co">## current sigma value is 0.1</span></span></code></pre>
-<div class="sourceCode" id="cb20"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb22"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">ref_obj</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/runSkrCCA.html">runSkrCCA</a></span><span class="op">(</span><span class="va">ref_obj</span>, scalePCs <span class="op">=</span> <span class="cn">TRUE</span>, maxIter <span class="op">=</span> <span class="fl">500</span>, nCC <span class="op">=</span> <span class="fl">2</span><span class="op">)</span></span></code></pre></div>
-<pre><code><span><span class="co">## Running skrCCA for sigma = 0.005</span></span></code></pre>
+<pre><code><span><span class="co">## Running skrCCA [1/5] for sigma = 0.005 ...</span></span></code></pre>
 <pre><code><span><span class="co">## [1] "Convergence reached at 10 iterations (Max diff = 8.855e-06 )"</span></span>
 <span><span class="co">## [1] "Convergence reached at 40 iterations (Max diff = 8.130e-06 )"</span></span></code></pre>
-<pre><code><span><span class="co">## Running skrCCA for sigma = 0.01</span></span></code></pre>
+<pre><code><span><span class="co">## Running skrCCA [2/5] for sigma = 0.01 ...</span></span></code></pre>
 <pre><code><span><span class="co">## [1] "Convergence reached at 10 iterations (Max diff = 7.128e-06 )"</span></span>
 <span><span class="co">## [1] "Convergence reached at 9 iterations (Max diff = 3.697e-06 )"</span></span></code></pre>
-<pre><code><span><span class="co">## Running skrCCA for sigma = 0.02</span></span></code></pre>
+<pre><code><span><span class="co">## Running skrCCA [3/5] for sigma = 0.02 ...</span></span></code></pre>
 <pre><code><span><span class="co">## [1] "Convergence reached at 9 iterations (Max diff = 6.981e-06 )"</span></span>
 <span><span class="co">## [1] "Convergence reached at 8 iterations (Max diff = 5.635e-06 )"</span></span></code></pre>
-<pre><code><span><span class="co">## Running skrCCA for sigma = 0.05</span></span></code></pre>
+<pre><code><span><span class="co">## Running skrCCA [4/5] for sigma = 0.05 ...</span></span></code></pre>
 <pre><code><span><span class="co">## [1] "Convergence reached at 8 iterations (Max diff = 4.572e-06 )"</span></span>
 <span><span class="co">## [1] "Convergence reached at 9 iterations (Max diff = 2.760e-06 )"</span></span></code></pre>
-<pre><code><span><span class="co">## Running skrCCA for sigma = 0.1</span></span></code></pre>
+<pre><code><span><span class="co">## Running skrCCA [5/5] for sigma = 0.1 ...</span></span></code></pre>
 <pre><code><span><span class="co">## [1] "Convergence reached at 6 iterations (Max diff = 5.352e-06 )"</span></span>
 <span><span class="co">## [1] "Convergence reached at 7 iterations (Max diff = 2.794e-06 )"</span></span></code></pre>
+<pre><code><span><span class="co">## skrCCA finished 5 sigma value(s) in 5.8 s.</span></span></code></pre>
 <pre><code><span><span class="co">## Optimization succeeded for 5 sigma value(s): sigma_0.005, sigma_0.01, sigma_0.02, sigma_0.05, sigma_0.1</span></span></code></pre>
-<div class="sourceCode" id="cb32"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb35"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">ref_obj</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/computeNormalizedCorrelation.html">computeNormalizedCorrelation</a></span><span class="op">(</span><span class="va">ref_obj</span><span class="op">)</span></span></code></pre></div>
-<pre><code><span><span class="co">## Calculating spectral norms,  depending on the data size, this may take a while. </span></span>
-<span><span class="co">## Finished calculating spectral norms</span></span></code></pre>
-<div class="sourceCode" id="cb34"><pre class="downlit sourceCode r">
+<pre><code><span><span class="co">## Calculating spectral norms, this may take a while.</span></span></code></pre>
+<pre><code><span><span class="co">## Finished calculating spectral norms.</span></span></code></pre>
+<div class="sourceCode" id="cb38"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">ref_obj</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/computeGeneAndCellScores.html">computeGeneAndCellScores</a></span><span class="op">(</span><span class="va">ref_obj</span><span class="op">)</span></span>
 <span><span class="va">ref_obj</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/computeRegressionGeneScores.html">computeRegressionGeneScores</a></span><span class="op">(</span><span class="va">ref_obj</span><span class="op">)</span></span></code></pre></div>
 <pre><code><span><span class="co">## Computed regression gene scores for sigma=0.005, cellType='Epithelial'</span></span></code></pre>
@@ -285,7 +287,7 @@ slides.</p>
 <div class="section level3">
 <h3 id="reference-slide-results">Reference slide results<a class="anchor" aria-label="anchor" href="#reference-slide-results"></a>
 </h3>
-<div class="sourceCode" id="cb50"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb54"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">sigma_opt</span> <span class="op">&lt;-</span> <span class="fl">0.01</span>  <span class="co"># adjust based on normalized correlation</span></span>
 <span></span>
 <span><span class="va">cs_ref</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/getCellScoresInSitu.html">getCellScoresInSitu</a></span><span class="op">(</span><span class="va">ref_obj</span>, sigmaValueChoice <span class="op">=</span> <span class="va">sigma_opt</span><span class="op">)</span></span>
@@ -304,7 +306,7 @@ slides.</p>
 </h3>
 <p>The CoPro disease axis should correlate with MU labels, with
 <strong>MU8</strong> cells showing the highest scores:</p>
-<div class="sourceCode" id="cb51"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb55"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">ref_meta</span> <span class="op">&lt;-</span> <span class="va">ref_obj</span><span class="op">@</span><span class="va">metaDataSub</span></span>
 <span><span class="va">ref_meta</span><span class="op">$</span><span class="va">cell_score</span> <span class="op">&lt;-</span> <span class="va">ref_meta</span><span class="op">[</span>, <span class="fu"><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste0</a></span><span class="op">(</span><span class="st">"cellScore_sigma_"</span>, <span class="va">sigma_opt</span>,</span>
 <span>                                          <span class="st">"_cc_index_1"</span><span class="op">)</span><span class="op">]</span></span>
@@ -332,7 +334,7 @@ slides.</p>
 <p>As disease severity increases, the cell type composition
 shifts—immune cell proportion increases while epithelial proportion
 decreases:</p>
-<div class="sourceCode" id="cb52"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb56"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">ref_meta_all</span> <span class="op">&lt;-</span> <span class="va">ref_obj</span><span class="op">@</span><span class="va">metaDataSub</span></span>
 <span><span class="va">ref_meta_all</span><span class="op">$</span><span class="va">cell_score</span> <span class="op">&lt;-</span> <span class="va">ref_meta_all</span><span class="op">[</span>, <span class="fu"><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste0</a></span><span class="op">(</span><span class="st">"cellScore_sigma_"</span>,</span>
 <span>                                                   <span class="va">sigma_opt</span>, <span class="st">"_cc_index_1"</span><span class="op">)</span><span class="op">]</span></span>
@@ -372,7 +374,7 @@ decreases:</p>
 <div class="section level3">
 <h3 id="top-genes-associated-with-the-disease-axis">Top genes associated with the disease axis<a class="anchor" aria-label="anchor" href="#top-genes-associated-with-the-disease-axis"></a>
 </h3>
-<div class="sourceCode" id="cb54"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb58"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Immune genes on the disease axis</span></span>
 <span><span class="va">key_imm</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste0</a></span><span class="op">(</span><span class="st">"geneScores|sigma"</span>, <span class="va">sigma_opt</span>, <span class="st">"|Immune"</span><span class="op">)</span></span>
 <span><span class="va">gs_imm</span> <span class="op">&lt;-</span> <span class="va">ref_obj</span><span class="op">@</span><span class="va">geneScoresRegression</span><span class="op">[[</span><span class="va">key_imm</span><span class="op">]</span><span class="op">]</span></span>
@@ -399,7 +401,7 @@ decreases:</p>
 <div class="section level2">
 <h2 id="step-2-create-target-copro-objects">Step 2: Create target CoPro objects<a class="anchor" aria-label="anchor" href="#step-2-create-target-copro-objects"></a>
 </h2>
-<div class="sourceCode" id="cb55"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb59"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Target slide 1</span></span>
 <span><span class="va">tar1_obj</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/newCoProSingle.html">newCoProSingle</a></span><span class="op">(</span></span>
 <span>  normalizedData <span class="op">=</span> <span class="va">dat</span><span class="op">$</span><span class="va">normalizedData</span><span class="op">[</span><span class="va">tar1_idx</span>, <span class="op">]</span>,</span>
@@ -412,17 +414,17 @@ decreases:</p>
 <pre><code><span><span class="co">## Input is dense (matrixarray), performing irlba pca...</span></span>
 <span><span class="co">## Input is dense (matrixarray), performing irlba pca...</span></span>
 <span><span class="co">## Input is dense (matrixarray), performing irlba pca...</span></span></code></pre>
-<div class="sourceCode" id="cb57"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb61"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">tar1_obj</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/computeDistance.html">computeDistance</a></span><span class="op">(</span><span class="va">tar1_obj</span>, distType <span class="op">=</span> <span class="st">"Euclidean2D"</span><span class="op">)</span></span></code></pre></div>
-<pre><code><span><span class="co">## normalizeDistance is set to TRUE, so distance will be normalized, so that 0.01 percentile distance will be scaled to 0.01</span></span>
-<span><span class="co">##         0%        25%        50%        75%       100% </span></span>
+<pre><code><span><span class="co">## normalizeDistance = TRUE: low-percentile distance will be scaled to 0.01.</span></span></code></pre>
+<pre><code><span><span class="co">##         0%        25%        50%        75%       100% </span></span>
 <span><span class="co">##   1.547908  40.150567  71.639135  99.196604 145.064234 </span></span>
 <span><span class="co">##         0%        25%        50%        75%       100% </span></span>
 <span><span class="co">##   1.839067  46.588659  74.794733 100.618483 144.602279 </span></span>
 <span><span class="co">##         0%        25%        50%        75%       100% </span></span>
-<span><span class="co">##   1.077755  44.939240  73.568954  97.010170 146.985239 </span></span>
-<span><span class="co">## The scaling factor for normalizing distance is 0.009278545</span></span></code></pre>
-<div class="sourceCode" id="cb59"><pre class="downlit sourceCode r">
+<span><span class="co">##   1.077755  44.939240  73.568954  97.010170 146.985239</span></span></code></pre>
+<pre><code><span><span class="co">## Distance normalization scaling factor: 0.00927854</span></span></code></pre>
+<div class="sourceCode" id="cb65"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">tar1_obj</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/computeKernelMatrix.html">computeKernelMatrix</a></span><span class="op">(</span><span class="va">tar1_obj</span>, sigmaValues <span class="op">=</span> <span class="va">sigma_choice</span><span class="op">)</span></span></code></pre></div>
 <pre><code><span><span class="co">## Computing pairwise kernel matrix for 3 cell types</span></span>
 <span><span class="co">## current sigma value is 0.005 </span></span>
@@ -430,7 +432,7 @@ decreases:</p>
 <span><span class="co">## current sigma value is 0.02 </span></span>
 <span><span class="co">## current sigma value is 0.05 </span></span>
 <span><span class="co">## current sigma value is 0.1</span></span></code></pre>
-<div class="sourceCode" id="cb61"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb67"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Target slide 2</span></span>
 <span><span class="va">tar2_obj</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/newCoProSingle.html">newCoProSingle</a></span><span class="op">(</span></span>
 <span>  normalizedData <span class="op">=</span> <span class="va">dat</span><span class="op">$</span><span class="va">normalizedData</span><span class="op">[</span><span class="va">tar2_idx</span>, <span class="op">]</span>,</span>
@@ -443,17 +445,17 @@ decreases:</p>
 <pre><code><span><span class="co">## Input is dense (matrixarray), performing irlba pca...</span></span>
 <span><span class="co">## Input is dense (matrixarray), performing irlba pca...</span></span>
 <span><span class="co">## Input is dense (matrixarray), performing irlba pca...</span></span></code></pre>
-<div class="sourceCode" id="cb63"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb69"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">tar2_obj</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/computeDistance.html">computeDistance</a></span><span class="op">(</span><span class="va">tar2_obj</span>, distType <span class="op">=</span> <span class="st">"Euclidean2D"</span><span class="op">)</span></span></code></pre></div>
-<pre><code><span><span class="co">## normalizeDistance is set to TRUE, so distance will be normalized, so that 0.01 percentile distance will be scaled to 0.01</span></span>
-<span><span class="co">##        0%       25%       50%       75%      100% </span></span>
+<pre><code><span><span class="co">## normalizeDistance = TRUE: low-percentile distance will be scaled to 0.01.</span></span></code></pre>
+<pre><code><span><span class="co">##        0%       25%       50%       75%      100% </span></span>
 <span><span class="co">##   1.65134  41.19449  71.21469  94.13571 147.60112 </span></span>
 <span><span class="co">##         0%        25%        50%        75%       100% </span></span>
 <span><span class="co">##   2.021933  50.297768  74.971212  97.972906 148.666374 </span></span>
 <span><span class="co">##         0%        25%        50%        75%       100% </span></span>
-<span><span class="co">##   1.162089  43.393514  70.036161  92.718582 149.327113 </span></span>
-<span><span class="co">## The scaling factor for normalizing distance is 0.008605196</span></span></code></pre>
-<div class="sourceCode" id="cb65"><pre class="downlit sourceCode r">
+<span><span class="co">##   1.162089  43.393514  70.036161  92.718582 149.327113</span></span></code></pre>
+<pre><code><span><span class="co">## Distance normalization scaling factor: 0.0086052</span></span></code></pre>
+<div class="sourceCode" id="cb73"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">tar2_obj</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/computeKernelMatrix.html">computeKernelMatrix</a></span><span class="op">(</span><span class="va">tar2_obj</span>, sigmaValues <span class="op">=</span> <span class="va">sigma_choice</span><span class="op">)</span></span></code></pre></div>
 <pre><code><span><span class="co">## Computing pairwise kernel matrix for 3 cell types</span></span>
 <span><span class="co">## current sigma value is 0.005 </span></span>
@@ -467,7 +469,7 @@ decreases:</p>
 </h2>
 <p>Transfer the learned gene weights from the reference to each target
 slide:</p>
-<div class="sourceCode" id="cb67"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb75"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Transfer to target 1</span></span>
 <span><span class="va">tar1_scores</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/getTransferCellScores.html">getTransferCellScores</a></span><span class="op">(</span></span>
 <span>  ref_obj <span class="op">=</span> <span class="va">ref_obj</span>,</span>
@@ -515,7 +517,7 @@ slide:</p>
 <pre><code><span><span class="co">## Processing feature 940/940</span></span></code></pre>
 <pre><code><span><span class="co">## retaining 940 genes for CC_1 with threshold 0 </span></span>
 <span><span class="co">## retaining 940 genes for CC_2 with threshold 0</span></span></code></pre>
-<div class="sourceCode" id="cb102"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb110"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Transfer to target 2</span></span>
 <span><span class="va">tar2_scores</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/getTransferCellScores.html">getTransferCellScores</a></span><span class="op">(</span></span>
 <span>  ref_obj <span class="op">=</span> <span class="va">ref_obj</span>,</span>
@@ -567,7 +569,7 @@ slide:</p>
 <div class="section level2">
 <h2 id="step-4-visualize-transferred-scores">Step 4: Visualize transferred scores<a class="anchor" aria-label="anchor" href="#step-4-visualize-transferred-scores"></a>
 </h2>
-<div class="sourceCode" id="cb137"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb145"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Build data frames for target slides from transferred scores</span></span>
 <span><span class="va">build_transfer_df</span> <span class="op">&lt;-</span> <span class="kw">function</span><span class="op">(</span><span class="va">tar_dat</span>, <span class="va">tar_scores</span>, <span class="va">slide_name</span>, <span class="va">sigma</span><span class="op">)</span> <span class="op">{</span></span>
 <span>  <span class="va">rows</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span><span class="op">)</span></span>
@@ -625,7 +627,7 @@ slide:</p>
 <p>Check whether the transferred disease scores also separate MU labels.
 Here we show the reference slide MU boxplot (already computed above)
 alongside the MU labels in spatial context for a target slide:</p>
-<div class="sourceCode" id="cb138"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb146"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Show MU labels spatially on target slide 1</span></span>
 <span><span class="va">tar1_mu</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span></span>
 <span>  x <span class="op">=</span> <span class="va">dat</span><span class="op">$</span><span class="va">locationData</span><span class="op">$</span><span class="va">x</span><span class="op">[</span><span class="va">tar1_idx</span><span class="op">]</span>,</span>
@@ -654,26 +656,26 @@ alongside the MU labels in spatial context for a target slide:</p>
 <p>Compare the normalized correlation between the reference and
 transferred slides to assess whether the co-progression pattern is
 consistent:</p>
-<div class="sourceCode" id="cb139"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb147"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">tar1_ncorr</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/getTransferNormCorr.html">getTransferNormCorr</a></span><span class="op">(</span></span>
 <span>  tar_obj <span class="op">=</span> <span class="va">tar1_obj</span>,</span>
 <span>  transfer_cell_scores <span class="op">=</span> <span class="va">tar1_scores</span>,</span>
 <span>  sigma_choice <span class="op">=</span> <span class="va">sigma_opt</span></span>
 <span><span class="op">)</span></span></code></pre></div>
-<pre><code><span><span class="co">## Calculating spectral norms,  depending on the data size, this may take a while. </span></span>
-<span><span class="co">## Finished calculating spectral norms</span></span></code></pre>
-<div class="sourceCode" id="cb141"><pre class="downlit sourceCode r">
+<pre><code><span><span class="co">## Calculating spectral norms, this may take a while.</span></span></code></pre>
+<pre><code><span><span class="co">## Finished calculating spectral norms.</span></span></code></pre>
+<div class="sourceCode" id="cb150"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">tar2_ncorr</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/getTransferNormCorr.html">getTransferNormCorr</a></span><span class="op">(</span></span>
 <span>  tar_obj <span class="op">=</span> <span class="va">tar2_obj</span>,</span>
 <span>  transfer_cell_scores <span class="op">=</span> <span class="va">tar2_scores</span>,</span>
 <span>  sigma_choice <span class="op">=</span> <span class="va">sigma_opt</span></span>
 <span><span class="op">)</span></span></code></pre></div>
-<pre><code><span><span class="co">## Calculating spectral norms,  depending on the data size, this may take a while. </span></span>
-<span><span class="co">## Finished calculating spectral norms</span></span></code></pre>
-<div class="sourceCode" id="cb143"><pre class="downlit sourceCode r">
+<pre><code><span><span class="co">## Calculating spectral norms, this may take a while.</span></span>
+<span><span class="co">## Finished calculating spectral norms.</span></span></code></pre>
+<div class="sourceCode" id="cb152"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/cat.html" class="external-link">cat</a></span><span class="op">(</span><span class="st">"Reference norm. corr.:\n"</span><span class="op">)</span></span></code></pre></div>
 <pre><code><span><span class="co">## Reference norm. corr.:</span></span></code></pre>
-<div class="sourceCode" id="cb145"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb154"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">ref_ncorr</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/getNormalizedCorrelation.html">getNormCorr</a></span><span class="op">(</span><span class="va">ref_obj</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/print.html" class="external-link">print</a></span><span class="op">(</span><span class="va">ref_ncorr</span><span class="op">[</span><span class="va">ref_ncorr</span><span class="op">$</span><span class="va">sigmaValues</span> <span class="op">==</span> <span class="va">sigma_opt</span>, <span class="op">]</span><span class="op">)</span></span></code></pre></div>
 <pre><code><span><span class="co">##              sigmaValues  cellType1  cellType2 CC_index normalizedCorrelation</span></span>
@@ -690,11 +692,11 @@ consistent:</p>
 <span><span class="co">## sigma_0.01.4 Epithelial-Fibroblast</span></span>
 <span><span class="co">## sigma_0.01.5     Epithelial-Immune</span></span>
 <span><span class="co">## sigma_0.01.6     Fibroblast-Immune</span></span></code></pre>
-<div class="sourceCode" id="cb147"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb156"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/cat.html" class="external-link">cat</a></span><span class="op">(</span><span class="st">"\nTarget 1 transferred norm. corr.:\n"</span><span class="op">)</span></span></code></pre></div>
 <pre><code><span><span class="co">## </span></span>
 <span><span class="co">## Target 1 transferred norm. corr.:</span></span></code></pre>
-<div class="sourceCode" id="cb149"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb158"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/print.html" class="external-link">print</a></span><span class="op">(</span><span class="va">tar1_ncorr</span><span class="op">)</span></span></code></pre></div>
 <pre><code><span><span class="co">## $sigma_0.01</span></span>
 <span><span class="co">##   sigmaValue  cellType1  cellType2 CC_index normalizedCorrelation</span></span>
@@ -704,11 +706,11 @@ consistent:</p>
 <span><span class="co">## 4       0.01 Epithelial     Immune        2           -0.07005265</span></span>
 <span><span class="co">## 5       0.01 Fibroblast     Immune        1            0.29851289</span></span>
 <span><span class="co">## 6       0.01 Fibroblast     Immune        2            0.10033653</span></span></code></pre>
-<div class="sourceCode" id="cb151"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb160"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/cat.html" class="external-link">cat</a></span><span class="op">(</span><span class="st">"\nTarget 2 transferred norm. corr.:\n"</span><span class="op">)</span></span></code></pre></div>
 <pre><code><span><span class="co">## </span></span>
 <span><span class="co">## Target 2 transferred norm. corr.:</span></span></code></pre>
-<div class="sourceCode" id="cb153"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb162"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/print.html" class="external-link">print</a></span><span class="op">(</span><span class="va">tar2_ncorr</span><span class="op">)</span></span></code></pre></div>
 <pre><code><span><span class="co">## $sigma_0.01</span></span>
 <span><span class="co">##   sigmaValue  cellType1  cellType2 CC_index normalizedCorrelation</span></span>
@@ -727,7 +729,7 @@ independent slides.</p>
 </h2>
 <p>For joint analysis across all slides simultaneously, use
 <code>newCoProMulti</code>:</p>
-<div class="sourceCode" id="cb155"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb164"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">multi_obj</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/newCoProMulti.html">newCoProMulti</a></span><span class="op">(</span></span>
 <span>  normalizedData <span class="op">=</span> <span class="va">dat</span><span class="op">$</span><span class="va">normalizedData</span>,</span>
 <span>  locationData <span class="op">=</span> <span class="va">dat</span><span class="op">$</span><span class="va">locationData</span>,</span>
@@ -748,41 +750,41 @@ independent slides.</p>
 <pre><code><span><span class="co">## Performing PCA for cell type: Immune</span></span></code></pre>
 <pre><code><span><span class="co">## Data centered and/or scaled</span></span></code></pre>
 <pre><code><span><span class="co">## PCA computed for cell type: Immune</span></span></code></pre>
-<div class="sourceCode" id="cb165"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb174"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">multi_obj</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/computeDistance.html">computeDistance</a></span><span class="op">(</span><span class="va">multi_obj</span>, distType <span class="op">=</span> <span class="st">"Euclidean2D"</span><span class="op">)</span></span></code></pre></div>
-<pre><code><span><span class="co">## normalizeDistance is set to TRUE, so distance will be normalized across all slides, so that 0.01 percentile distance will be scaled to 0.01</span></span></code></pre>
+<pre><code><span><span class="co">## normalizeDistance = TRUE: low-percentile distance will be normalized across all slides and scaled to 0.01.</span></span></code></pre>
 <pre><code><span><span class="co">## Computing pairwise distances for slide: 062221_D9_m3_2_slice_3</span></span></code></pre>
-<pre><code><span><span class="co">## Slide: 062221_D9_m3_2_slice_3 , Pair: Epithelial - Fibroblast </span></span>
-<span><span class="co">##        0%       25%       50%       75%      100% </span></span>
-<span><span class="co">##   1.65134  41.19449  71.21469  94.13571 147.60112 </span></span>
-<span><span class="co">## Slide: 062221_D9_m3_2_slice_3 , Pair: Epithelial - Immune </span></span>
-<span><span class="co">##         0%        25%        50%        75%       100% </span></span>
-<span><span class="co">##   2.021933  50.297768  74.971212  97.972906 148.666374 </span></span>
-<span><span class="co">## Slide: 062221_D9_m3_2_slice_3 , Pair: Fibroblast - Immune </span></span>
-<span><span class="co">##         0%        25%        50%        75%       100% </span></span>
+<pre><code><span><span class="co">## Slide: 062221_D9_m3_2_slice_3, Pair: Epithelial - Fibroblast</span></span></code></pre>
+<pre><code><span><span class="co">##        0%       25%       50%       75%      100% </span></span>
+<span><span class="co">##   1.65134  41.19449  71.21469  94.13571 147.60112</span></span></code></pre>
+<pre><code><span><span class="co">## Slide: 062221_D9_m3_2_slice_3, Pair: Epithelial - Immune</span></span></code></pre>
+<pre><code><span><span class="co">##         0%        25%        50%        75%       100% </span></span>
+<span><span class="co">##   2.021933  50.297768  74.971212  97.972906 148.666374</span></span></code></pre>
+<pre><code><span><span class="co">## Slide: 062221_D9_m3_2_slice_3, Pair: Fibroblast - Immune</span></span></code></pre>
+<pre><code><span><span class="co">##         0%        25%        50%        75%       100% </span></span>
 <span><span class="co">##   1.162089  43.393514  70.036161  92.718582 149.327113</span></span></code></pre>
 <pre><code><span><span class="co">## Computing pairwise distances for slide: 062221_D9_m3_2_slice_2</span></span></code></pre>
-<pre><code><span><span class="co">## Slide: 062221_D9_m3_2_slice_2 , Pair: Epithelial - Fibroblast </span></span>
-<span><span class="co">##         0%        25%        50%        75%       100% </span></span>
-<span><span class="co">##   1.547908  40.150567  71.639135  99.196604 145.064234 </span></span>
-<span><span class="co">## Slide: 062221_D9_m3_2_slice_2 , Pair: Epithelial - Immune </span></span>
-<span><span class="co">##         0%        25%        50%        75%       100% </span></span>
-<span><span class="co">##   1.839067  46.588659  74.794733 100.618483 144.602279 </span></span>
-<span><span class="co">## Slide: 062221_D9_m3_2_slice_2 , Pair: Fibroblast - Immune </span></span>
-<span><span class="co">##         0%        25%        50%        75%       100% </span></span>
+<pre><code><span><span class="co">## Slide: 062221_D9_m3_2_slice_2, Pair: Epithelial - Fibroblast</span></span></code></pre>
+<pre><code><span><span class="co">##         0%        25%        50%        75%       100% </span></span>
+<span><span class="co">##   1.547908  40.150567  71.639135  99.196604 145.064234</span></span></code></pre>
+<pre><code><span><span class="co">## Slide: 062221_D9_m3_2_slice_2, Pair: Epithelial - Immune</span></span></code></pre>
+<pre><code><span><span class="co">##         0%        25%        50%        75%       100% </span></span>
+<span><span class="co">##   1.839067  46.588659  74.794733 100.618483 144.602279</span></span></code></pre>
+<pre><code><span><span class="co">## Slide: 062221_D9_m3_2_slice_2, Pair: Fibroblast - Immune</span></span></code></pre>
+<pre><code><span><span class="co">##         0%        25%        50%        75%       100% </span></span>
 <span><span class="co">##   1.077755  44.939240  73.568954  97.010170 146.985239</span></span></code></pre>
 <pre><code><span><span class="co">## Computing pairwise distances for slide: 062221_D9_m3_2_slice_1</span></span></code></pre>
-<pre><code><span><span class="co">## Slide: 062221_D9_m3_2_slice_1 , Pair: Epithelial - Fibroblast </span></span>
-<span><span class="co">##         0%        25%        50%        75%       100% </span></span>
-<span><span class="co">##   1.559086  54.812663  95.648432 126.009495 191.917943 </span></span>
-<span><span class="co">## Slide: 062221_D9_m3_2_slice_1 , Pair: Epithelial - Immune </span></span>
-<span><span class="co">##         0%        25%        50%        75%       100% </span></span>
-<span><span class="co">##   1.723399  61.128716 100.304344 127.403172 191.878277 </span></span>
-<span><span class="co">## Slide: 062221_D9_m3_2_slice_1 , Pair: Fibroblast - Immune </span></span>
-<span><span class="co">##         0%        25%        50%        75%       100% </span></span>
-<span><span class="co">##   1.033183  59.470179 102.405454 133.908593 194.179085 </span></span>
-<span><span class="co">## Global distance scaling factor: 0.009678831</span></span></code></pre>
-<div class="sourceCode" id="cb173"><pre class="downlit sourceCode r">
+<pre><code><span><span class="co">## Slide: 062221_D9_m3_2_slice_1, Pair: Epithelial - Fibroblast</span></span></code></pre>
+<pre><code><span><span class="co">##         0%        25%        50%        75%       100% </span></span>
+<span><span class="co">##   1.559086  54.812663  95.648432 126.009495 191.917943</span></span></code></pre>
+<pre><code><span><span class="co">## Slide: 062221_D9_m3_2_slice_1, Pair: Epithelial - Immune</span></span></code></pre>
+<pre><code><span><span class="co">##         0%        25%        50%        75%       100% </span></span>
+<span><span class="co">##   1.723399  61.128716 100.304344 127.403172 191.878277</span></span></code></pre>
+<pre><code><span><span class="co">## Slide: 062221_D9_m3_2_slice_1, Pair: Fibroblast - Immune</span></span></code></pre>
+<pre><code><span><span class="co">##         0%        25%        50%        75%       100% </span></span>
+<span><span class="co">##   1.033183  59.470179 102.405454 133.908593 194.179085</span></span></code></pre>
+<pre><code><span><span class="co">## Global distance scaling factor: 0.00967883</span></span></code></pre>
+<div class="sourceCode" id="cb198"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">multi_obj</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/computeKernelMatrix.html">computeKernelMatrix</a></span><span class="op">(</span><span class="va">multi_obj</span>, sigmaValues <span class="op">=</span> <span class="va">sigma_choice</span><span class="op">)</span></span></code></pre></div>
 <pre><code><span><span class="co">## Computing pairwise kernel matrix for 3 cell types across 3 slides</span></span>
 <span><span class="co">## current sigma value is 0.005 </span></span>
@@ -790,29 +792,30 @@ independent slides.</p>
 <span><span class="co">## current sigma value is 0.02 </span></span>
 <span><span class="co">## current sigma value is 0.05 </span></span>
 <span><span class="co">## current sigma value is 0.1</span></span></code></pre>
-<div class="sourceCode" id="cb175"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb200"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">multi_obj</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/runSkrCCA.html">runSkrCCA</a></span><span class="op">(</span><span class="va">multi_obj</span>, scalePCs <span class="op">=</span> <span class="cn">TRUE</span>, maxIter <span class="op">=</span> <span class="fl">500</span>, nCC <span class="op">=</span> <span class="fl">2</span><span class="op">)</span></span></code></pre></div>
-<pre><code><span><span class="co">## Running skrCCA for sigma = 0.005</span></span></code></pre>
+<pre><code><span><span class="co">## Running skrCCA [1/5] for sigma = 0.005 ...</span></span></code></pre>
 <pre><code><span><span class="co">## Convergence reached at 8 iterations (Max diff = 6.856e-06 )</span></span></code></pre>
 <pre><code><span><span class="co">## [1] "Convergence reached at 19 iterations (Max diff = 8.112e-06 )"</span></span></code></pre>
-<pre><code><span><span class="co">## Running skrCCA for sigma = 0.01</span></span></code></pre>
+<pre><code><span><span class="co">## Running skrCCA [2/5] for sigma = 0.01 ...</span></span></code></pre>
 <pre><code><span><span class="co">## Convergence reached at 8 iterations (Max diff = 2.045e-06 )</span></span></code></pre>
 <pre><code><span><span class="co">## [1] "Convergence reached at 74 iterations (Max diff = 9.409e-06 )"</span></span></code></pre>
-<pre><code><span><span class="co">## Running skrCCA for sigma = 0.02</span></span></code></pre>
+<pre><code><span><span class="co">## Running skrCCA [3/5] for sigma = 0.02 ...</span></span></code></pre>
 <pre><code><span><span class="co">## Convergence reached at 7 iterations (Max diff = 4.600e-06 )</span></span></code></pre>
 <pre><code><span><span class="co">## [1] "Convergence reached at 33 iterations (Max diff = 7.607e-06 )"</span></span></code></pre>
-<pre><code><span><span class="co">## Running skrCCA for sigma = 0.05</span></span></code></pre>
+<pre><code><span><span class="co">## Running skrCCA [4/5] for sigma = 0.05 ...</span></span></code></pre>
 <pre><code><span><span class="co">## Convergence reached at 7 iterations (Max diff = 7.622e-06 )</span></span></code></pre>
 <pre><code><span><span class="co">## [1] "Convergence reached at 18 iterations (Max diff = 8.816e-06 )"</span></span></code></pre>
-<pre><code><span><span class="co">## Running skrCCA for sigma = 0.1</span></span></code></pre>
+<pre><code><span><span class="co">## Running skrCCA [5/5] for sigma = 0.1 ...</span></span></code></pre>
 <pre><code><span><span class="co">## Convergence reached at 10 iterations (Max diff = 1.994e-06 )</span></span></code></pre>
 <pre><code><span><span class="co">## [1] "Convergence reached at 20 iterations (Max diff = 8.645e-06 )"</span></span></code></pre>
+<pre><code><span><span class="co">## skrCCA finished 5 sigma value(s) in 14.8 s.</span></span></code></pre>
 <pre><code><span><span class="co">## Optimization succeeded for 5 sigma value(s): sigma_0.005, sigma_0.01, sigma_0.02, sigma_0.05, sigma_0.1</span></span></code></pre>
-<div class="sourceCode" id="cb192"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb218"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">multi_obj</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/computeNormalizedCorrelation.html">computeNormalizedCorrelation</a></span><span class="op">(</span><span class="va">multi_obj</span><span class="op">)</span></span></code></pre></div>
 <pre><code><span><span class="co">## Calculating spectral norms (can take time)...</span></span></code></pre>
 <pre><code><span><span class="co">## Finished calculating spectral norms.</span></span></code></pre>
-<div class="sourceCode" id="cb195"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb221"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">multi_obj</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/computeGeneAndCellScores.html">computeGeneAndCellScores</a></span><span class="op">(</span><span class="va">multi_obj</span><span class="op">)</span></span></code></pre></div>
 <p>The multi-slide approach optimizes CCA weights jointly across all
 slides, while the transfer approach trains on one slide and evaluates
@@ -822,9 +825,9 @@ question.</p>
 <div class="section level2">
 <h2 id="session-info">Session info<a class="anchor" aria-label="anchor" href="#session-info"></a>
 </h2>
-<div class="sourceCode" id="cb196"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb222"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/sessionInfo.html" class="external-link">sessionInfo</a></span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
-<pre><code><span><span class="co">## R version 4.5.3 (2026-03-11)</span></span>
+<pre><code><span><span class="co">## R version 4.6.0 (2026-04-24)</span></span>
 <span><span class="co">## Platform: x86_64-pc-linux-gnu</span></span>
 <span><span class="co">## Running under: Ubuntu 24.04.4 LTS</span></span>
 <span><span class="co">## </span></span>
@@ -845,26 +848,26 @@ question.</p>
 <span><span class="co">## [1] stats     graphics  grDevices utils     datasets  methods   base     </span></span>
 <span><span class="co">## </span></span>
 <span><span class="co">## other attached packages:</span></span>
-<span><span class="co">## [1] ggplot2_4.0.2 CoPro_0.6.1  </span></span>
+<span><span class="co">## [1] ggplot2_4.0.3 CoPro_1.1.0  </span></span>
 <span><span class="co">## </span></span>
 <span><span class="co">## loaded via a namespace (and not attached):</span></span>
 <span><span class="co">##  [1] rappdirs_0.3.4     sass_0.4.10        generics_0.1.4     lattice_0.22-9    </span></span>
 <span><span class="co">##  [5] digest_0.6.39      magrittr_2.0.5     timechange_0.4.0   evaluate_1.0.5    </span></span>
-<span><span class="co">##  [9] grid_4.5.3         RColorBrewer_1.1-3 fastmap_1.2.0      maps_3.4.3        </span></span>
-<span><span class="co">## [13] jsonlite_2.0.0     Matrix_1.7-4       mgcv_1.9-4         httr_1.4.8        </span></span>
+<span><span class="co">##  [9] grid_4.6.0         RColorBrewer_1.1-3 fastmap_1.2.0      maps_3.4.3        </span></span>
+<span><span class="co">## [13] jsonlite_2.0.0     Matrix_1.7-5       mgcv_1.9-4         httr_1.4.8        </span></span>
 <span><span class="co">## [17] spam_2.11-3        viridisLite_0.4.3  scales_1.4.0       httr2_1.2.2       </span></span>
 <span><span class="co">## [21] textshaping_1.0.5  jquerylib_0.1.4    cli_3.6.6          rlang_1.2.0       </span></span>
-<span><span class="co">## [25] gitcreds_0.1.2     splines_4.5.3      withr_3.0.2        cachem_1.1.0      </span></span>
-<span><span class="co">## [29] yaml_2.3.12        tools_4.5.3        parallel_4.5.3     memoise_2.0.1     </span></span>
-<span><span class="co">## [33] dplyr_1.2.1        curl_7.0.0         vctrs_0.7.3        R6_2.6.1          </span></span>
-<span><span class="co">## [37] lubridate_1.9.5    matrixStats_1.5.0  lifecycle_1.0.5    fs_2.0.1          </span></span>
+<span><span class="co">## [25] gitcreds_0.1.2     splines_4.6.0      withr_3.0.2        cachem_1.1.0      </span></span>
+<span><span class="co">## [29] yaml_2.3.12        tools_4.6.0        parallel_4.6.0     memoise_2.0.1     </span></span>
+<span><span class="co">## [33] dplyr_1.2.1        curl_7.1.0         vctrs_0.7.3        R6_2.6.1          </span></span>
+<span><span class="co">## [37] lubridate_1.9.5    matrixStats_1.5.0  lifecycle_1.0.5    fs_2.1.0          </span></span>
 <span><span class="co">## [41] ragg_1.5.2         irlba_2.3.7        pkgconfig_2.0.3    desc_1.4.3        </span></span>
 <span><span class="co">## [45] pkgdown_2.2.0      pillar_1.11.1      bslib_0.10.0       gtable_0.3.6      </span></span>
-<span><span class="co">## [49] glue_1.8.0         gh_1.5.0           Rcpp_1.1.1-1       fields_17.1       </span></span>
+<span><span class="co">## [49] glue_1.8.1         gh_1.5.0           Rcpp_1.1.1-1.1     fields_17.3       </span></span>
 <span><span class="co">## [53] systemfonts_1.3.2  xfun_0.57          tibble_3.3.1       tidyselect_1.2.1  </span></span>
-<span><span class="co">## [57] knitr_1.51         farver_2.1.2       nlme_3.1-168       htmltools_0.5.9   </span></span>
+<span><span class="co">## [57] knitr_1.51         farver_2.1.2       nlme_3.1-169       htmltools_0.5.9   </span></span>
 <span><span class="co">## [61] labeling_0.4.3     rmarkdown_2.31     piggyback_0.1.5    dotCall64_1.2     </span></span>
-<span><span class="co">## [65] compiler_4.5.3     S7_0.2.1-1</span></span></code></pre>
+<span><span class="co">## [65] compiler_4.6.0     S7_0.2.2</span></span></code></pre>
 </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
     </nav></aside>

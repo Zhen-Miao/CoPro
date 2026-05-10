@@ -11,7 +11,7 @@ It works with both single-slide (CoProSingle) and multi-slide (CoProMulti) objec
 
     <a class="navbar-brand me-2" href="../index.html">CoPro</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.1.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -29,6 +29,7 @@ It works with both single-slide (CoProSingle) and multi-slide (CoProMulti) objec
     <li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Advanced</h6></li>
     <li><a class="dropdown-item" href="../articles/colon_d3_cross_type.html">Cross-cell-type co-progression with orthogonal axes (Colon Day 3)</a></li>
+    <li><a class="dropdown-item" href="../articles/colon_d3_multi_slide.html">Multi-slide joint analysis (Colon Day 3)</a></li>
     <li><a class="dropdown-item" href="../articles/colon_d9_multi_slide.html">Multi-slide analysis and score transfer (Colon Day 9)</a></li>
     <li><a class="dropdown-item" href="../articles/kidney_guided_gradient.html">Supervised detection of spatial gradients (Kidney)</a></li>
   </ul></li>
@@ -135,6 +136,14 @@ If cells is specified, returns only those specific cells.</p>
     <p>The function uses a flat structure for efficient access:</p><ul><li><p>Cell scores are stored with names like "cellScores|sigma0.1|TypeA"</p></li>
 </ul><p>For multi-slide objects, cell scores are aggregated across slides and specific
 slide filtering is done using the metaDataSub slot.</p>
+    </div>
+    <div class="section level2">
+    <h2 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a></h2>
+    <div class="dont-index"><p><code><a href="getCellScoresInSitu.html">getCellScoresInSitu()</a></code>, <code><a href="getDistMat.html">getDistMat()</a></code>, <code><a href="getKernelMatrix.html">getKernelMatrix()</a></code></p>
+<p>Other accessors:
+<code><a href="getCellScoresInSitu.html">getCellScoresInSitu()</a></code>,
+<code><a href="getDistMat.html">getDistMat()</a></code>,
+<code><a href="getKernelMatrix.html">getKernelMatrix()</a></code></p></div>
     </div>
 
     <div class="section level2">

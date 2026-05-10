@@ -57,3 +57,31 @@ computePCA(
 
 A `CoProMulti` object with the `pcaResults` slot populated. `pcaResults`
 structure: `list(slideID = list(cellType = pc_matrix))`.
+
+## See also
+
+[`computeDistance()`](https://zhen-miao.github.io/CoPro/reference/computeDistance.md),
+[`computeKernelMatrix()`](https://zhen-miao.github.io/CoPro/reference/computeKernelMatrix.md),
+[`runSkrCCA()`](https://zhen-miao.github.io/CoPro/reference/runSkrCCA.md)
+
+Other spatial-pipeline:
+[`computeDistance()`](https://zhen-miao.github.io/CoPro/reference/computeDistance.md),
+[`computeKernelMatrix()`](https://zhen-miao.github.io/CoPro/reference/computeKernelMatrix.md),
+[`runGeneSpaceCCA()`](https://zhen-miao.github.io/CoPro/reference/runGeneSpaceCCA.md),
+[`runSkrCCA()`](https://zhen-miao.github.io/CoPro/reference/runSkrCCA.md)
+
+## Examples
+
+``` r
+toy <- readRDS(system.file("extdata", "toy_copro_data.rds", package = "CoPro"))
+obj <- newCoProSingle(
+  normalizedData = toy$normalizedData,
+  locationData   = toy$locationData,
+  metaData       = toy$metaData,
+  cellTypes      = toy$cellTypes
+)
+obj <- subsetData(obj, cellTypesOfInterest = unique(toy$cellTypes))
+obj <- computePCA(obj, nPCA = 10)
+#> Input is dense (matrixarray), performing irlba pca...
+#> Input is dense (matrixarray), performing irlba pca...
+```

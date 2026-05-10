@@ -11,7 +11,7 @@ both individual plots for each pair and a combined plot with all pairs overlaid.
 
     <a class="navbar-brand me-2" href="../index.html">CoPro</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.1.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -29,6 +29,7 @@ both individual plots for each pair and a combined plot with all pairs overlaid.
     <li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Advanced</h6></li>
     <li><a class="dropdown-item" href="../articles/colon_d3_cross_type.html">Cross-cell-type co-progression with orthogonal axes (Colon Day 3)</a></li>
+    <li><a class="dropdown-item" href="../articles/colon_d3_multi_slide.html">Multi-slide joint analysis (Colon Day 3)</a></li>
     <li><a class="dropdown-item" href="../articles/colon_d9_multi_slide.html">Multi-slide analysis and score transfer (Colon Day 9)</a></li>
     <li><a class="dropdown-item" href="../articles/kidney_guided_gradient.html">Supervised detection of spatial gradients (Kidney)</a></li>
   </ul></li>
@@ -155,9 +156,13 @@ uses default color palette.</p></dd>
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
-    <p>A list containing:</p><ul><li><p><code>plot</code>: ggplot object(s) with the g_12(r) plots</p></li>
-<li><p><code>data</code>: data.frame with g_12(r) values, confidence intervals, and metadata</p></li>
-<li><p><code>summary</code>: summary statistics for each cell type pair</p></li>
+    <p>A list with a stable shape regardless of <code>plot_type</code>:</p><ul><li><p><code>plot$combined</code>: a single-panel ggplot object, or <code>NULL</code> when
+<code>plot_type == "individual"</code>.</p></li>
+<li><p><code>plot$individual</code>: a facetted ggplot object, or <code>NULL</code> when
+<code>plot_type == "combined"</code>.</p></li>
+<li><p><code>data</code>: data.frame with g_12(r) values, confidence intervals, and
+metadata.</p></li>
+<li><p><code>summary</code>: summary statistics for each cell type pair.</p></li>
 </ul></div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
@@ -168,6 +173,10 @@ confidence bands derived from random labelling simulations.</p>
 <li><p>g_12(r) &gt; 1: Attraction/colocalization at distance r</p></li>
 <li><p>g_12(r) &lt; 1: Repulsion/segregation at distance r</p></li>
 </ul></div>
+    <div class="section level2">
+    <h2 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a></h2>
+    <div class="dont-index"><p><code><a href="getCellScoresInSitu.html">getCellScoresInSitu()</a></code>, <code><a href="getColocScores.html">getColocScores()</a></code></p></div>
+    </div>
 
     <div class="section level2">
     <h2 id="ref-examples">Examples<a class="anchor" aria-label="anchor" href="#ref-examples"></a></h2>
@@ -182,7 +191,7 @@ confidence bands derived from random labelling simulations.</p>
 <span class="r-in"><span>                             include_confidence <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="co"># Access the plot and data</span></span></span>
-<span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/print.html" class="external-link">print</a></span><span class="op">(</span><span class="va">g12_plots</span><span class="op">$</span><span class="va">plot</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/print.html" class="external-link">print</a></span><span class="op">(</span><span class="va">g12_plots</span><span class="op">$</span><span class="va">plot</span><span class="op">$</span><span class="va">individual</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">g12_plots</span><span class="op">$</span><span class="va">data</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="op">}</span> <span class="co"># }</span></span></span>
 <span class="r-in"><span></span></span>

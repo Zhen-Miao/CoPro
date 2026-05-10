@@ -32,3 +32,13 @@ getCellScoresInSitu(object, sigmaValueChoice, ccIndex = 1)
 ## Value
 
 A data.frame object with cell scores and their locations
+
+## See also
+
+[`getCellScores()`](https://zhen-miao.github.io/CoPro/reference/getCellScores.md),
+[`computeGeneAndCellScores()`](https://zhen-miao.github.io/CoPro/reference/computeGeneAndCellScores.md)
+
+Other accessors:
+[`getCellScores()`](https://zhen-miao.github.io/CoPro/reference/getCellScores.md),
+[`getDistMat()`](https://zhen-miao.github.io/CoPro/reference/getDistMat.md),
+[`getKernelMatrix()`](https://zhen-miao.github.io/CoPro/reference/getKernelMatrix.md)

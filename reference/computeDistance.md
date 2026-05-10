@@ -12,6 +12,7 @@ computeDistance(
   yDistScale = 1,
   zDistScale = 1,
   normalizeDistance = TRUE,
+  normalizeTarget = 0.01,
   truncateLowDist = TRUE,
   verbose = TRUE,
   knn_k = 10,
@@ -27,6 +28,7 @@ computeDistance(
   yDistScale = 1,
   zDistScale = 1,
   normalizeDistance = TRUE,
+  normalizeTarget = 0.01,
   truncateLowDist = TRUE,
   verbose = TRUE,
   knn_k = 10,
@@ -42,6 +44,7 @@ computeDistance(
   yDistScale = 1,
   zDistScale = 1,
   normalizeDistance = TRUE,
+  normalizeTarget = 0.01,
   truncateLowDist = TRUE,
   verbose = TRUE,
   knn_k = 10,
@@ -76,10 +79,19 @@ computeDistance(
 - normalizeDistance:
 
   Whether to normalize distance? The normalization will make sure that
-  the 0.01% cell-cell distance will become 0.01, thus ensuring no matter
-  which input scale is used for the distance matrix, the output will
-  roughly be in mm^3. This ensures that the kernel sizes from 0.001 to
-  0.1 will make sense. Default = TRUE
+  the low-percentile cell-cell distance will become `normalizeTarget`
+  (default 0.01), thus ensuring no matter which input scale is used for
+  the distance matrix, the output will roughly be in mm^3. This ensures
+  that the kernel sizes from 0.001 to 0.1 will make sense. Default =
+  TRUE.
+
+- normalizeTarget:
+
+  Numeric scalar. The target value that the low-percentile cell-cell
+  distance is rescaled to when `normalizeDistance = TRUE`. Default =
+  0.01 (preserves historical behavior). Advanced users can tune this
+  alongside `sigmaValues` passed to
+  [`computeKernelMatrix()`](https://zhen-miao.github.io/CoPro/reference/computeKernelMatrix.md).
 
 - truncateLowDist:
 
@@ -135,3 +147,29 @@ The algorithm:
     cutoff_d_E, set distance to the maximum distance in the matrix
 
 This requires the igraph package to be installed.
+
+## See also
+
+[`computeKernelMatrix()`](https://zhen-miao.github.io/CoPro/reference/computeKernelMatrix.md),
+[`computePCA()`](https://zhen-miao.github.io/CoPro/reference/computePCAMulti.md),
+[`runSkrCCA()`](https://zhen-miao.github.io/CoPro/reference/runSkrCCA.md)
+
+Other spatial-pipeline:
+[`computeKernelMatrix()`](https://zhen-miao.github.io/CoPro/reference/computeKernelMatrix.md),
+[`computePCA()`](https://zhen-miao.github.io/CoPro/reference/computePCAMulti.md),
+[`runGeneSpaceCCA()`](https://zhen-miao.github.io/CoPro/reference/runGeneSpaceCCA.md),
+[`runSkrCCA()`](https://zhen-miao.github.io/CoPro/reference/runSkrCCA.md)
+
+## Examples
+
+``` r
+toy <- readRDS(system.file("extdata", "toy_copro_data.rds", package = "CoPro"))
+obj <- newCoProSingle(
+  normalizedData = toy$normalizedData,
+  locationData   = toy$locationData,
+  metaData       = toy$metaData,
+  cellTypes      = toy$cellTypes
+)
+obj <- subsetData(obj, cellTypesOfInterest = unique(toy$cellTypes))
+obj <- computeDistance(obj, distType = "Euclidean2D", verbose = FALSE)
+```

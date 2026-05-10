@@ -24,3 +24,13 @@ computeGeneAndCellScores(object)
 ## Value
 
 A `CoPro` or `CoProMulti` object with gene and cell scores computed
+
+## See also
+
+[`runSkrCCA()`](https://zhen-miao.github.io/CoPro/reference/runSkrCCA.md),
+[`computeNormalizedCorrelation()`](https://zhen-miao.github.io/CoPro/reference/computeNormalizedCorrelation.md),
+[`getCellScores()`](https://zhen-miao.github.io/CoPro/reference/getCellScores.md),
+[`getCellScoresInSitu()`](https://zhen-miao.github.io/CoPro/reference/getCellScoresInSitu.md)
+
+Other scores-and-correlation:
+[`computeNormalizedCorrelation()`](https://zhen-miao.github.io/CoPro/reference/computeNormalizedCorrelation.md)

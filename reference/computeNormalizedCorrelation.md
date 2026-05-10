@@ -36,3 +36,12 @@ computeNormalizedCorrelation(object, tol = 1e-04, calculationMode = "perSlide")
 
 The object with the normalized correlation value between any pair of
 cell types added as a new slot, `normalizedCorrelation`.
+
+## See also
+
+[`runSkrCCA()`](https://zhen-miao.github.io/CoPro/reference/runSkrCCA.md),
+[`computeBidirCorrelation()`](https://zhen-miao.github.io/CoPro/reference/computeBidirCorrelation.md),
+[`computeGeneAndCellScores()`](https://zhen-miao.github.io/CoPro/reference/computeGeneAndCellScores.md)
+
+Other scores-and-correlation:
+[`computeGeneAndCellScores()`](https://zhen-miao.github.io/CoPro/reference/computeGeneAndCellScores.md)

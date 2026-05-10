@@ -36,3 +36,40 @@ newCoProSingle(normalizedData, locationData, metaData, cellTypes)
 ## Value
 
 A `CoPro` object
+
+## See also
+
+[`newCoProMulti()`](https://zhen-miao.github.io/CoPro/reference/newCoProMulti.md),
+[`CreateCoPro()`](https://zhen-miao.github.io/CoPro/reference/CreateCoPro.md),
+[`asCoProSingle()`](https://zhen-miao.github.io/CoPro/reference/asCoPro.md)
+
+Other object-creation:
+[`asCoPro`](https://zhen-miao.github.io/CoPro/reference/asCoPro.md),
+[`newCoProMulti()`](https://zhen-miao.github.io/CoPro/reference/newCoProMulti.md),
+[`subsetData()`](https://zhen-miao.github.io/CoPro/reference/subsetData.md)
+
+## Examples
+
+``` r
+toy <- readRDS(system.file("extdata", "toy_copro_data.rds", package = "CoPro"))
+obj <- newCoProSingle(
+  normalizedData = toy$normalizedData,
+  locationData   = toy$locationData,
+  metaData       = toy$metaData,
+  cellTypes      = toy$cellTypes
+)
+obj
+#> 'CoProSingle' object for spatial coordinated progression detection
+#> ------------------------
+#> Number of cells: 200
+#> Number of genes: 80
+#> Number of slides: 1 (single-slide analysis)
+#> 
+#> Processing steps completed:
+#> 
+#> Available metadata fields:
+#> - cell_id
+#> - cell_type
+#> 
+#> Approx. object size: 0.20 MB
+```

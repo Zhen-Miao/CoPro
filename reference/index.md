@@ -11,6 +11,9 @@ Create CoPro objects from spatial transcriptomics data
 - [`CreateCoPro()`](https://zhen-miao.github.io/CoPro/reference/CreateCoPro.md)
   : Create a CoPro object, automatically choosing Single vs Multi and
   splitting large slices.
+- [`asCoProSingle()`](https://zhen-miao.github.io/CoPro/reference/asCoPro.md)
+  [`asCoProMulti()`](https://zhen-miao.github.io/CoPro/reference/asCoPro.md)
+  : Coerce a single-cell object into a CoPro object
 - [`CoPro-class`](https://zhen-miao.github.io/CoPro/reference/CoPro-class.md)
   : CoPro object of spatial transcriptomics data
 - [`subsetData()`](https://zhen-miao.github.io/CoPro/reference/subsetData.md)
@@ -33,6 +36,8 @@ The main CoPro analysis workflow
   : Compute Kernel Matrix for CoPro
 - [`runSkrCCA()`](https://zhen-miao.github.io/CoPro/reference/runSkrCCA.md)
   : runSkrCCA
+- [`runGeneSpaceCCA()`](https://zhen-miao.github.io/CoPro/reference/runGeneSpaceCCA.md)
+  : Run gene-space canonical correlation analysis
 - [`computeNormalizedCorrelation()`](https://zhen-miao.github.io/CoPro/reference/computeNormalizedCorrelation.md)
   : Compute Normalized Correlation (approximation)
 - [`computeGeneAndCellScores()`](https://zhen-miao.github.io/CoPro/reference/computeGeneAndCellScores.md)

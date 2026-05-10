@@ -1,9 +1,11 @@
 <urlset xmlns = 'http://www.sitemaps.org/schemas/sitemap/0.9'>
 <url><loc>https://zhen-miao.github.io/CoPro/404.html</loc></url>
+<url><loc>https://zhen-miao.github.io/CoPro/CONTRIBUTING.html</loc></url>
 <url><loc>https://zhen-miao.github.io/CoPro/LICENSE-text.html</loc></url>
 <url><loc>https://zhen-miao.github.io/CoPro/LICENSE.html</loc></url>
 <url><loc>https://zhen-miao.github.io/CoPro/articles/brain_merfish_two_type.html</loc></url>
 <url><loc>https://zhen-miao.github.io/CoPro/articles/colon_d3_cross_type.html</loc></url>
+<url><loc>https://zhen-miao.github.io/CoPro/articles/colon_d3_multi_slide.html</loc></url>
 <url><loc>https://zhen-miao.github.io/CoPro/articles/colon_d9_multi_slide.html</loc></url>
 <url><loc>https://zhen-miao.github.io/CoPro/articles/index.html</loc></url>
 <url><loc>https://zhen-miao.github.io/CoPro/articles/kidney_guided_gradient.html</loc></url>
@@ -13,6 +15,7 @@
 <url><loc>https://zhen-miao.github.io/CoPro/news/index.html</loc></url>
 <url><loc>https://zhen-miao.github.io/CoPro/reference/CoPro-class.html</loc></url>
 <url><loc>https://zhen-miao.github.io/CoPro/reference/CreateCoPro.html</loc></url>
+<url><loc>https://zhen-miao.github.io/CoPro/reference/asCoPro.html</loc></url>
 <url><loc>https://zhen-miao.github.io/CoPro/reference/assignDistanceManually.html</loc></url>
 <url><loc>https://zhen-miao.github.io/CoPro/reference/calculate_pvalue.html</loc></url>
 <url><loc>https://zhen-miao.github.io/CoPro/reference/computeBidirCorrelation.html</loc></url>
@@ -37,6 +40,7 @@
 <url><loc>https://zhen-miao.github.io/CoPro/reference/dot-partitionByLocation.html</loc></url>
 <url><loc>https://zhen-miao.github.io/CoPro/reference/ensureBidirCorrelationSlot.html</loc></url>
 <url><loc>https://zhen-miao.github.io/CoPro/reference/generate_toroidal_permutations.html</loc></url>
+<url><loc>https://zhen-miao.github.io/CoPro/reference/genespace_optimization.html</loc></url>
 <url><loc>https://zhen-miao.github.io/CoPro/reference/getCellScores.html</loc></url>
 <url><loc>https://zhen-miao.github.io/CoPro/reference/getCellScoresInSitu.html</loc></url>
 <url><loc>https://zhen-miao.github.io/CoPro/reference/getColocScores.html</loc></url>
@@ -62,9 +66,12 @@
 <url><loc>https://zhen-miao.github.io/CoPro/reference/optimize_bilinear_multi_slides.html</loc></url>
 <url><loc>https://zhen-miao.github.io/CoPro/reference/optimize_bilinear_n.html</loc></url>
 <url><loc>https://zhen-miao.github.io/CoPro/reference/optimize_bilinear_n_multi_slides.html</loc></url>
+<url><loc>https://zhen-miao.github.io/CoPro/reference/optimize_genespace_avg_corr.html</loc></url>
+<url><loc>https://zhen-miao.github.io/CoPro/reference/optimize_genespace_avg_corr_n.html</loc></url>
 <url><loc>https://zhen-miao.github.io/CoPro/reference/plotG12Functions.html</loc></url>
 <url><loc>https://zhen-miao.github.io/CoPro/reference/quantile_normalize.html</loc></url>
 <url><loc>https://zhen-miao.github.io/CoPro/reference/resample_spatial.html</loc></url>
+<url><loc>https://zhen-miao.github.io/CoPro/reference/runGeneSpaceCCA.html</loc></url>
 <url><loc>https://zhen-miao.github.io/CoPro/reference/runSkrCCA.html</loc></url>
 <url><loc>https://zhen-miao.github.io/CoPro/reference/runSkrCCAPermu.html</loc></url>
 <url><loc>https://zhen-miao.github.io/CoPro/reference/runSkrCCAPermu_FairSigma.html</loc></url>

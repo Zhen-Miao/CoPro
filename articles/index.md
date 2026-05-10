@@ -11,6 +11,8 @@
 
 - [Cross-cell-type co-progression with orthogonal axes (Colon Day
   3)](https://zhen-miao.github.io/CoPro/articles/colon_d3_cross_type.md):
+- [Multi-slide joint analysis (Colon Day
+  3)](https://zhen-miao.github.io/CoPro/articles/colon_d3_multi_slide.md):
 - [Multi-slide analysis and score transfer (Colon Day
   9)](https://zhen-miao.github.io/CoPro/articles/colon_d9_multi_slide.md):
 - [Supervised detection of spatial gradients

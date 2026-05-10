@@ -19,7 +19,7 @@ within the object."></head><body>
 
     <a class="navbar-brand me-2" href="../index.html">CoPro</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.1.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -37,6 +37,7 @@ within the object."></head><body>
     <li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Advanced</h6></li>
     <li><a class="dropdown-item" href="../articles/colon_d3_cross_type.html">Cross-cell-type co-progression with orthogonal axes (Colon Day 3)</a></li>
+    <li><a class="dropdown-item" href="../articles/colon_d3_multi_slide.html">Multi-slide joint analysis (Colon Day 3)</a></li>
     <li><a class="dropdown-item" href="../articles/colon_d9_multi_slide.html">Multi-slide analysis and score transfer (Colon Day 9)</a></li>
     <li><a class="dropdown-item" href="../articles/kidney_guided_gradient.html">Supervised detection of spatial gradients (Kidney)</a></li>
   </ul></li>
@@ -171,7 +172,30 @@ types</p>
     <h2 id="note">Note<a class="anchor" aria-label="anchor" href="#note"></a></h2>
     <p>To-do: Shall we include row or column normalization of the kernel?</p>
     </div>
+    <div class="section level2">
+    <h2 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a></h2>
+    <div class="dont-index"><p><code><a href="computeDistance.html">computeDistance()</a></code>, <code><a href="computePCAMulti.html">computePCA()</a></code>, <code><a href="runSkrCCA.html">runSkrCCA()</a></code></p>
+<p>Other spatial-pipeline:
+<code><a href="computeDistance.html">computeDistance()</a></code>,
+<code><a href="computePCAMulti.html">computePCA()</a></code>,
+<code><a href="runGeneSpaceCCA.html">runGeneSpaceCCA()</a></code>,
+<code><a href="runSkrCCA.html">runSkrCCA()</a></code></p></div>
+    </div>
 
+    <div class="section level2">
+    <h2 id="ref-examples">Examples<a class="anchor" aria-label="anchor" href="#ref-examples"></a></h2>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="va">toy</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/readRDS.html" class="external-link">readRDS</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/system.file.html" class="external-link">system.file</a></span><span class="op">(</span><span class="st">"extdata"</span>, <span class="st">"toy_copro_data.rds"</span>, package <span class="op">=</span> <span class="st">"CoPro"</span><span class="op">)</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="va">obj</span> <span class="op">&lt;-</span> <span class="fu"><a href="newCoProSingle.html">newCoProSingle</a></span><span class="op">(</span></span></span>
+<span class="r-in"><span>  normalizedData <span class="op">=</span> <span class="va">toy</span><span class="op">$</span><span class="va">normalizedData</span>,</span></span>
+<span class="r-in"><span>  locationData   <span class="op">=</span> <span class="va">toy</span><span class="op">$</span><span class="va">locationData</span>,</span></span>
+<span class="r-in"><span>  metaData       <span class="op">=</span> <span class="va">toy</span><span class="op">$</span><span class="va">metaData</span>,</span></span>
+<span class="r-in"><span>  cellTypes      <span class="op">=</span> <span class="va">toy</span><span class="op">$</span><span class="va">cellTypes</span></span></span>
+<span class="r-in"><span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="va">obj</span> <span class="op">&lt;-</span> <span class="fu"><a href="subsetData.html">subsetData</a></span><span class="op">(</span><span class="va">obj</span>, cellTypesOfInterest <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/unique.html" class="external-link">unique</a></span><span class="op">(</span><span class="va">toy</span><span class="op">$</span><span class="va">cellTypes</span><span class="op">)</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="va">obj</span> <span class="op">&lt;-</span> <span class="fu"><a href="computeDistance.html">computeDistance</a></span><span class="op">(</span><span class="va">obj</span>, distType <span class="op">=</span> <span class="st">"Euclidean2D"</span>, verbose <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="va">obj</span> <span class="op">&lt;-</span> <span class="fu">computeKernelMatrix</span><span class="op">(</span><span class="va">obj</span>, sigmaValues <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.05</span>, <span class="fl">0.1</span><span class="op">)</span>, verbose <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span></span>
+</code></pre></div>
+    </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
     </nav></aside></div>
 

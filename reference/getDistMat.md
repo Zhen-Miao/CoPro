@@ -65,3 +65,13 @@ getDistMat(
 ## Value
 
 Distance matrix as a numeric matrix
+
+## See also
+
+[`computeDistance()`](https://zhen-miao.github.io/CoPro/reference/computeDistance.md),
+[`getKernelMatrix()`](https://zhen-miao.github.io/CoPro/reference/getKernelMatrix.md)
+
+Other accessors:
+[`getCellScores()`](https://zhen-miao.github.io/CoPro/reference/getCellScores.md),
+[`getCellScoresInSitu()`](https://zhen-miao.github.io/CoPro/reference/getCellScoresInSitu.md),
+[`getKernelMatrix()`](https://zhen-miao.github.io/CoPro/reference/getKernelMatrix.md)

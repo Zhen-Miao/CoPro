@@ -43,3 +43,14 @@ newCoProMulti(normalizedData, locationData, metaData, cellTypes, slideID)
 ## Value
 
 A `CoProMulti` object.
+
+## See also
+
+[`newCoProSingle()`](https://zhen-miao.github.io/CoPro/reference/newCoProSingle.md),
+[`CreateCoPro()`](https://zhen-miao.github.io/CoPro/reference/CreateCoPro.md),
+[`asCoProMulti()`](https://zhen-miao.github.io/CoPro/reference/asCoPro.md)
+
+Other object-creation:
+[`asCoPro`](https://zhen-miao.github.io/CoPro/reference/asCoPro.md),
+[`newCoProSingle()`](https://zhen-miao.github.io/CoPro/reference/newCoProSingle.md),
+[`subsetData()`](https://zhen-miao.github.io/CoPro/reference/subsetData.md)

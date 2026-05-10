@@ -72,3 +72,13 @@ getKernelMatrix(
 ## Value
 
 Kernel matrix as a numeric matrix
+
+## See also
+
+[`computeKernelMatrix()`](https://zhen-miao.github.io/CoPro/reference/computeKernelMatrix.md),
+[`getDistMat()`](https://zhen-miao.github.io/CoPro/reference/getDistMat.md)
+
+Other accessors:
+[`getCellScores()`](https://zhen-miao.github.io/CoPro/reference/getCellScores.md),
+[`getCellScoresInSitu()`](https://zhen-miao.github.io/CoPro/reference/getCellScoresInSitu.md),
+[`getDistMat()`](https://zhen-miao.github.io/CoPro/reference/getDistMat.md)

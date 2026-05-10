@@ -89,6 +89,17 @@ The function uses a flat structure for efficient access:
 For multi-slide objects, cell scores are aggregated across slides and
 specific slide filtering is done using the metaDataSub slot.
 
+## See also
+
+[`getCellScoresInSitu()`](https://zhen-miao.github.io/CoPro/reference/getCellScoresInSitu.md),
+[`getDistMat()`](https://zhen-miao.github.io/CoPro/reference/getDistMat.md),
+[`getKernelMatrix()`](https://zhen-miao.github.io/CoPro/reference/getKernelMatrix.md)
+
+Other accessors:
+[`getCellScoresInSitu()`](https://zhen-miao.github.io/CoPro/reference/getCellScoresInSitu.md),
+[`getDistMat()`](https://zhen-miao.github.io/CoPro/reference/getDistMat.md),
+[`getKernelMatrix()`](https://zhen-miao.github.io/CoPro/reference/getKernelMatrix.md)
+
 ## Examples
 
 ``` r
