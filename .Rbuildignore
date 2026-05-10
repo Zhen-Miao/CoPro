@@ -18,3 +18,5 @@
 ^data-raw$
 ^scripts$
 ^\.claude$
+vignettes/.*\.Rmd\.orig$
+vignettes/precompute\.R$
