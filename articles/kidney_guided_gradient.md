@@ -40,10 +40,6 @@ library(scales)
 ``` r
 
 data_path <- copro_download_data("kidney")
-```
-
-``` r
-
 dat <- readRDS(data_path)
 
 cat("Cells:", nrow(dat$normalizedData), "\n")
@@ -298,27 +294,27 @@ obj <- runSkrCCA(obj, scalePCs = TRUE, maxIter = 500, nCC = 4,
 
     ## Running skrCCA for sigma = 0.04
 
-    ## [1] "Convergence reached at 1 iterations (Max diff = 2.220e-16 )"
-    ## [1] "Convergence reached at 0 iterations (Max diff = 5.017e-15 )"
+    ## [1] "Convergence reached at 0 iterations (Max diff = 1.610e-15 )"
+    ## [1] "Convergence reached at 0 iterations (Max diff = 3.088e-16 )"
     ## [1] "Convergence reached at 1 iterations (Max diff = 1.110e-16 )"
 
     ## Running skrCCA for sigma = 0.08
 
-    ## [1] "Convergence reached at 1 iterations (Max diff = 1.110e-16 )"
-    ## [1] "Convergence reached at 0 iterations (Max diff = 1.110e-15 )"
-    ## [1] "Convergence reached at 1 iterations (Max diff = 6.258e-16 )"
+    ## [1] "Convergence reached at 0 iterations (Max diff = 1.582e-15 )"
+    ## [1] "Convergence reached at 0 iterations (Max diff = 2.887e-15 )"
+    ## [1] "Convergence reached at 0 iterations (Max diff = 5.856e-15 )"
 
     ## Running skrCCA for sigma = 0.1
 
-    ## [1] "Convergence reached at 0 iterations (Max diff = 3.390e-15 )"
     ## [1] "Convergence reached at 1 iterations (Max diff = 1.110e-16 )"
     ## [1] "Convergence reached at 1 iterations (Max diff = 1.110e-16 )"
+    ## [1] "Convergence reached at 0 iterations (Max diff = 3.886e-16 )"
 
     ## Running skrCCA for sigma = 0.15
 
     ## [1] "Convergence reached at 1 iterations (Max diff = 1.110e-16 )"
-    ## [1] "Convergence reached at 1 iterations (Max diff = 5.551e-17 )"
-    ## [1] "Convergence reached at 0 iterations (Max diff = 3.331e-16 )"
+    ## [1] "Convergence reached at 0 iterations (Max diff = 2.220e-16 )"
+    ## [1] "Convergence reached at 0 iterations (Max diff = 2.220e-16 )"
 
     ## Optimization succeeded for 4 sigma value(s): sigma_0.04, sigma_0.08, sigma_0.1, sigma_0.15
 
