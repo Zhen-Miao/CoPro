@@ -310,7 +310,7 @@ multi_obj <- runSkrCCA(multi_obj, scalePCs = TRUE, maxIter = 500, nCC = 4)
     ## [1] "Convergence reached at 9 iterations (Max diff = 9.487e-06 )"
     ## [1] "Convergence reached at 8 iterations (Max diff = 3.325e-06 )"
 
-    ## skrCCA finished 5 sigma value(s) in 26.6 s.
+    ## skrCCA finished 5 sigma value(s) in 25.9 s.
 
     ## Optimization succeeded for 5 sigma value(s): sigma_0.005, sigma_0.01, sigma_0.02, sigma_0.05, sigma_0.1
 
@@ -606,7 +606,7 @@ ref_obj <- runSkrCCA(ref_obj, scalePCs = TRUE, maxIter = 500, nCC = 4)
     ## [1] "Convergence reached at 7 iterations (Max diff = 4.530e-06 )"
     ## [1] "Convergence reached at 86 iterations (Max diff = 9.339e-06 )"
 
-    ## skrCCA finished 5 sigma value(s) in 8.6 s.
+    ## skrCCA finished 5 sigma value(s) in 8.1 s.
 
     ## Optimization succeeded for 5 sigma value(s): sigma_0.005, sigma_0.01, sigma_0.02, sigma_0.05, sigma_0.1
 

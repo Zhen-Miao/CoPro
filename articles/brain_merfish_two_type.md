@@ -110,7 +110,7 @@ obj <- runSkrCCA(obj, scalePCs = TRUE, maxIter = 500)
     ## [1] "Convergence reached at 11 iterations (Max diff = 7.408e-06 )"
     ## [1] "Convergence reached at 0 iterations (Max diff = 1.480e-15 )"
 
-    ## skrCCA finished 4 sigma value(s) in 2.8 s.
+    ## skrCCA finished 4 sigma value(s) in 2.9 s.
 
     ## Optimization succeeded for 4 sigma value(s): sigma_0.1, sigma_0.14, sigma_0.2, sigma_0.5
 

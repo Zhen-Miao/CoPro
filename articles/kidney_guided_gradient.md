@@ -40,21 +40,69 @@ library(scales)
 ``` r
 
 data_path <- copro_download_data("kidney")
+```
+
+``` r
+
 dat <- readRDS(data_path)
 
 cat("Cells:", nrow(dat$normalizedData), "\n")
+```
+
+    ## Cells: 28555
+
+``` r
+
 cat("Genes:", ncol(dat$normalizedData), "\n")
+```
+
+    ## Genes: 1298
+
+``` r
+
 cat("Cell types:", paste(unique(dat$cellTypes), collapse = ", "), "\n")
+```
+
+    ## Cell types: Vascular, Tubular
+
+``` r
+
 cat("Tubular subtypes:", paste(dat$tubularTypes, collapse = ", "), "\n")
+```
+
+    ## Tubular subtypes: PTS1, PTS2, PTS3, LOH-TL-C, LOH-TL-JM, TAL_1, TAL_2, TAL_3, DCT-CNT
+
+``` r
+
 cat("Vascular subtypes:", paste(dat$vascTypes, collapse = ", "), "\n")
+```
+
+    ## Vascular subtypes: Vasc_1, Vasc_2, Vasc_3
+
+``` r
 
 # scRNA-seq full-transcriptome expression (sparse, genes x cells)
 cat("\nscRNA-seq data (full transcriptome, >= 1% expressed):\n")
+```
+
+    ## 
+    ## scRNA-seq data (full transcriptome, >= 1% expressed):
+
+``` r
+
 cat("  Vascular:", nrow(dat$scRNA_vasc_expr), "genes x",
     ncol(dat$scRNA_vasc_expr), "cells\n")
+```
+
+    ##   Vascular: 10372 genes x 10198 cells
+
+``` r
+
 cat("  Nephron:", nrow(dat$scRNA_neph_expr), "genes x",
     ncol(dat$scRNA_neph_expr), "cells\n")
 ```
+
+    ##   Nephron: 12060 genes x 9117 cells
 
 ## Visualize the tissue
 
@@ -77,6 +125,11 @@ ggplot(plot_df, aes(x = x, y = y, color = celltype)) +
   theme_classic() +
   theme(legend.position = "bottom")
 ```
+
+![plot of chunk
+plot-layout](kidney_guided_gradient_files/plot-layout-1.png)
+
+plot of chunk plot-layout
 
 ### Tubular subtypes along the nephron axis
 
@@ -106,6 +159,11 @@ ggplot(tub_df, aes(x = x, y = y, color = subtype)) +
   theme_classic()
 ```
 
+![plot of chunk
+plot-subtypes](kidney_guided_gradient_files/plot-subtypes-1.png)
+
+plot of chunk plot-subtypes
+
 ## Step 1: Create CoPro object and compute PCA
 
 ``` r
@@ -124,6 +182,9 @@ obj <- subsetData(obj, cellTypesOfInterest = c("Tubular", "Vascular"))
 obj <- computePCA(obj, nPCA = 15, center = TRUE, scale. = TRUE)
 ```
 
+    ## Input is dense (matrixarray), performing irlba pca...
+    ## Input is dense (matrixarray), performing irlba pca...
+
 ## Step 2: Derive supervised tubular weight from nephron ordering
 
 The key idea: we regress the known segment ordering onto the PCA scores
@@ -135,6 +196,14 @@ axis. This becomes our fixed tubular weight vector.
 # Segment ordering: proximal (PTS1=1) to distal (DCT-CNT=6)
 segment_order <- dat$segmentOrder
 print(segment_order)
+```
+
+    ##      PTS1      PTS2      PTS3  LOH-TL-C LOH-TL-JM     TAL_1     TAL_2     TAL_3 
+    ##         1         2         3         4         4         5         5         5 
+    ##   DCT-CNT 
+    ##         6
+
+``` r
 
 # Get tubular PCA scores
 tubular_idx <- obj@cellTypesSub == "Tubular"
@@ -156,6 +225,8 @@ tau <- cor(proj_scores, ordered_labels, method = "kendall")
 cat(sprintf("Kendall tau (tubular axis vs segment ordering): %.4f\n", tau))
 ```
 
+    ## Kendall tau (tubular axis vs segment ordering): 0.8337
+
 ## Step 3: Derive supervised vascular weight via kernel regression
 
 We compute the spatial kernel, smooth the tubular axis scores to each
@@ -167,7 +238,25 @@ with the nephron axis.
 
 sigma_choice <- c(0.04, 0.08, 0.1, 0.15)
 obj <- computeDistance(obj, distType = "Euclidean2D")
+```
+
+    ## normalizeDistance is set to TRUE, so distance will be normalized, so that 0.01 percentile distance will be scaled to 0.01
+    ##         0%        25%        50%        75%       100% 
+    ## 0.01661044 0.97355863 1.59208771 2.45716417 5.20528057 
+    ## The scaling factor for normalizing distance is 0.6020311
+
+``` r
+
 obj <- computeKernelMatrix(obj, sigmaValues = sigma_choice)
+```
+
+    ## Computing pairwise kernel matrix for 2 cell types
+    ## current sigma value is 0.04 
+    ## current sigma value is 0.08 
+    ## current sigma value is 0.1 
+    ## current sigma value is 0.15
+
+``` r
 
 # Get vascular PCA scores
 vasc_idx <- obj@cellTypesSub == "Vascular"
@@ -205,11 +294,63 @@ obj <- runSkrCCA(obj, scalePCs = TRUE, maxIter = 500, nCC = 4,
                    Tubular  = matrix(w1_tubular, ncol = 1),
                    Vascular = matrix(w1_vasc, ncol = 1)
                  ))
+```
+
+    ## Running skrCCA for sigma = 0.04
+
+    ## [1] "Convergence reached at 1 iterations (Max diff = 2.220e-16 )"
+    ## [1] "Convergence reached at 0 iterations (Max diff = 5.017e-15 )"
+    ## [1] "Convergence reached at 1 iterations (Max diff = 1.110e-16 )"
+
+    ## Running skrCCA for sigma = 0.08
+
+    ## [1] "Convergence reached at 1 iterations (Max diff = 1.110e-16 )"
+    ## [1] "Convergence reached at 0 iterations (Max diff = 1.110e-15 )"
+    ## [1] "Convergence reached at 1 iterations (Max diff = 6.258e-16 )"
+
+    ## Running skrCCA for sigma = 0.1
+
+    ## [1] "Convergence reached at 0 iterations (Max diff = 3.390e-15 )"
+    ## [1] "Convergence reached at 1 iterations (Max diff = 1.110e-16 )"
+    ## [1] "Convergence reached at 1 iterations (Max diff = 1.110e-16 )"
+
+    ## Running skrCCA for sigma = 0.15
+
+    ## [1] "Convergence reached at 1 iterations (Max diff = 1.110e-16 )"
+    ## [1] "Convergence reached at 1 iterations (Max diff = 5.551e-17 )"
+    ## [1] "Convergence reached at 0 iterations (Max diff = 3.331e-16 )"
+
+    ## Optimization succeeded for 4 sigma value(s): sigma_0.04, sigma_0.08, sigma_0.1, sigma_0.15
+
+``` r
 
 obj <- computeNormalizedCorrelation(obj)
+```
+
+    ## Calculating spectral norms,  depending on the data size, this may take a while. 
+    ## Finished calculating spectral norms
+
+``` r
+
 obj <- computeGeneAndCellScores(obj)
 obj <- computeRegressionGeneScores(obj)
 ```
+
+    ## Computed regression gene scores for sigma=0.04, cellType='Tubular'
+
+    ## Computed regression gene scores for sigma=0.04, cellType='Vascular'
+
+    ## Computed regression gene scores for sigma=0.08, cellType='Tubular'
+
+    ## Computed regression gene scores for sigma=0.08, cellType='Vascular'
+
+    ## Computed regression gene scores for sigma=0.1, cellType='Tubular'
+
+    ## Computed regression gene scores for sigma=0.1, cellType='Vascular'
+
+    ## Computed regression gene scores for sigma=0.15, cellType='Tubular'
+
+    ## Computed regression gene scores for sigma=0.15, cellType='Vascular'
 
 ## Results: Spatial analysis
 
@@ -228,6 +369,10 @@ ggplot(ncorr, aes(x = sigmaValues, y = normalizedCorrelation, group = 1)) +
   ggtitle("Normalized correlation -- supervised nephron axis") +
   theme_minimal()
 ```
+
+![plot of chunk ncorr](kidney_guided_gradient_files/ncorr-1.png)
+
+plot of chunk ncorr
 
 ### Tubular cell scores in situ
 
@@ -254,6 +399,11 @@ ggplot(cs_tub) +
         axis.ticks = element_blank(), axis.title = element_blank())
 ```
 
+![plot of chunk
+insitu-tubular](kidney_guided_gradient_files/insitu-tubular-1.png)
+
+plot of chunk insitu-tubular
+
 ### Vascular cell scores in situ
 
 The vascular program that co-varies with the nephron axis:
@@ -274,6 +424,11 @@ ggplot(cs_vasc) +
   theme(axis.line = element_blank(), axis.text = element_blank(),
         axis.ticks = element_blank(), axis.title = element_blank())
 ```
+
+![plot of chunk
+insitu-vasc](kidney_guided_gradient_files/insitu-vasc-1.png)
+
+plot of chunk insitu-vasc
 
 ### CoPro score vs known nephron segment ordering
 
@@ -306,6 +461,11 @@ ggplot(tub_meta[!is.na(tub_meta$segment), ]) +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 ```
 
+![plot of chunk
+boxplot-segments](kidney_guided_gradient_files/boxplot-segments-1.png)
+
+plot of chunk boxplot-segments
+
 ### Vascular subtype separation
 
 The vascular subtypes (Vasc_1, Vasc_2, Vasc_3) should show differential
@@ -326,6 +486,11 @@ ggplot(vasc_meta) +
   theme_classic()
 ```
 
+![plot of chunk
+vasc-subtypes](kidney_guided_gradient_files/vasc-subtypes-1.png)
+
+plot of chunk vasc-subtypes
+
 ### Tubular-vascular cross-type correlation
 
 ``` r
@@ -344,6 +509,11 @@ ggplot(df_corr) +
   ggtitle("Tubular-Vascular co-progression along nephron axis") +
   theme_minimal()
 ```
+
+![plot of chunk
+cross-corr](kidney_guided_gradient_files/cross-corr-1.png)
+
+plot of chunk cross-corr
 
 ### Top gene weights (spatial panel)
 
@@ -370,6 +540,11 @@ ggplot(top_df, aes(x = gene, y = weight, fill = direction)) +
   theme(legend.position = "bottom")
 ```
 
+![plot of chunk
+top-vasc-genes](kidney_guided_gradient_files/top-vasc-genes-1.png)
+
+plot of chunk top-vasc-genes
+
 ``` r
 
 key_tub <- paste0("geneScores|sigma", sigma_opt, "|Tubular")
@@ -392,6 +567,11 @@ ggplot(top_tub_df, aes(x = gene, y = weight, fill = direction)) +
   theme_classic() +
   theme(legend.position = "bottom")
 ```
+
+![plot of chunk
+top-tub-genes](kidney_guided_gradient_files/top-tub-genes-1.png)
+
+plot of chunk top-tub-genes
 
 ## Score transfer to scRNA-seq
 
@@ -426,6 +606,11 @@ sc_vasc_full <- t(as.matrix(dat$scRNA_vasc_expr))
 shared_genes <- intersect(colnames(seqfish_vasc_expr), colnames(sc_vasc_full))
 shared_genes <- intersect(shared_genes, rownames(gs_vasc_cc1))
 cat("Shared genes for transfer:", length(shared_genes), "\n")
+```
+
+    ## Shared genes for transfer: 632
+
+``` r
 
 seqfish_vasc_shared <- as.matrix(seqfish_vasc_expr[, shared_genes])
 sc_vasc_shared <- sc_vasc_full[, shared_genes]
@@ -448,8 +633,16 @@ vasc_transferred <- transfer_scores(
 )
 
 cat("Transferred vascular scores:", length(vasc_transferred), "cells\n")
+```
+
+    ## Transferred vascular scores: 10198 cells
+
+``` r
+
 cat("Score range:", round(range(vasc_transferred), 2), "\n")
 ```
+
+    ## Score range: -33.78 13.99
 
 ### Step 3: Transfer nephron scores
 
@@ -477,6 +670,8 @@ neph_transferred <- transfer_scores(
 cat("Transferred nephron scores:", length(neph_transferred), "cells\n")
 ```
 
+    ## Transferred nephron scores: 9117 cells
+
 ## Results: scRNA-seq transfer
 
 ### Nephron UMAP colored by transferred CoPro score
@@ -496,6 +691,11 @@ ggplot(neph_umap_filt[!is.na(neph_umap_filt$axis_score), ],
         axis.title = element_blank(), axis.text = element_blank()) +
   labs(title = "Transferred CoPro score (nephron)", color = "Score")
 ```
+
+![plot of chunk
+neph-umap-score](kidney_guided_gradient_files/neph-umap-score-1.png)
+
+plot of chunk neph-umap-score
 
 ### Nephron UMAP colored by cell type
 
@@ -524,6 +724,11 @@ ggplot(neph_umap_filt[!is.na(neph_umap_filt$agg_label), ],
   guides(color = guide_legend(override.aes = list(size = 2)))
 ```
 
+![plot of chunk
+neph-umap-celltype](kidney_guided_gradient_files/neph-umap-celltype-1.png)
+
+plot of chunk neph-umap-celltype
+
 ### Nephron boxplot by segment
 
 Transferred CoPro scores recapitulate the nephron segment ordering in
@@ -551,6 +756,11 @@ ggplot(neph_box, aes(x = agg_label, y = axis_score, fill = agg_label)) +
   theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 9))
 ```
 
+![plot of chunk
+neph-boxplot](kidney_guided_gradient_files/neph-boxplot-1.png)
+
+plot of chunk neph-boxplot
+
 ### Vascular UMAP colored by transferred CoPro score
 
 ``` r
@@ -572,6 +782,11 @@ ggplot(vasc_umap[!is.na(vasc_umap$axis_score), ],
   labs(title = "Transferred CoPro score (vasculature)", color = "Score")
 ```
 
+![plot of chunk
+vasc-umap-score](kidney_guided_gradient_files/vasc-umap-score-1.png)
+
+plot of chunk vasc-umap-score
+
 ### Vascular UMAP colored by cluster
 
 ``` r
@@ -584,6 +799,11 @@ ggplot(vasc_umap, aes(x = UMAP1, y = UMAP2, color = cluster)) +
   labs(title = "Vascular cluster annotation", color = "Cluster") +
   guides(color = guide_legend(override.aes = list(size = 2)))
 ```
+
+![plot of chunk
+vasc-umap-cluster](kidney_guided_gradient_files/vasc-umap-cluster-1.png)
+
+plot of chunk vasc-umap-cluster
 
 ### Vascular boxplot by cluster
 
@@ -609,6 +829,11 @@ ggplot(vasc_box, aes(x = cluster, y = axis_score, fill = cluster)) +
        title = "Transferred score by vascular cluster (scRNA-seq)") +
   theme_classic() + theme(legend.position = "none")
 ```
+
+![plot of chunk
+vasc-boxplot](kidney_guided_gradient_files/vasc-boxplot-1.png)
+
+plot of chunk vasc-boxplot
 
 ### Full-transcriptome regression
 
@@ -657,6 +882,11 @@ reg_results$fdr <- p.adjust(reg_results$p_value, method = "BH")
 
 cat("Significant genes (FDR < 0.05):",
     sum(reg_results$fdr < 0.05, na.rm = TRUE), "\n")
+```
+
+    ## Significant genes (FDR < 0.05): 3243
+
+``` r
 
 # MA plot: beta on x-axis, log expression on y-axis
 reg_results$log_mean_expr <- log(reg_results$mean_expr + 1)
@@ -715,6 +945,11 @@ ggplot(reg_results, aes(x = beta, y = log_mean_expr)) +
   theme(legend.position = "bottom")
 ```
 
+![plot of chunk
+full-transcriptome-regression](kidney_guided_gradient_files/full-transcriptome-regression-1.png)
+
+plot of chunk full-transcriptome-regression
+
 ## Key takeaways
 
 1.  **Supervised mode** lets you leverage known biology (nephron segment
@@ -744,3 +979,35 @@ ggplot(reg_results, aes(x = beta, y = log_mean_expr)) +
 
 sessionInfo()
 ```
+
+    ## R version 4.5.2 (2025-10-31)
+    ## Platform: aarch64-apple-darwin20
+    ## Running under: macOS Tahoe 26.1
+    ## 
+    ## Matrix products: default
+    ## BLAS:   /System/Library/Frameworks/Accelerate.framework/Versions/A/Frameworks/vecLib.framework/Versions/A/libBLAS.dylib 
+    ## LAPACK: /Library/Frameworks/R.framework/Versions/4.5-arm64/Resources/lib/libRlapack.dylib;  LAPACK version 3.12.1
+    ## 
+    ## locale:
+    ## [1] en_US.UTF-8/en_US.UTF-8/en_US.UTF-8/C/en_US.UTF-8/en_US.UTF-8
+    ## 
+    ## time zone: America/Los_Angeles
+    ## tzcode source: internal
+    ## 
+    ## attached base packages:
+    ## [1] stats     graphics  grDevices utils     datasets  methods   base     
+    ## 
+    ## other attached packages:
+    ## [1] scales_1.4.0  ggrepel_0.9.8 ggplot2_4.0.2 CoPro_0.6.1   knitr_1.51   
+    ## 
+    ## loaded via a namespace (and not attached):
+    ##  [1] Matrix_1.7-5       gtable_0.3.6       dplyr_1.2.1        compiler_4.5.2    
+    ##  [5] piggyback_0.1.5    maps_3.4.3         tidyselect_1.2.1   Rcpp_1.1.1        
+    ##  [9] parallel_4.5.2     fastmap_1.2.0      lattice_0.22-9     R6_2.6.1          
+    ## [13] labeling_0.4.3     generics_0.1.4     dotCall64_1.2      tibble_3.3.1      
+    ## [17] pillar_1.11.1      RColorBrewer_1.1-3 rlang_1.2.0        cachem_1.1.0      
+    ## [21] xfun_0.57          S7_0.2.1           otel_0.2.0         memoise_2.0.1     
+    ## [25] viridisLite_0.4.3  cli_3.6.5          withr_3.0.2        magrittr_2.0.5    
+    ## [29] grid_4.5.2         irlba_2.3.7        spam_2.11-3        lifecycle_1.0.5   
+    ## [33] fields_17.1        vctrs_0.7.2        evaluate_1.0.5     glue_1.8.0        
+    ## [37] farver_2.1.2       matrixStats_1.5.0  tools_4.5.2        pkgconfig_2.0.3
