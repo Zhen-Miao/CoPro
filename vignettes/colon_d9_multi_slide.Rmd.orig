@@ -196,7 +196,13 @@ ggplot(ref_meta, aes(x = MU_grouped, y = cell_score, fill = MU_grouped)) +
 ### Cell type proportions along the disease axis
 
 As disease severity increases, the cell type composition shifts---immune
-cell proportion increases while epithelial proportion decreases:
+cell proportion increases while epithelial proportion decreases.
+
+**Note:** The results below are based on a single slide and may not fully
+reflect the patterns reported in the manuscript, which analyzed all Day 9
+slides jointly. For a more comprehensive analysis, please refer to the
+manuscript. The full dataset is available at
+<https://doi.org/10.5061/dryad.rjdfn2zh3>.
 
 ```{r celltype-prop, fig.width=6, fig.height=4}
 ref_meta_all <- ref_obj@metaDataSub
@@ -395,7 +401,8 @@ ggplot(tar1_mu, aes(x = x, y = y, color = MU_grouped)) +
 ## Step 6: Assess transfer consistency
 
 Compare the normalized correlation between the reference and transferred
-slides to assess whether the co-progression pattern is consistent:
+slides to assess whether the co-progression pattern is consistent. Here
+we focus on **CC1**, which corresponds to the disease progression axis.
 
 ```{r transfer-ncorr, message=FALSE}
 tar1_ncorr <- getTransferNormCorr(
@@ -410,15 +417,18 @@ tar2_ncorr <- getTransferNormCorr(
   sigma_choice = sigma_opt
 )
 
-cat("Reference norm. corr.:\n")
+cat("Reference norm. corr. (CC1):\n")
 ref_ncorr <- getNormCorr(ref_obj)
-print(ref_ncorr[ref_ncorr$sigmaValues == sigma_opt, ])
+print(ref_ncorr[ref_ncorr$sigmaValues == sigma_opt &
+                ref_ncorr$CC_index == 1, ])
 
-cat("\nTarget 1 transferred norm. corr.:\n")
-print(tar1_ncorr)
+cat("\nTarget 1 transferred norm. corr. (CC1):\n")
+tar1_ncorr_df <- tar1_ncorr[[1]]
+print(tar1_ncorr_df[tar1_ncorr_df$CC_index == 1, ])
 
-cat("\nTarget 2 transferred norm. corr.:\n")
-print(tar2_ncorr)
+cat("\nTarget 2 transferred norm. corr. (CC1):\n")
+tar2_ncorr_df <- tar2_ncorr[[1]]
+print(tar2_ncorr_df[tar2_ncorr_df$CC_index == 1, ])
 ```
 
 High transferred normalized correlations indicate that the co-progression
