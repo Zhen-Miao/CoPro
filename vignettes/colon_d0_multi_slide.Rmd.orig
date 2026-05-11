@@ -143,6 +143,7 @@ sigma_choice <- 0.01
 multi_obj <- computeKernelMatrix(multi_obj, sigmaValues = sigma_choice)
 
 multi_obj <- runGeneSpaceCCA(multi_obj, sigma = sigma_choice, nCC = 1)
+multi_obj <- computeRegressionGeneScores(multi_obj, sigma = sigma_choice)
 ```
 
 ## Visualize cell scores per slide
@@ -225,10 +226,10 @@ ggplot(df_cc1, aes(x = AK, y = B, color = slide_label)) +
 
 ## Gene weights
 
-Gene-space CCA directly produces gene weights: each gene's weight
-reflects its contribution to the co-progression axis. Genes with large
-positive weights increase along the axis; genes with large negative
-weights decrease.
+We use regression-based gene weights, which evaluate each gene
+independently against the cell score. This avoids collinearity issues
+where correlated genes split weight and produces more reproducible
+rankings across replicates.
 
 ### Top genes for CC1
 
@@ -236,7 +237,7 @@ weights decrease.
 gene_bar_plot <- function(obj, ct, cc = 1, n_top = 20,
                           pos_col = "darkred", neg_col = "lightpink") {
   key <- paste0("geneScores|sigma", sigma_choice, "|", ct)
-  gs <- obj@geneScores[[key]]
+  gs <- obj@geneScoresRegression[[key]]
   gs_cc <- gs[, cc]
   top <- head(sort(abs(gs_cc), decreasing = TRUE), n_top)
   top_df <- data.frame(
