@@ -5,8 +5,9 @@
 #' GitHub releases via the \code{piggyback} package.
 #'
 #' @param dataset Character string specifying which dataset to download.
-#'   One of \code{"colon_d3"}, \code{"colon_d3_multi"}, \code{"colon_d9"},
-#'   \code{"kidney"}, \code{"organoid"}, or \code{"brain_merfish"}.
+#'   One of \code{"colon_d3"}, \code{"colon_d0_multi"}, \code{"colon_d3_multi"},
+#'   \code{"colon_d9"}, \code{"kidney"}, \code{"organoid"}, or
+#'   \code{"brain_merfish"}.
 #' @param destdir Directory to save the downloaded file. Defaults to
 #'   a package-specific cache directory via \code{tools::R_user_dir()}.
 #' @param tag The GitHub release tag to download from. Defaults to

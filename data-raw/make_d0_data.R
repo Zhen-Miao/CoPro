@@ -4,7 +4,7 @@
 
 library(Matrix)
 
-data_dir <- "/Users/zhenmiao/Library/CloudStorage/Dropbox/DIALOGUE_plus project/Data"
+data_dir <- "path/to/Data"  # Update for your system
 out_dir <- "data-raw/vignette_data"
 dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
 

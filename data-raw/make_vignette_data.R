@@ -18,6 +18,8 @@
 #             repo = "Zhen-Miao/CoPro", tag = "data-v1")
 #   pb_upload("data-raw/vignette_data/copro_brain_merfish.rds",
 #             repo = "Zhen-Miao/CoPro", tag = "data-v1")
+#   pb_upload("data-raw/vignette_data/copro_colon_d0_multi.rds",
+#             repo = "Zhen-Miao/CoPro", tag = "data-v1")
 #
 # Prerequisites: Access to the original data files on Dropbox.
 
