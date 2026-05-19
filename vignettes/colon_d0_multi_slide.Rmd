@@ -1,7 +1,7 @@
 ---
 title: "Multi-slide, multi-type joint analysis (Colon Day 0)"
 output: rmarkdown::html_vignette
-date: "2026-05-10"
+date: "2026-05-19"
 vignette: >
   %\VignetteIndexEntry{Multi-slide, multi-type joint analysis (Colon Day 0)}
   %\VignetteEngine{knitr::rmarkdown}
@@ -368,7 +368,7 @@ for (sl in dat$selectedSlides) {
     nn <- order(dists)[seq_len(k)]
     smoothed[i] <- mean(fib[nn])
   }
-  r_val <- cor(epi, smoothed)
+  r_val <- abs(cor(epi, smoothed))
 
   corr_df <- rbind(corr_df, data.frame(
     slide = slide_labels[sl],
@@ -425,27 +425,28 @@ sessionInfo()
 ## locale:
 ## [1] en_US.UTF-8/en_US.UTF-8/en_US.UTF-8/C/en_US.UTF-8/en_US.UTF-8
 ## 
-## time zone: America/Los_Angeles
+## time zone: America/New_York
 ## tzcode source: internal
 ## 
 ## attached base packages:
 ## [1] stats     graphics  grDevices utils     datasets  methods   base     
 ## 
 ## other attached packages:
-## [1] patchwork_1.3.2 CoPro_1.1.0     magrittr_2.0.5  devtools_2.5.0 
-## [5] usethis_3.2.1   ggplot2_4.0.2   dplyr_1.2.1    
+## [1] patchwork_1.3.2 CoPro_1.1.0     testthat_3.3.2  magrittr_2.0.5 
+## [5] devtools_2.5.0  usethis_3.2.1   ggplot2_4.0.2   dplyr_1.2.1    
 ## 
 ## loaded via a namespace (and not attached):
-##  [1] Matrix_1.7-5       gtable_0.3.6       compiler_4.5.2     maps_3.4.3        
-##  [5] Rcpp_1.1.1         tidyselect_1.2.1   parallel_4.5.2     scales_1.4.0      
-##  [9] fastmap_1.2.0      lattice_0.22-9     R6_2.6.1           labeling_0.4.3    
-## [13] generics_0.1.4     knitr_1.51         dotCall64_1.2      tibble_3.3.1      
-## [17] pillar_1.11.1      RColorBrewer_1.1-3 rlang_1.2.0        cachem_1.1.0      
-## [21] xfun_0.57          fs_2.0.1           S7_0.2.1           pkgload_1.5.1     
-## [25] otel_0.2.0         viridisLite_0.4.3  memoise_2.0.1      cli_3.6.5         
-## [29] withr_3.0.2        grid_4.5.2         irlba_2.3.7        spam_2.11-3       
-## [33] lifecycle_1.0.5    fields_17.1        vctrs_0.7.2        evaluate_1.0.5    
-## [37] glue_1.8.0         farver_2.1.2       sessioninfo_1.2.3  pkgbuild_1.4.8    
-## [41] purrr_1.2.1        matrixStats_1.5.0  tools_4.5.2        pkgconfig_2.0.3   
-## [45] ellipsis_0.3.3
+##  [1] generics_0.1.4     lattice_0.22-9     evaluate_1.0.5     grid_4.5.2        
+##  [5] RColorBrewer_1.1-3 pkgload_1.5.1      fastmap_1.2.0      maps_3.4.3        
+##  [9] rprojroot_2.1.1    Matrix_1.7-5       pkgbuild_1.4.8     sessioninfo_1.2.3 
+## [13] brio_1.1.5         purrr_1.2.1        spam_2.11-3        viridisLite_0.4.3 
+## [17] scales_1.4.0       cli_3.6.5          rlang_1.2.0        ellipsis_0.3.3    
+## [21] withr_3.0.2        cachem_1.1.0       otel_0.2.0         tools_4.5.2       
+## [25] parallel_4.5.2     memoise_2.0.1      vctrs_0.7.2        R6_2.6.1          
+## [29] matrixStats_1.5.0  lifecycle_1.0.5    fs_2.0.1           irlba_2.3.7       
+## [33] pkgconfig_2.0.3    desc_1.4.3         pillar_1.11.1      gtable_0.3.6      
+## [37] glue_1.8.0         Rcpp_1.1.1         fields_17.1        xfun_0.57         
+## [41] tibble_3.3.1       tidyselect_1.2.1   knitr_1.51         rstudioapi_0.18.0 
+## [45] farver_2.1.2       labeling_0.4.3     dotCall64_1.2      compiler_4.5.2    
+## [49] S7_0.2.1
 ```
