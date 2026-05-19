@@ -178,9 +178,6 @@ obj <- subsetData(obj, cellTypesOfInterest = c("Tubular", "Vascular"))
 obj <- computePCA(obj, nPCA = 15, center = TRUE, scale. = TRUE)
 ```
 
-    ## Input is dense (matrixarray), performing irlba pca...
-    ## Input is dense (matrixarray), performing irlba pca...
-
 ## Step 2: Derive supervised tubular weight from nephron ordering
 
 The key idea: we regress the known segment ordering onto the PCA scores
@@ -234,25 +231,7 @@ with the nephron axis.
 
 sigma_choice <- c(0.04, 0.08, 0.1, 0.15)
 obj <- computeDistance(obj, distType = "Euclidean2D")
-```
-
-    ## normalizeDistance is set to TRUE, so distance will be normalized, so that 0.01 percentile distance will be scaled to 0.01
-    ##         0%        25%        50%        75%       100% 
-    ## 0.01661044 0.97355863 1.59208771 2.45716417 5.20528057 
-    ## The scaling factor for normalizing distance is 0.6020311
-
-``` r
-
 obj <- computeKernelMatrix(obj, sigmaValues = sigma_choice)
-```
-
-    ## Computing pairwise kernel matrix for 2 cell types
-    ## current sigma value is 0.04 
-    ## current sigma value is 0.08 
-    ## current sigma value is 0.1 
-    ## current sigma value is 0.15
-
-``` r
 
 # Get vascular PCA scores
 vasc_idx <- obj@cellTypesSub == "Vascular"
@@ -290,63 +269,11 @@ obj <- runSkrCCA(obj, scalePCs = TRUE, maxIter = 500, nCC = 4,
                    Tubular  = matrix(w1_tubular, ncol = 1),
                    Vascular = matrix(w1_vasc, ncol = 1)
                  ))
-```
-
-    ## Running skrCCA for sigma = 0.04
-
-    ## [1] "Convergence reached at 0 iterations (Max diff = 1.610e-15 )"
-    ## [1] "Convergence reached at 0 iterations (Max diff = 3.088e-16 )"
-    ## [1] "Convergence reached at 1 iterations (Max diff = 1.110e-16 )"
-
-    ## Running skrCCA for sigma = 0.08
-
-    ## [1] "Convergence reached at 0 iterations (Max diff = 1.582e-15 )"
-    ## [1] "Convergence reached at 0 iterations (Max diff = 2.887e-15 )"
-    ## [1] "Convergence reached at 0 iterations (Max diff = 5.856e-15 )"
-
-    ## Running skrCCA for sigma = 0.1
-
-    ## [1] "Convergence reached at 1 iterations (Max diff = 1.110e-16 )"
-    ## [1] "Convergence reached at 1 iterations (Max diff = 1.110e-16 )"
-    ## [1] "Convergence reached at 0 iterations (Max diff = 3.886e-16 )"
-
-    ## Running skrCCA for sigma = 0.15
-
-    ## [1] "Convergence reached at 1 iterations (Max diff = 1.110e-16 )"
-    ## [1] "Convergence reached at 0 iterations (Max diff = 2.220e-16 )"
-    ## [1] "Convergence reached at 0 iterations (Max diff = 2.220e-16 )"
-
-    ## Optimization succeeded for 4 sigma value(s): sigma_0.04, sigma_0.08, sigma_0.1, sigma_0.15
-
-``` r
 
 obj <- computeNormalizedCorrelation(obj)
-```
-
-    ## Calculating spectral norms,  depending on the data size, this may take a while. 
-    ## Finished calculating spectral norms
-
-``` r
-
 obj <- computeGeneAndCellScores(obj)
 obj <- computeRegressionGeneScores(obj)
 ```
-
-    ## Computed regression gene scores for sigma=0.04, cellType='Tubular'
-
-    ## Computed regression gene scores for sigma=0.04, cellType='Vascular'
-
-    ## Computed regression gene scores for sigma=0.08, cellType='Tubular'
-
-    ## Computed regression gene scores for sigma=0.08, cellType='Vascular'
-
-    ## Computed regression gene scores for sigma=0.1, cellType='Tubular'
-
-    ## Computed regression gene scores for sigma=0.1, cellType='Vascular'
-
-    ## Computed regression gene scores for sigma=0.15, cellType='Tubular'
-
-    ## Computed regression gene scores for sigma=0.15, cellType='Vascular'
 
 ## Results: Spatial analysis
 
@@ -994,16 +921,22 @@ sessionInfo()
     ## [1] stats     graphics  grDevices utils     datasets  methods   base     
     ## 
     ## other attached packages:
-    ## [1] scales_1.4.0  ggrepel_0.9.8 ggplot2_4.0.2 CoPro_0.6.1   knitr_1.51   
+    ## [1] scales_1.4.0    ggrepel_0.9.6   patchwork_1.3.2 ggplot2_4.0.1  
+    ## [5] CoPro_1.1.0     testthat_3.3.2 
     ## 
     ## loaded via a namespace (and not attached):
-    ##  [1] Matrix_1.7-5       gtable_0.3.6       dplyr_1.2.1        compiler_4.5.2    
-    ##  [5] piggyback_0.1.5    maps_3.4.3         tidyselect_1.2.1   Rcpp_1.1.1        
-    ##  [9] parallel_4.5.2     fastmap_1.2.0      lattice_0.22-9     R6_2.6.1          
-    ## [13] labeling_0.4.3     generics_0.1.4     dotCall64_1.2      tibble_3.3.1      
-    ## [17] pillar_1.11.1      RColorBrewer_1.1-3 rlang_1.2.0        cachem_1.1.0      
-    ## [21] xfun_0.57          S7_0.2.1           otel_0.2.0         memoise_2.0.1     
-    ## [25] viridisLite_0.4.3  cli_3.6.5          withr_3.0.2        magrittr_2.0.5    
-    ## [29] grid_4.5.2         irlba_2.3.7        spam_2.11-3        lifecycle_1.0.5   
-    ## [33] fields_17.1        vctrs_0.7.2        evaluate_1.0.5     glue_1.8.0        
-    ## [37] farver_2.1.2       matrixStats_1.5.0  tools_4.5.2        pkgconfig_2.0.3
+    ##  [1] generics_0.1.4     renv_1.1.7         lattice_0.22-9     magrittr_2.0.4    
+    ##  [5] evaluate_1.0.5     grid_4.5.2         RColorBrewer_1.1-3 pkgload_1.4.1     
+    ##  [9] fastmap_1.2.0      maps_3.4.3         rprojroot_2.1.1    Matrix_1.7-5      
+    ## [13] pkgbuild_1.4.8     sessioninfo_1.2.3  brio_1.1.5         mgcv_1.9-4        
+    ## [17] purrr_1.2.1        spam_2.11-3        viridisLite_0.4.2  isoband_0.3.0     
+    ## [21] cli_3.6.5          rlang_1.1.7        splines_4.5.2      ellipsis_0.3.2    
+    ## [25] remotes_2.5.0      withr_3.0.2        cachem_1.1.0       yaml_2.3.12       
+    ## [29] devtools_2.4.6     otel_0.2.0         tools_4.5.2        parallel_4.5.2    
+    ## [33] memoise_2.0.1      dplyr_1.1.4        vctrs_0.7.1        R6_2.6.1          
+    ## [37] matrixStats_1.5.0  lifecycle_1.0.5    fs_1.6.6           MASS_7.3-65       
+    ## [41] usethis_3.2.1      irlba_2.3.7        pkgconfig_2.0.3    desc_1.4.3        
+    ## [45] pillar_1.11.1      gtable_0.3.6       glue_1.8.0         Rcpp_1.1.1        
+    ## [49] fields_17.1        xfun_0.56          tibble_3.3.1       tidyselect_1.2.1  
+    ## [53] rstudioapi_0.18.0  knitr_1.51         farver_2.1.2       nlme_3.1-169      
+    ## [57] labeling_0.4.3     dotCall64_1.2      compiler_4.5.2     S7_0.2.1

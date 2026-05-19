@@ -26,14 +26,6 @@ library(ggplot2)
 ``` r
 
 data_path <- copro_download_data("colon_d3")
-```
-
-    ## Downloading copro_colon_d3.rds from GitHub Release 'data-v1'...
-
-    ## Downloaded to: /home/runner/.cache/R/CoPro/copro_colon_d3.rds
-
-``` r
-
 dat <- readRDS(data_path)
 
 str(dat[c("normalizedData", "locationData", "cellTypes")], max.level = 1)
@@ -66,7 +58,10 @@ ggplot(plot_df, aes(x = x, y = y, color = celltype)) +
   theme(legend.position = "bottom")
 ```
 
-![](colon_d3_cross_type_files/figure-html/plot-layout-1.png)
+![plot of chunk
+plot-layout](colon_d3_cross_type_files/plot-layout-1.png)
+
+plot of chunk plot-layout
 
 ### Mucosal neighborhood (MU) labels
 
@@ -100,7 +95,9 @@ ggplot(mu_df, aes(x = x, y = y, color = MU_grouped)) +
         legend.title = element_blank())
 ```
 
-![](colon_d3_cross_type_files/figure-html/plot-mu-1.png)
+![plot of chunk plot-mu](colon_d3_cross_type_files/plot-mu-1.png)
+
+plot of chunk plot-mu
 
 ## Create CoPro object
 
@@ -123,99 +120,18 @@ obj <- subsetData(obj, cellTypesOfInterest = cell_types)
 
 # PCA
 obj <- computePCA(obj, nPCA = 40, center = TRUE, scale. = TRUE)
-```
-
-    ## Input is dense (matrixarray), performing irlba pca...
-    ## Input is dense (matrixarray), performing irlba pca...
-    ## Input is dense (matrixarray), performing irlba pca...
-
-``` r
 
 # Distance and kernel
 obj <- computeDistance(obj, distType = "Euclidean2D")
-```
-
-    ## normalizeDistance = TRUE: low-percentile distance will be scaled to 0.01.
-
-    ##          0%         25%         50%         75%        100% 
-    ##   0.9705014  37.5605433  59.8000973  82.3149151 148.3187211 
-    ##         0%        25%        50%        75%       100% 
-    ##   1.044265  37.159523  59.872983  82.261799 147.622508 
-    ##         0%        25%        50%        75%       100% 
-    ##   1.036319  37.135140  59.598056  82.079873 147.257437
-
-    ## Distance normalization scaling factor: 0.010304
-
-``` r
 
 sigma_choice <- c(0.005, 0.01, 0.02, 0.05, 0.1)
 obj <- computeKernelMatrix(obj, sigmaValues = sigma_choice)
-```
-
-    ## Computing pairwise kernel matrix for 3 cell types
-    ## current sigma value is 0.005 
-    ## current sigma value is 0.01 
-    ## current sigma value is 0.02 
-    ## current sigma value is 0.05 
-    ## current sigma value is 0.1
-
-``` r
 
 # Sparse kernel CCA -- request 4 CCs to capture multiple axes
 obj <- runSkrCCA(obj, scalePCs = TRUE, maxIter = 500, nCC = 4)
-```
-
-    ## Running skrCCA [1/5] for sigma = 0.005 ...
-
-    ## [1] "Convergence reached at 9 iterations (Max diff = 6.837e-06 )"
-    ## [1] "Convergence reached at 9 iterations (Max diff = 4.406e-06 )"
-    ## [1] "Convergence reached at 35 iterations (Max diff = 8.970e-06 )"
-    ## [1] "Convergence reached at 51 iterations (Max diff = 9.957e-06 )"
-
-    ## Running skrCCA [2/5] for sigma = 0.01 ...
-
-    ## [1] "Convergence reached at 11 iterations (Max diff = 3.749e-06 )"
-    ## [1] "Convergence reached at 6 iterations (Max diff = 3.491e-06 )"
-    ## [1] "Convergence reached at 22 iterations (Max diff = 8.516e-06 )"
-    ## [1] "Convergence reached at 18 iterations (Max diff = 9.325e-06 )"
-
-    ## Running skrCCA [3/5] for sigma = 0.02 ...
-
-    ## [1] "Convergence reached at 11 iterations (Max diff = 3.220e-06 )"
-    ## [1] "Convergence reached at 6 iterations (Max diff = 4.958e-06 )"
-    ## [1] "Convergence reached at 17 iterations (Max diff = 7.344e-06 )"
-    ## [1] "Convergence reached at 7 iterations (Max diff = 9.868e-06 )"
-
-    ## Running skrCCA [4/5] for sigma = 0.05 ...
-
-    ## [1] "Convergence reached at 17 iterations (Max diff = 5.965e-06 )"
-    ## [1] "Convergence reached at 8 iterations (Max diff = 8.780e-06 )"
-    ## [1] "Convergence reached at 6 iterations (Max diff = 6.403e-06 )"
-    ## [1] "Convergence reached at 22 iterations (Max diff = 8.899e-06 )"
-
-    ## Running skrCCA [5/5] for sigma = 0.1 ...
-
-    ## [1] "Convergence reached at 24 iterations (Max diff = 7.534e-06 )"
-    ## [1] "Convergence reached at 12 iterations (Max diff = 7.206e-06 )"
-    ## [1] "Convergence reached at 7 iterations (Max diff = 4.527e-06 )"
-    ## [1] "Convergence reached at 86 iterations (Max diff = 9.381e-06 )"
-
-    ## skrCCA finished 5 sigma value(s) in 8.8 s.
-
-    ## Optimization succeeded for 5 sigma value(s): sigma_0.005, sigma_0.01, sigma_0.02, sigma_0.05, sigma_0.1
-
-``` r
 
 # Normalized correlation and scores
 obj <- computeNormalizedCorrelation(obj)
-```
-
-    ## Calculating spectral norms, this may take a while.
-
-    ## Finished calculating spectral norms.
-
-``` r
-
 obj <- computeGeneAndCellScores(obj)
 ```
 
@@ -235,7 +151,9 @@ ggplot(ncorr, aes(x = sigmaValues, y = normalizedCorrelation)) +
   theme_minimal()
 ```
 
-![](colon_d3_cross_type_files/figure-html/plot-ncorr-1.png)
+![plot of chunk plot-ncorr](colon_d3_cross_type_files/plot-ncorr-1.png)
+
+plot of chunk plot-ncorr
 
 ## Orthogonal axes: CC1 vs CC2
 
@@ -260,7 +178,9 @@ ggplot(cs_cc1) +
   theme_minimal()
 ```
 
-![](colon_d3_cross_type_files/figure-html/insitu-cc1-1.png)
+![plot of chunk insitu-cc1](colon_d3_cross_type_files/insitu-cc1-1.png)
+
+plot of chunk insitu-cc1
 
 ### CC2 cell scores in situ
 
@@ -278,7 +198,9 @@ ggplot(cs_cc2) +
   theme_minimal()
 ```
 
-![](colon_d3_cross_type_files/figure-html/insitu-cc2-1.png)
+![plot of chunk insitu-cc2](colon_d3_cross_type_files/insitu-cc2-1.png)
+
+plot of chunk insitu-cc2
 
 CC1 and CC2 capture distinct spatial gradients. Because CCA axes are
 orthogonal, these represent independent programs of coordinated gene
@@ -315,7 +237,10 @@ ggplot() +
   theme_classic()
 ```
 
-![](colon_d3_cross_type_files/figure-html/cc1-vs-cc2-mu-1.png)
+![plot of chunk
+cc1-vs-cc2-mu](colon_d3_cross_type_files/cc1-vs-cc2-mu-1.png)
+
+plot of chunk cc1-vs-cc2-mu
 
 ## Example gene expression in situ
 
@@ -345,7 +270,10 @@ ggplot(expr_df, aes(x = x, y = y, color = Egr1)) +
         axis.ticks = element_blank(), axis.title = element_blank())
 ```
 
-![](colon_d3_cross_type_files/figure-html/gene-insitu-egr1-1.png)
+![plot of chunk
+gene-insitu-egr1](colon_d3_cross_type_files/gene-insitu-egr1-1.png)
+
+plot of chunk gene-insitu-egr1
 
 ``` r
 
@@ -361,7 +289,10 @@ ggplot(expr_df, aes(x = x, y = y, color = Mki67)) +
         axis.ticks = element_blank(), axis.title = element_blank())
 ```
 
-![](colon_d3_cross_type_files/figure-html/gene-insitu-mki67-1.png)
+![plot of chunk
+gene-insitu-mki67](colon_d3_cross_type_files/gene-insitu-mki67-1.png)
+
+plot of chunk gene-insitu-mki67
 
 ## Cross-type correlation plots
 
@@ -386,7 +317,9 @@ ggplot(df_cc1) +
   theme_minimal()
 ```
 
-![](colon_d3_cross_type_files/figure-html/cross-corr-1.png)
+![plot of chunk cross-corr](colon_d3_cross_type_files/cross-corr-1.png)
+
+plot of chunk cross-corr
 
 ``` r
 
@@ -406,7 +339,9 @@ ggplot(df_cc2) +
   theme_minimal()
 ```
 
-![](colon_d3_cross_type_files/figure-html/cross-corr-2.png)
+![plot of chunk cross-corr](colon_d3_cross_type_files/cross-corr-2.png)
+
+plot of chunk cross-corr
 
 ## Gene scores
 
@@ -451,7 +386,10 @@ ggplot(top_df, aes(x = gene, y = weight, fill = direction)) +
   theme(legend.position = "none")
 ```
 
-![](colon_d3_cross_type_files/figure-html/top-genes-cc1-1.png)
+![plot of chunk
+top-genes-cc1](colon_d3_cross_type_files/top-genes-cc1-1.png)
+
+plot of chunk top-genes-cc1
 
 ### Visualize top genes for CC2
 
@@ -476,7 +414,10 @@ ggplot(top_df_cc2, aes(x = gene, y = weight, fill = direction)) +
   theme(legend.position = "none")
 ```
 
-![](colon_d3_cross_type_files/figure-html/top-genes-cc2-1.png)
+![plot of chunk
+top-genes-cc2](colon_d3_cross_type_files/top-genes-cc2-1.png)
+
+plot of chunk top-genes-cc2
 
 ## Session info
 
@@ -485,44 +426,39 @@ ggplot(top_df_cc2, aes(x = gene, y = weight, fill = direction)) +
 sessionInfo()
 ```
 
-    ## R version 4.6.0 (2026-04-24)
-    ## Platform: x86_64-pc-linux-gnu
-    ## Running under: Ubuntu 24.04.4 LTS
+    ## R version 4.5.2 (2025-10-31)
+    ## Platform: aarch64-apple-darwin20
+    ## Running under: macOS Tahoe 26.1
     ## 
     ## Matrix products: default
-    ## BLAS:   /usr/lib/x86_64-linux-gnu/openblas-pthread/libblas.so.3 
-    ## LAPACK: /usr/lib/x86_64-linux-gnu/openblas-pthread/libopenblasp-r0.3.26.so;  LAPACK version 3.12.0
+    ## BLAS:   /System/Library/Frameworks/Accelerate.framework/Versions/A/Frameworks/vecLib.framework/Versions/A/libBLAS.dylib 
+    ## LAPACK: /Library/Frameworks/R.framework/Versions/4.5-arm64/Resources/lib/libRlapack.dylib;  LAPACK version 3.12.1
     ## 
     ## locale:
-    ##  [1] LC_CTYPE=C.UTF-8       LC_NUMERIC=C           LC_TIME=C.UTF-8       
-    ##  [4] LC_COLLATE=C.UTF-8     LC_MONETARY=C.UTF-8    LC_MESSAGES=C.UTF-8   
-    ##  [7] LC_PAPER=C.UTF-8       LC_NAME=C              LC_ADDRESS=C          
-    ## [10] LC_TELEPHONE=C         LC_MEASUREMENT=C.UTF-8 LC_IDENTIFICATION=C   
+    ## [1] en_US.UTF-8/en_US.UTF-8/en_US.UTF-8/C/en_US.UTF-8/en_US.UTF-8
     ## 
-    ## time zone: UTC
-    ## tzcode source: system (glibc)
+    ## time zone: America/Los_Angeles
+    ## tzcode source: internal
     ## 
     ## attached base packages:
     ## [1] stats     graphics  grDevices utils     datasets  methods   base     
     ## 
     ## other attached packages:
-    ## [1] ggplot2_4.0.3 CoPro_1.1.0  
+    ## [1] patchwork_1.3.2 ggplot2_4.0.1   CoPro_1.1.0     testthat_3.3.2 
     ## 
     ## loaded via a namespace (and not attached):
-    ##  [1] rappdirs_0.3.4     sass_0.4.10        generics_0.1.4     lattice_0.22-9    
-    ##  [5] digest_0.6.39      magrittr_2.0.5     timechange_0.4.0   evaluate_1.0.5    
-    ##  [9] grid_4.6.0         RColorBrewer_1.1-3 fastmap_1.2.0      maps_3.4.3        
-    ## [13] jsonlite_2.0.0     Matrix_1.7-5       httr_1.4.8         spam_2.11-3       
-    ## [17] viridisLite_0.4.3  scales_1.4.0       isoband_0.3.0      httr2_1.2.2       
-    ## [21] textshaping_1.0.5  jquerylib_0.1.4    cli_3.6.6          rlang_1.2.0       
-    ## [25] gitcreds_0.1.2     withr_3.0.2        cachem_1.1.0       yaml_2.3.12       
-    ## [29] tools_4.6.0        parallel_4.6.0     memoise_2.0.1      dplyr_1.2.1       
-    ## [33] curl_7.1.0         vctrs_0.7.3        R6_2.6.1           lubridate_1.9.5   
-    ## [37] matrixStats_1.5.0  lifecycle_1.0.5    fs_2.1.0           MASS_7.3-65       
-    ## [41] ragg_1.5.2         irlba_2.3.7        pkgconfig_2.0.3    desc_1.4.3        
-    ## [45] pkgdown_2.2.0      pillar_1.11.1      bslib_0.10.0       gtable_0.3.6      
-    ## [49] glue_1.8.1         gh_1.5.0           Rcpp_1.1.1-1.1     fields_17.3       
-    ## [53] systemfonts_1.3.2  xfun_0.57          tibble_3.3.1       tidyselect_1.2.1  
-    ## [57] knitr_1.51         farver_2.1.2       htmltools_0.5.9    labeling_0.4.3    
-    ## [61] rmarkdown_2.31     piggyback_0.1.5    dotCall64_1.2      compiler_4.6.0    
-    ## [65] S7_0.2.2
+    ##  [1] generics_0.1.4     renv_1.1.7         lattice_0.22-9     magrittr_2.0.4    
+    ##  [5] evaluate_1.0.5     grid_4.5.2         RColorBrewer_1.1-3 pkgload_1.4.1     
+    ##  [9] fastmap_1.2.0      maps_3.4.3         rprojroot_2.1.1    Matrix_1.7-5      
+    ## [13] pkgbuild_1.4.8     sessioninfo_1.2.3  brio_1.1.5         purrr_1.2.1       
+    ## [17] spam_2.11-3        viridisLite_0.4.2  scales_1.4.0       isoband_0.3.0     
+    ## [21] cli_3.6.5          rlang_1.1.7        ellipsis_0.3.2     remotes_2.5.0     
+    ## [25] withr_3.0.2        cachem_1.1.0       yaml_2.3.12        devtools_2.4.6    
+    ## [29] otel_0.2.0         tools_4.5.2        parallel_4.5.2     memoise_2.0.1     
+    ## [33] dplyr_1.1.4        vctrs_0.7.1        R6_2.6.1           matrixStats_1.5.0 
+    ## [37] lifecycle_1.0.5    fs_1.6.6           MASS_7.3-65        usethis_3.2.1     
+    ## [41] irlba_2.3.7        pkgconfig_2.0.3    desc_1.4.3         pillar_1.11.1     
+    ## [45] gtable_0.3.6       glue_1.8.0         Rcpp_1.1.1         fields_17.1       
+    ## [49] xfun_0.56          tibble_3.3.1       tidyselect_1.2.1   rstudioapi_0.18.0 
+    ## [53] knitr_1.51         farver_2.1.2       labeling_0.4.3     dotCall64_1.2     
+    ## [57] compiler_4.5.2     S7_0.2.1

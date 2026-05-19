@@ -20,14 +20,6 @@ library(ggplot2)
 ``` r
 
 data_path <- copro_download_data("brain_merfish")
-```
-
-    ## Downloading copro_brain_merfish.rds from GitHub Release 'data-v1'...
-
-    ## Downloaded to: /home/runner/.cache/R/CoPro/copro_brain_merfish.rds
-
-``` r
-
 dat <- readRDS(data_path)
 ```
 
@@ -42,7 +34,10 @@ ggplot(dat$metaData) +
   ggtitle("D1 and D2 neurons in the striatum")
 ```
 
-![](brain_merfish_two_type_files/figure-html/plot-layout-1.png)
+![plot of chunk
+plot-layout](brain_merfish_two_type_files/plot-layout-1.png)
+
+plot of chunk plot-layout
 
 ## Create CoPro object and run pipeline
 
@@ -60,71 +55,11 @@ obj <- subsetData(obj, cellTypesOfInterest = cell_types)
 
 # Core pipeline
 obj <- computePCA(obj, nPCA = 40, center = TRUE, scale. = TRUE)
-```
-
-    ## Input is dense (matrixarray), performing irlba pca...
-    ## Input is dense (matrixarray), performing irlba pca...
-
-``` r
-
 obj <- computeDistance(obj, distType = "Euclidean2D",
                        normalizeDistance = FALSE)
-```
-
-    ##         0%        25%        50%        75%       100% 
-    ## 0.03333036 0.77980408 1.21734420 1.70564639 3.10426158
-
-``` r
-
 obj <- computeKernelMatrix(obj, sigmaValues = c(0.1, 0.14, 0.2, 0.5))
-```
-
-    ## Computing pairwise kernel matrix for 2 cell types
-    ## current sigma value is 0.1 
-    ## current sigma value is 0.14 
-    ## current sigma value is 0.2 
-    ## current sigma value is 0.5
-
-``` r
-
 obj <- runSkrCCA(obj, scalePCs = TRUE, maxIter = 500)
-```
-
-    ## Running skrCCA [1/4] for sigma = 0.1 ...
-
-    ## [1] "Convergence reached at 27 iterations (Max diff = 8.929e-06 )"
-    ## [1] "Convergence reached at 0 iterations (Max diff = 3.417e-14 )"
-
-    ## Running skrCCA [2/4] for sigma = 0.14 ...
-
-    ## [1] "Convergence reached at 21 iterations (Max diff = 6.632e-06 )"
-    ## [1] "Convergence reached at 0 iterations (Max diff = 2.481e-14 )"
-
-    ## Running skrCCA [3/4] for sigma = 0.2 ...
-
-    ## [1] "Convergence reached at 17 iterations (Max diff = 6.454e-06 )"
-    ## [1] "Convergence reached at 0 iterations (Max diff = 1.846e-15 )"
-
-    ## Running skrCCA [4/4] for sigma = 0.5 ...
-
-    ## [1] "Convergence reached at 11 iterations (Max diff = 7.408e-06 )"
-    ## [1] "Convergence reached at 0 iterations (Max diff = 1.480e-15 )"
-
-    ## skrCCA finished 4 sigma value(s) in 2.8 s.
-
-    ## Optimization succeeded for 4 sigma value(s): sigma_0.1, sigma_0.14, sigma_0.2, sigma_0.5
-
-``` r
-
 obj <- computeNormalizedCorrelation(obj)
-```
-
-    ## Calculating spectral norms, this may take a while.
-
-    ## Finished calculating spectral norms.
-
-``` r
-
 obj <- computeGeneAndCellScores(obj)
 ```
 
@@ -144,7 +79,10 @@ ggplot(ncorr, aes(x = sigmaValues, y = normalizedCorrelation)) +
   theme_minimal()
 ```
 
-![](brain_merfish_two_type_files/figure-html/plot-ncorr-1.png)
+![plot of chunk
+plot-ncorr](brain_merfish_two_type_files/plot-ncorr-1.png)
+
+plot of chunk plot-ncorr
 
 ## Cross-type correlation
 
@@ -167,7 +105,10 @@ ggplot(df_corr) +
   theme_minimal()
 ```
 
-![](brain_merfish_two_type_files/figure-html/plot-cross-corr-1.png)
+![plot of chunk
+plot-cross-corr](brain_merfish_two_type_files/plot-cross-corr-1.png)
+
+plot of chunk plot-cross-corr
 
 ## In situ visualization
 
@@ -184,7 +125,10 @@ ggplot(cs) +
   theme_minimal()
 ```
 
-![](brain_merfish_two_type_files/figure-html/plot-insitu-1.png)
+![plot of chunk
+plot-insitu](brain_merfish_two_type_files/plot-insitu-1.png)
+
+plot of chunk plot-insitu
 
 ``` r
 
@@ -197,7 +141,10 @@ ggplot(cs) +
   theme_minimal()
 ```
 
-![](brain_merfish_two_type_files/figure-html/plot-insitu-2.png)
+![plot of chunk
+plot-insitu](brain_merfish_two_type_files/plot-insitu-2.png)
+
+plot of chunk plot-insitu
 
 ## Permutation test
 
@@ -225,16 +172,16 @@ obj <- runSkrCCAPermu(obj, nPermu = 5L, permu_method = "bin",
     ## Cell permutation indices generated.
     ## 
     ## Running CCA optimization for 5 permutations...
-    ## [1] "Convergence reached at 22 iterations (Max diff = 8.787e-06 )"
-    ## [1] "Convergence reached at 0 iterations (Max diff = 5.763e-13 )"
-    ## [1] "Convergence reached at 47 iterations (Max diff = 9.597e-06 )"
-    ## [1] "Convergence reached at 0 iterations (Max diff = 1.873e-14 )"
-    ## [1] "Convergence reached at 21 iterations (Max diff = 9.612e-06 )"
-    ## [1] "Convergence reached at 0 iterations (Max diff = 3.344e-11 )"
-    ## [1] "Convergence reached at 54 iterations (Max diff = 8.615e-06 )"
-    ## [1] "Convergence reached at 0 iterations (Max diff = 2.520e-14 )"
-    ## [1] "Convergence reached at 16 iterations (Max diff = 9.050e-06 )"
-    ## [1] "Convergence reached at 0 iterations (Max diff = 3.650e-12 )"
+    ## [1] "Convergence reached at 15 iterations (Max diff = 6.601e-06 )"
+    ## [1] "Convergence reached at 0 iterations (Max diff = 1.368e-10 )"
+    ## [1] "Convergence reached at 28 iterations (Max diff = 8.467e-06 )"
+    ## [1] "Convergence reached at 0 iterations (Max diff = 9.963e-13 )"
+    ## [1] "Convergence reached at 56 iterations (Max diff = 8.786e-06 )"
+    ## [1] "Convergence reached at 0 iterations (Max diff = 1.361e-10 )"
+    ## [1] "Convergence reached at 11 iterations (Max diff = 9.432e-06 )"
+    ## [1] "Convergence reached at 0 iterations (Max diff = 2.243e-09 )"
+    ## [1] "Convergence reached at 11 iterations (Max diff = 4.301e-06 )"
+    ## [1] "Convergence reached at 0 iterations (Max diff = 1.132e-10 )"
     ##   Completed 5 of 5 permutations
     ## 
     ## Permutation testing complete.
@@ -271,16 +218,16 @@ print(nc_permu)
     ## permu_5.1         0.1 061 STR D1 Gaba 062 STR D2 Gaba        1
     ## permu_5.2         0.1 061 STR D1 Gaba 062 STR D2 Gaba        2
     ##           normalizedCorrelation
-    ## permu_1.1             0.2822854
-    ## permu_1.2             0.2208827
-    ## permu_2.1             0.2703554
-    ## permu_2.2             0.2507406
-    ## permu_3.1             0.2523586
-    ## permu_3.2             0.1980277
-    ## permu_4.1             0.2575950
-    ## permu_4.2             0.2257873
-    ## permu_5.1             0.2828030
-    ## permu_5.2             0.2102234
+    ## permu_1.1             0.3317592
+    ## permu_1.2             0.2306265
+    ## permu_2.1             0.2711081
+    ## permu_2.2             0.2218264
+    ## permu_3.1             0.2693285
+    ## permu_3.2             0.2543175
+    ## permu_4.1             0.2839825
+    ## permu_4.2             0.1828652
+    ## permu_5.1             0.3245313
+    ## permu_5.2             0.2109768
 
 ## References
 
@@ -295,43 +242,38 @@ resolved cell atlas of the whole mouse brain. *Nature* 624, 343–354
 sessionInfo()
 ```
 
-    ## R version 4.6.0 (2026-04-24)
-    ## Platform: x86_64-pc-linux-gnu
-    ## Running under: Ubuntu 24.04.4 LTS
+    ## R version 4.5.2 (2025-10-31)
+    ## Platform: aarch64-apple-darwin20
+    ## Running under: macOS Tahoe 26.1
     ## 
     ## Matrix products: default
-    ## BLAS:   /usr/lib/x86_64-linux-gnu/openblas-pthread/libblas.so.3 
-    ## LAPACK: /usr/lib/x86_64-linux-gnu/openblas-pthread/libopenblasp-r0.3.26.so;  LAPACK version 3.12.0
+    ## BLAS:   /System/Library/Frameworks/Accelerate.framework/Versions/A/Frameworks/vecLib.framework/Versions/A/libBLAS.dylib 
+    ## LAPACK: /Library/Frameworks/R.framework/Versions/4.5-arm64/Resources/lib/libRlapack.dylib;  LAPACK version 3.12.1
     ## 
     ## locale:
-    ##  [1] LC_CTYPE=C.UTF-8       LC_NUMERIC=C           LC_TIME=C.UTF-8       
-    ##  [4] LC_COLLATE=C.UTF-8     LC_MONETARY=C.UTF-8    LC_MESSAGES=C.UTF-8   
-    ##  [7] LC_PAPER=C.UTF-8       LC_NAME=C              LC_ADDRESS=C          
-    ## [10] LC_TELEPHONE=C         LC_MEASUREMENT=C.UTF-8 LC_IDENTIFICATION=C   
+    ## [1] en_US.UTF-8/en_US.UTF-8/en_US.UTF-8/C/en_US.UTF-8/en_US.UTF-8
     ## 
-    ## time zone: UTC
-    ## tzcode source: system (glibc)
+    ## time zone: America/Los_Angeles
+    ## tzcode source: internal
     ## 
     ## attached base packages:
     ## [1] stats     graphics  grDevices utils     datasets  methods   base     
     ## 
     ## other attached packages:
-    ## [1] ggplot2_4.0.3 CoPro_1.1.0  
+    ## [1] patchwork_1.3.2 ggplot2_4.0.1   CoPro_1.1.0     testthat_3.3.2 
     ## 
     ## loaded via a namespace (and not attached):
-    ##  [1] rappdirs_0.3.4     sass_0.4.10        generics_0.1.4     lattice_0.22-9    
-    ##  [5] digest_0.6.39      magrittr_2.0.5     timechange_0.4.0   evaluate_1.0.5    
-    ##  [9] grid_4.6.0         RColorBrewer_1.1-3 fastmap_1.2.0      maps_3.4.3        
-    ## [13] jsonlite_2.0.0     Matrix_1.7-5       httr_1.4.8         spam_2.11-3       
-    ## [17] viridisLite_0.4.3  scales_1.4.0       httr2_1.2.2        textshaping_1.0.5 
-    ## [21] jquerylib_0.1.4    cli_3.6.6          rlang_1.2.0        gitcreds_0.1.2    
-    ## [25] withr_3.0.2        cachem_1.1.0       yaml_2.3.12        tools_4.6.0       
-    ## [29] parallel_4.6.0     memoise_2.0.1      dplyr_1.2.1        curl_7.1.0        
-    ## [33] vctrs_0.7.3        R6_2.6.1           lubridate_1.9.5    matrixStats_1.5.0 
-    ## [37] lifecycle_1.0.5    fs_2.1.0           ragg_1.5.2         irlba_2.3.7       
-    ## [41] pkgconfig_2.0.3    desc_1.4.3         pkgdown_2.2.0      pillar_1.11.1     
-    ## [45] bslib_0.10.0       gtable_0.3.6       glue_1.8.1         gh_1.5.0          
-    ## [49] Rcpp_1.1.1-1.1     fields_17.3        systemfonts_1.3.2  xfun_0.57         
-    ## [53] tibble_3.3.1       tidyselect_1.2.1   knitr_1.51         farver_2.1.2      
-    ## [57] htmltools_0.5.9    labeling_0.4.3     rmarkdown_2.31     piggyback_0.1.5   
-    ## [61] dotCall64_1.2      compiler_4.6.0     S7_0.2.2
+    ##  [1] generics_0.1.4     renv_1.1.7         lattice_0.22-9     magrittr_2.0.4    
+    ##  [5] evaluate_1.0.5     grid_4.5.2         RColorBrewer_1.1-3 pkgload_1.4.1     
+    ##  [9] fastmap_1.2.0      maps_3.4.3         rprojroot_2.1.1    Matrix_1.7-5      
+    ## [13] pkgbuild_1.4.8     sessioninfo_1.2.3  brio_1.1.5         purrr_1.2.1       
+    ## [17] spam_2.11-3        viridisLite_0.4.2  scales_1.4.0       cli_3.6.5         
+    ## [21] rlang_1.1.7        ellipsis_0.3.2     remotes_2.5.0      withr_3.0.2       
+    ## [25] cachem_1.1.0       yaml_2.3.12        devtools_2.4.6     otel_0.2.0        
+    ## [29] tools_4.5.2        parallel_4.5.2     memoise_2.0.1      dplyr_1.1.4       
+    ## [33] vctrs_0.7.1        R6_2.6.1           matrixStats_1.5.0  lifecycle_1.0.5   
+    ## [37] fs_1.6.6           usethis_3.2.1      irlba_2.3.7        pkgconfig_2.0.3   
+    ## [41] desc_1.4.3         pillar_1.11.1      gtable_0.3.6       glue_1.8.0        
+    ## [45] Rcpp_1.1.1         fields_17.1        xfun_0.56          tibble_3.3.1      
+    ## [49] tidyselect_1.2.1   rstudioapi_0.18.0  knitr_1.51         farver_2.1.2      
+    ## [53] labeling_0.4.3     dotCall64_1.2      compiler_4.5.2     S7_0.2.1
