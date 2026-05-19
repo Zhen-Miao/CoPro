@@ -1,17 +1,14 @@
 ---
 title: "Within-cell-type spatial patterns (Organoid)"
 output: rmarkdown::html_vignette
-date: "`r Sys.Date()`"
+date: "2026-05-10"
 vignette: >
   %\VignetteIndexEntry{Within-cell-type spatial patterns (Organoid)}
   %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
 ---
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE, eval = TRUE,
-                      fig.width = 6, fig.height = 5)
-```
+
 
 ## Overview
 
@@ -27,19 +24,32 @@ developmental trajectory cluster spatially.
 
 ## Load packages
 
-```{r load-packages, message=FALSE, warning=FALSE}
+
+``` r
 library(CoPro)
 library(ggplot2)
 ```
 
 ## Download and load data
 
-```{r download-data}
+
+``` r
 data_path <- copro_download_data("organoid")
 dat <- readRDS(data_path)
 
 cat("Cells:", nrow(dat$normalizedData), "\n")
+```
+
+```
+## Cells: 9140
+```
+
+``` r
 cat("Genes:", ncol(dat$normalizedData), "\n")
+```
+
+```
+## Genes: 140
 ```
 
 The dataset contains:
@@ -52,7 +62,8 @@ The dataset contains:
 
 ## Visualize tissue layout
 
-```{r plot-layout}
+
+``` r
 plot_df <- data.frame(
   x = dat$locationData$x,
   y = dat$locationData$y
@@ -66,9 +77,12 @@ ggplot(plot_df, aes(x = x, y = y)) +
   theme_classic()
 ```
 
+![plot of chunk plot-layout](organoid_one_type_files/plot-layout-1.png)
+
 ## Create CoPro object
 
-```{r create-object}
+
+``` r
 obj <- newCoProSingle(
   normalizedData = dat$normalizedData,
   locationData = dat$locationData,
@@ -81,7 +95,8 @@ obj <- subsetData(obj, cellTypesOfInterest = "Epithelial")
 
 ## Run the CoPro pipeline
 
-```{r run-pipeline}
+
+``` r
 # PCA
 obj <- computePCA(obj, nPCA = 30, center = TRUE, scale. = TRUE)
 
@@ -95,7 +110,22 @@ obj <- computeKernelMatrix(obj, sigmaValues = sigma_choice,
                             upperQuantile = 0.85,
                             normalizeKernel = FALSE,
                             lowerLimit = 5e-7)
+```
 
+```
+## Warning in .CheckSigmaValuesToRemove(kernel_current = kernel_current,
+## lowerLimit = lowerLimit, : Kernel matrix for cell types Epithelial and
+## Epithelial with sigma = 0.01 contains too many zeros. Specifically, less than
+## 0.0218818380743982 % total counts are above the threshold
+```
+
+```
+## Warning in .CheckSigmaValuesToRemove(kernel_current = kernel_current,
+## lowerLimit = lowerLimit, : Dropping sigma value of 0.01 because all Gaussian
+## kernel values are too small, which will not produce meaningful results.
+```
+
+``` r
 # Sparse kernel CCA
 obj <- runSkrCCA(obj, scalePCs = TRUE, maxIter = 500, nCC = 4)
 
@@ -110,7 +140,8 @@ CoPro automatically selects the sigma that maximizes the CC1 normalized
 correlation. We visualize the normalized correlation across all sigma
 values and canonical components:
 
-```{r plot-ncorr, fig.width=8, fig.height=3.5}
+
+``` r
 ncorr <- getNormCorr(obj)
 
 ggplot(ncorr, aes(x = sigmaValues, y = normalizedCorrelation)) +
@@ -123,10 +154,17 @@ ggplot(ncorr, aes(x = sigmaValues, y = normalizedCorrelation)) +
   theme_minimal()
 ```
 
-```{r select-sigma}
+![plot of chunk plot-ncorr](organoid_one_type_files/plot-ncorr-1.png)
+
+
+``` r
 # Use the automatically selected sigma
 sigma_opt <- obj@sigmaValueChoice
 cat("Selected sigma:", sigma_opt, "\n")
+```
+
+```
+## Selected sigma: 0.1
 ```
 
 ## Correlation plot
@@ -136,7 +174,8 @@ spatially correlated: cells close in space (as measured by the kernel)
 should have similar scores. The kernel-smoothed scores (K * scores) vs
 raw cell scores should show a positive correlation:
 
-```{r plot-correlation}
+
+``` r
 df_corr <- getCorrOneType(obj,
   sigmaValueChoice = sigma_opt,
   cellTypeA = "Epithelial",
@@ -152,11 +191,14 @@ ggplot(df_corr) +
   theme_minimal()
 ```
 
+![plot of chunk plot-correlation](organoid_one_type_files/plot-correlation-1.png)
+
 ## Cell scores in situ
 
 ### Continuous scores
 
-```{r plot-insitu, fig.width=6, fig.height=5.5}
+
+``` r
 cs <- getCellScoresInSitu(obj, sigmaValueChoice = sigma_opt)
 
 # Clamp color scale for contrast
@@ -176,12 +218,15 @@ ggplot(cs) +
         axis.ticks = element_blank(), axis.title = element_blank())
 ```
 
+![plot of chunk plot-insitu](organoid_one_type_files/plot-insitu-1.png)
+
 ### Binarized scores
 
 Binarizing at the median highlights the two spatial groups---high vs
 low scoring cells, revealing the organoid's spatial compartments:
 
-```{r plot-binary, fig.width=6, fig.height=5.5}
+
+``` r
 cs$group <- ifelse(cs$cellScores > median(cs$cellScores), "High", "Low")
 
 ggplot(cs) +
@@ -195,6 +240,8 @@ ggplot(cs) +
         axis.ticks = element_blank(), axis.title = element_blank())
 ```
 
+![plot of chunk plot-binary](organoid_one_type_files/plot-binary-1.png)
+
 The spatial pattern reveals the self-organization of the organoid
 epithelium---cells are continuously ordered along a spatial gradient
 that reflects their position within the organoid structure.
@@ -204,7 +251,8 @@ that reflects their position within the organoid structure.
 Gene scores reflect how strongly each gene contributes to the spatial
 co-progression axis:
 
-```{r top-genes, fig.width=5, fig.height=6}
+
+``` r
 key <- paste0("geneScores|sigma", sigma_opt, "|Epithelial")
 gs <- obj@geneScores[[key]][, 1]
 
@@ -228,6 +276,8 @@ ggplot(top_df, aes(x = gene, y = score, fill = direction)) +
   theme_classic()
 ```
 
+![plot of chunk top-genes](organoid_one_type_files/top-genes-1.png)
+
 ## Data citation
 
 Organoid data from: Heyman Y, Erez M, Burnham P, Nitzan M, Raj A.
@@ -237,6 +287,45 @@ doi: [10.1101/2025.11.14.688372](https://doi.org/10.1101/2025.11.14.688372)
 
 ## Session info
 
-```{r session-info}
+
+``` r
 sessionInfo()
+```
+
+```
+## R version 4.5.2 (2025-10-31)
+## Platform: aarch64-apple-darwin20
+## Running under: macOS Tahoe 26.1
+## 
+## Matrix products: default
+## BLAS:   /System/Library/Frameworks/Accelerate.framework/Versions/A/Frameworks/vecLib.framework/Versions/A/libBLAS.dylib 
+## LAPACK: /Library/Frameworks/R.framework/Versions/4.5-arm64/Resources/lib/libRlapack.dylib;  LAPACK version 3.12.1
+## 
+## locale:
+## [1] en_US.UTF-8/en_US.UTF-8/en_US.UTF-8/C/en_US.UTF-8/en_US.UTF-8
+## 
+## time zone: America/Los_Angeles
+## tzcode source: internal
+## 
+## attached base packages:
+## [1] stats     graphics  grDevices utils     datasets  methods   base     
+## 
+## other attached packages:
+## [1] patchwork_1.3.2 ggplot2_4.0.1   CoPro_1.1.0     testthat_3.3.2 
+## 
+## loaded via a namespace (and not attached):
+##  [1] generics_0.1.4     renv_1.1.7         lattice_0.22-9     magrittr_2.0.4    
+##  [5] evaluate_1.0.5     grid_4.5.2         RColorBrewer_1.1-3 pkgload_1.4.1     
+##  [9] fastmap_1.2.0      maps_3.4.3         rprojroot_2.1.1    Matrix_1.7-5      
+## [13] pkgbuild_1.4.8     sessioninfo_1.2.3  brio_1.1.5         purrr_1.2.1       
+## [17] spam_2.11-3        viridisLite_0.4.2  scales_1.4.0       cli_3.6.5         
+## [21] rlang_1.1.7        ellipsis_0.3.2     remotes_2.5.0      withr_3.0.2       
+## [25] cachem_1.1.0       yaml_2.3.12        devtools_2.4.6     otel_0.2.0        
+## [29] tools_4.5.2        parallel_4.5.2     memoise_2.0.1      dplyr_1.1.4       
+## [33] vctrs_0.7.1        R6_2.6.1           matrixStats_1.5.0  lifecycle_1.0.5   
+## [37] fs_1.6.6           usethis_3.2.1      irlba_2.3.7        pkgconfig_2.0.3   
+## [41] desc_1.4.3         pillar_1.11.1      gtable_0.3.6       glue_1.8.0        
+## [45] Rcpp_1.1.1         fields_17.1        xfun_0.56          tibble_3.3.1      
+## [49] tidyselect_1.2.1   rstudioapi_0.18.0  knitr_1.51         farver_2.1.2      
+## [53] labeling_0.4.3     dotCall64_1.2      compiler_4.5.2     S7_0.2.1
 ```

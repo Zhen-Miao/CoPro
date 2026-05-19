@@ -43,7 +43,8 @@ Suggests:
     rmarkdown,
     piggyback,
     scales,
-    ggrepel
+    ggrepel,
+    patchwork
 Remotes:
     bnprks/BPCells/r
 VignetteBuilder: knitr

@@ -5,8 +5,8 @@
 \title{Download example datasets for CoPro vignettes}
 \usage{
 copro_download_data(
-  dataset = c("colon_d3", "colon_d3_multi", "colon_d9", "kidney", "organoid",
-    "brain_merfish"),
+  dataset = c("colon_d3", "colon_d0_multi", "colon_d3_multi", "colon_d9", "kidney",
+    "organoid", "brain_merfish"),
   destdir = NULL,
   tag = "data-v1",
   overwrite = FALSE
@@ -14,8 +14,9 @@ copro_download_data(
 }
 \arguments{
 \item{dataset}{Character string specifying which dataset to download.
-One of \code{"colon_d3"}, \code{"colon_d3_multi"}, \code{"colon_d9"},
-\code{"kidney"}, \code{"organoid"}, or \code{"brain_merfish"}.}
+One of \code{"colon_d3"}, \code{"colon_d0_multi"}, \code{"colon_d3_multi"},
+\code{"colon_d9"}, \code{"kidney"}, \code{"organoid"}, or
+\code{"brain_merfish"}.}
 
 \item{destdir}{Directory to save the downloaded file. Defaults to
 a package-specific cache directory via \code{tools::R_user_dir()}.}
@@ -40,6 +41,9 @@ Available datasets:
 \item{\code{colon_d3}}{Colon Day 3 organoid data (Epithelial,
 Fibroblast, Immune). Single slide. Demonstrates cross-cell-type
 co-progression with orthogonal CCA axes.}
+\item{\code{colon_d0_multi}}{Colon Day 0 healthy organoid data
+(3 slides from different regions). Demonstrates multi-slide
+gene-space CCA with \code{runGeneSpaceCCA}.}
 \item{\code{colon_d3_multi}}{Colon Day 3 organoid data (3 slides).
 Demonstrates multi-slide joint analysis with \code{newCoProMulti}
 and score transfer across biological replicates.}

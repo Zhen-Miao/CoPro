@@ -37,7 +37,7 @@ jobs:
       - name: Install vignette extras
         run: |
           pak::pkg_install(c("knitr", "rmarkdown", "piggyback", "viridis",
-                             "scales", "ggrepel"))
+                             "scales", "ggrepel", "patchwork"))
         shell: Rscript {0}
 
       - name: Build site
