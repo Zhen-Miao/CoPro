@@ -99,6 +99,13 @@ for each sigma value after permutation}
 Bidirectional correlation values
 for each sigma value after permutation}
 
+\item{\code{conditionalPermu}}{A \code{list} object storing results of the conditional
+(sequential step-down) permutation test across canonical axes, produced by
+\code{runSkrCCAPermu_Conditional()}. Contains the per-axis raw and
+step-down p-values, observed and null statistics, and the fair-sigma
+selections used to control both sigma-selection and canonical-axis
+multiplicity.}
+
 \item{\code{sigmaValueChoice}}{A \code{numeric} value. The optimal sigma squared based
 on the median normalized correlation value.}
 }}

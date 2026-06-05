@@ -68,6 +68,12 @@ setClassUnion("matrixOrDataFrame", c("matrix", "data.frame"))
 #' @slot bidirCorrelationPermu A `list` object.
 #'  Bidirectional correlation values
 #' for each sigma value after permutation
+#' @slot conditionalPermu A `list` object storing results of the conditional
+#'  (sequential step-down) permutation test across canonical axes, produced by
+#'  \code{runSkrCCAPermu_Conditional()}. Contains the per-axis raw and
+#'  step-down p-values, observed and null statistics, and the fair-sigma
+#'  selections used to control both sigma-selection and canonical-axis
+#'  multiplicity.
 #' @slot sigmaValueChoice A `numeric` value. The optimal sigma squared based
 #' on the median normalized correlation value.
 #' @name CoPro-class
@@ -130,7 +136,8 @@ setClass("CoPro", contains  = "VIRTUAL",
            skrCCAPermuOut = "list",
            cellPermu = "list",
            normalizedCorrelationPermu = "list",
-           bidirCorrelationPermu = "list"
+           bidirCorrelationPermu = "list",
+           conditionalPermu = "list"
          ),
          prototype = list(
            cellTypesOfInterest = character(0),

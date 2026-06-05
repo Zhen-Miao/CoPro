@@ -11,8 +11,8 @@ runSkrCCAPermu(
   maxIter = 200,
   permu_method = "bin",
   permu_which = "second_only",
-  num_bins_x = 10,
-  num_bins_y = 10,
+  num_bins_x = NULL,
+  num_bins_y = NULL,
   match_quantile = FALSE,
   conservative = FALSE,
   n_cores = 1,
@@ -35,8 +35,9 @@ Increase to 100+ for publication-quality p-values.}
 \item "global": Simple random permutation breaking all spatial structure
 \item "pc": PC-space permutation (like DIALOGUE) - shuffles values within each
 PC dimension, breaking cell correlation while preserving PC distributions
-\item "toroidal": Toroidal shift permutation - perfectly preserves spatial
-autocorrelation by shifting coordinates in wrap-around manner
+\item "toroidal": Toroidal shift permutation - approximately preserves
+spatial autocorrelation by shifting coordinates in a wrap-around manner
+(assumes stationarity/periodicity; see \code{\link[=generate_toroidal_permutations]{generate_toroidal_permutations()}})
 }}
 
 \item{permu_which}{Which cell types to permute:
@@ -46,11 +47,15 @@ autocorrelation by shifting coordinates in wrap-around manner
 \item "first_only": Keep others fixed, permute only the first cell type
 }}
 
-\item{num_bins_x}{Number of bins in x direction for bin-wise permutation (default: 10).
-Use \code{diagnose_bin_distribution()} to choose appropriate values.
+\item{num_bins_x}{Number of bins in x direction for bin-wise permutation.
+Default \code{NULL} sizes the grid automatically from the kernel bandwidth so
+each patch is ~2*sigma wide on the normalized distance scale (see
+\code{\link[=.sigmaAwareBins]{.sigmaAwareBins()}}). Pass an explicit integer to override.
+Use \code{diagnose_bin_distribution()} to inspect a chosen grid.
 \strong{More bins = better preserve local structure = lower FPR.}}
 
-\item{num_bins_y}{Number of bins in y direction for bin-wise permutation (default: 10).
+\item{num_bins_y}{Number of bins in y direction for bin-wise permutation.
+Default \code{NULL} (sigma-aware, as for \code{num_bins_x}). Pass an integer to override.
 \strong{More bins = better preserve local structure = lower FPR.}}
 
 \item{match_quantile}{Logical. If TRUE and \code{permu_method = "bin"}, matches cells
@@ -83,23 +88,34 @@ by permuting cell assignments while optionally preserving spatial structure.
 The function supports three permutation methods:
 
 \strong{"global"}: Simple random shuffling of cells. This breaks ALL spatial
-structure and tests against a null of complete spatial randomness.
+structure and tests against a null of complete spatial randomness. It is a
+\emph{deliberately-broken reference}: by destroying within-type autocorrelation it
+inflates the effective sample size (Clifford-Richardson-Hemon 1989) and is
+therefore anti-conservative by construction. Keep it for calibration, not as
+a default.
 
 \strong{"bin"} (default): Bin-wise shuffling that preserves local spatial
 structure. This tests against a null where cells have spatial autocorrelation
-within their type, but no coordination across types.
+within their type, but no coordination across types. By default the patch
+grid is sized from the bandwidth (see \code{\link[=.sigmaAwareBins]{.sigmaAwareBins()}}). This is a
+restricted / approximate permutation that is valid under stationarity; under
+autocorrelation the within-type cells are not exchangeable, which is exactly
+the point (Anderson & ter Braak 2003).
 
 \strong{"pc"}: PC-space permutation (like DIALOGUE). Shuffles values within each
 PC dimension across cells, breaking cell-to-cell correlation while preserving
-the marginal distribution of each PC. This is the same approach used by
-DIALOGUE's internal significance testing. Use this to compare with DIALOGUE's
-conservative behavior.
+the marginal distribution of each PC. Like "global" this is a
+\emph{deliberately-broken reference} that destroys within-type autocorrelation;
+use it to reproduce DIALOGUE-style complete-spatial-randomness behaviour and
+to demonstrate FPR inflation, not as a default.
 
 \strong{"toroidal"}: Toroidal (wrap-around) shift permutation. Shifts all cells'
-coordinates by a random amount, wrapping at boundaries. This PERFECTLY
-preserves spatial autocorrelation within each cell type because relative
-positions are unchanged. Best choice for reducing FPR when spatial
-autocorrelation is strong.
+coordinates by a random amount, wrapping at boundaries, then re-ranks to a
+permutation. This \emph{approximately} preserves within-type spatial
+autocorrelation (exactly only on a regular lattice; see
+\code{\link[=generate_toroidal_permutations]{generate_toroidal_permutations()}}) and assumes spatial stationarity and
+periodic wrap-around, which is biologically false at tissue edges. Benchmark
+it against the sigma-aware "bin" null rather than preferring it a priori.
 }
 
 \subsection{Which Cell Types to Permute}{

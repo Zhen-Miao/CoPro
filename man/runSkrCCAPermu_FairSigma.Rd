@@ -10,8 +10,8 @@ runSkrCCAPermu_FairSigma(
   sigma_values = NULL,
   permu_method = "bin",
   permu_which = "second_only",
-  num_bins_x = 10,
-  num_bins_y = 10,
+  num_bins_x = NULL,
+  num_bins_y = NULL,
   match_quantile = FALSE,
   maxIter = 200,
   tol = 1e-05,
@@ -32,9 +32,13 @@ sigma values from the original analysis (object@sigmaValues)}
 
 \item{permu_which}{Which cell types to permute: "second_only", "both", "first_only"}
 
-\item{num_bins_x}{Number of bins in x for bin-wise permutation}
+\item{num_bins_x}{Number of bins in x for bin-wise permutation. Default \code{NULL}
+sizes the grid from the observed best bandwidth (\code{sigmaValueChoice}) via
+\code{\link[=.sigmaAwareBins]{.sigmaAwareBins()}}; the same grid (and hence the same permutation) is
+shared across the sigma sweep. Pass an integer to override.}
 
-\item{num_bins_y}{Number of bins in y for bin-wise permutation}
+\item{num_bins_y}{Number of bins in y for bin-wise permutation. Default \code{NULL}
+(sigma-aware, as for \code{num_bins_x}).}
 
 \item{match_quantile}{Whether to use quantile matching for bin permutation}
 
@@ -96,4 +100,8 @@ br <- runSkrCCAPermu_FairSigma(br, nPermu = 100,
 result <- calculate_pvalue(br)
 }
 
+}
+\seealso{
+\code{\link[=runSkrCCAPermu_Conditional]{runSkrCCAPermu_Conditional()}} for a sequential step-down test
+across canonical axes (the correct treatment when \code{nCC > 1}).
 }
