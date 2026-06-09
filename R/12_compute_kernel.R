@@ -219,7 +219,8 @@ kernel_from_distance <- function(
   
   # Remove small values
   kernel_current[kernel_current < lowerLimit & !is.na(kernel_current)] <- 0
-  
+  kernel_current <- as(kernel_current, "CsparseMatrix")  # Fix 1: convert to sparse to reduce memory
+
   return(kernel_current)
 }
 
@@ -280,14 +281,16 @@ kernel_from_distance <- function(
   
   # Determine computation approach
   if (length(cts) == 1) {
-    return(.computeKernelWithin(object, cts, sigmaValues, lowerLimit, upperQuantile,
-                               normalizeKernel, minAveCellNeighor, rowNormalizeKernel,
-                               colNormalizeKernel, verbose))
+    object <- .computeKernelWithin(object, cts, sigmaValues, lowerLimit, upperQuantile,
+                                   normalizeKernel, minAveCellNeighor, rowNormalizeKernel,
+                                   colNormalizeKernel, verbose)
   } else {
-    return(.computeKernelPairs(object, cts, sigmaValues, lowerLimit, upperQuantile,
-                              normalizeKernel, minAveCellNeighor, rowNormalizeKernel,
-                              colNormalizeKernel, verbose))
+    object <- .computeKernelPairs(object, cts, sigmaValues, lowerLimit, upperQuantile,
+                                  normalizeKernel, minAveCellNeighor, rowNormalizeKernel,
+                                  colNormalizeKernel, verbose)
   }
+  object@distances <- list()  # Fix 2: free distances after kernel is built
+  return(object)
 }
 
 # Function for computing kernel matrices between pairs of cell types
@@ -538,14 +541,16 @@ setMethod("computeKernelMatrix", "CoProMulti",
   
   # Determine computation approach
   if (length(cts) == 1) {
-    return(.computeKernelMultiWithin(object, cts, sigmaValues, lowerLimit, upperQuantile,
-                                    normalizeKernel, minAveCellNeighor, rowNormalizeKernel,
-                                    colNormalizeKernel, verbose))
+    object <- .computeKernelMultiWithin(object, cts, sigmaValues, lowerLimit, upperQuantile,
+                                        normalizeKernel, minAveCellNeighor, rowNormalizeKernel,
+                                        colNormalizeKernel, verbose)
   } else {
-    return(.computeKernelMultiPairs(object, cts, sigmaValues, lowerLimit, upperQuantile,
-                                   normalizeKernel, minAveCellNeighor, rowNormalizeKernel,
-                                   colNormalizeKernel, verbose))
+    object <- .computeKernelMultiPairs(object, cts, sigmaValues, lowerLimit, upperQuantile,
+                                       normalizeKernel, minAveCellNeighor, rowNormalizeKernel,
+                                       colNormalizeKernel, verbose)
   }
+  object@distances <- list()  # Fix 2: free distances after kernel is built
+  return(object)
 }
 
 # Helper function to validate kernel computation inputs for multi-slide
