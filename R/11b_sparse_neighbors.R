@@ -240,7 +240,12 @@
   repeat {
     tri <- .frnnGrid(A, B, r)
     d <- tri$d
-    if (length(d) >= need) break
+    # Need enough pairs AND at least one non-zero distance. The dense path
+    # replaces coincident-cell zeros with the smallest non-zero distance before
+    # taking the quantile, so with many coincident cells we must keep expanding
+    # until a non-zero distance is retained, or we would stop short with an
+    # all-zero set and fail where the dense path returns a valid percentile.
+    if (length(d) >= need && any(d > 0)) break
     if (r >= max_span) {
       # radius now spans the whole block; we have every pair there is
       break

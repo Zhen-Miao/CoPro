@@ -77,6 +77,27 @@ test_that(".frnnGrid handles coincident points (d = 0 pairs kept, self excluded)
   expect_false(any(g$i == g$j))
 })
 
+test_that(".lowPercentileBlock matches dense quantile with many coincident cells", {
+  # Many coincident cells produce a large block of zero distances. The dense path
+  # replaces them with the smallest non-zero distance before quantiling, so the
+  # sparse reproducer must expand its radius past the zeros to recover that value
+  # rather than stopping short on an all-zero retained set.
+  set.seed(42)
+  A <- rbind(matrix(rep(c(0.3, 0.7), each = 150), ncol = 2),   # 150 stacked cells
+             cbind(runif(50), runif(50)))                      # + 50 spread out
+  p <- 1e-4
+
+  D <- as.matrix(dist(A)); diag(D) <- NA
+  full <- as.numeric(D[!is.na(D)])
+  mn <- min(full[full > 0]); full[full == 0] <- mn
+  dense_q <- as.numeric(stats::quantile(full, p, type = 7, names = FALSE))
+
+  res <- CoPro:::.lowPercentileBlock(A, NULL, p)
+  expect_true(is.finite(res$percentile))
+  expect_equal(res$percentile, dense_q, tolerance = 1e-12)
+  expect_equal(res$min_nonzero, mn, tolerance = 1e-12)
+})
+
 test_that(".frnnGrid returns an empty result when no pair is within radius", {
   A <- cbind(c(0, 10), c(0, 10))
   g <- CoPro:::.frnnGrid(A, NULL, 0.5)

@@ -323,6 +323,12 @@
     }
   }
   scaling_factor <- if (normalizeDistance) normalizeTarget / min(pctls) else 1
+  if (normalizeDistance && (!is.finite(scaling_factor) || scaling_factor <= 0)) {
+    stop("Cannot compute distance normalization: no valid low-distance ",
+         "percentile across cell-type blocks (scaling factor is ",
+         scaling_factor, "). Check for cell types with degenerate or ",
+         "coincident coordinates, or set normalizeDistance = FALSE.")
+  }
   if (normalizeDistance && verbose) {
     message(sprintf("Distance normalization scaling factor: %g", scaling_factor))
   }
@@ -451,6 +457,12 @@
   }
   global_min_pct <- if (need_pct) min(pctls, na.rm = TRUE) else NA_real_
   scaling_factor <- if (normalizeDistance) normalizeTarget / global_min_pct else 1
+  if (normalizeDistance && (!is.finite(scaling_factor) || scaling_factor <= 0)) {
+    stop("Cannot compute distance normalization: no valid low-distance ",
+         "percentile across slide/cell-type blocks (scaling factor is ",
+         scaling_factor, "). Check for cell types with degenerate or ",
+         "coincident coordinates, or set normalizeDistance = FALSE.")
+  }
   if (normalizeDistance && verbose) {
     message(sprintf("Global distance scaling factor: %g", scaling_factor))
   }
