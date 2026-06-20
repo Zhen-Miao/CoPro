@@ -50,7 +50,11 @@ setMethod("getDistMat", "CoProMulti",
   
   # Check if distance matrices exist
   if (length(object@distances) == 0) {
-    stop("No distance matrices found. Run computeDistance() first.")
+    stop(paste("No distance matrices found. Run computeDistance() first.",
+               "If you used computeKernelMatrix() with dropDistances = TRUE",
+               "(the default) or the sparse method, distances were not retained;",
+               "re-run computeKernelMatrix(..., method = 'dense', dropDistances = FALSE)",
+               "after computeDistance() to keep them."))
   }
   
   # Always use flat structure access
@@ -77,7 +81,11 @@ setMethod("getDistMat", "CoProMulti",
   
   # Check if distance matrices exist
   if (length(object@distances) == 0) {
-    stop("No distance matrices found. Run computeDistance() first.")
+    stop(paste("No distance matrices found. Run computeDistance() first.",
+               "If you used computeKernelMatrix() with dropDistances = TRUE",
+               "(the default) or the sparse method, distances were not retained;",
+               "re-run computeKernelMatrix(..., method = 'dense', dropDistances = FALSE)",
+               "after computeDistance() to keep them."))
   }
   
   # Always use flat structure access

@@ -26,22 +26,28 @@ sinkhorn_knopp <- function(A, tol = 1e-8, max_iter = 1000) {
     v_prev <- v
     
     # Row normalization
-    Av <- A %*% v
+    Av <- as.numeric(A %*% v)
     u <- ifelse(Av > eps, 1.0 / Av, 0.0)
-    
+
     # Column normalization
-    Atu <- crossprod(A, u)
+    Atu <- as.numeric(crossprod(A, u))
     v <- ifelse(Atu > eps, 1.0 / Atu, 0.0)
-    
+
     # Simple convergence check (like fast1)
     if (max(abs(u - u_prev), abs(v - v_prev)) < tol) {
       break
     }
   }
-  
-  # Use fast1's scaling method since it's proven faster
-  scaled_matrix <- (u %*% t(rep(1, m))) * A * (rep(1, n) %*% t(v))
-  
+
+  # Scale rows by u and columns by v. Diagonal scaling keeps sparse inputs
+  # sparse (the outer-product form below would densify them); the dense form is
+  # kept unchanged for base matrices.
+  if (inherits(A, "sparseMatrix")) {
+    scaled_matrix <- Matrix::Diagonal(x = u) %*% A %*% Matrix::Diagonal(x = v)
+  } else {
+    scaled_matrix <- (u %*% t(rep(1, m))) * A * (rep(1, n) %*% t(v))
+  }
+
   return(scaled_matrix)
 }
 
@@ -65,22 +71,32 @@ sinkhorn_knopp <- function(A, tol = 1e-8, max_iter = 1000) {
     K_col_sum <- colSums(K)
     K_row_sum[K_row_sum == 0] <- 1  # avoid division by zero
     K_col_sum[K_col_sum == 0] <- 1  # avoid division by zero
-    K_row_norm <- K / K_row_sum
-    K_col_norm <- sweep(K, 2, K_col_sum, "/")
+    if (inherits(K, "sparseMatrix")) {
+      # diagonal scaling keeps K sparse; `K / vec` and sweep() would densify it
+      K_row_norm <- Matrix::Diagonal(x = 1 / K_row_sum) %*% K
+      K_col_norm <- K %*% Matrix::Diagonal(x = 1 / K_col_sum)
+    } else {
+      K_row_norm <- K / K_row_sum
+      K_col_norm <- sweep(K, 2, K_col_sum, "/")
+    }
 
     # Compute kernel-weighted matrices for all CC at once
     KA_all <- crossprod(K_row_norm, A_W1_all)  # nCC columns
     KB_all <- K_col_norm %*% B_W2_all         # nCC columns
-    
+
   } else if (normalize_K == "sinkhorn_knopp") {
     K_norm <- sinkhorn_knopp(K)
     KA_all <- crossprod(K_norm, A_W1_all)
     KB_all <- K_norm %*% B_W2_all
-    
+
   } else { # "none"
     KA_all <- crossprod(K, A_W1_all)
     KB_all <- K %*% B_W2_all
   }
+  # Coerce to base matrix so downstream scale()/indexing is type-stable whether
+  # the kernel was dense or sparse.
+  KA_all <- as.matrix(KA_all)
+  KB_all <- as.matrix(KB_all)
   
   # Ultra-fast vectorized correlation calculation
   # Compute correlations for all CC at once using matrix operations
@@ -195,8 +211,14 @@ normalize_K = c("row_or_col", "sinkhorn_knopp", "none"), filter_kernel = TRUE,
     K_col_sum[K_col_sum == 0] <- 1  # avoid division by zero
 
     # More efficient normalization using vectorized operations
-    K_row_norm <- K / K_row_sum  # Broadcasting division
-    K_col_norm <- sweep(K, 2, K_col_sum, "/")  # More efficient than t(t(K) / K_col_sum)
+    if (inherits(K, "sparseMatrix")) {
+      # diagonal scaling keeps K sparse; `K / vec` and sweep() would densify it
+      K_row_norm <- Matrix::Diagonal(x = 1 / K_row_sum) %*% K
+      K_col_norm <- K %*% Matrix::Diagonal(x = 1 / K_col_sum)
+    } else {
+      K_row_norm <- K / K_row_sum  # Broadcasting division
+      K_col_norm <- sweep(K, 2, K_col_sum, "/")  # More efficient than t(t(K) / K_col_sum)
+    }
 
     # Use crossprod for more efficient matrix multiplication
     KA <- crossprod(K_row_norm, A_w1)  # Equivalent to t(K_row_norm) %*% A_w1

@@ -157,6 +157,7 @@ Other spatial-pipeline:
 \code{\link{computeDistance}()},
 \code{\link{computeKernelMatrix}()},
 \code{\link{computePCA}()},
+\code{\link{computeSparseKernel}()},
 \code{\link{runSkrCCA}()}
 }
 \concept{spatial-pipeline}
