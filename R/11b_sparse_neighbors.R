@@ -159,7 +159,10 @@
   span <- upper - origin
   span[span <= 0] <- .Machine$double.eps
   vol <- prod(span)
-  pairs_total <- if (within) nA * (nA - 1) else nA * nB
+  # as.numeric() avoids integer overflow: the pair count exceeds
+  # .Machine$integer.max (~2.1e9) once a block has more than ~46k cells.
+  pairs_total <- if (within) as.numeric(nA) * (as.numeric(nA) - 1) else
+    as.numeric(nA) * as.numeric(nB)
   if (pairs_total <= 0) return(max(span))
   frac <- min(1, max(target, 1) / pairs_total)
   # invert ball-volume fraction: c_d * r^d / vol = frac  (c_2 = pi, c_3 = 4pi/3)
@@ -217,7 +220,11 @@
   within <- is.null(B)
   nA <- nrow(A)
   nB <- if (within) nA else nrow(B)
-  N <- if (within) nA * (nA - 1) else nA * nB
+  # as.numeric() avoids integer overflow of the true pair count N (used only as
+  # a count for the type-7 quantile rank), which would otherwise become NA past
+  # ~46k cells and silently break the percentile reconstruction.
+  N <- if (within) as.numeric(nA) * (as.numeric(nA) - 1) else
+    as.numeric(nA) * as.numeric(nB)
   if (N < 1) stop("Block has too few cells to compute a distance percentile.")
 
   h <- (N - 1) * p + 1

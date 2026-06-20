@@ -162,7 +162,9 @@
 #' @noRd
 .checkSparseSigmaRemove <- function(K, lowerLimit, sigma_choose, sigmaValues,
                                     i, j, minAveCellNeighor) {
-  n1 <- nrow(K); n2 <- ncol(K)
+  # as.numeric() avoids integer overflow of n1 * n2 past ~46k cells (NA would
+  # make the proportion comparison silently incorrect on large data).
+  n1 <- as.numeric(nrow(K)); n2 <- as.numeric(ncol(K))
   minPropZero <- minAveCellNeighor * min(n1, n2) / (n1 * n2)
   prop_above <- sum(K@x > lowerLimit) / (n1 * n2)
   if (prop_above < minPropZero) {
