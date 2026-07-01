@@ -12,6 +12,24 @@
 
 ## New features
 
+* Added a sparse, memory-efficient kernel path for large-scale data.
+  `computeKernelMatrix()` gains a `method` argument (`"auto"`, `"dense"`,
+  `"sparse"`) defaulting to `"auto"`, which selects the sparse path when any
+  cell type exceeds `autoThreshold` (default 20000) cells. The new
+  `computeSparseKernel()` generic builds sparse `dgCMatrix` Gaussian kernels
+  directly from coordinates via an exact fixed-radius neighbor search, never
+  forming a dense `n x n` distance or kernel matrix. Results are numerically
+  equivalent to the dense path (every pair beyond the kernel's support radius
+  is already zero). The sparse path does not require `computeDistance()` to be
+  run first and supports `Euclidean2D` / `Euclidean3D` distances.
+* `computeKernelMatrix()` gains `dropDistances` (default `TRUE`), which clears
+  the large `@distances` slot after kernels are computed, since the downstream
+  pipeline only needs the kernels. Set `dropDistances = FALSE` to retain
+  distances for inspection via `getDistMat()` or to recompute kernels with new
+  sigma values without rebuilding distances.
+* The bidirectional-correlation kernel normalizations (`sinkhorn_knopp`,
+  `"row_or_col"`) now operate on sparse kernels without densifying them.
+
 * Added `asCoProSingle()` and `asCoProMulti()` S4 generics for one-call
   coercion from `SingleCellExperiment` and `Seurat` objects into CoPro
   objects. Conversions are gated on their respective packages being
