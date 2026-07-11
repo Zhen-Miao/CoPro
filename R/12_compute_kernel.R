@@ -453,6 +453,25 @@ kernel_from_distance <- function(
 #' @param colNormalizeKernel Whether the kernel matrix will be column-wise
 #' normalized? Note that row or column wise normalization will result in an
 #' asymmetric result in skrCCA inference.
+#' @param method One of `"auto"`, `"dense"`, or `"sparse"`. `"dense"` is the
+#'  classic path that reads the distance matrices produced by
+#'  [computeDistance()]. `"sparse"` is a fused, memory-efficient path
+#'  ([computeSparseKernel()]) that builds sparse `dgCMatrix` kernels directly
+#'  from coordinates via a fixed-radius neighbor search, never forming a dense
+#'  `n x n` matrix, and does not require [computeDistance()] to have been run.
+#'  Results are numerically equivalent. `"auto"` (default) picks `"sparse"` when
+#'  any cell type exceeds `autoThreshold` cells, otherwise `"dense"`.
+#' @param dropDistances Logical. If `TRUE` (default), the (potentially large)
+#'  `@distances` slot is cleared after kernels are computed, since the
+#'  downstream pipeline only needs the kernels. Set `FALSE` to keep distances
+#'  for inspection via [getDistMat()] or to recompute kernels with new sigma
+#'  values without rebuilding distances.
+#' @param autoThreshold Integer cell count above which `method = "auto"` selects
+#'  the sparse path. Default 20000.
+#' @param distType,xDistScale,yDistScale,zDistScale,normalizeDistance,normalizeTarget,truncateLowDist
+#'  Distance options used only by the sparse path (see [computeDistance()] and
+#'  [computeSparseKernel()]). `distType` defaults to `"Euclidean3D"` when the
+#'  coordinates contain a `z` column, otherwise `"Euclidean2D"`.
 #' @return The `CoPro` object with computed kernel matrices added. The kernel
 #' matrices are organized into a three-layer nested list object. The first layer
 #' is indexed by the sigma value, and the second and the third layers are cell
@@ -480,32 +499,59 @@ setGeneric(
   function(object, sigmaValues, lowerLimit = 1e-7, upperQuantile = 0.85,
            normalizeKernel = FALSE, minAveCellNeighor = 2,
            rowNormalizeKernel = FALSE, colNormalizeKernel = FALSE,
+           method = c("auto", "dense", "sparse"), dropDistances = TRUE,
+           autoThreshold = 20000L, distType = NULL,
+           xDistScale = 1, yDistScale = 1, zDistScale = 1,
+           normalizeDistance = TRUE, normalizeTarget = 0.01,
+           truncateLowDist = TRUE,
            verbose = TRUE) standardGeneric("computeKernelMatrix"))
 
 #' @rdname computeKernelMatrix
 #' @aliases computeKernelMatrix,CoProSingle-method
 #' @export
-setMethod("computeKernelMatrix", "CoProSingle", 
+setMethod("computeKernelMatrix", "CoProSingle",
           function(object, sigmaValues, lowerLimit = 1e-7, upperQuantile = 0.85,
                    normalizeKernel = FALSE, minAveCellNeighor = 2,
                    rowNormalizeKernel = FALSE, colNormalizeKernel = FALSE,
+                   method = c("auto", "dense", "sparse"), dropDistances = TRUE,
+                   autoThreshold = 20000L, distType = NULL,
+                   xDistScale = 1, yDistScale = 1, zDistScale = 1,
+                   normalizeDistance = TRUE, normalizeTarget = 0.01,
+                   truncateLowDist = TRUE,
                    verbose = TRUE) {
-            .computeKernelCore(object, sigmaValues, lowerLimit, upperQuantile,
-                              normalizeKernel, minAveCellNeighor, rowNormalizeKernel,
-                              colNormalizeKernel, verbose)
+            .computeKernelDispatch(object, sigmaValues, lowerLimit, upperQuantile,
+                                   normalizeKernel, minAveCellNeighor, rowNormalizeKernel,
+                                   colNormalizeKernel, verbose,
+                                   method = match.arg(method), dropDistances = dropDistances,
+                                   autoThreshold = autoThreshold, distType = distType,
+                                   xDistScale = xDistScale, yDistScale = yDistScale,
+                                   zDistScale = zDistScale, normalizeDistance = normalizeDistance,
+                                   normalizeTarget = normalizeTarget,
+                                   truncateLowDist = truncateLowDist, is_multi = FALSE)
           })
 
 #' @rdname computeKernelMatrix
 #' @aliases computeKernelMatrix,CoProMulti-method
 #' @export
-setMethod("computeKernelMatrix", "CoProMulti", 
+setMethod("computeKernelMatrix", "CoProMulti",
           function(object, sigmaValues, lowerLimit = 1e-7, upperQuantile = 0.85,
                    normalizeKernel = FALSE, minAveCellNeighor = 2,
                    rowNormalizeKernel = FALSE, colNormalizeKernel = FALSE,
+                   method = c("auto", "dense", "sparse"), dropDistances = TRUE,
+                   autoThreshold = 20000L, distType = NULL,
+                   xDistScale = 1, yDistScale = 1, zDistScale = 1,
+                   normalizeDistance = TRUE, normalizeTarget = 0.01,
+                   truncateLowDist = TRUE,
                    verbose = TRUE) {
-            .computeKernelCoreMulti(object, sigmaValues, lowerLimit, upperQuantile,
+            .computeKernelDispatch(object, sigmaValues, lowerLimit, upperQuantile,
                                    normalizeKernel, minAveCellNeighor, rowNormalizeKernel,
-                                   colNormalizeKernel, verbose)
+                                   colNormalizeKernel, verbose,
+                                   method = match.arg(method), dropDistances = dropDistances,
+                                   autoThreshold = autoThreshold, distType = distType,
+                                   xDistScale = xDistScale, yDistScale = yDistScale,
+                                   zDistScale = zDistScale, normalizeDistance = normalizeDistance,
+                                   normalizeTarget = normalizeTarget,
+                                   truncateLowDist = truncateLowDist, is_multi = TRUE)
           })
 
 # Core dispatcher for multi-slide objects

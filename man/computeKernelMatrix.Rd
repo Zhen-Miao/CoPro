@@ -15,6 +15,16 @@ computeKernelMatrix(
   minAveCellNeighor = 2,
   rowNormalizeKernel = FALSE,
   colNormalizeKernel = FALSE,
+  method = c("auto", "dense", "sparse"),
+  dropDistances = TRUE,
+  autoThreshold = 20000L,
+  distType = NULL,
+  xDistScale = 1,
+  yDistScale = 1,
+  zDistScale = 1,
+  normalizeDistance = TRUE,
+  normalizeTarget = 0.01,
+  truncateLowDist = TRUE,
   verbose = TRUE
 )
 
@@ -27,6 +37,16 @@ computeKernelMatrix(
   minAveCellNeighor = 2,
   rowNormalizeKernel = FALSE,
   colNormalizeKernel = FALSE,
+  method = c("auto", "dense", "sparse"),
+  dropDistances = TRUE,
+  autoThreshold = 20000L,
+  distType = NULL,
+  xDistScale = 1,
+  yDistScale = 1,
+  zDistScale = 1,
+  normalizeDistance = TRUE,
+  normalizeTarget = 0.01,
+  truncateLowDist = TRUE,
   verbose = TRUE
 )
 
@@ -39,6 +59,16 @@ computeKernelMatrix(
   minAveCellNeighor = 2,
   rowNormalizeKernel = FALSE,
   colNormalizeKernel = FALSE,
+  method = c("auto", "dense", "sparse"),
+  dropDistances = TRUE,
+  autoThreshold = 20000L,
+  distType = NULL,
+  xDistScale = 1,
+  yDistScale = 1,
+  zDistScale = 1,
+  normalizeDistance = TRUE,
+  normalizeTarget = 0.01,
+  truncateLowDist = TRUE,
   verbose = TRUE
 )
 }
@@ -70,6 +100,28 @@ asymmetric result in skrCCA inference.}
 \item{colNormalizeKernel}{Whether the kernel matrix will be column-wise
 normalized? Note that row or column wise normalization will result in an
 asymmetric result in skrCCA inference.}
+
+\item{method}{One of \code{"auto"}, \code{"dense"}, or \code{"sparse"}. \code{"dense"} is the
+classic path that reads the distance matrices produced by
+\code{\link[=computeDistance]{computeDistance()}}. \code{"sparse"} is a fused, memory-efficient path
+(\code{\link[=computeSparseKernel]{computeSparseKernel()}}) that builds sparse \code{dgCMatrix} kernels directly
+from coordinates via a fixed-radius neighbor search, never forming a dense
+\verb{n x n} matrix, and does not require \code{\link[=computeDistance]{computeDistance()}} to have been run.
+Results are numerically equivalent. \code{"auto"} (default) picks \code{"sparse"} when
+any cell type exceeds \code{autoThreshold} cells, otherwise \code{"dense"}.}
+
+\item{dropDistances}{Logical. If \code{TRUE} (default), the (potentially large)
+\verb{@distances} slot is cleared after kernels are computed, since the
+downstream pipeline only needs the kernels. Set \code{FALSE} to keep distances
+for inspection via \code{\link[=getDistMat]{getDistMat()}} or to recompute kernels with new sigma
+values without rebuilding distances.}
+
+\item{autoThreshold}{Integer cell count above which \code{method = "auto"} selects
+the sparse path. Default 20000.}
+
+\item{distType, xDistScale, yDistScale, zDistScale, normalizeDistance, normalizeTarget, truncateLowDist}{Distance options used only by the sparse path (see \code{\link[=computeDistance]{computeDistance()}} and
+\code{\link[=computeSparseKernel]{computeSparseKernel()}}). \code{distType} defaults to \code{"Euclidean3D"} when the
+coordinates contain a \code{z} column, otherwise \code{"Euclidean2D"}.}
 
 \item{verbose}{Whether to output the progress and related information}
 }
@@ -109,6 +161,7 @@ obj <- computeKernelMatrix(obj, sigmaValues = c(0.05, 0.1), verbose = FALSE)
 Other spatial-pipeline: 
 \code{\link{computeDistance}()},
 \code{\link{computePCA}()},
+\code{\link{computeSparseKernel}()},
 \code{\link{runGeneSpaceCCA}()},
 \code{\link{runSkrCCA}()}
 }

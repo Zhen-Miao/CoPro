@@ -189,13 +189,15 @@ test_that("Full workflow runs without errors", {
   # Run complete pipeline
   obj <- subsetData(obj, cellTypesOfInterest = c("CellTypeA", "CellTypeB"))
   obj <- computePCA(obj, nPCA = 10, center = TRUE, scale. = TRUE)
-  obj <- computeDistance(obj, distType = "Euclidean2D", 
+  obj <- computeDistance(obj, distType = "Euclidean2D",
                          normalizeDistance = TRUE, verbose = FALSE)
-  obj <- computeKernelMatrix(obj, sigmaValues = c(0.05, 0.1), verbose = FALSE)
+  # dropDistances = FALSE so we can assert the distances slot was populated
+  obj <- computeKernelMatrix(obj, sigmaValues = c(0.05, 0.1),
+                             dropDistances = FALSE, verbose = FALSE)
   obj <- runSkrCCA(obj, scalePCs = TRUE, nCC = 2, maxIter = 100)
   obj <- computeNormalizedCorrelation(obj)
   obj <- computeGeneAndCellScores(obj)
-  
+
   # All key slots should be populated
   expect_true(length(obj@pcaGlobal) > 0)
   expect_true(length(obj@distances) > 0)
@@ -213,13 +215,15 @@ test_that("Multi-slide full workflow runs without errors", {
   # Run complete pipeline
   obj <- subsetData(obj, cellTypesOfInterest = c("CellTypeA", "CellTypeB"))
   obj <- computePCA(obj, nPCA = 10, center = TRUE, scale. = TRUE)
-  obj <- computeDistance(obj, distType = "Euclidean2D", 
+  obj <- computeDistance(obj, distType = "Euclidean2D",
                          normalizeDistance = TRUE, verbose = FALSE)
-  obj <- computeKernelMatrix(obj, sigmaValues = c(0.1), verbose = FALSE)
+  # dropDistances = FALSE so we can assert the distances slot was populated
+  obj <- computeKernelMatrix(obj, sigmaValues = c(0.1),
+                             dropDistances = FALSE, verbose = FALSE)
   obj <- runSkrCCA(obj, scalePCs = TRUE, nCC = 2, maxIter = 100)
   obj <- computeNormalizedCorrelation(obj)
   obj <- computeGeneAndCellScores(obj)
-  
+
   # All key slots should be populated
   expect_true(length(obj@pcaGlobal) > 0)
   expect_true(length(obj@pcaResults) > 0)

@@ -61,6 +61,7 @@ obj <- computePCA(obj, nPCA = 10)
 Other spatial-pipeline: 
 \code{\link{computeDistance}()},
 \code{\link{computeKernelMatrix}()},
+\code{\link{computeSparseKernel}()},
 \code{\link{runGeneSpaceCCA}()},
 \code{\link{runSkrCCA}()}
 }

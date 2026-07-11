@@ -201,6 +201,16 @@ optimize_genespace_avg_corr <- function(C_self_slide, C_cross_slide,
   for (ct in cell_types) {
     if (!is.matrix(w_list[[ct]])) w_list[[ct]] <- matrix(w_list[[ct]], ncol = 1)
   }
+
+  # Fix sign ambiguity: the power iteration can converge to either sign.
+  # Flip the first cell type's weights if the objective is negative so that
+  # pairwise canonical correlations are consistently positive.
+  obj <- .compute_p1b_objective(w_list, C_self_slide, C_cross_slide,
+                                slides, cell_types)
+  if (obj < 0) {
+    w_list[[cell_types[1]]] <- -w_list[[cell_types[1]]]
+  }
+
   w_list
 }
 
@@ -318,6 +328,13 @@ optimize_genespace_avg_corr_n <- function(C_self_slide, C_cross_slide,
     if (iter == max_iter && max_diff > tol) {
       warning(sprintf("CC %d did not converge after %d iterations (max_diff = %.2e)",
                       cc, max_iter, max_diff))
+    }
+
+    # Fix sign ambiguity for this component (same logic as first component)
+    obj_cc <- .compute_p1b_objective(w_current, C_self_slide, C_cross_slide,
+                                     slides, cell_types)
+    if (obj_cc < 0) {
+      w_current[[cell_types[1]]] <- -w_current[[cell_types[1]]]
     }
 
     # Append this component to w_list

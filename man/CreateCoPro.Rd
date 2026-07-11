@@ -41,3 +41,20 @@ Behavior:
 \item multi slices, some > p   -> newCoProMulti() with refined slideID (origin + block)
 }
 }
+\section{Note on spatial binning (approximate)}{
+
+Splitting an oversized slide into spatial blocks (cases 2 and 4) treats each
+block as an independent pseudo-slide. Because kernels are computed only within
+a block, this is a \strong{block-diagonal approximation} of the full spatial kernel:
+cell pairs that straddle a block boundary are dropped. The approximation is
+good when a block's linear size greatly exceeds the kernel support radius
+\eqn{\sigma\sqrt{-2\log(\texttt{lowerLimit})}}, but the error is not bounded in
+general and grows with \code{sigma}. Two further caveats: the normalized- and
+bidirectional-correlation metrics average per-slide quantities, so the block
+count affects their normalization; and rare cell types may be silently dropped
+from blocks where their count falls to 5 or fewer. For an \strong{exact} large-scale
+kernel that needs no binning, use \code{computeKernelMatrix(..., method = "sparse")}
+(see \code{\link[=computeSparseKernel]{computeSparseKernel()}}), which builds a single sparse kernel per slide
+via a fixed-radius neighbor search.
+}
+

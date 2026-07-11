@@ -324,7 +324,7 @@ for (sl in dat$selectedSlides) {
     nn <- order(dists)[seq_len(k)]
     smoothed[i] <- mean(fib[nn])
   }
-  r_val <- cor(epi, smoothed)
+  r_val <- abs(cor(epi, smoothed))
 
   corr_df <- rbind(corr_df, data.frame(
     slide = slide_labels[sl],
