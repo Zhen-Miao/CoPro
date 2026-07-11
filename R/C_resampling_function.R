@@ -114,6 +114,13 @@ diagnose_bin_distribution <- function(location_data,
 #'   if it cannot be recovered.
 #' @keywords internal
 .recoverDistanceScaleFactor <- function(object, n_probe = 200L) {
+  # Prefer the scale factor stored at computeDistance time: it is the exact
+  # normalizeTarget / min_percentile ratio and, unlike @distances, survives
+  # computeKernelMatrix(dropDistances = TRUE) (the default).
+  sf_stored <- tryCatch(object@distanceScaleFactor, error = function(e) numeric(0))
+  if (length(sf_stored) == 1L && is.finite(sf_stored) && sf_stored > 0) {
+    return(sf_stored)
+  }
   if (length(object@distances) == 0) {
     return(NA_real_)
   }

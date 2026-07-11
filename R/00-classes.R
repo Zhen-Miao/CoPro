@@ -33,6 +33,9 @@ setClassUnion("matrixOrDataFrame", c("matrix", "data.frame"))
 #' @slot pcaGlobal A `list` object storing PCA results for each cell type.
 #' @slot distances A `list` object to store the pairwise distances between any
 #' two cell types of interest.
+#' @slot distanceScaleFactor A single numeric value. The raw-to-normalized
+#' distance scaling factor recorded at `computeDistance` time; persists after
+#' `computeKernelMatrix(dropDistances = TRUE)` clears `@distances`.
 #' @slot geneList A `vector` object with elements being character. To store the
 #' gene names.
 #' @slot kernelMatrices A `list` object. To store the kernel matrix generated
@@ -117,6 +120,7 @@ setClass("CoPro", contains  = "VIRTUAL",
 
            # Distance & Kernel (Slide-Specific if multiple slideID)
            distances = "list",      # Stores list(slideID = list(ct1 = list(ct2 = dist)))
+           distanceScaleFactor = "numeric", # normalized/raw distance ratio; persists after @distances is dropped
            kernelMatrices = "list", # Stores list(sigma = list(slideID = list(ct1 = list(ct2 = K))))
            sigmaValues = "numeric",
 
@@ -147,6 +151,7 @@ setClass("CoPro", contains  = "VIRTUAL",
            nCC = numeric(0),
            nPermu = numeric(0),
            sigmaValueChoice = numeric(0),
+           distanceScaleFactor = numeric(0),
            scalePCs = logical(0)
          )
 )

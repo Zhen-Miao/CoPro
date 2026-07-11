@@ -46,6 +46,10 @@ Recommended structure: \code{list(slideID = list(cellType = pc_matrix))}.}
 \item{\code{distances}}{A \code{list} object to store the pairwise distances between any
 two cell types of interest.}
 
+\item{\code{distanceScaleFactor}}{A single numeric value. The raw-to-normalized
+distance scaling factor recorded at \code{computeDistance} time; persists after
+\code{computeKernelMatrix(dropDistances = TRUE)} clears \verb{@distances}.}
+
 \item{\code{geneList}}{A \code{vector} object with elements being character. To store the
 gene names.}
 

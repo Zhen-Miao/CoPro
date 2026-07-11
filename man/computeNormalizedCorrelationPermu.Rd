@@ -23,10 +23,11 @@ p-value calculation by comparing observed values to the null distribution.
 The normalized correlation for each permutation is calculated using the
 same formula as the observed data:
 
-\deqn{NC = \frac{s_1^T K_{12} s_2}{||s_1|| \cdot ||s_2|| \cdot ||K_{12}||_2}}
+\deqn{NC = \frac{s_1^T K_{12} s_2}{||s_1|| \cdot ||s_2|| \cdot ||\tilde K_c||_F}}
 
 where \eqn{s_1} and \eqn{s_2} are cell scores, \eqn{K_{12}} is the kernel
-matrix, and \eqn{||K_{12}||_2} is the spectral norm.
+matrix, and \eqn{||\tilde K_c||_F} is the whitened-Frobenius norm
+\eqn{||R_x^{1/2} K_c R_y^{1/2}||_F}.
 }
 \examples{
 \dontrun{

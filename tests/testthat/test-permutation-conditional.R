@@ -16,7 +16,7 @@
   obj <- computeDistance(obj, distType = "Euclidean2D",
                          normalizeDistance = TRUE, verbose = FALSE)
   obj <- computeKernelMatrix(obj, sigmaValues = c(0.05, 0.1, 0.2),
-                             verbose = FALSE)
+                             dropDistances = FALSE, verbose = FALSE)
   obj <- computePCA(obj, nPCA = 10, center = TRUE, scale. = TRUE,
                     scalePCs = TRUE)
   suppressWarnings(
@@ -46,6 +46,26 @@ test_that("distance scale factor is recovered and sigma-aware bins are sane", {
   expect_gte(bins$num_bins_x, 2L)
   expect_gte(bins$num_bins_y, 2L)
   expect_true(is.finite(bins$scale_factor))
+})
+
+test_that("distance scale factor survives @distances being dropped", {
+  skip_on_cran()
+  # computeKernelMatrix(dropDistances = TRUE) is the DEFAULT and clears
+  # @distances after building the kernel. The scale factor persisted in
+  # @distanceScaleFactor at computeDistance time must still be recoverable.
+  obj <- .cond_pipeline(nCC = 2)
+  sf_before <- .recoverDistanceScaleFactor(obj)
+  expect_true(is.finite(sf_before) && sf_before > 0)
+
+  obj@distances <- list()                     # simulate dropDistances = TRUE
+  sf_after <- .recoverDistanceScaleFactor(obj)
+  expect_true(is.finite(sf_after) && sf_after > 0)
+  expect_equal(sf_after, sf_before, tolerance = 1e-12)
+
+  # sigma-aware bins must NOT fall back to the hard-coded 10 x 10 grid
+  bins <- .sigmaAwareBins(obj, sigma = obj@sigmaValueChoice, verbose = FALSE)
+  expect_true(is.finite(bins$scale_factor))
+  expect_equal(bins$scale_factor, sf_before, tolerance = 1e-12)
 })
 
 test_that(".fitConditionalAxis reproduces stored observed CC_k exactly", {

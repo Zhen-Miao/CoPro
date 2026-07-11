@@ -664,10 +664,11 @@ runSkrCCAPermu <- function(object, tol = 1e-5, nPermu = 20,
 #' The normalized correlation for each permutation is calculated using the
 #' same formula as the observed data:
 #'
-#' \deqn{NC = \frac{s_1^T K_{12} s_2}{||s_1|| \cdot ||s_2|| \cdot ||K_{12}||_2}}
+#' \deqn{NC = \frac{s_1^T K_{12} s_2}{||s_1|| \cdot ||s_2|| \cdot ||\tilde K_c||_F}}
 #'
 #' where \eqn{s_1} and \eqn{s_2} are cell scores, \eqn{K_{12}} is the kernel
-#' matrix, and \eqn{||K_{12}||_2} is the spectral norm.
+#' matrix, and \eqn{||\tilde K_c||_F} is the whitened-Frobenius norm
+#' \eqn{||R_x^{1/2} K_c R_y^{1/2}||_F}.
 #'
 #' @param object A `CoPro` object with permutation results from `runSkrCCAPermu()`
 #' @param tol Tolerance for approximate SVD calculation (default: 1e-4)
@@ -723,8 +724,8 @@ computeNormalizedCorrelationPermu <- function(object, tol = 1e-4) {
   names(correlation_value) <- permu_names
   s_name <- paste("sigma", sigmaValueChoice, sep = "_")
 
-  ## Calculate spectral norms (only need to do this once)
-  cat("Calculating spectral norms...\n")
+  ## Calculate whitened-Frobenius normalizers (only need to do this once)
+  cat("Calculating whitened-Frobenius normalizers...\n")
   norm_K12 <- setNames(vector(mode = "list", length = 1), s_name)
   norm_K12[[s_name]] <- setNames(vector(mode = "list", length = length(cts)), cts)
 
@@ -739,10 +740,16 @@ computeNormalizedCorrelationPermu <- function(object, tol = 1e-4) {
     K <- getKernelMatrix(object, sigma = sigmaValueChoice,
                          cellType1 = cellType1, cellType2 = cellType2,
                          verbose = FALSE)
-    svd_result <- irlba::irlba(K, nv = 1, tol = tol)
-    norm_K12[[s_name]][[cellType1]][[cellType2]] <- svd_result$d[1]
+    ## matched-sigma within-type kernels as whitening operators
+    Rx <- tryCatch(getKernelMatrix(object, sigma = sigmaValueChoice,
+                     cellType1 = cellType1, cellType2 = cellType1,
+                     verbose = FALSE), error = function(e) NULL)
+    Ry <- tryCatch(getKernelMatrix(object, sigma = sigmaValueChoice,
+                     cellType1 = cellType2, cellType2 = cellType2,
+                     verbose = FALSE), error = function(e) NULL)
+    norm_K12[[s_name]][[cellType1]][[cellType2]] <- .whitenedFrobNorm(K, Rx, Ry)
   }
-  cat("Spectral norms calculated.\n\n")
+  cat("Whitened-Frobenius normalizers calculated.\n\n")
 
   ## Helper function for PC-space permutation (recreate using stored seed)
   permute_pc_matrix_ncorr <- function(pc_mat, seed) {
@@ -936,9 +943,14 @@ compute_ground_truth_ncorr <- function(object,
   s1 <- normalize_vec(scores_ct1)
   s2 <- normalize_vec(scores_ct2)
 
-  ## Calculate spectral norm of kernel matrix
-  svd_result <- irlba::irlba(K, nv = 1, tol = tol)
-  norm_K12 <- svd_result$d[1]
+  ## Whitened-Frobenius normalizer (matched-sigma within-type kernels)
+  Rx <- tryCatch(getKernelMatrix(object, sigma = sigma,
+                   cellType1 = cellType1, cellType2 = cellType1,
+                   verbose = FALSE), error = function(e) NULL)
+  Ry <- tryCatch(getKernelMatrix(object, sigma = sigma,
+                   cellType1 = cellType2, cellType2 = cellType2,
+                   verbose = FALSE), error = function(e) NULL)
+  norm_K12 <- .whitenedFrobNorm(K, Rx, Ry)
 
   ## Calculate normalized correlation
   norm_corr <- as.numeric(t(s1) %*% K %*% s2) / norm_K12
@@ -1055,9 +1067,12 @@ calculate_pvalue <- function(object, cc_index = 1, alternative = "greater") {
   # Get kernel matrix
   K <- get_kernel_matrix_flat(flat_kernels, sigma, ct1, ct2, slide = NULL)
 
-  # Compute spectral norm
-  svd_result <- irlba::irlba(K, nv = 1, tol = tol)
-  norm_K12 <- svd_result$d[1]
+  # Whitened-Frobenius normalizer (matched-sigma within-type kernels)
+  Rx <- tryCatch(get_kernel_matrix_flat(flat_kernels, sigma, ct1, ct1, slide = NULL),
+                 error = function(e) NULL)
+  Ry <- tryCatch(get_kernel_matrix_flat(flat_kernels, sigma, ct2, ct2, slide = NULL),
+                 error = function(e) NULL)
+  norm_K12 <- .whitenedFrobNorm(K, Rx, Ry)
 
   # Normalized correlation
   numerator <- as.numeric(t(A_w1) %*% K %*% B_w2)
