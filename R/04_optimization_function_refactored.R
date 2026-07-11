@@ -152,7 +152,7 @@ compute_update_vector_within <- function(X, K, w) {
 #'   power iteration). Values in (0,1) blend old and new weights for smoother
 #'   convergence, which can help with many cells or many CCs.
 #' @param sdev2_list Optional named list of squared standard deviations per
-#'   cell type, used for weighted normalization when \code{scalePCs = TRUE}.
+#'   cell type, used for weighted normalization when \code{scalePCs = FALSE}.
 #'   Default \code{NULL} (unweighted).
 #'
 #' @return Named list `w_list` containing the first weight vector component.
@@ -168,61 +168,23 @@ optimize_bilinear <- function(X_list, flat_kernels, sigma, max_iter = 1000,
 
   cell_types <- names(X_list)
   if (is.null(cell_types)) stop("Input X_list must be a named list.")
-  n_mat <- length(cell_types)
-
-  # Auto-detect if this is within-cell-type optimization
-  is_within <- (n_mat == 1)
-
   n_features <- ncol(X_list[[cell_types[1]]])
 
   # Initialize w_list using SVD
   w_list <- initialize_weights_svd(X_list, cell_types)
 
-  # Iterative refinement
-  iter <- 0
-  while (iter < max_iter) {
-    w_list_old <- w_list
-
-    if (is_within) {
-      # Within-cell-type optimization
-      ct <- cell_types[1]
-      X <- X_list[[ct]]
-      K <- get_kernel_matrix_flat(flat_kernels, sigma, ct, ct, slide = NULL)
-      sd2 <- if (!is.null(sdev2_list)) sdev2_list[[ct]] else NULL
-
-      w_update <- compute_update_vector_within(X, K, w_list[[ct]])
-      if (step_size < 1) {
-        w_list[[ct]] <- normalize_vec_weighted((1 - step_size) * w_list_old[[ct]] + step_size * normalize_gradient_weighted(w_update, sd2), sd2)
-      } else {
-        w_list[[ct]] <- normalize_gradient_weighted(w_update, sd2)
-      }
-
-    } else {
-      # Standard multi-cell-type optimization
-      for (ct_i in cell_types) {
-        w_i_update_vec <- compute_update_vector_standard(ct_i, cell_types, X_list, flat_kernels, sigma, w_list, n_features, slide = NULL)
-        sd2 <- if (!is.null(sdev2_list)) sdev2_list[[ct_i]] else NULL
-        if (step_size < 1) {
-          w_list[[ct_i]] <- normalize_vec_weighted((1 - step_size) * w_list_old[[ct_i]] + step_size * normalize_gradient_weighted(w_i_update_vec, sd2), sd2)
-        } else {
-          w_list[[ct_i]] <- normalize_gradient_weighted(w_i_update_vec, sd2)
-        }
-      }
-    }
-
-    # Check convergence
-    current_max_diff <- check_convergence(w_list, w_list_old, cell_types)
-
-    if (current_max_diff <= tol) {
-      print(paste("Convergence reached at", iter, "iterations (Max diff =", sprintf("%.3e", current_max_diff), ")"))
-      break
-    }
-    iter <- iter + 1
-  } # end while
-
-  if (iter >= max_iter) {
-    warning("Maximum number of iterations reached without convergence")
-  }
+  # Precompute small PC-space operator matrices once, then run power iteration
+  # using Y_ij %*% w_j. This avoids repeated X' K X products per iteration.
+  Y_resi <- compute_Y_resi(X_list, flat_kernels, sigma, cell_types, slide = NULL)
+  w_list <- bilinear_w_from_Y_resi(
+    w_list_new = w_list,
+    Y_resi = Y_resi,
+    n_features = n_features,
+    max_iter = max_iter,
+    tol = tol,
+    step_size = step_size,
+    sdev2_list = sdev2_list
+  )
 
   # Ensure final format is list of single-column matrices
   for (ct in cell_types) {
@@ -233,13 +195,13 @@ optimize_bilinear <- function(X_list, flat_kernels, sigma, max_iter = 1000,
   return(w_list)
 }
 
-#' Compute Y_resi for subsequent components
+#' Compute PC-space operator matrices
 #' @param X_list Data matrices
 #' @param flat_kernels Flat kernel matrices
 #' @param sigma Sigma value
 #' @param cell_types Cell type names
 #' @param slide Slide ID (NULL for single slide)
-#' @return Y_resi structure
+#' @return Y_resi structure with entries \code{Y_ij = X_i' K_ij X_j}
 #' @noRd
 compute_Y_resi <- function(X_list, flat_kernels, sigma, cell_types, slide = NULL) {
   n_mat <- length(cell_types)
@@ -281,26 +243,55 @@ compute_Y_resi <- function(X_list, flat_kernels, sigma, cell_types, slide = NULL
 #' @param w_list Weight list
 #' @param qq Component index used for deflation
 #' @param cell_types Cell type names
+#' @param deflation How to remove the (w1, w2) direction from Y. `"rank1"`
+#'   (default) subtracts the rank-1 bilinear component
+#'   `Y - (w1^T Y w2) w1 w2^T`; when `w1, w2` are the leading singular vectors of
+#'   `Y` (the observed, converged case) this equals the full projection, so the
+#'   observed sequential CCA is unchanged. `"projection"` applies the full
+#'   orthogonal projection `(I - u u^T) Y (I - v v^T)` with unit `u, v` -- the
+#'   Freedman-Lane / Legendre-Oksanen-ter Braak (2011) residualization. The two
+#'   agree on the observed `Y` but differ on a permuted `Y` (where `w1, w2` are
+#'   no longer its singular vectors), which is exactly where the conditional
+#'   null lives. `"projection"` is not defined together with `sdev2_list`
+#'   (weighted deflation) and errors if both are supplied.
 #' @return Updated Y_resi
 #' @noRd
-apply_deflation <- function(Y_resi, w_list, qq, cell_types, sdev2_list = NULL) {
+apply_deflation <- function(Y_resi, w_list, qq, cell_types, sdev2_list = NULL,
+                            deflation = c("rank1", "projection")) {
+  deflation <- match.arg(deflation)
+  if (deflation == "projection" && !is.null(sdev2_list)) {
+    stop("deflation = 'projection' is not defined with weighted deflation ",
+         "(sdev2_list); use deflation = 'rank1'.")
+  }
   n_mat <- length(cell_types)
   is_within <- (n_mat == 1)
+
+  ## full orthogonal projection (I - uu^T) Y (I - vv^T) with unit u, v
+  proj_deflate <- function(Y1, w1, w2) {
+    u <- w1 / sqrt(sum(w1^2))
+    v <- w2 / sqrt(sum(w2^2))
+    Y1 - u %*% crossprod(u, Y1) - (Y1 %*% v) %*% t(v) +
+      as.numeric(crossprod(u, Y1 %*% v)) * (u %*% t(v))
+  }
 
   if (is_within) {
     ct <- cell_types[1]
     Y1 <- Y_resi[[ct]][[ct]]
     w1 <- w_list[[ct]][, qq, drop = FALSE]
 
-    deflation_scalar <- (t(w1) %*% Y1 %*% w1)[1, 1]
-    if (!is.null(sdev2_list)) {
-      # Weighted deflation: project out Dw direction where D = diag(sdev^2)
-      Dw1 <- w1 * sdev2_list[[ct]]
-      deflation_term <- deflation_scalar * (Dw1 %*% t(Dw1))
+    if (deflation == "projection") {
+      Y_resi[[ct]][[ct]] <- proj_deflate(Y1, w1, w1)
     } else {
-      deflation_term <- deflation_scalar * (w1 %*% t(w1))
+      deflation_scalar <- (t(w1) %*% Y1 %*% w1)[1, 1]
+      if (!is.null(sdev2_list)) {
+        # Weighted deflation: project out Dw direction where D = diag(sdev^2)
+        Dw1 <- w1 * sdev2_list[[ct]]
+        deflation_term <- deflation_scalar * (Dw1 %*% t(Dw1))
+      } else {
+        deflation_term <- deflation_scalar * (w1 %*% t(w1))
+      }
+      Y_resi[[ct]][[ct]] <- Y1 - deflation_term
     }
-    Y_resi[[ct]][[ct]] <- Y1 - deflation_term
   } else {
     pair_cell_types <- combn(cell_types, 2)
     for (pp in seq_len(ncol(pair_cell_types))) {
@@ -311,15 +302,19 @@ apply_deflation <- function(Y_resi, w_list, qq, cell_types, sdev2_list = NULL) {
       w2 <- w_list[[j]][, qq, drop = FALSE]
       Y1 <- Y_resi[[i]][[j]]
 
-      deflation_scalar <- (t(w1) %*% Y1 %*% w2)[1, 1]
-      if (!is.null(sdev2_list)) {
-        Dw1 <- w1 * sdev2_list[[i]]
-        Dw2 <- w2 * sdev2_list[[j]]
-        deflation_term <- deflation_scalar * (Dw1 %*% t(Dw2))
+      if (deflation == "projection") {
+        Y_resi[[i]][[j]] <- proj_deflate(Y1, w1, w2)
       } else {
-        deflation_term <- deflation_scalar * (w1 %*% t(w2))
+        deflation_scalar <- (t(w1) %*% Y1 %*% w2)[1, 1]
+        if (!is.null(sdev2_list)) {
+          Dw1 <- w1 * sdev2_list[[i]]
+          Dw2 <- w2 * sdev2_list[[j]]
+          deflation_term <- deflation_scalar * (Dw1 %*% t(Dw2))
+        } else {
+          deflation_term <- deflation_scalar * (w1 %*% t(w2))
+        }
+        Y_resi[[i]][[j]] <- Y1 - deflation_term
       }
-      Y_resi[[i]][[j]] <- Y1 - deflation_term
       Y_resi[[j]][[i]] <- t(Y_resi[[i]][[j]])
     }
   }
@@ -828,12 +823,14 @@ optimize_bilinear_multi_slides <- function(X_list_all, flat_kernels, sigma, slid
                             sdev2_list = sdev2_list))
   }
   
+  # Build the small PC-space operators once for all iterative first-CC updates.
+  Y_aggregate <- compute_Y_multi_slide(
+    X_list_all, flat_kernels, sigma, slides, cell_types, n_cores
+  )
+
   # Handle within-cell-type case with direct solution
   if (is_within && direct_solve) {
     ct <- cell_types[1]
-
-    # Aggregate Y matrices across slides
-    Y_aggregate <- compute_Y_multi_slide(X_list_all, flat_kernels, sigma, slides, cell_types, n_cores)
     Y_sum <- Y_aggregate[[ct]][[ct]]
 
     # When scalePCs=FALSE, solve generalized eigen problem Y w = λ D w
@@ -872,65 +869,17 @@ optimize_bilinear_multi_slides <- function(X_list_all, flat_kernels, sigma, slid
   
   # Initialize weights
   w_list <- initialize_weights_multi_slide(X_list_all, cell_types, use_aggregation = TRUE)
-  
-  # Iterative optimization
-  iter <- 0
-  while (iter <= max_iter) {
-    w_list_old <- w_list
-    
-    if (is_within) {
-      # Within-cell-type optimization
-      ct <- cell_types[1]
-      
-      # Compute aggregated update
-      update_contributions <- mclapply(seq_len(n_slides), function(q) {
-        X <- X_list_all[[q]][[ct]]
-        K <- get_kernel_matrix_flat(flat_kernels, sigma, ct, ct, slides[q])
-        w <- w_list[[ct]]
-        
-        # Compute: t(X) %*% K %*% X %*% w
-        Xw <- X %*% w
-        KXw <- K %*% Xw
-        crossprod(X, KXw)
-      }, mc.cores = n_cores)
-      
-      w_update <- Reduce("+", update_contributions)
-      sd2 <- if (!is.null(sdev2_list)) sdev2_list[[ct]] else NULL
-      if (step_size < 1) {
-        w_list[[ct]] <- normalize_vec_weighted((1 - step_size) * w_list_old[[ct]] + step_size * normalize_gradient_weighted(w_update, sd2), sd2)
-      } else {
-        w_list[[ct]] <- normalize_gradient_weighted(w_update, sd2)
-      }
 
-    } else {
-      # Standard multi-cell-type optimization
-      for (ct_i in cell_types) {
-        w_i_update_vec <- compute_update_vector_multi_slide(
-          ct_i, cell_types, X_list_all, flat_kernels, sigma, slides, w_list, n_features, n_cores
-        )
-        sd2 <- if (!is.null(sdev2_list)) sdev2_list[[ct_i]] else NULL
-        if (step_size < 1) {
-          w_list[[ct_i]] <- normalize_vec_weighted((1 - step_size) * w_list_old[[ct_i]] + step_size * normalize_gradient_weighted(w_i_update_vec, sd2), sd2)
-        } else {
-          w_list[[ct_i]] <- normalize_gradient_weighted(w_i_update_vec, sd2)
-        }
-      }
-    }
-
-    # Check convergence
-    current_max_diff <- check_convergence(w_list, w_list_old, cell_types)
-    
-    if (current_max_diff <= tol) {
-      message(paste("Convergence reached at", iter, "iterations (Max diff =", 
-                   sprintf("%.3e", current_max_diff), ")"))
-      break
-    }
-    iter <- iter + 1
-  }
-  
-  if (iter > max_iter) {
-    warning("Maximum number of iterations reached without convergence")
-  }
+  # Iterative optimization on the aggregated small operators.
+  w_list <- bilinear_w_from_Y_resi(
+    w_list_new = w_list,
+    Y_resi = Y_aggregate,
+    n_features = n_features,
+    max_iter = max_iter,
+    tol = tol,
+    step_size = step_size,
+    sdev2_list = sdev2_list
+  )
   
   # Ensure proper matrix format
   for (ct in cell_types) {
@@ -1054,5 +1003,3 @@ optimize_bilinear_n_multi_slides <- function(X_list_all, flat_kernels, sigma, sl
   
   return(w_list)
 }
-
-
