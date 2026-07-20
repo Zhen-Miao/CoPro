@@ -91,13 +91,19 @@
         cell_loc <- location_full[object@cellTypesSub == ct, ]
         cell_permu[[ct]] <- matrix(ncol = nPermu, nrow = nrow(cell_loc))
 
+        # Bins, memberships, and neighboring-bin lookups are invariant across
+        # permutations. Preparing them once avoids repeatedly scanning the full
+        # data frame for every occupied bin in every permutation.
+        prepared <- .prepareSpatialResampling(
+          location_data = cell_loc,
+          num_bins_x = num_bins_x,
+          num_bins_y = num_bins_y
+        )
+
         for (j in seq_len(nPermu)) {
-          cell_loc_resample <- resample_spatial(location_data = cell_loc,
-                                                num_bins_x = num_bins_x,
-                                                num_bins_y = num_bins_y,
-                                                match_quantile = match_quantile)
-          cell_permu[[ct]][, j] <- match(cell_loc_resample$"cell_ID",
-                                         cell_loc$"cell_ID")
+          cell_permu[[ct]][, j] <- .drawSpatialPermutation(
+            prepared, match_quantile = match_quantile
+          )
         }
       } else {
         # Keep this cell type fixed (identity permutation)
@@ -728,6 +734,7 @@ computeNormalizedCorrelationPermu <- function(object, tol = 1e-4) {
   cat("Calculating whitened-Frobenius normalizers...\n")
   norm_K12 <- setNames(vector(mode = "list", length = 1), s_name)
   norm_K12[[s_name]] <- setNames(vector(mode = "list", length = length(cts)), cts)
+  kernels <- vector("list", ncol(pair_cell_types))
 
   for (i in cts) {
     norm_K12[[s_name]][[i]] <- setNames(
@@ -740,6 +747,7 @@ computeNormalizedCorrelationPermu <- function(object, tol = 1e-4) {
     K <- getKernelMatrix(object, sigma = sigmaValueChoice,
                          cellType1 = cellType1, cellType2 = cellType2,
                          verbose = FALSE)
+    kernels[[pp]] <- K
     ## matched-sigma within-type kernels as whitening operators
     Rx <- tryCatch(getKernelMatrix(object, sigma = sigmaValueChoice,
                      cellType1 = cellType1, cellType2 = cellType1,
@@ -788,31 +796,31 @@ computeNormalizedCorrelationPermu <- function(object, tol = 1e-4) {
       stringsAsFactors = FALSE
     )
 
+    # Each permuted PC matrix is invariant across cell-type pairs and canonical
+    # components. Multiplying by all component weights at once also lets sparse
+    # kernels process an nCC-column score matrix in one call.
+    PCmats_permuted <- stats::setNames(
+      lapply(cts, get_permuted_pcmat, tt = tt), cts
+    )
+    scores <- stats::setNames(lapply(cts, function(ct) {
+      W <- object@skrCCAPermuOut[[t]][[ct]][, seq_len(nCC), drop = FALSE]
+      PCmats_permuted[[ct]] %*% W
+    }), cts)
+    score_norms <- lapply(scores, function(x) sqrt(colSums(x^2)))
+
     for (pp in seq_len(ncol(pair_cell_types))) {
-      for (cc_index in seq_len(nCC)) {
-        cellType1 <- pair_cell_types[1, pp]
-        cellType2 <- pair_cell_types[2, pp]
+      cellType1 <- pair_cell_types[1, pp]
+      cellType2 <- pair_cell_types[2, pp]
+      K <- kernels[[pp]]
+      norm_K12_sel <- norm_K12[[s_name]][[cellType1]][[cellType2]]
 
-        w_1 <- object@skrCCAPermuOut[[t]][[cellType1]][, cc_index, drop = FALSE]
-        w_2 <- object@skrCCAPermuOut[[t]][[cellType2]][, cc_index, drop = FALSE]
-
-        A <- get_permuted_pcmat(cellType1, tt)
-        B <- get_permuted_pcmat(cellType2, tt)
-
-        A_w1 <- A %*% w_1
-        B_w2 <- B %*% w_2
-
-        K <- getKernelMatrix(object, sigma = sigmaValueChoice,
-                             cellType1 = cellType1, cellType2 = cellType2,
-                             verbose = FALSE)
-        norm_K12_sel <- norm_K12[[s_name]][[cellType1]][[cellType2]]
-
-        # Calculate normalized correlation
-        correlation_value[[t]]$"normalizedCorrelation"[
-          pp + (cc_index - 1) * ncol(pair_cell_types)] <-
-          (t(A_w1) %*% K %*% B_w2) /
-          (sqrt(sum(A_w1^2)) * sqrt(sum(B_w2^2)) * norm_K12_sel)
-      }
+      numerators <- colSums(scores[[cellType1]] *
+                              (K %*% scores[[cellType2]]))
+      denominators <- score_norms[[cellType1]] * score_norms[[cellType2]] *
+        norm_K12_sel
+      out_idx <- pp + (seq_len(nCC) - 1L) * ncol(pair_cell_types)
+      correlation_value[[t]]$normalizedCorrelation[out_idx] <-
+        as.numeric(numerators / denominators)
     }
 
     # Progress indicator
