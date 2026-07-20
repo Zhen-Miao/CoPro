@@ -22,8 +22,11 @@ Imports:
     irlba,
     fields,
     matrixStats,
+    Rcpp,
     dplyr,
     ggplot2
+LinkingTo:
+    Rcpp
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.3.3
 Suggests:
@@ -48,6 +51,7 @@ Suggests:
 Remotes:
     bnprks/BPCells/r
 VignetteBuilder: knitr
+NeedsCompilation: yes
 Config/testthat/edition: 3
 URL: https://zhen-miao.github.io/CoPro/, https://github.com/Zhen-Miao/CoPro
 BugReports: https://github.com/Zhen-Miao/CoPro/issues

@@ -10,3 +10,5 @@ README.knit.md
 *.tar.gz
 *.Rcheck/
 experiments/
+src/*.o
+src/*.so

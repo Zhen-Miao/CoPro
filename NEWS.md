@@ -43,6 +43,16 @@
   once per bandwidth and reuse each precomputed PC-space operator for fitting
   and scoring. Sparse whitened-Frobenius normalization also stays sparse via an
   equivalent low-rank centering formula instead of materializing dense kernels.
+* The exact fixed-radius neighbor search used by sparse kernels now runs in a
+  deterministic Rcpp engine, with the original R implementation retained as a
+  reference fallback. Bin-wise permutations precompute bin memberships and
+  neighbor lookups once per cell type, and normalized permutation scoring
+  batches all canonical components instead of rebuilding permuted PC matrices
+  inside every pair/component loop.
+* `computeSelfKernel()` now supports `method = "auto"`, `"dense"`, or
+  `"sparse"`. Its default automatically builds exact sparse multitype
+  self-kernels directly from coordinates for large workloads or when dense
+  self-distance matrices are unavailable.
 
 ## Bug fixes
 

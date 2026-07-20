@@ -267,10 +267,12 @@ setMethod("computeSelfDistance", "CoProMulti",
 #' Compute Self-Kernel Matrices for Multiple Cell Types
 #'
 #' This function computes within-cell-type kernel matrices for each cell type
-#' when multiple cell types are present. It requires that self-distance matrices
-#' have been computed first (using computeSelfDistance).
+#' when multiple cell types are present. The default `method = "auto"` uses
+#' existing self-distance matrices for small workloads and builds sparse kernels
+#' directly from coordinates for large workloads or when self-distances have not
+#' been materialized.
 #'
-#' @param object A `CoPro` object with multiple cell types and self-distance matrices
+#' @param object A `CoPro` object with multiple cell types
 #' @param sigmaValues A vector of sigma values used for kernel calculation
 #' @param lowerLimit The lower limit for the kernel function, default is 1e-7
 #' @param upperQuantile The quantile used for clipping the kernel values, default is 0.85
@@ -281,6 +283,15 @@ setMethod("computeSelfDistance", "CoProMulti",
 #' @param verbose Whether to output progress information
 #' @param overwrite Whether to overwrite existing kernel matrices. If FALSE,
 #'  will add self-kernel matrices to existing cross-type kernels. Default = FALSE
+#' @param method One of `"auto"`, `"dense"`, or `"sparse"`. The sparse path
+#'  constructs exact thresholded self-kernels directly from coordinates and
+#'  does not require [computeSelfDistance()].
+#' @param autoThreshold Cell-count threshold used by `method = "auto"`.
+#'  Sparse construction is selected when a self-kernel dimension reaches this
+#'  value, aggregate dense self-kernel entries reach its square, or required
+#'  self-distance matrices are absent. Default 5000.
+#' @param distType,xDistScale,yDistScale,zDistScale,normalizeDistance,normalizeTarget,truncateLowDist
+#'  Distance options for the sparse path, matching [computeKernelMatrix()].
 #'
 #' @return `CoPro` object with self-kernel matrices added to the kernelMatrices slot
 #' @export
@@ -306,7 +317,11 @@ setGeneric(
   function(object, sigmaValues, lowerLimit = 1e-7, upperQuantile = 0.85,
            normalizeKernel = FALSE, minAveCellNeighor = 2,
            rowNormalizeKernel = FALSE, colNormalizeKernel = FALSE,
-           verbose = TRUE, overwrite = FALSE) standardGeneric("computeSelfKernel")
+           verbose = TRUE, overwrite = FALSE,
+           method = c("auto", "dense", "sparse"), autoThreshold = 5000L,
+           distType = NULL, xDistScale = 1, yDistScale = 1, zDistScale = 1,
+           normalizeDistance = TRUE, normalizeTarget = 0.01,
+           truncateLowDist = TRUE) standardGeneric("computeSelfKernel")
 )
 
 #' @rdname computeSelfKernel
@@ -315,10 +330,21 @@ setMethod("computeSelfKernel", "CoProSingle",
           function(object, sigmaValues, lowerLimit = 1e-7, upperQuantile = 0.85,
                    normalizeKernel = FALSE, minAveCellNeighor = 2,
                    rowNormalizeKernel = FALSE, colNormalizeKernel = FALSE,
-                   verbose = TRUE, overwrite = FALSE) {
-            .computeSelfKernelCore(object, sigmaValues, lowerLimit, upperQuantile,
-                                  normalizeKernel, minAveCellNeighor, rowNormalizeKernel,
-                                  colNormalizeKernel, verbose, overwrite)
+                   verbose = TRUE, overwrite = FALSE,
+                   method = c("auto", "dense", "sparse"), autoThreshold = 5000L,
+                   distType = NULL, xDistScale = 1, yDistScale = 1, zDistScale = 1,
+                   normalizeDistance = TRUE, normalizeTarget = 0.01,
+                   truncateLowDist = TRUE) {
+            .computeSelfKernelDispatch(
+              object, sigmaValues, lowerLimit, upperQuantile,
+              normalizeKernel, minAveCellNeighor, rowNormalizeKernel,
+              colNormalizeKernel, method = match.arg(method),
+              autoThreshold = autoThreshold, distType = distType,
+              xDistScale = xDistScale, yDistScale = yDistScale,
+              zDistScale = zDistScale, normalizeDistance = normalizeDistance,
+              normalizeTarget = normalizeTarget, truncateLowDist = truncateLowDist,
+              verbose = verbose, overwrite = overwrite, is_multi = FALSE
+            )
           })
 
 #' @rdname computeSelfKernel
@@ -327,10 +353,21 @@ setMethod("computeSelfKernel", "CoProMulti",
           function(object, sigmaValues, lowerLimit = 1e-7, upperQuantile = 0.85,
                    normalizeKernel = FALSE, minAveCellNeighor = 2,
                    rowNormalizeKernel = FALSE, colNormalizeKernel = FALSE,
-                   verbose = TRUE, overwrite = FALSE) {
-            .computeSelfKernelCoreMulti(object, sigmaValues, lowerLimit, upperQuantile,
-                                       normalizeKernel, minAveCellNeighor, rowNormalizeKernel,
-                                       colNormalizeKernel, verbose, overwrite)
+                   verbose = TRUE, overwrite = FALSE,
+                   method = c("auto", "dense", "sparse"), autoThreshold = 5000L,
+                   distType = NULL, xDistScale = 1, yDistScale = 1, zDistScale = 1,
+                   normalizeDistance = TRUE, normalizeTarget = 0.01,
+                   truncateLowDist = TRUE) {
+            .computeSelfKernelDispatch(
+              object, sigmaValues, lowerLimit, upperQuantile,
+              normalizeKernel, minAveCellNeighor, rowNormalizeKernel,
+              colNormalizeKernel, method = match.arg(method),
+              autoThreshold = autoThreshold, distType = distType,
+              xDistScale = xDistScale, yDistScale = yDistScale,
+              zDistScale = zDistScale, normalizeDistance = normalizeDistance,
+              normalizeTarget = normalizeTarget, truncateLowDist = truncateLowDist,
+              verbose = verbose, overwrite = overwrite, is_multi = TRUE
+            )
           })
 
 #' Core function for computing self-kernels (single slide)
