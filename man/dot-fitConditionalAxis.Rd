@@ -12,6 +12,7 @@
   W_lower = NULL,
   k_minus_1 = 0,
   Y_resi = NULL,
+  kernel_info = NULL,
   maxIter = 200,
   tol = 1e-05
 )
@@ -33,6 +34,9 @@
 
 \item{Y_resi}{Optional precomputed \code{compute_Y_resi()} structure for this
 (PCmats, sigma); recomputed when \code{NULL} and \code{k_minus_1 >= 1}.}
+
+\item{kernel_info}{Optional precomputed kernel and normalizer information
+from \code{.get_ncorr_kernel_info()}.}
 
 \item{maxIter, tol}{Optimization controls.}
 }

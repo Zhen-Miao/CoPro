@@ -87,6 +87,40 @@ test_that(".fitConditionalAxis reproduces stored observed CC_k exactly", {
   }
 })
 
+test_that("precomputed permutation scoring inputs preserve results", {
+  skip_on_cran()
+  obj <- .cond_pipeline(nCC = 2)
+  cts <- obj@cellTypesOfInterest
+  sigma <- obj@sigmaValueChoice
+  PCmats <- .getAllPCMats(obj@pcaGlobal, obj@scalePCs)
+  Wobs <- obj@skrCCAOut[[paste0("sigma_", sigma)]]
+  Y0 <- compute_Y_resi(PCmats, obj@kernelMatrices, sigma, cts)
+  kernel_info <- .get_ncorr_kernel_info(obj@kernelMatrices, sigma, cts)
+  w1 <- lapply(Wobs, function(w) w[, 1, drop = FALSE])
+
+  uncached <- .compute_ncorr_quick(
+    PCmats, w1, obj@kernelMatrices, sigma, cts
+  )
+  cached <- .compute_ncorr_quick(
+    PCmats, w1, obj@kernelMatrices, sigma, cts,
+    kernel_info = kernel_info, Y_resi = Y0
+  )
+  expect_equal(cached, uncached, tolerance = 1e-12)
+
+  fit_uncached <- .fitConditionalAxis(
+    PCmats, obj@kernelMatrices, sigma, cts, k_minus_1 = 0
+  )
+  fit_cached <- .fitConditionalAxis(
+    PCmats, obj@kernelMatrices, sigma, cts, k_minus_1 = 0,
+    Y_resi = Y0, kernel_info = kernel_info
+  )
+  for (ct in cts) {
+    expect_equal(abs(fit_cached$w[[ct]]), abs(fit_uncached$w[[ct]]),
+                 tolerance = 1e-5)
+  }
+  expect_equal(fit_cached$ncorr, fit_uncached$ncorr, tolerance = 1e-10)
+})
+
 test_that("conditional k = 1 p-value equals fair-sigma p-value", {
   skip_on_cran()
   obj1 <- .cond_pipeline(nCC = 1)

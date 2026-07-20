@@ -36,6 +36,13 @@
   selection to the grid floor. Affects `computeNormalizedCorrelation()`, the
   permutation tests (`runSkrCCAPermu*()`), and `getTransfer*()` extrapolation.
 
+## Performance
+
+* Fair-sigma and conditional permutation tests now cache kernel normalizers
+  once per bandwidth and reuse each precomputed PC-space operator for fitting
+  and scoring. Sparse whitened-Frobenius normalization also stays sparse via an
+  equivalent low-rank centering formula instead of materializing dense kernels.
+
 ## Bug fixes
 
 * Sigma-aware bin sizing no longer silently falls back to a hard-coded 10x10

@@ -4,7 +4,16 @@
 \alias{.compute_ncorr_quick}
 \title{Quick Normalized Correlation Computation (Internal)}
 \usage{
-.compute_ncorr_quick(PCmats, w_list, flat_kernels, sigma, cts, tol = 1e-04)
+.compute_ncorr_quick(
+  PCmats,
+  w_list,
+  flat_kernels,
+  sigma,
+  cts,
+  tol = 1e-04,
+  kernel_info = NULL,
+  Y_resi = NULL
+)
 }
 \arguments{
 \item{PCmats}{Named list of PC matrices}
@@ -18,6 +27,13 @@
 \item{cts}{Cell types of interest}
 
 \item{tol}{Tolerance for SVD computation}
+
+\item{kernel_info}{Optional precomputed list containing \code{K} and \code{norm_K12}
+for this sigma.}
+
+\item{Y_resi}{Optional precomputed PC-space operator from
+\code{compute_Y_resi()}. When supplied, it is used for the numerator so the
+kernel-vector product is not repeated.}
 }
 \value{
 Numeric value of normalized correlation

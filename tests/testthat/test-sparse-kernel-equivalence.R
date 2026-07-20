@@ -263,3 +263,20 @@ test_that("sparse path does not require computeDistance and rejects Morphology-A
     "Euclidean"
   )
 })
+
+test_that("sparse whitened-Frobenius normalizer matches dense calculation", {
+  set.seed(701)
+  K <- Matrix::rsparsematrix(37, 41, density = 0.18)
+  X <- Matrix::rsparsematrix(37, 37, density = 0.12)
+  Y <- Matrix::rsparsematrix(41, 41, density = 0.12)
+  Rx <- Matrix::crossprod(X) + Matrix::Diagonal(37)
+  Ry <- Matrix::crossprod(Y) + Matrix::Diagonal(41)
+
+  sparse_norm <- .whitenedFrobNorm(K, Rx, Ry)
+  dense_norm <- .whitenedFrobNorm(as.matrix(K), as.matrix(Rx), as.matrix(Ry))
+  expect_equal(sparse_norm, dense_norm, tolerance = 1e-10)
+
+  sparse_unwhitened <- .whitenedFrobNorm(K)
+  dense_unwhitened <- .whitenedFrobNorm(as.matrix(K))
+  expect_equal(sparse_unwhitened, dense_unwhitened, tolerance = 1e-10)
+})

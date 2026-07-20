@@ -1044,11 +1044,17 @@ calculate_pvalue <- function(object, cc_index = 1, alternative = "greater") {
 #' @param sigma Sigma value for kernel selection
 #' @param cts Cell types of interest
 #' @param tol Tolerance for SVD computation
+#' @param kernel_info Optional precomputed list containing `K` and `norm_K12`
+#'   for this sigma.
+#' @param Y_resi Optional precomputed PC-space operator from
+#'   `compute_Y_resi()`. When supplied, it is used for the numerator so the
+#'   kernel-vector product is not repeated.
 #'
 #' @return Numeric value of normalized correlation
 #' @keywords internal
 .compute_ncorr_quick <- function(PCmats, w_list, flat_kernels, sigma, cts,
-                                 tol = 1e-4) {
+                                 tol = 1e-4, kernel_info = NULL,
+                                 Y_resi = NULL) {
   if (length(cts) == 1) {
     ct1 <- ct2 <- cts[1]
   } else {
@@ -1064,21 +1070,51 @@ calculate_pvalue <- function(object, cc_index = 1, alternative = "greater") {
   A_w1 <- A %*% w1
   B_w2 <- B %*% w2
 
-  # Get kernel matrix
-  K <- get_kernel_matrix_flat(flat_kernels, sigma, ct1, ct2, slide = NULL)
-
-  # Whitened-Frobenius normalizer (matched-sigma within-type kernels)
-  Rx <- tryCatch(get_kernel_matrix_flat(flat_kernels, sigma, ct1, ct1, slide = NULL),
-                 error = function(e) NULL)
-  Ry <- tryCatch(get_kernel_matrix_flat(flat_kernels, sigma, ct2, ct2, slide = NULL),
-                 error = function(e) NULL)
-  norm_K12 <- .whitenedFrobNorm(K, Rx, Ry)
+  if (is.null(kernel_info)) {
+    kernel_info <- .get_ncorr_kernel_info(flat_kernels, sigma, cts)
+  }
+  K <- kernel_info$K
+  norm_K12 <- kernel_info$norm_K12
 
   # Normalized correlation
-  numerator <- as.numeric(t(A_w1) %*% K %*% B_w2)
+  Y12 <- if (!is.null(Y_resi) && !is.null(Y_resi[[ct1]])) {
+    Y_resi[[ct1]][[ct2]]
+  } else {
+    NULL
+  }
+  numerator <- if (!is.null(Y12)) {
+    as.numeric(crossprod(w1, Y12 %*% w2))
+  } else {
+    as.numeric(crossprod(A_w1, K %*% B_w2))
+  }
   denominator <- sqrt(sum(A_w1^2)) * sqrt(sum(B_w2^2)) * norm_K12
 
   return(numerator / denominator)
+}
+
+
+# Precompute permutation scoring objects that depend only on sigma. The
+# whitened-Frobenius normalizer is especially expensive for large kernels and
+# must not be recomputed for every permutation or canonical axis.
+.get_ncorr_kernel_info <- function(flat_kernels, sigma, cts) {
+  if (length(cts) == 1) {
+    ct1 <- ct2 <- cts[1]
+  } else {
+    ct1 <- cts[1]
+    ct2 <- cts[2]
+  }
+
+  K <- get_kernel_matrix_flat(flat_kernels, sigma, ct1, ct2, slide = NULL)
+  Rx <- tryCatch(
+    get_kernel_matrix_flat(flat_kernels, sigma, ct1, ct1, slide = NULL),
+    error = function(e) NULL
+  )
+  Ry <- tryCatch(
+    get_kernel_matrix_flat(flat_kernels, sigma, ct2, ct2, slide = NULL),
+    error = function(e) NULL
+  )
+
+  list(K = K, norm_K12 = .whitenedFrobNorm(K, Rx, Ry))
 }
 
 
@@ -1260,6 +1296,14 @@ runSkrCCAPermu_FairSigma <- function(object,
   permu_ncorrs <- numeric(nPermu)
   permu_sigmas <- numeric(nPermu)
 
+  # Kernel matrices and their whitened-Frobenius normalizers are invariant to
+  # PC permutations. Cache them once per sigma instead of repeating the
+  # cubic normalizer calculation nPermu times.
+  kernel_info <- lapply(
+    sigma_values,
+    function(sigma) .get_ncorr_kernel_info(object@kernelMatrices, sigma, cts)
+  )
+
   # Helper function for PC-space permutation
   permute_pc_matrix <- function(pc_mat, seed) {
     set.seed(seed)
@@ -1293,22 +1337,20 @@ runSkrCCAPermu_FairSigma <- function(object,
     best_sigma <- sigma_values[1]
     best_weights <- NULL
 
-    for (sigma in sigma_values) {
-      # Run CCA for this sigma
-      cca_result <- optimize_bilinear(
-        X_list = PCmats_local,
-        flat_kernels = object@kernelMatrices,
-        sigma = sigma,
-        max_iter = maxIter,
-        tol = tol
+    for (si in seq_along(sigma_values)) {
+      sigma <- sigma_values[si]
+      # Compute the PC-space operator once, then reuse it for fitting and
+      # normalized-correlation scoring.
+      Y0 <- compute_Y_resi(
+        PCmats_local, object@kernelMatrices, sigma, cts, slide = NULL
       )
-      names(cca_result) <- cts
-
-      # Compute normalized correlation
-      ncorr <- .compute_ncorr_quick(
-        PCmats_local, cca_result,
-        object@kernelMatrices, sigma, cts
+      fit <- .fitConditionalAxis(
+        PCmats = PCmats_local, flat_kernels = object@kernelMatrices,
+        sigma = sigma, cts = cts, k_minus_1 = 0, Y_resi = Y0,
+        kernel_info = kernel_info[[si]], maxIter = maxIter, tol = tol
       )
+      cca_result <- fit$w
+      ncorr <- fit$ncorr
 
       if (ncorr > best_ncorr) {
         best_ncorr <- ncorr
@@ -1436,6 +1478,8 @@ runSkrCCAPermu_FairSigma <- function(object,
 #' @param k_minus_1 Number of lower axes to deflate (0 for the first axis).
 #' @param Y_resi Optional precomputed `compute_Y_resi()` structure for this
 #'   (PCmats, sigma); recomputed when `NULL` and `k_minus_1 >= 1`.
+#' @param kernel_info Optional precomputed kernel and normalizer information
+#'   from `.get_ncorr_kernel_info()`.
 #' @param maxIter,tol Optimization controls.
 #'
 #' @return List with `w` (named list of 1-column weight matrices for axis k) and
@@ -1444,16 +1488,29 @@ runSkrCCAPermu_FairSigma <- function(object,
 #' @keywords internal
 .fitConditionalAxis <- function(PCmats, flat_kernels, sigma, cts,
                                 W_lower = NULL, k_minus_1 = 0,
-                                Y_resi = NULL, maxIter = 200, tol = 1e-5) {
+                                Y_resi = NULL, kernel_info = NULL,
+                                maxIter = 200, tol = 1e-5) {
   if (k_minus_1 <= 0) {
-    # First axis: identical to the fair-sigma CC1 optimization (X-based).
-    invisible(utils::capture.output(
-      w_k <- optimize_bilinear(
-        X_list = PCmats, flat_kernels = flat_kernels, sigma = sigma,
-        max_iter = maxIter, tol = tol
-      )
-    ))
-    names(w_k) <- cts
+    # First axis: identical to optimize_bilinear(). When Y_resi was already
+    # computed by the caller, reuse it instead of repeating X' K X.
+    if (is.null(Y_resi)) {
+      invisible(utils::capture.output(
+        w_k <- optimize_bilinear(
+          X_list = PCmats, flat_kernels = flat_kernels, sigma = sigma,
+          max_iter = maxIter, tol = tol
+        )
+      ))
+      names(w_k) <- cts
+    } else {
+      w_new <- initialize_weights_svd(PCmats, cts)
+      invisible(utils::capture.output(
+        w_k <- bilinear_w_from_Y_resi(
+          w_list_new = w_new, Y_resi = Y_resi,
+          n_features = ncol(PCmats[[cts[1]]]),
+          max_iter = maxIter, tol = tol
+        )
+      ))
+    }
   } else {
     # Conditional axis: deflate the fixed observed lower directions from Y,
     # then optimize the leading residual component.
@@ -1478,7 +1535,10 @@ runSkrCCAPermu_FairSigma <- function(object,
     w_k[[ct]] <- matrix(w_k[[ct]][, 1], ncol = 1)
   }
 
-  ncorr <- .compute_ncorr_quick(PCmats, w_k, flat_kernels, sigma, cts)
+  ncorr <- .compute_ncorr_quick(
+    PCmats, w_k, flat_kernels, sigma, cts,
+    kernel_info = kernel_info, Y_resi = Y_resi
+  )
   list(w = w_k, ncorr = ncorr)
 }
 
@@ -1705,6 +1765,13 @@ runSkrCCAPermu_Conditional <- function(object,
   perm_sigma <- matrix(sigma_values[1], nrow = nPermu, ncol = nCC)
   n_failed <- 0L
 
+  # These values are kernel/sigma-specific, not permutation/axis-specific.
+  # Precomputing them removes nPermu * nCC repeated normalizer products.
+  kernel_info <- lapply(
+    sigma_values,
+    function(sigma) .get_ncorr_kernel_info(object@kernelMatrices, sigma, cts)
+  )
+
   if (verbose) cat("Running permutations...\n")
 
   for (tt in seq_len(nPermu)) {
@@ -1725,18 +1792,15 @@ runSkrCCAPermu_Conditional <- function(object,
       for (si in seq_along(sigma_values)) {
         s <- sigma_values[si]
         sname <- sigma_names[si]
-        ## compute Y once per (permutation, sigma); reuse across axes >= 2
-        Y0 <- if (nCC >= 2) {
-          compute_Y_resi(PCmats_local, object@kernelMatrices, s, cts,
-                         slide = NULL)
-        } else {
-          NULL
-        }
+        ## compute Y once per (permutation, sigma); reuse across all axes
+        Y0 <- compute_Y_resi(PCmats_local, object@kernelMatrices, s, cts,
+                             slide = NULL)
         for (k in seq_len(nCC)) {
           fit <- .fitConditionalAxis(
             PCmats = PCmats_local, flat_kernels = object@kernelMatrices,
             sigma = s, cts = cts, W_lower = obs_W[[sname]], k_minus_1 = k - 1,
-            Y_resi = Y0, maxIter = maxIter, tol = tol
+            Y_resi = Y0, kernel_info = kernel_info[[si]],
+            maxIter = maxIter, tol = tol
           )
           if (is.finite(fit$ncorr) && fit$ncorr > stat_k[k]) {
             stat_k[k] <- fit$ncorr
