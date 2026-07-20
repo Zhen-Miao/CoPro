@@ -360,20 +360,30 @@ diagnose_bin_distribution <- function(location_data,
 resample_spatial <- function(location_data,
                              num_bins_x = 10, num_bins_y = 10,
                              match_quantile = FALSE) {
+  prepared <- .prepareSpatialResampling(location_data, num_bins_x, num_bins_y)
+  draw <- .drawSpatialResample(prepared, match_quantile = match_quantile)
 
-  # Input validation
- if (is.matrix(location_data) || is.data.frame(location_data)) {
-    if (is.matrix(location_data)) {
-      location_data <- as.data.frame(location_data)
-    }
-    if (!all(c("x", "y", "cell_ID") %in% colnames(location_data))) {
-      stop("Input location_data must have 'x', 'y', and 'cell_ID' columns.")
-    }
-  } else {
+  resampled_location_data <- prepared$location_data
+  resampled_location_data$cell_ID <- draw$cell_ID
+  resampled_location_data$bin_id <- draw$bin_id
+  rownames(resampled_location_data) <- prepared$original_cell_loc_order
+  resampled_location_data
+}
+
+
+#' Prepare invariant spatial resampling data
+#' @noRd
+.prepareSpatialResampling <- function(location_data,
+                                      num_bins_x = 10,
+                                      num_bins_y = 10) {
+  if (is.matrix(location_data)) {
+    location_data <- as.data.frame(location_data)
+  } else if (!is.data.frame(location_data)) {
     stop("Input location_data must be a matrix or data frame.")
   }
-
-  # Validate bin numbers
+  if (!all(c("x", "y", "cell_ID") %in% colnames(location_data))) {
+    stop("Input location_data must have 'x', 'y', and 'cell_ID' columns.")
+  }
   if (num_bins_x < 2 || num_bins_y < 2) {
     stop("num_bins_x and num_bins_y must be at least 2.")
   }
@@ -382,114 +392,110 @@ resample_spatial <- function(location_data,
   }
 
   original_cell_loc_order <- paste(location_data$x, location_data$y, sep = "_")
-  rownames(location_data) <- original_cell_loc_order
 
-  # Create bins for x and y coordinates if not already present
   if (!all(c("x_bin", "y_bin") %in% colnames(location_data))) {
-    location_data$x_bin <- cut(location_data$x, breaks = num_bins_x, labels = FALSE)
-    location_data$y_bin <- cut(location_data$y, breaks = num_bins_y, labels = FALSE)
+    location_data$x_bin <- cut(location_data$x, breaks = num_bins_x,
+                               labels = FALSE)
+    location_data$y_bin <- cut(location_data$y, breaks = num_bins_y,
+                               labels = FALSE)
   }
 
-  # Handle NA bins (cells outside the binning range)
   na_bins <- is.na(location_data$x_bin) | is.na(location_data$y_bin)
   if (any(na_bins)) {
     warning(paste(sum(na_bins), "cells have NA bin assignments and will be",
                   "assigned to nearest valid bin."))
-    # Assign NA bins to the closest valid bin
-    if (any(is.na(location_data$x_bin))) {
-      location_data$x_bin[is.na(location_data$x_bin)] <- 1
-    }
-    if (any(is.na(location_data$y_bin))) {
-      location_data$y_bin[is.na(location_data$y_bin)] <- 1
-    }
+    location_data$x_bin[is.na(location_data$x_bin)] <- 1
+    location_data$y_bin[is.na(location_data$y_bin)] <- 1
   }
 
-  # Assign a bin ID to each point
-  location_data$bin_id <- paste(location_data$x_bin, location_data$y_bin, sep = "_")
-
-  # Get unique bins and shuffle them
+  location_data$bin_id <- paste(location_data$x_bin, location_data$y_bin,
+                                sep = "_")
   unique_bins <- unique(location_data$bin_id)
-  shuffled_bins <- sample(unique_bins)
+  bin_members <- split(
+    seq_len(nrow(location_data)),
+    factor(location_data$bin_id, levels = unique_bins),
+    drop = TRUE
+  )
 
-  # Create a mapping from original bins to shuffled bins
-  bin_mapping <- setNames(shuffled_bins, unique_bins)
-
-  # Create a lookup table for bin coordinates
   bin_coords <- unique(location_data[, c("bin_id", "x_bin", "y_bin")])
   rownames(bin_coords) <- bin_coords$bin_id
+  neighbor_bins <- stats::setNames(
+    lapply(unique_bins, function(bin_id) {
+      .get_neighbor_bins(bin_coords, bin_id, num_bins_x, num_bins_y)
+    }),
+    unique_bins
+  )
 
-  # Initialize a list to store resampled location_data
-  resampled_list <- vector("list", length(unique_bins))
+  list(
+    location_data = location_data,
+    original_cell_loc_order = original_cell_loc_order,
+    unique_bins = unique_bins,
+    bin_members = bin_members,
+    neighbor_bins = neighbor_bins
+  )
+}
 
-  # Resample points for each bin
-  for (i in seq_along(unique_bins)) {
-    orig_bin <- unique_bins[i]
+
+#' Draw one permutation from precomputed spatial bins
+#'
+#' This helper intentionally consumes random numbers in the same order as the
+#' historical `resample_spatial()` implementation. It returns vectors in the
+#' original cell order, avoiding per-bin data-frame copies and a final `rbind`.
+#' @noRd
+.drawSpatialResample <- function(prepared, match_quantile = FALSE) {
+  location_data <- prepared$location_data
+  unique_bins <- prepared$unique_bins
+  shuffled_bins <- sample(unique_bins)
+  bin_mapping <- stats::setNames(shuffled_bins, unique_bins)
+
+  sampled_cell_ids <- location_data$cell_ID
+  sampled_bin_ids <- location_data$bin_id
+
+  for (orig_bin in unique_bins) {
     target_bin <- bin_mapping[[orig_bin]]
+    orig_idx <- prepared$bin_members[[orig_bin]]
+    candidate_idx <- prepared$bin_members[[target_bin]]
+    n_points <- length(orig_idx)
 
-    id_ori <- location_data$bin_id == orig_bin
-    id_tar <- location_data$bin_id == target_bin
-
-    # Points in the original bin
-    orig_points <- location_data[id_ori, ]
-    n_points <- sum(id_ori)
-
-    # Candidate points from the target bin
-    candidate_bins <- target_bin
-    candidate_points <- location_data[id_tar, ]
-    n_points_tar <- sum(id_tar)
-
-    # If not enough points, include neighboring bins
-    if (n_points_tar < n_points) {
-      neighbors <- .get_neighbor_bins(bin_coords = bin_coords,
-                                      tar_bin_id = target_bin,
-                                      num_bins_x = num_bins_x,
-                                      num_bins_y = num_bins_y)
-      # Exclude bins already in candidate_bins
-      additional_bins <- setdiff(neighbors, candidate_bins)
+    if (length(candidate_idx) < n_points) {
+      additional_bins <- setdiff(prepared$neighbor_bins[[target_bin]],
+                                 target_bin)
       for (neighbor_bin in additional_bins) {
-        neighbor_idx <- location_data$bin_id == neighbor_bin
-        if (any(neighbor_idx)) {
-          neighbor_points <- location_data[neighbor_idx, ]
-          candidate_points <- rbind(candidate_points, neighbor_points)
-          candidate_bins <- c(candidate_bins, neighbor_bin)
+        neighbor_idx <- prepared$bin_members[[neighbor_bin]]
+        if (!is.null(neighbor_idx)) {
+          candidate_idx <- c(candidate_idx, neighbor_idx)
         }
-        if (nrow(candidate_points) >= n_points) {
-          break
-        }
+        if (length(candidate_idx) >= n_points) break
       }
     }
 
-    # Sample cells from candidates
     if (match_quantile) {
-      # Use quantile-based matching to preserve within-tile structure
-      sampled_indices <- .match_by_quantile_position(orig_points, candidate_points, n_points)
+      sampled_indices <- .match_by_quantile_position(
+        location_data[orig_idx, , drop = FALSE],
+        location_data[candidate_idx, , drop = FALSE],
+        n_points
+      )
     } else {
-      # Random sampling (original behavior)
-      if (nrow(candidate_points) < n_points) {
-        sampled_indices <- sample(nrow(candidate_points), n_points, replace = TRUE)
-      } else {
-        sampled_indices <- sample(nrow(candidate_points), n_points)
-      }
+      sampled_indices <- sample.int(
+        length(candidate_idx), n_points,
+        replace = length(candidate_idx) < n_points
+      )
     }
 
-    # Replace the cell_ID in the original points
-    orig_points$"cell_ID" <- candidate_points[sampled_indices, "cell_ID"]
-    orig_points$"bin_id" <- candidate_points[sampled_indices, "bin_id"]
-
-    # Store the resampled points
-    resampled_list[[i]] <- orig_points
+    selected <- candidate_idx[sampled_indices]
+    sampled_cell_ids[orig_idx] <- location_data$cell_ID[selected]
+    sampled_bin_ids[orig_idx] <- location_data$bin_id[selected]
   }
 
-  # Combine all resampled points
-  resampled_location_data <- do.call(rbind, resampled_list)
+  list(cell_ID = sampled_cell_ids, bin_id = sampled_bin_ids)
+}
 
-  # Ensure the row names are in the original order
-  rownames(resampled_location_data) <- paste(resampled_location_data$x,
-                                             resampled_location_data$y,
-                                             sep = "_")
-  resampled_location_data <- resampled_location_data[original_cell_loc_order, ]
 
-  return(resampled_location_data)
+#' Draw one spatial permutation as integer indices
+#' @noRd
+.drawSpatialPermutation <- function(prepared, match_quantile = FALSE) {
+  draw <- .drawSpatialResample(prepared, match_quantile = match_quantile)
+  match(draw$cell_ID, prepared$location_data$cell_ID)
 }
 
 

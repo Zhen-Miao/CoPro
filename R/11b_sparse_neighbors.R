@@ -19,7 +19,8 @@
 
 #' Encode integer cell indices (0-based, per axis) into a single integer key
 #'
-#' @param cells integer matrix (n x d) of per-axis cell indices in [0, G_axis-1]
+#' @param cells integer matrix (n x d) of nonnegative per-axis cell indices,
+#'   each smaller than its corresponding grid dimension.
 #' @param G integer vector length d of per-axis grid dimensions
 #' @return integer vector of length n
 #' @noRd
@@ -71,7 +72,7 @@
 #' @return list(i = integer row index into A, j = integer index into B (or A),
 #'   d = numeric Euclidean distance). May be empty.
 #' @noRd
-.frnnGrid <- function(A, B = NULL, r) {
+.frnnGridR <- function(A, B = NULL, r) {
   within <- is.null(B)
   if (within) B <- A
 
@@ -143,6 +144,21 @@
   )
 }
 
+
+#' Fixed-radius neighbor search using the compiled engine when available
+#'
+#' Set `options(CoPro.useRcppFRNN = FALSE)` to force the exact R reference
+#' implementation. Keeping the reference path makes equivalence testing easy
+#' and provides a diagnostic fallback for unusual platforms.
+#' @noRd
+.frnnGrid <- function(A, B = NULL, r) {
+  use_cpp <- isTRUE(getOption("CoPro.useRcppFRNN", TRUE))
+  if (use_cpp && exists("frnn_grid_cpp", mode = "function", inherits = TRUE)) {
+    return(frnn_grid_cpp(A, B, r))
+  }
+  .frnnGridR(A, B, r)
+}
+
 #' Heuristic seed radius expected to capture roughly `target` near pairs
 #'
 #' Used only to seed the radius-doubling loop in the percentile pre-pass; the
@@ -183,7 +199,7 @@
 #' @param sorted_small numeric vector, ascending, of the retained distances
 #'   (must contain at least the floor(h)+1 smallest, where h is computed below).
 #' @param N integer true total count of finite non-zero distances.
-#' @param p numeric probability in [0, 1].
+#' @param p numeric probability between 0 and 1, inclusive.
 #' @return numeric quantile value.
 #' @noRd
 .exactLowQuantile <- function(sorted_small, N, p) {

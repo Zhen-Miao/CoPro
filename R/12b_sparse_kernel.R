@@ -24,16 +24,169 @@
   sqrt(-2 * log(lowerLimit))
 }
 
-#' Largest number of cells in any single cell type of interest (subset).
-#' Used by method = "auto" to decide dense vs sparse.
+#' Largest number of cells in any kernel block dimension.
+#'
+#' Multi-slide kernels are built slide by slide, so use the largest per-slide,
+#' per-cell-type count rather than the total count across all slides. This keeps
+#' `method = "auto"` on the fast dense route for many small slides while still
+#' protecting genuinely large blocks.
 #' @noRd
 .maxCellTypeCount <- function(object) {
   cts <- object@cellTypesOfInterest
   sub <- object@cellTypesSub
   if (length(cts) == 0 || length(sub) == 0) return(0L)
+
+  if (isMultiSlide(object)) {
+    slides <- getSlideList(object)
+    if (length(slides) == 0) return(0L)
+    counts <- vapply(
+      slides,
+      function(sID) max(vapply(
+        cts,
+        function(ct) .countSlideCellType(object, slide = sID, cellType = ct),
+        numeric(1)
+      )),
+      numeric(1)
+    )
+    return(as.integer(max(counts)))
+  }
+
   tt <- table(sub[sub %in% cts])
   if (length(tt) == 0) return(0L)
   as.integer(max(tt))
+}
+
+#' Number of entries the dense distance path would materialize.
+#'
+#' Counts every cross-type block (or the within-type block for a one-type
+#' analysis), including all slides. Returned as a double to avoid integer
+#' overflow. This catches workloads with many medium-sized blocks whose total
+#' memory cost is large even though no single cell type crosses the threshold.
+#' @noRd
+.denseKernelEntryCount <- function(object) {
+  cts <- object@cellTypesOfInterest
+  if (length(cts) == 0 || length(object@cellTypesSub) == 0) return(0)
+
+  slides <- if (isMultiSlide(object)) getSlideList(object) else NULL
+  slide_keys <- if (length(slides) > 0) slides else NA_character_
+
+  sum(vapply(slide_keys, function(sID) {
+    slide <- if (is.na(sID)) NULL else sID
+    counts <- vapply(
+      cts,
+      function(ct) .countSlideCellType(object, slide = slide, cellType = ct),
+      numeric(1)
+    )
+    if (length(counts) == 1) {
+      counts[1]^2
+    } else {
+      pair_idx <- utils::combn(seq_along(counts), 2)
+      sum(counts[pair_idx[1, ]] * counts[pair_idx[2, ]])
+    }
+  }, numeric(1)))
+}
+
+#' Number of entries required by dense multitype self-kernels
+#' @noRd
+.denseSelfKernelEntryCount <- function(object) {
+  cts <- object@cellTypesOfInterest
+  if (length(cts) == 0 || length(object@cellTypesSub) == 0) return(0)
+
+  slides <- if (isMultiSlide(object)) getSlideList(object) else NULL
+  slide_keys <- if (length(slides) > 0) slides else NA_character_
+  sum(vapply(slide_keys, function(sID) {
+    slide <- if (is.na(sID)) NULL else sID
+    counts <- vapply(
+      cts,
+      function(ct) .countSlideCellType(object, slide = slide, cellType = ct),
+      numeric(1)
+    )
+    sum(counts^2)
+  }, numeric(1)))
+}
+
+
+#' Whether every dense self-distance block required by computeSelfKernel exists
+#' @noRd
+.hasSelfDistanceMatrices <- function(object, is_multi) {
+  cts <- object@cellTypesOfInterest
+  if (length(cts) == 0) return(FALSE)
+  if (!is_multi) {
+    required <- vapply(cts, function(ct) {
+      .createDistMatrixName(ct, ct, slide = NULL)
+    }, character(1))
+  } else {
+    slides <- getSlideList(object)
+    required <- unlist(lapply(slides, function(sID) {
+      vapply(cts, function(ct) {
+        .createDistMatrixName(ct, ct, slide = sID)
+      }, character(1))
+    }), use.names = FALSE)
+  }
+  length(required) > 0 && all(required %in% names(object@distances))
+}
+
+
+#' Dispatch multitype self-kernel construction
+#' @noRd
+.computeSelfKernelDispatch <- function(
+    object, sigmaValues, lowerLimit, upperQuantile,
+    normalizeKernel, minAveCellNeighor, rowNormalizeKernel, colNormalizeKernel,
+    method, autoThreshold, distType, xDistScale, yDistScale, zDistScale,
+    normalizeDistance, normalizeTarget, truncateLowDist,
+    verbose, overwrite, is_multi) {
+  if (is.null(distType)) {
+    distType <- if ("z" %in% tolower(colnames(object@locationDataSub))) {
+      "Euclidean3D"
+    } else {
+      "Euclidean2D"
+    }
+  } else {
+    distType <- match.arg(
+      distType,
+      c("Euclidean2D", "Euclidean3D", "Morphology-Aware")
+    )
+  }
+
+  if (method == "auto") {
+    n_max <- .maxCellTypeCount(object)
+    dense_entries <- .denseSelfKernelEntryCount(object)
+    has_dense_inputs <- .hasSelfDistanceMatrices(object, is_multi)
+    use_sparse <- !has_dense_inputs || n_max >= autoThreshold ||
+      dense_entries >= as.numeric(autoThreshold)^2
+    method <- if (use_sparse) "sparse" else "dense"
+    if (verbose) {
+      message(sprintf(
+        paste0("computeSelfKernel: method='auto' -> '%s' ",
+               "(largest block = %d cells, estimated dense entries = %.3g, ",
+               "self-distances available = %s)."),
+        method, n_max, dense_entries, has_dense_inputs
+      ))
+    }
+  }
+
+  if (method == "dense") {
+    if (is_multi) {
+      return(.computeSelfKernelCoreMulti(
+        object, sigmaValues, lowerLimit, upperQuantile, normalizeKernel,
+        minAveCellNeighor, rowNormalizeKernel, colNormalizeKernel,
+        verbose, overwrite
+      ))
+    }
+    return(.computeSelfKernelCore(
+      object, sigmaValues, lowerLimit, upperQuantile, normalizeKernel,
+      minAveCellNeighor, rowNormalizeKernel, colNormalizeKernel,
+      verbose, overwrite
+    ))
+  }
+
+  .computeSparseSelfKernelCore(
+    object, sigmaValues, lowerLimit, upperQuantile, normalizeKernel,
+    minAveCellNeighor, rowNormalizeKernel, colNormalizeKernel,
+    distType, xDistScale, yDistScale, zDistScale,
+    normalizeDistance, normalizeTarget, truncateLowDist,
+    verbose, overwrite, is_multi
+  )
 }
 
 #' Dispatch computeKernelMatrix() to the dense or sparse path and optionally
@@ -56,11 +209,17 @@
 
   if (method == "auto") {
     n_max <- .maxCellTypeCount(object)
-    method <- if (n_max > autoThreshold) "sparse" else "dense"
+    dense_entries <- .denseKernelEntryCount(object)
+    sparse_by_block <- n_max >= autoThreshold
+    sparse_by_total <- dense_entries >= as.numeric(autoThreshold)^2
+    method <- if (sparse_by_block || sparse_by_total) "sparse" else "dense"
     if (verbose) {
       message(sprintf(
-        "computeKernelMatrix: method='auto' -> '%s' (largest cell type = %d cells, threshold = %d).",
-        method, n_max, autoThreshold))
+        paste0("computeKernelMatrix: method='auto' -> '%s' ",
+               "(largest block dimension = %d cells, estimated dense entries = %.3g, ",
+               "threshold = %d cells / %.3g entries)."),
+        method, n_max, dense_entries, autoThreshold,
+        as.numeric(autoThreshold)^2))
     }
   }
 
@@ -332,6 +491,7 @@
   if (normalizeDistance && verbose) {
     message(sprintf("Distance normalization scaling factor: %g", scaling_factor))
   }
+  if (normalizeDistance) object@distanceScaleFactor <- scaling_factor
 
   # PASS 2a: cache kernel-ready triplets per block
   block_tri <- vector("list", length(blocks))
@@ -466,6 +626,7 @@
   if (normalizeDistance && verbose) {
     message(sprintf("Global distance scaling factor: %g", scaling_factor))
   }
+  if (normalizeDistance) object@distanceScaleFactor <- scaling_factor
 
   # PASS 2a: cache triplets per block
   block_tri <- vector("list", length(blocks))
@@ -513,6 +674,182 @@
   }
 
   object <- .cleanupSigmaValuesMulti(object, kernel_mat, sigmaValuesToRemove, verbose)
+  object
+}
+
+
+#' Build multitype within-cell-type kernels directly from coordinates
+#'
+#' This is the sparse counterpart of `computeSelfDistance()` followed by
+#' `computeSelfKernel()`. All self blocks share one distance-normalization
+#' factor, matching the dense self-kernel workflow, while existing cross-type
+#' kernels are retained unless `overwrite = TRUE`.
+#' @noRd
+.computeSparseSelfKernelCore <- function(
+    object, sigmaValues, lowerLimit, upperQuantile,
+    normalizeKernel, minAveCellNeighor, rowNormalizeKernel, colNormalizeKernel,
+    distType, xDistScale, yDistScale, zDistScale,
+    normalizeDistance, normalizeTarget, truncateLowDist,
+    verbose, overwrite, is_multi) {
+  cts <- .checkInputSparseKernel(
+    object, sigmaValues, lowerLimit, upperQuantile, minAveCellNeighor,
+    rowNormalizeKernel, colNormalizeKernel, distType
+  )
+  if (length(cts) == 1L) {
+    warning("Only one cell type detected. Use computeKernelMatrix() instead ",
+            "for single-cell-type kernels.")
+    return(object)
+  }
+
+  slides <- if (is_multi) getSlideList(object) else NULL
+  if (is_multi && length(slides) == 0L) {
+    stop("No slides found in multi-slide object")
+  }
+
+  coord_cache <- new.env(parent = emptyenv())
+  coord_key <- function(slide, ct) {
+    paste(if (is.null(slide)) "single" else slide, ct, sep = "|")
+  }
+  get_coords <- function(slide, ct) {
+    key <- coord_key(slide, ct)
+    if (is.null(coord_cache[[key]])) {
+      coord_cache[[key]] <- .getCoordinateMatrix(
+        object, ct, distType, xDistScale, yDistScale, zDistScale,
+        slideID = slide
+      )
+    }
+    coord_cache[[key]]
+  }
+
+  blocks <- list()
+  slide_keys <- if (is_multi) slides else list(NULL)
+  for (slide in slide_keys) {
+    for (ct in cts) {
+      coords <- get_coords(slide, ct)
+      if (nrow(coords) <= 5L) {
+        if (verbose) {
+          message(sprintf(
+            "Skipping self-kernel for %s%s: only %d cells.",
+            ct,
+            if (is.null(slide)) "" else paste0(" in slide ", slide),
+            nrow(coords)
+          ))
+        }
+        next
+      }
+      blocks[[length(blocks) + 1L]] <- list(
+        slide = slide, i = ct, j = ct, within = TRUE
+      )
+    }
+  }
+  if (length(blocks) == 0L) {
+    stop("No cell-type blocks have enough cells to compute self-kernels.")
+  }
+
+  if (verbose) {
+    message(sprintf(
+      "Computing sparse self-kernels for %d cell types%s.",
+      length(cts),
+      if (is_multi) paste0(" across ", length(slides), " slides") else ""
+    ))
+  }
+
+  need_pct <- truncateLowDist || normalizeDistance
+  pctls <- rep(NA_real_, length(blocks))
+  if (need_pct) {
+    for (b in seq_along(blocks)) {
+      blk <- blocks[[b]]
+      pctls[b] <- .lowPercentileBlock(
+        get_coords(blk$slide, blk$i), NULL, 1e-4
+      )$percentile
+    }
+  }
+  global_min_pct <- if (need_pct) min(pctls, na.rm = TRUE) else NA_real_
+  scaling_factor <- if (normalizeDistance) normalizeTarget / global_min_pct else 1
+  if (normalizeDistance && (!is.finite(scaling_factor) || scaling_factor <= 0)) {
+    stop("Cannot normalize self-kernel distances: no valid low-distance ",
+         "percentile was found.")
+  }
+  if (normalizeDistance) {
+    if (verbose) message(sprintf("Self-distance scaling factor: %g", scaling_factor))
+  }
+
+  max_sigma <- max(sigmaValues)
+  block_tri <- vector("list", length(blocks))
+  for (b in seq_along(blocks)) {
+    blk <- blocks[[b]]
+    block_tri[[b]] <- .buildBlockTriplets(
+      get_coords(blk$slide, blk$i), NULL, pctls[b], scaling_factor,
+      max_sigma, lowerLimit, truncateLowDist
+    )
+  }
+
+  kernel_matrices <- if (overwrite || length(object@kernelMatrices) == 0L) {
+    list()
+  } else {
+    object@kernelMatrices
+  }
+  sigma_names <- paste("sigma", sigmaValues, sep = "_")
+  sigma_invalid <- stats::setNames(logical(length(sigmaValues)), sigma_names)
+
+  for (tt in seq_along(sigmaValues)) {
+    sigma <- sigmaValues[tt]
+    sigma_name <- sigma_names[tt]
+    if (verbose) message("Processing self-kernel sigma: ", sigma)
+
+    for (b in seq_along(blocks)) {
+      blk <- blocks[[b]]
+      coords <- get_coords(blk$slide, blk$i)
+      bt <- block_tri[[b]]
+      Kraw <- if (is.null(bt)) {
+        Matrix::sparseMatrix(
+          i = integer(0), j = integer(0), x = numeric(0),
+          dims = c(nrow(coords), nrow(coords))
+        )
+      } else {
+        .sparseKernelFromTriplets(bt, sigma, lowerLimit)
+      }
+
+      valid <- if (is_multi) {
+        .checkSparseKernelValidityMulti(
+          Kraw, lowerLimit, minAveCellNeighor, sigma,
+          blk$i, blk$j, blk$slide
+        )
+      } else {
+        !.checkSparseSigmaRemove(
+          Kraw, lowerLimit, sigma, sigmaValues,
+          blk$i, blk$j, minAveCellNeighor
+        )
+      }
+      if (!valid) sigma_invalid[sigma_name] <- TRUE
+
+      flat_name <- .createKernelMatrixName(
+        sigma, blk$i, blk$j, slide = blk$slide
+      )
+      kernel_matrices[[flat_name]] <- .processSparseKernelMatrix(
+        Kraw, lowerLimit, upperQuantile, normalizeKernel,
+        rowNormalizeKernel, colNormalizeKernel
+      )
+    }
+  }
+
+  if (any(sigma_invalid)) {
+    invalid_sigmas <- sigmaValues[sigma_invalid]
+    is_invalid_self <- vapply(names(kernel_matrices), function(name) {
+      parsed <- .parseKernelMatrixName(name)
+      parsed$sigma %in% invalid_sigmas &&
+        identical(parsed$cellType1, parsed$cellType2)
+    }, logical(1))
+    kernel_matrices <- kernel_matrices[!is_invalid_self]
+    if (verbose) {
+      message("Removed ", sum(sigma_invalid),
+              " invalid sigma value(s) from self-kernels.")
+    }
+  }
+
+  surviving <- sigmaValues[!sigma_invalid]
+  if (length(object@sigmaValues) == 0L) object@sigmaValues <- surviving
+  object@kernelMatrices <- kernel_matrices
   object
 }
 

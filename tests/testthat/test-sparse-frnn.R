@@ -105,3 +105,27 @@ test_that(".frnnGrid returns an empty result when no pair is within radius", {
   expect_length(g$j, 0L)
   expect_length(g$d, 0L)
 })
+
+test_that("compiled and R fixed-radius engines return identical triplets", {
+  set.seed(808)
+  old_options <- options(CoPro.useRcppFRNN = FALSE)
+  on.exit(options(old_options), add = TRUE)
+
+  for (dimensions in 2:3) {
+    A <- matrix(runif(240 * dimensions), ncol = dimensions)
+    B <- matrix(runif(180 * dimensions), ncol = dimensions)
+    radius <- if (dimensions == 2) 0.18 else 0.3
+
+    for (within in c(FALSE, TRUE)) {
+      B_current <- if (within) NULL else B
+      r_result <- .canonFrnn(CoPro:::.frnnGrid(A, B_current, radius))
+      options(CoPro.useRcppFRNN = TRUE)
+      cpp_result <- .canonFrnn(CoPro:::.frnnGrid(A, B_current, radius))
+      options(CoPro.useRcppFRNN = FALSE)
+
+      expect_identical(cpp_result$i, r_result$i)
+      expect_identical(cpp_result$j, r_result$j)
+      expect_equal(cpp_result$d, r_result$d, tolerance = 1e-12)
+    }
+  }
+})

@@ -229,9 +229,11 @@ test_that("method = 'auto' selects sparse above threshold and dense below", {
                                   n_cell_types = 2, seed = 9)
   obj <- subsetData(obj, cellTypesOfInterest = c("CellTypeA", "CellTypeB"))
 
-  # low threshold -> sparse
-  a <- computeKernelMatrix(obj, sigmaValues = c(0.1), method = "auto",
-                           autoThreshold = 5, distType = "Euclidean2D",
+  # The public default method is "auto". At the exact threshold it must take
+  # the sparse path without requiring computeDistance() first.
+  threshold <- .maxCellTypeCount(obj)
+  a <- computeKernelMatrix(obj, sigmaValues = c(0.1),
+                           autoThreshold = threshold, distType = "Euclidean2D",
                            verbose = FALSE)
   Ka <- getKernelMatrix(a, sigma = 0.1, cellType1 = "CellTypeA",
                         cellType2 = "CellTypeB", verbose = FALSE)
@@ -239,12 +241,41 @@ test_that("method = 'auto' selects sparse above threshold and dense below", {
 
   # high threshold -> dense (requires distances first)
   obj_d <- computeDistance(obj, distType = "Euclidean2D", verbose = FALSE)
-  b <- computeKernelMatrix(obj_d, sigmaValues = c(0.1), method = "auto",
+  b <- computeKernelMatrix(obj_d, sigmaValues = c(0.1),
                            autoThreshold = 1e9, dropDistances = FALSE,
                            verbose = FALSE)
   Kb <- getKernelMatrix(b, sigma = 0.1, cellType1 = "CellTypeA",
                         cellType2 = "CellTypeB", verbose = FALSE)
   expect_true(is.matrix(Kb))
+})
+
+test_that("auto accounts for aggregate blocks and per-slide dimensions", {
+  obj <- create_test_copro_multi(n_cells_per_slide = 80, n_slides = 3,
+                                 n_genes = 10, n_cell_types = 2, seed = 91)
+  obj <- subsetData(obj, cellTypesOfInterest = c("CellTypeA", "CellTypeB"))
+
+  # Counts across all slides exceed the largest per-slide block; auto should
+  # reason about the dimensions actually materialized by each slide.
+  per_slide_max <- max(vapply(getSlideList(obj), function(sID) {
+    max(vapply(obj@cellTypesOfInterest, function(ct) {
+      .countSlideCellType(obj, slide = sID, cellType = ct)
+    }, numeric(1)))
+  }, numeric(1)))
+  expect_equal(.maxCellTypeCount(obj), as.integer(per_slide_max))
+  expect_lt(.maxCellTypeCount(obj),
+            max(as.integer(table(obj@cellTypesSub))))
+
+  # No individual block reaches 50 cells, but the aggregate cross-slide dense
+  # workload exceeds 50^2 entries, so the default auto method selects sparse.
+  expect_lt(.maxCellTypeCount(obj), 50L)
+  expect_gte(.denseKernelEntryCount(obj), 50^2)
+  out <- computeKernelMatrix(obj, sigmaValues = 0.1,
+                             autoThreshold = 50L,
+                             distType = "Euclidean2D", verbose = FALSE)
+  K <- getKernelMatrix(out, sigma = 0.1, cellType1 = "CellTypeA",
+                       cellType2 = "CellTypeB", slide = getSlideList(out)[1],
+                       verbose = FALSE)
+  expect_s4_class(K, "dgCMatrix")
 })
 
 test_that("sparse path does not require computeDistance and rejects Morphology-Aware", {
@@ -262,4 +293,21 @@ test_that("sparse path does not require computeDistance and rejects Morphology-A
                         distType = "Morphology-Aware", verbose = FALSE),
     "Euclidean"
   )
+})
+
+test_that("sparse whitened-Frobenius normalizer matches dense calculation", {
+  set.seed(701)
+  K <- Matrix::rsparsematrix(37, 41, density = 0.18)
+  X <- Matrix::rsparsematrix(37, 37, density = 0.12)
+  Y <- Matrix::rsparsematrix(41, 41, density = 0.12)
+  Rx <- Matrix::crossprod(X) + Matrix::Diagonal(37)
+  Ry <- Matrix::crossprod(Y) + Matrix::Diagonal(41)
+
+  sparse_norm <- .whitenedFrobNorm(K, Rx, Ry)
+  dense_norm <- .whitenedFrobNorm(as.matrix(K), as.matrix(Rx), as.matrix(Ry))
+  expect_equal(sparse_norm, dense_norm, tolerance = 1e-10)
+
+  sparse_unwhitened <- .whitenedFrobNorm(K)
+  dense_unwhitened <- .whitenedFrobNorm(as.matrix(K))
+  expect_equal(sparse_unwhitened, dense_unwhitened, tolerance = 1e-10)
 })

@@ -83,6 +83,51 @@ setGeneric(
 #' @return Scalar whitened-Frobenius norm.
 #' @keywords internal
 .whitenedFrobNorm <- function(K, Rx = NULL, Ry = NULL) {
+  ## Sparse fixed-radius kernels can be very large. Double-centering a sparse
+  ## matrix explicitly makes it dense, and coercing the matched within-type
+  ## kernels to base matrices compounds that memory cost. Use the equivalent
+  ## sparse-plus-low-rank expansion whenever all three kernels are sparse.
+  ##
+  ## K_c = K + U V', with
+  ##   U = [-rowMeans(K), 1]
+  ##   V = [1, mean(K) - colMeans(K)].
+  ## For symmetric Rx/Ry,
+  ##   <Rx K_c Ry, K_c>
+  ## = <Rx K Ry, K> + 2 <Rx K Ry, U V'>
+  ##   + sum((U' Rx U) * (V' Ry V)).
+  ## This is algebraically identical to materializing K_c, but retains sparse
+  ## matrix multiplication for the expensive term.
+  all_sparse <- inherits(K, "sparseMatrix") &&
+    (is.null(Rx) || inherits(Rx, "sparseMatrix")) &&
+    (is.null(Ry) || inherits(Ry, "sparseMatrix"))
+
+  if (all_sparse) {
+    nr <- nrow(K)
+    nc <- ncol(K)
+    rmean <- as.numeric(rowMeans(K))
+    cmean <- as.numeric(colMeans(K))
+    grand_mean <- mean(cmean)
+
+    if (is.null(Rx) || is.null(Ry)) {
+      ## ||H_r K H_c||_F^2 without forming the dense centered matrix.
+      norm2 <- sum(K * K) - nc * sum(rmean^2) - nr * sum(cmean^2) +
+        nr * nc * grand_mean^2
+      return(sqrt(max(as.numeric(norm2), 0)))
+    }
+
+    Rx <- (Rx + t(Rx)) / 2
+    Ry <- (Ry + t(Ry)) / 2
+    M <- (Rx %*% K) %*% Ry
+
+    U <- cbind(-rmean, rep.int(1, nr))
+    V <- cbind(rep.int(1, nc), grand_mean - cmean)
+    base_term <- as.numeric(sum(M * K))
+    cross_term <- as.numeric(sum(U * (M %*% V)))
+    rank_term <- as.numeric(sum(crossprod(U, Rx %*% U) *
+                                  crossprod(V, Ry %*% V)))
+    return(sqrt(max(base_term + 2 * cross_term + rank_term, 0)))
+  }
+
   K <- as.matrix(K)
   ## double-center: a' K b = a' K_c b for centered scores; Var_0(T) uses K_c
   Kc <- K - rowMeans(K) - rep(colMeans(K), each = nrow(K)) + mean(K)

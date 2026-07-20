@@ -460,14 +460,18 @@ kernel_from_distance <- function(
 #'  from coordinates via a fixed-radius neighbor search, never forming a dense
 #'  `n x n` matrix, and does not require [computeDistance()] to have been run.
 #'  Results are numerically equivalent. `"auto"` (default) picks `"sparse"` when
-#'  any cell type exceeds `autoThreshold` cells, otherwise `"dense"`.
+#'  any per-slide cell-type block reaches `autoThreshold` cells or when the
+#'  aggregate dense block workload reaches `autoThreshold^2` entries; otherwise
+#'  it picks `"dense"`.
 #' @param dropDistances Logical. If `TRUE` (default), the (potentially large)
 #'  `@distances` slot is cleared after kernels are computed, since the
 #'  downstream pipeline only needs the kernels. Set `FALSE` to keep distances
 #'  for inspection via [getDistMat()] or to recompute kernels with new sigma
 #'  values without rebuilding distances.
-#' @param autoThreshold Integer cell count above which `method = "auto"` selects
-#'  the sparse path. Default 20000.
+#' @param autoThreshold Integer cell count at which `method = "auto"` selects
+#'  the sparse path for any kernel-block dimension. The sparse path is also
+#'  selected when aggregate dense block entries reach `autoThreshold^2`.
+#'  Default 5000 (about 200 MB of doubles before temporary matrices and copies).
 #' @param distType,xDistScale,yDistScale,zDistScale,normalizeDistance,normalizeTarget,truncateLowDist
 #'  Distance options used only by the sparse path (see [computeDistance()] and
 #'  [computeSparseKernel()]). `distType` defaults to `"Euclidean3D"` when the
@@ -500,7 +504,7 @@ setGeneric(
            normalizeKernel = FALSE, minAveCellNeighor = 2,
            rowNormalizeKernel = FALSE, colNormalizeKernel = FALSE,
            method = c("auto", "dense", "sparse"), dropDistances = TRUE,
-           autoThreshold = 20000L, distType = NULL,
+           autoThreshold = 5000L, distType = NULL,
            xDistScale = 1, yDistScale = 1, zDistScale = 1,
            normalizeDistance = TRUE, normalizeTarget = 0.01,
            truncateLowDist = TRUE,
@@ -514,7 +518,7 @@ setMethod("computeKernelMatrix", "CoProSingle",
                    normalizeKernel = FALSE, minAveCellNeighor = 2,
                    rowNormalizeKernel = FALSE, colNormalizeKernel = FALSE,
                    method = c("auto", "dense", "sparse"), dropDistances = TRUE,
-                   autoThreshold = 20000L, distType = NULL,
+                   autoThreshold = 5000L, distType = NULL,
                    xDistScale = 1, yDistScale = 1, zDistScale = 1,
                    normalizeDistance = TRUE, normalizeTarget = 0.01,
                    truncateLowDist = TRUE,
@@ -538,7 +542,7 @@ setMethod("computeKernelMatrix", "CoProMulti",
                    normalizeKernel = FALSE, minAveCellNeighor = 2,
                    rowNormalizeKernel = FALSE, colNormalizeKernel = FALSE,
                    method = c("auto", "dense", "sparse"), dropDistances = TRUE,
-                   autoThreshold = 20000L, distType = NULL,
+                   autoThreshold = 5000L, distType = NULL,
                    xDistScale = 1, yDistScale = 1, zDistScale = 1,
                    normalizeDistance = TRUE, normalizeTarget = 0.01,
                    truncateLowDist = TRUE,

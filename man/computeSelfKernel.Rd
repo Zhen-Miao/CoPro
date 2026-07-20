@@ -16,7 +16,16 @@ computeSelfKernel(
   rowNormalizeKernel = FALSE,
   colNormalizeKernel = FALSE,
   verbose = TRUE,
-  overwrite = FALSE
+  overwrite = FALSE,
+  method = c("auto", "dense", "sparse"),
+  autoThreshold = 5000L,
+  distType = NULL,
+  xDistScale = 1,
+  yDistScale = 1,
+  zDistScale = 1,
+  normalizeDistance = TRUE,
+  normalizeTarget = 0.01,
+  truncateLowDist = TRUE
 )
 
 \S4method{computeSelfKernel}{CoProSingle}(
@@ -29,7 +38,16 @@ computeSelfKernel(
   rowNormalizeKernel = FALSE,
   colNormalizeKernel = FALSE,
   verbose = TRUE,
-  overwrite = FALSE
+  overwrite = FALSE,
+  method = c("auto", "dense", "sparse"),
+  autoThreshold = 5000L,
+  distType = NULL,
+  xDistScale = 1,
+  yDistScale = 1,
+  zDistScale = 1,
+  normalizeDistance = TRUE,
+  normalizeTarget = 0.01,
+  truncateLowDist = TRUE
 )
 
 \S4method{computeSelfKernel}{CoProMulti}(
@@ -42,11 +60,20 @@ computeSelfKernel(
   rowNormalizeKernel = FALSE,
   colNormalizeKernel = FALSE,
   verbose = TRUE,
-  overwrite = FALSE
+  overwrite = FALSE,
+  method = c("auto", "dense", "sparse"),
+  autoThreshold = 5000L,
+  distType = NULL,
+  xDistScale = 1,
+  yDistScale = 1,
+  zDistScale = 1,
+  normalizeDistance = TRUE,
+  normalizeTarget = 0.01,
+  truncateLowDist = TRUE
 )
 }
 \arguments{
-\item{object}{A \code{CoPro} object with multiple cell types and self-distance matrices}
+\item{object}{A \code{CoPro} object with multiple cell types}
 
 \item{sigmaValues}{A vector of sigma values used for kernel calculation}
 
@@ -66,14 +93,27 @@ computeSelfKernel(
 
 \item{overwrite}{Whether to overwrite existing kernel matrices. If FALSE,
 will add self-kernel matrices to existing cross-type kernels. Default = FALSE}
+
+\item{method}{One of \code{"auto"}, \code{"dense"}, or \code{"sparse"}. The sparse path
+constructs exact thresholded self-kernels directly from coordinates and
+does not require \code{\link[=computeSelfDistance]{computeSelfDistance()}}.}
+
+\item{autoThreshold}{Cell-count threshold used by \code{method = "auto"}.
+Sparse construction is selected when a self-kernel dimension reaches this
+value, aggregate dense self-kernel entries reach its square, or required
+self-distance matrices are absent. Default 5000.}
+
+\item{distType, xDistScale, yDistScale, zDistScale, normalizeDistance, normalizeTarget, truncateLowDist}{Distance options for the sparse path, matching \code{\link[=computeKernelMatrix]{computeKernelMatrix()}}.}
 }
 \value{
 \code{CoPro} object with self-kernel matrices added to the kernelMatrices slot
 }
 \description{
 This function computes within-cell-type kernel matrices for each cell type
-when multiple cell types are present. It requires that self-distance matrices
-have been computed first (using computeSelfDistance).
+when multiple cell types are present. The default \code{method = "auto"} uses
+existing self-distance matrices for small workloads and builds sparse kernels
+directly from coordinates for large workloads or when self-distances have not
+been materialized.
 }
 \examples{
 \dontrun{

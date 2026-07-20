@@ -15,7 +15,8 @@
 * Added a sparse, memory-efficient kernel path for large-scale data.
   `computeKernelMatrix()` gains a `method` argument (`"auto"`, `"dense"`,
   `"sparse"`) defaulting to `"auto"`, which selects the sparse path when any
-  cell type exceeds `autoThreshold` (default 20000) cells. The new
+  per-slide cell-type block reaches `autoThreshold` (default 5000) cells or the
+  aggregate dense workload reaches `autoThreshold^2` entries. The new
   `computeSparseKernel()` generic builds sparse `dgCMatrix` Gaussian kernels
   directly from coordinates via an exact fixed-radius neighbor search, never
   forming a dense `n x n` distance or kernel matrix. Results are numerically
@@ -35,6 +36,23 @@
   statistic `a' K b` and, unlike the spectral norm, does not rail `sigma`
   selection to the grid floor. Affects `computeNormalizedCorrelation()`, the
   permutation tests (`runSkrCCAPermu*()`), and `getTransfer*()` extrapolation.
+
+## Performance
+
+* Fair-sigma and conditional permutation tests now cache kernel normalizers
+  once per bandwidth and reuse each precomputed PC-space operator for fitting
+  and scoring. Sparse whitened-Frobenius normalization also stays sparse via an
+  equivalent low-rank centering formula instead of materializing dense kernels.
+* The exact fixed-radius neighbor search used by sparse kernels now runs in a
+  deterministic Rcpp engine, with the original R implementation retained as a
+  reference fallback. Bin-wise permutations precompute bin memberships and
+  neighbor lookups once per cell type, and normalized permutation scoring
+  batches all canonical components instead of rebuilding permuted PC matrices
+  inside every pair/component loop.
+* `computeSelfKernel()` now supports `method = "auto"`, `"dense"`, or
+  `"sparse"`. Its default automatically builds exact sparse multitype
+  self-kernels directly from coordinates for large workloads or when dense
+  self-distance matrices are unavailable.
 
 ## Bug fixes
 
