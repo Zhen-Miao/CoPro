@@ -17,7 +17,7 @@ computeKernelMatrix(
   colNormalizeKernel = FALSE,
   method = c("auto", "dense", "sparse"),
   dropDistances = TRUE,
-  autoThreshold = 20000L,
+  autoThreshold = 5000L,
   distType = NULL,
   xDistScale = 1,
   yDistScale = 1,
@@ -39,7 +39,7 @@ computeKernelMatrix(
   colNormalizeKernel = FALSE,
   method = c("auto", "dense", "sparse"),
   dropDistances = TRUE,
-  autoThreshold = 20000L,
+  autoThreshold = 5000L,
   distType = NULL,
   xDistScale = 1,
   yDistScale = 1,
@@ -61,7 +61,7 @@ computeKernelMatrix(
   colNormalizeKernel = FALSE,
   method = c("auto", "dense", "sparse"),
   dropDistances = TRUE,
-  autoThreshold = 20000L,
+  autoThreshold = 5000L,
   distType = NULL,
   xDistScale = 1,
   yDistScale = 1,
@@ -108,7 +108,9 @@ classic path that reads the distance matrices produced by
 from coordinates via a fixed-radius neighbor search, never forming a dense
 \verb{n x n} matrix, and does not require \code{\link[=computeDistance]{computeDistance()}} to have been run.
 Results are numerically equivalent. \code{"auto"} (default) picks \code{"sparse"} when
-any cell type exceeds \code{autoThreshold} cells, otherwise \code{"dense"}.}
+any per-slide cell-type block reaches \code{autoThreshold} cells or when the
+aggregate dense block workload reaches \code{autoThreshold^2} entries; otherwise
+it picks \code{"dense"}.}
 
 \item{dropDistances}{Logical. If \code{TRUE} (default), the (potentially large)
 \verb{@distances} slot is cleared after kernels are computed, since the
@@ -116,8 +118,10 @@ downstream pipeline only needs the kernels. Set \code{FALSE} to keep distances
 for inspection via \code{\link[=getDistMat]{getDistMat()}} or to recompute kernels with new sigma
 values without rebuilding distances.}
 
-\item{autoThreshold}{Integer cell count above which \code{method = "auto"} selects
-the sparse path. Default 20000.}
+\item{autoThreshold}{Integer cell count at which \code{method = "auto"} selects
+the sparse path for any kernel-block dimension. The sparse path is also
+selected when aggregate dense block entries reach \code{autoThreshold^2}.
+Default 5000 (about 200 MB of doubles before temporary matrices and copies).}
 
 \item{distType, xDistScale, yDistScale, zDistScale, normalizeDistance, normalizeTarget, truncateLowDist}{Distance options used only by the sparse path (see \code{\link[=computeDistance]{computeDistance()}} and
 \code{\link[=computeSparseKernel]{computeSparseKernel()}}). \code{distType} defaults to \code{"Euclidean3D"} when the

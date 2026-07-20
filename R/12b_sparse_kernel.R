@@ -24,16 +24,66 @@
   sqrt(-2 * log(lowerLimit))
 }
 
-#' Largest number of cells in any single cell type of interest (subset).
-#' Used by method = "auto" to decide dense vs sparse.
+#' Largest number of cells in any kernel block dimension.
+#'
+#' Multi-slide kernels are built slide by slide, so use the largest per-slide,
+#' per-cell-type count rather than the total count across all slides. This keeps
+#' `method = "auto"` on the fast dense route for many small slides while still
+#' protecting genuinely large blocks.
 #' @noRd
 .maxCellTypeCount <- function(object) {
   cts <- object@cellTypesOfInterest
   sub <- object@cellTypesSub
   if (length(cts) == 0 || length(sub) == 0) return(0L)
+
+  if (isMultiSlide(object)) {
+    slides <- getSlideList(object)
+    if (length(slides) == 0) return(0L)
+    counts <- vapply(
+      slides,
+      function(sID) max(vapply(
+        cts,
+        function(ct) .countSlideCellType(object, slide = sID, cellType = ct),
+        numeric(1)
+      )),
+      numeric(1)
+    )
+    return(as.integer(max(counts)))
+  }
+
   tt <- table(sub[sub %in% cts])
   if (length(tt) == 0) return(0L)
   as.integer(max(tt))
+}
+
+#' Number of entries the dense distance path would materialize.
+#'
+#' Counts every cross-type block (or the within-type block for a one-type
+#' analysis), including all slides. Returned as a double to avoid integer
+#' overflow. This catches workloads with many medium-sized blocks whose total
+#' memory cost is large even though no single cell type crosses the threshold.
+#' @noRd
+.denseKernelEntryCount <- function(object) {
+  cts <- object@cellTypesOfInterest
+  if (length(cts) == 0 || length(object@cellTypesSub) == 0) return(0)
+
+  slides <- if (isMultiSlide(object)) getSlideList(object) else NULL
+  slide_keys <- if (length(slides) > 0) slides else NA_character_
+
+  sum(vapply(slide_keys, function(sID) {
+    slide <- if (is.na(sID)) NULL else sID
+    counts <- vapply(
+      cts,
+      function(ct) .countSlideCellType(object, slide = slide, cellType = ct),
+      numeric(1)
+    )
+    if (length(counts) == 1) {
+      counts[1]^2
+    } else {
+      pair_idx <- utils::combn(seq_along(counts), 2)
+      sum(counts[pair_idx[1, ]] * counts[pair_idx[2, ]])
+    }
+  }, numeric(1)))
 }
 
 #' Dispatch computeKernelMatrix() to the dense or sparse path and optionally
@@ -56,11 +106,17 @@
 
   if (method == "auto") {
     n_max <- .maxCellTypeCount(object)
-    method <- if (n_max > autoThreshold) "sparse" else "dense"
+    dense_entries <- .denseKernelEntryCount(object)
+    sparse_by_block <- n_max >= autoThreshold
+    sparse_by_total <- dense_entries >= as.numeric(autoThreshold)^2
+    method <- if (sparse_by_block || sparse_by_total) "sparse" else "dense"
     if (verbose) {
       message(sprintf(
-        "computeKernelMatrix: method='auto' -> '%s' (largest cell type = %d cells, threshold = %d).",
-        method, n_max, autoThreshold))
+        paste0("computeKernelMatrix: method='auto' -> '%s' ",
+               "(largest block dimension = %d cells, estimated dense entries = %.3g, ",
+               "threshold = %d cells / %.3g entries)."),
+        method, n_max, dense_entries, autoThreshold,
+        as.numeric(autoThreshold)^2))
     }
   }
 

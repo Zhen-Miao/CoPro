@@ -6,13 +6,13 @@
 test_that("sparse path scales to large data without forming dense matrices", {
   skip_on_ci()
 
-  n <- 22000L  # > default autoThreshold (20000) -> method = "auto" picks sparse
+  n <- 22000L  # > default autoThreshold (5000) -> default method picks sparse
   obj <- create_test_copro_single(n_cells = n, n_genes = 15,
                                   n_cell_types = 1, seed = 1)
   obj <- subsetData(obj, cellTypesOfInterest = "CellTypeA")
 
   t0 <- Sys.time()
-  obj <- computeKernelMatrix(obj, sigmaValues = c(0.1), method = "auto",
+  obj <- computeKernelMatrix(obj, sigmaValues = c(0.1),
                              distType = "Euclidean2D",
                              normalizeDistance = FALSE, verbose = FALSE)
   elapsed <- as.numeric(difftime(Sys.time(), t0, units = "secs"))

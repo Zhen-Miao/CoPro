@@ -15,7 +15,8 @@
 * Added a sparse, memory-efficient kernel path for large-scale data.
   `computeKernelMatrix()` gains a `method` argument (`"auto"`, `"dense"`,
   `"sparse"`) defaulting to `"auto"`, which selects the sparse path when any
-  cell type exceeds `autoThreshold` (default 20000) cells. The new
+  per-slide cell-type block reaches `autoThreshold` (default 5000) cells or the
+  aggregate dense workload reaches `autoThreshold^2` entries. The new
   `computeSparseKernel()` generic builds sparse `dgCMatrix` Gaussian kernels
   directly from coordinates via an exact fixed-radius neighbor search, never
   forming a dense `n x n` distance or kernel matrix. Results are numerically
