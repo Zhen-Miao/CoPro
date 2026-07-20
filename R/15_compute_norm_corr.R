@@ -1,8 +1,9 @@
 #' Compute Normalized Correlation (approximation)
 #'
 #' This method calculates the normalized correlation between pairs of cell types
-#' based on CCA weights and the respective kernel matrix. It uses
-#' the spectral norm of the kernel matrix for normalization.
+#' based on CCA weights and the respective kernel matrix. It uses the
+#' whitened-Frobenius norm ||R_x^(1/2) K_c R_y^(1/2)||_F of the kernel for
+#' normalization (R_x, R_y = matched-sigma within-type kernels).
 #'
 #' @param object A `CoPro` or `CoProMulti` object containing CCA results and kernel matrices.
 #' @param tol tolerance for approximate SVD calculation
@@ -65,10 +66,45 @@ setGeneric(
   return(list(cts = cts, scalePCs = scalePCs, sigmaValues = sigmaValues, nCC = nCC))
 }
 
-.computeSpecNorm <- function(object, tol = 1e-4, cts, scalePCs,
+#' Whitened-Frobenius null SD of the bilinear statistic a' K b
+#'
+#' Internal. Returns \eqn{\|R_x^{1/2} K_c R_y^{1/2}\|_F}, the distribution-free
+#' null standard deviation of \eqn{T = a' K b}, where \eqn{K_c} is the
+#' double-centered cross-kernel and \eqn{R_x, R_y} are the within-type
+#' correlation operators. This replaces the spectral norm \eqn{\|K\|_2}, which
+#' is scale-blind and rails bandwidth selection to the noise floor. With
+#' \code{Rx}/\code{Ry} omitted it degrades to the un-whitened \eqn{\|K_c\|_F}
+#' (i.e. \eqn{R_x = R_y = I}).
+#'
+#' @param K Cross-type kernel matrix (double-centered internally).
+#' @param Rx,Ry Within-type kernels used as correlation operators; symmetrized
+#'   defensively (a no-op when the kernel is un-normalized). `NULL` to skip
+#'   whitening.
+#' @return Scalar whitened-Frobenius norm.
+#' @keywords internal
+.whitenedFrobNorm <- function(K, Rx = NULL, Ry = NULL) {
+  K <- as.matrix(K)
+  ## double-center: a' K b = a' K_c b for centered scores; Var_0(T) uses K_c
+  Kc <- K - rowMeans(K) - rep(colMeans(K), each = nrow(K)) + mean(K)
+  if (is.null(Rx) || is.null(Ry)) {
+    return(sqrt(sum(Kc * Kc)))                 # ||K_c||_F  (R_x = R_y = I)
+  }
+  ## symmetrize within-type kernels into correlation operators (no-op when the
+  ## kernel is un-normalized, i.e. already symmetric PSD with unit diagonal)
+  Rx <- as.matrix(Rx); Ry <- as.matrix(Ry)
+  Rx <- (Rx + t(Rx)) / 2
+  Ry <- (Ry + t(Ry)) / 2
+  ## ||R_x^{1/2} K_c R_y^{1/2}||_F^2 = tr(R_x K_c R_y K_c^T) = sum((R_x K_c R_y) * K_c)
+  M <- (Rx %*% Kc) %*% Ry
+  sqrt(max(sum(M * Kc), 0))
+}
+
+.computeCrossKernelNorm <- function(object, tol = 1e-4, cts, scalePCs,
  sigmaValues, nCC, pair_cell_types) {
-  ## calculate all spectral norms
-  message("Calculating spectral norms, this may take a while.")
+  ## Whitened-Frobenius normalizer ||R_x^{1/2} K_c R_y^{1/2}||_F per (sigma,
+  ## pair), with R_x, R_y the matched-sigma within-type kernels. Replaces the
+  ## old spectral norm ||K||_2.
+  message("Calculating whitened-Frobenius normalizers, this may take a while.")
 
   sigma_names <- paste("sigma", sigmaValues, sep = "_")
   norm_K12 <- setNames(vector(mode = "list", length = length(sigma_names)),
@@ -88,20 +124,27 @@ setGeneric(
     for (pp in seq_len(ncol(pair_cell_types))) {
       cellType1 <- pair_cell_types[1, pp]
       cellType2 <- pair_cell_types[2, pp]
-      K <- getKernelMatrix(object, sigma = sigma_val, 
-                           cellType1 = cellType1, cellType2 = cellType2, 
+      K <- getKernelMatrix(object, sigma = sigma_val,
+                           cellType1 = cellType1, cellType2 = cellType2,
                            verbose = FALSE)
-      ## Calculate the spectral norm of the kernel matrix
-      svd_result <- irlba::irlba(K, nv = 1, tol = tol)
-      norm_K12[[t]][[cellType1]][[cellType2]] <- svd_result$d[1]
-      # Store the transpose as well for symmetry
+      ## matched-sigma within-type kernels serve as the whitening operators;
+      ## if unavailable, .whitenedFrobNorm falls back to ||K_c||_F
+      Rx <- tryCatch(getKernelMatrix(object, sigma = sigma_val,
+                       cellType1 = cellType1, cellType2 = cellType1,
+                       verbose = FALSE), error = function(e) NULL)
+      Ry <- tryCatch(getKernelMatrix(object, sigma = sigma_val,
+                       cellType1 = cellType2, cellType2 = cellType2,
+                       verbose = FALSE), error = function(e) NULL)
+      nrm <- .whitenedFrobNorm(K, Rx, Ry)
+      norm_K12[[t]][[cellType1]][[cellType2]] <- nrm
+      # Frobenius norm is transpose-invariant: store the mirror for symmetry
       if (cellType1 != cellType2) {
-        norm_K12[[t]][[cellType2]][[cellType1]] <- svd_result$d[1]
+        norm_K12[[t]][[cellType2]][[cellType1]] <- nrm
       }
     }
   }
 
-  message("Finished calculating spectral norms.")
+  message("Finished calculating whitened-Frobenius normalizers.")
 
   return(norm_K12)
 }
@@ -122,8 +165,8 @@ setGeneric(
   sigma_names <- paste("sigma", sigmaValues, sep = "_")
   names(correlation_value) <- sigma_names
 
-  norm_K12 <- .computeSpecNorm(object, tol = tol, cts = cts,
-   scalePCs = scalePCs, sigmaValues = sigmaValues, nCC = nCC, 
+  norm_K12 <- .computeCrossKernelNorm(object, tol = tol, cts = cts,
+   scalePCs = scalePCs, sigmaValues = sigmaValues, nCC = nCC,
    pair_cell_types = pair_cell_types)
 
   for (tt in seq_along(sigmaValues)) {
@@ -151,7 +194,7 @@ setGeneric(
                            verbose = FALSE)
       norm_K12_sel <- norm_K12[[t]][[cellType1]][[cellType2]]
       if (is.null(norm_K12_sel) || !is.finite(norm_K12_sel)) {
-        warning(paste("Spectral norm unavailable for", cellType1, "-", cellType2, "at", t, "- skipping"))
+        warning(paste("Normalizer unavailable for", cellType1, "-", cellType2, "at", t, "- skipping"))
         next
       }
 
@@ -257,12 +300,12 @@ setMethod(
   return(list(cts = cts, slides = slides, sigmas_run = sigmas_run, nCC = nCC, scalePCs = scalePCs))
 }
 
-.computeSpecNormMulti <- function(object, tol = 1e-4, cts, slides, sigmas_run, nCC, pair_cell_types) {
-  
-  # --- Precompute Spectral Norms (Per Slide, Per Sigma) ---
-  message("Calculating spectral norms (can take time)...")
+.computeCrossKernelNormMulti <- function(object, tol = 1e-4, cts, slides, sigmas_run, nCC, pair_cell_types) {
+
+  # --- Precompute whitened-Frobenius normalizers (Per Slide, Per Sigma) ---
+  message("Calculating whitened-Frobenius normalizers (can take time)...")
   norm_K_all <- setNames(vector("list", length = length(sigmas_run)), sigmas_run)
-  
+
   for (sig_name in sigmas_run) {
     sigma_val <- as.numeric(gsub("sigma_", "", sig_name))
     norm_K_sigma <- setNames(vector("list", length = length(slides)), slides)
@@ -285,14 +328,20 @@ setMethod(
         }, error = function(e) NULL)
 
         if (!is.null(K) && nrow(K) > 0 && ncol(K) > 0) {
-          svd_d <- tryCatch({
-            irlba::irlba(K, nv = 1, nu = 0, tol = tol)$d[1]
-          }, error = function(e) {
-            warning(paste("SVD failed for K[", sID, ",", ct_i, ",", ct_j, "]:", e$message))
+          # matched-sigma within-type kernels for this slide are the whitening
+          # operators; fall back to ||K_c||_F if either is unavailable
+          Rx <- tryCatch(getKernelMatrix(object, sigma = sigma_val, cellType1 = ct_i,
+                          cellType2 = ct_i, slide = sID, verbose = FALSE),
+                         error = function(e) NULL)
+          Ry <- tryCatch(getKernelMatrix(object, sigma = sigma_val, cellType1 = ct_j,
+                          cellType2 = ct_j, slide = sID, verbose = FALSE),
+                         error = function(e) NULL)
+          nrm <- tryCatch(.whitenedFrobNorm(K, Rx, Ry), error = function(e) {
+            warning(paste("Normalizer failed for K[", sID, ",", ct_i, ",", ct_j, "]:", e$message))
             NA
           })
-          norm_K_slide[[ct_i]][[ct_j]] <- svd_d
-          norm_K_slide[[ct_j]][[ct_i]] <- svd_d # symmetry
+          norm_K_slide[[ct_i]][[ct_j]] <- nrm
+          norm_K_slide[[ct_j]][[ct_i]] <- nrm # symmetry (Frobenius transpose-invariant)
         } else {
           norm_K_slide[[ct_i]][[ct_j]] <- NA
           norm_K_slide[[ct_j]][[ct_i]] <- NA
@@ -303,7 +352,7 @@ setMethod(
     norm_K_all[[sig_name]] <- norm_K_sigma
   }
 
-  message("Finished calculating spectral norms.")
+  message("Finished calculating whitened-Frobenius normalizers.")
   return(norm_K_all)
 }
 
@@ -324,7 +373,7 @@ setMethod(
     cts = cts
   )
 
-  norm_K_all <- .computeSpecNormMulti(object, tol = tol, cts = cts,
+  norm_K_all <- .computeCrossKernelNormMulti(object, tol = tol, cts = cts,
    slides = slides, sigmas_run = sigmas_run, nCC = nCC, pair_cell_types = pair_cell_types)
   
   # --- Calculate Correlation ---

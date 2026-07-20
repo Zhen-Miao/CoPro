@@ -31,7 +31,7 @@ power iteration). Values in (0,1) blend old and new weights for smoother
 convergence, which can help with many cells or many CCs.}
 
 \item{sdev2_list}{Optional named list of squared standard deviations per
-cell type, used for weighted normalization when \code{scalePCs = TRUE}.
+cell type, used for weighted normalization when \code{scalePCs = FALSE}.
 Default \code{NULL} (unweighted).}
 }
 \value{

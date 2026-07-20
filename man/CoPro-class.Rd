@@ -46,6 +46,10 @@ Recommended structure: \code{list(slideID = list(cellType = pc_matrix))}.}
 \item{\code{distances}}{A \code{list} object to store the pairwise distances between any
 two cell types of interest.}
 
+\item{\code{distanceScaleFactor}}{A single numeric value. The raw-to-normalized
+distance scaling factor recorded at \code{computeDistance} time; persists after
+\code{computeKernelMatrix(dropDistances = TRUE)} clears \verb{@distances}.}
+
 \item{\code{geneList}}{A \code{vector} object with elements being character. To store the
 gene names.}
 
@@ -98,6 +102,13 @@ for each sigma value after permutation}
 \item{\code{bidirCorrelationPermu}}{A \code{list} object.
 Bidirectional correlation values
 for each sigma value after permutation}
+
+\item{\code{conditionalPermu}}{A \code{list} object storing results of the conditional
+(sequential step-down) permutation test across canonical axes, produced by
+\code{runSkrCCAPermu_Conditional()}. Contains the per-axis raw and
+step-down p-values, observed and null statistics, and the fair-sigma
+selections used to control both sigma-selection and canonical-axis
+multiplicity.}
 
 \item{\code{sigmaValueChoice}}{A \code{numeric} value. The optimal sigma squared based
 on the median normalized correlation value.}

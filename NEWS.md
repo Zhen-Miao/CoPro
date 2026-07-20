@@ -27,6 +27,22 @@
   pipeline only needs the kernels. Set `dropDistances = FALSE` to retain
   distances for inspection via `getDistMat()` or to recompute kernels with new
   sigma values without rebuilding distances.
+* Normalized correlation and bandwidth (`sigma`) selection now normalize by the
+  whitened-Frobenius norm `||R_x^{1/2} K_c R_y^{1/2}||_F` of the cross-kernel
+  instead of its spectral norm `||K||_2`. Here `K_c` is the double-centered
+  cross-kernel and `R_x`, `R_y` are the matched-`sigma` within-type kernels;
+  this norm is the distribution-free null standard deviation of the bilinear
+  statistic `a' K b` and, unlike the spectral norm, does not rail `sigma`
+  selection to the grid floor. Affects `computeNormalizedCorrelation()`, the
+  permutation tests (`runSkrCCAPermu*()`), and `getTransfer*()` extrapolation.
+
+## Bug fixes
+
+* Sigma-aware bin sizing no longer silently falls back to a hard-coded 10x10
+  grid under the default `dropDistances = TRUE`. The raw-to-normalized distance
+  scale factor is now stored in a new `@distanceScaleFactor` slot at
+  `computeDistance()` time and recovered from there after `@distances` is
+  cleared, so `.sigmaAwareBins()` keeps its bandwidth-aware grid.
 * The bidirectional-correlation kernel normalizations (`sinkhorn_knopp`,
   `"row_or_col"`) now operate on sparse kernels without densifying them.
 

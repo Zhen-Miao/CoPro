@@ -18,21 +18,36 @@ Matrix of permutation indices (n_cells x n_permu). Each column
 contains a permutation of row indices that can be used to reorder cells.
 }
 \description{
-Shifts spatial coordinates in a toroidal (wrap-around) manner,
-perfectly preserving spatial autocorrelation structure. This is
-useful for permutation testing when you want to break cross-type
-coordination while preserving within-type spatial patterns.
+Shifts spatial coordinates in a toroidal (wrap-around) manner to break
+cross-type coordination while approximately preserving within-type spatial
+autocorrelation. Useful as one of several autocorrelation-respecting nulls
+for permutation testing (see also the sigma-aware \code{bin} null and Moran
+Spectral Randomization for irregular tissue).
 }
 \details{
 The toroidal shift works by:
 \enumerate{
 \item Applying a random shift to all coordinates (wrapping at boundaries)
-\item Matching cells based on their new positions to original positions
+\item Re-ranking cells by their shifted positions and matching back to the
+original ordering.
 }
 
-This preserves ALL spatial autocorrelation within each cell type because
-the relative positions of cells are unchanged - only their absolute
-positions are shifted.
+Important caveats (the docstring previously over-claimed "perfect"
+preservation):
+\itemize{
+\item The position matching is by coordinate \emph{rank}, which equals a rigid
+torus translation only on a regular lattice. On an irregular point cloud
+it is a monotone rearrangement that preserves pairwise distances only
+approximately, so within-type autocorrelation is approximately (not
+exactly) preserved.
+\item The torus-translation test (Harms et al. 2001) assumes spatial
+stationarity and periodic wrap-around. Gluing opposite tissue edges
+creates artificial neighbours at the seam and is biologically false for
+non-rectangular / hole-bearing tissue, and the family of distinct shifts
+is effectively small (a coarse null with limited power).
+}
+For these reasons toroidal should be benchmarked against, not preferred over,
+the sigma-aware patch null and graph-based surrogates; let calibration choose.
 }
 \examples{
 \dontrun{

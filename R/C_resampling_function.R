@@ -88,6 +88,148 @@ diagnose_bin_distribution <- function(location_data,
 }
 
 
+#' Recover the raw-to-normalized distance scaling factor
+#'
+#' Internal helper that recovers the single scalar mapping raw
+#' spatial-coordinate distances to the normalized distance scale on which
+#' `sigmaValues` are defined. `computeDistance(normalizeDistance = TRUE)`
+#' multiplies every stored distance by one constant, so for any entry that was
+#' not affected by low-distance truncation the ratio (normalized distance) /
+#' (raw Euclidean distance) equals that constant. We probe random off-diagonal
+#' entries and take the median ratio, which is robust to the small fraction of
+#' truncated entries and avoids copying the full distance matrix.
+#'
+#' @details
+#' This assumes isotropic coordinates (`xDistScale = yDistScale`, the default).
+#' Under anisotropic scaling the recovered value is a representative, not exact,
+#' factor; the `[sigma, 4*sigma]` guardrail in [.sigmaAwareBins()] will flag a
+#' grossly mis-sized grid. When `normalizeDistance = FALSE` the recovered factor
+#' is simply the coordinate scale (1 by default), which is also correct because
+#' `sigma` is then on the raw coordinate scale.
+#'
+#' @param object A CoPro object with `@distances` populated.
+#' @param n_probe Number of random cell pairs to probe (default 200).
+#'
+#' @return Numeric scaling factor (normalized = raw * factor), or `NA_real_`
+#'   if it cannot be recovered.
+#' @keywords internal
+.recoverDistanceScaleFactor <- function(object, n_probe = 200L) {
+  # Prefer the scale factor stored at computeDistance time: it is the exact
+  # normalizeTarget / min_percentile ratio and, unlike @distances, survives
+  # computeKernelMatrix(dropDistances = TRUE) (the default).
+  sf_stored <- tryCatch(object@distanceScaleFactor, error = function(e) numeric(0))
+  if (length(sf_stored) == 1L && is.finite(sf_stored) && sf_stored > 0) {
+    return(sf_stored)
+  }
+  if (length(object@distances) == 0) {
+    return(NA_real_)
+  }
+  loc <- as.data.frame(object@locationDataSub)
+  if (!all(c("x", "y") %in% colnames(loc)) || is.null(rownames(loc))) {
+    return(NA_real_)
+  }
+
+  D <- object@distances[[1]]
+  rn <- rownames(D)
+  cn <- colnames(D)
+  if (is.null(rn) || is.null(cn) || is.null(dim(D)) ||
+      nrow(D) < 1 || ncol(D) < 1) {
+    return(NA_real_)
+  }
+
+  loc_ids <- rownames(loc)
+  ratios <- numeric(0)
+  max_tries <- n_probe * 20L
+  tries <- 0L
+  while (length(ratios) < n_probe && tries < max_tries) {
+    tries <- tries + 1L
+    i <- sample.int(nrow(D), 1L)
+    j <- sample.int(ncol(D), 1L)
+    if (identical(rn[i], cn[j])) next         # skip self (within-type diagonal)
+    d_norm <- D[i, j]
+    if (!is.finite(d_norm) || d_norm <= 0) next
+    if (!(rn[i] %in% loc_ids) || !(cn[j] %in% loc_ids)) next
+    dx <- loc[rn[i], "x"] - loc[cn[j], "x"]
+    dy <- loc[rn[i], "y"] - loc[cn[j], "y"]
+    d_raw <- sqrt(dx * dx + dy * dy)
+    if (!is.finite(d_raw) || d_raw <= 0) next
+    ratios <- c(ratios, d_norm / d_raw)
+  }
+
+  if (length(ratios) == 0) {
+    return(NA_real_)
+  }
+  stats::median(ratios)
+}
+
+
+#' Compute sigma-aware bin counts for spatial permutation
+#'
+#' Internal helper that chooses the number of bins for bin-wise spatial
+#' permutation from the kernel bandwidth `sigma` instead of a fixed hard-coded
+#' grid. The target patch side is `2 * sigma` on the normalized distance scale,
+#' so each patch is large enough to preserve within-type spatial
+#' autocorrelation (length scale `~sigma`) while shuffling whole patches still
+#' breaks longer-range cross-type coordination. A hard-coded grid (e.g. the
+#' historical 10x10) ignores both the tissue extent and `sigma`, which is the
+#' root cause of mis-calibrated bin-wise permutation.
+#'
+#' @param object A CoPro object (uses `@locationDataSub` and `@distances`).
+#' @param sigma Kernel bandwidth (numeric, on the normalized distance scale).
+#' @param min_bins Minimum number of bins per axis (default 2).
+#' @param verbose Whether to message the chosen grid (default TRUE).
+#'
+#' @return A list with integer `num_bins_x`, `num_bins_y`, and the recovered
+#'   `scale_factor`.
+#' @keywords internal
+.sigmaAwareBins <- function(object, sigma, min_bins = 2L, verbose = TRUE) {
+  loc <- as.data.frame(object@locationDataSub)
+  ext_x <- diff(range(loc$x))
+  ext_y <- diff(range(loc$y))
+
+  sf <- .recoverDistanceScaleFactor(object)
+  if (!is.finite(sf) || sf <= 0 || !is.finite(sigma) || sigma <= 0 ||
+      !is.finite(ext_x) || !is.finite(ext_y) || ext_x <= 0 || ext_y <= 0) {
+    warning("sigma-aware bins: could not recover distance scale; ",
+            "falling back to a 10 x 10 grid. Pass num_bins_x/num_bins_y ",
+            "explicitly to override.")
+    return(list(num_bins_x = 10L, num_bins_y = 10L, scale_factor = NA_real_))
+  }
+
+  # Target patch side = 2*sigma on the normalized scale, in raw coordinate units
+  patch_raw <- (2 * sigma) / sf
+  nbx <- max(min_bins, floor(ext_x / patch_raw))
+  nby <- max(min_bins, floor(ext_y / patch_raw))
+
+  # Realized patch sides, mapped back to the normalized scale, for the guardrail
+  side_x <- (ext_x / nbx) * sf
+  side_y <- (ext_y / nby) * sf
+  for (ax in c("x", "y")) {
+    s <- if (ax == "x") side_x else side_y
+    if (s < sigma) {
+      warning(sprintf(paste0("sigma-aware bins: %s patch side (%.3g) < sigma ",
+                             "(%.3g); patches may be too small and over-shuffle ",
+                             "within-type structure (anti-conservative)."),
+                      ax, s, sigma))
+    } else if (s > 4 * sigma) {
+      warning(sprintf(paste0("sigma-aware bins: %s patch side (%.3g) > 4*sigma ",
+                             "(%.3g); patches may be too large to break ",
+                             "cross-type coordination (conservative)."),
+                      ax, s, 4 * sigma))
+    }
+  }
+
+  if (verbose) {
+    message(sprintf(paste0("sigma-aware bins (sigma = %g): %d x %d grid ",
+                          "(patch side ~ %.3g x %.3g on the normalized scale)."),
+                    sigma, nbx, nby, side_x, side_y))
+  }
+
+  list(num_bins_x = as.integer(nbx), num_bins_y = as.integer(nby),
+       scale_factor = sf)
+}
+
+
 #' Match Cells by Within-Tile Quantile Position
 #'
 #' Internal helper to match cells from target tile to original tile based on
@@ -353,19 +495,34 @@ resample_spatial <- function(location_data,
 
 #' Generate Toroidal Shift Permutation Indices
 #'
-#' Shifts spatial coordinates in a toroidal (wrap-around) manner,
-#' perfectly preserving spatial autocorrelation structure. This is
-#' useful for permutation testing when you want to break cross-type
-#' coordination while preserving within-type spatial patterns.
+#' Shifts spatial coordinates in a toroidal (wrap-around) manner to break
+#' cross-type coordination while approximately preserving within-type spatial
+#' autocorrelation. Useful as one of several autocorrelation-respecting nulls
+#' for permutation testing (see also the sigma-aware `bin` null and Moran
+#' Spectral Randomization for irregular tissue).
 #'
 #' @details
 #' The toroidal shift works by:
 #' 1. Applying a random shift to all coordinates (wrapping at boundaries)
-#' 2. Matching cells based on their new positions to original positions
+#' 2. Re-ranking cells by their shifted positions and matching back to the
+#'    original ordering.
 #'
-#' This preserves ALL spatial autocorrelation within each cell type because
-#' the relative positions of cells are unchanged - only their absolute
-#' positions are shifted.
+#' Important caveats (the docstring previously over-claimed "perfect"
+#' preservation):
+#' \itemize{
+#'   \item The position matching is by coordinate *rank*, which equals a rigid
+#'     torus translation only on a regular lattice. On an irregular point cloud
+#'     it is a monotone rearrangement that preserves pairwise distances only
+#'     approximately, so within-type autocorrelation is approximately (not
+#'     exactly) preserved.
+#'   \item The torus-translation test (Harms et al. 2001) assumes spatial
+#'     stationarity and periodic wrap-around. Gluing opposite tissue edges
+#'     creates artificial neighbours at the seam and is biologically false for
+#'     non-rectangular / hole-bearing tissue, and the family of distinct shifts
+#'     is effectively small (a coarse null with limited power).
+#' }
+#' For these reasons toroidal should be benchmarked against, not preferred over,
+#' the sigma-aware patch null and graph-based surrogates; let calibration choose.
 #'
 #' @param location_data Data frame with x, y, cell_ID columns
 #' @param n_permu Number of permutations to generate

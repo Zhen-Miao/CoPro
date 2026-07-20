@@ -25,7 +25,8 @@ rows are cell IDs and columns are \code{CC_1}, \code{CC_2}, ..., as returned by
 
 \item{sigma_choice}{Numeric scalar specifying the sigma value of the kernel to use.}
 
-\item{tol}{Numeric tolerance passed to the truncated SVD for spectral norm
+\item{tol}{Numeric tolerance (formerly for the truncated SVD; retained for
+backward compatibility, unused by the closed-form whitened-Frobenius norm)
 estimation (default 1e-4).}
 
 \item{calculationMode}{For \code{CoProMulti} objects only, either "perSlide" or
@@ -56,10 +57,11 @@ This function mirrors the correlation calculation used in
 
 The normalized correlation is computed as:
 numerator = t(A_w1) \%\emph{\% K \%}\% B_w2
-denominator = sqrt(sum(A_w1^2)) * sqrt(sum(B_w2^2)) * ||K||_2
+denominator = sqrt(sum(A_w1^2)) * sqrt(sum(B_w2^2)) * ||K_tilde_c||_F
 where A_w1 and B_w2 are the cell score vectors (for the same CC index)
 for cell types A and B respectively, K is the kernel matrix between the two
-cell types at the chosen sigma, and ||K||_2 is the spectral norm of K.
+cell types at the chosen sigma, and ||K_tilde_c||_F is the whitened-Frobenius
+norm ||R_x^(1/2) K_c R_y^(1/2)||_F (R_x, R_y = matched-sigma within-type kernels).
 }
 \examples{
 # Assuming `tar_obj` is prepared and `trans_scores` was computed with

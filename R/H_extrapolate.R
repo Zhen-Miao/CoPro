@@ -349,10 +349,11 @@ getTransferCellScores <- function(ref_obj, tar_obj, sigma_choice,
 #'
 #' The normalized correlation is computed as:
 #'   numerator = t(A_w1) %*% K %*% B_w2
-#'   denominator = sqrt(sum(A_w1^2)) * sqrt(sum(B_w2^2)) * ||K||_2
+#'   denominator = sqrt(sum(A_w1^2)) * sqrt(sum(B_w2^2)) * ||K_tilde_c||_F
 #' where A_w1 and B_w2 are the cell score vectors (for the same CC index)
 #' for cell types A and B respectively, K is the kernel matrix between the two
-#' cell types at the chosen sigma, and ||K||_2 is the spectral norm of K.
+#' cell types at the chosen sigma, and ||K_tilde_c||_F is the whitened-Frobenius
+#' norm ||R_x^(1/2) K_c R_y^(1/2)||_F (R_x, R_y = matched-sigma within-type kernels).
 #'
 #' @param tar_obj A `CoProSingle` or `CoProMulti` object containing kernel matrices
 #'   and metadata needed for alignment.
@@ -361,7 +362,8 @@ getTransferCellScores <- function(ref_obj, tar_obj, sigma_choice,
 #'   rows are cell IDs and columns are `CC_1`, `CC_2`, ..., as returned by
 #'   `getTransferCellScores(agg_cell_type = FALSE)`.
 #' @param sigma_choice Numeric scalar specifying the sigma value of the kernel to use.
-#' @param tol Numeric tolerance passed to the truncated SVD for spectral norm
+#' @param tol Numeric tolerance (formerly for the truncated SVD; retained for
+#'   backward compatibility, unused by the closed-form whitened-Frobenius norm)
 #'   estimation (default 1e-4).
 #' @param calculationMode For `CoProMulti` objects only, either "perSlide" or
 #'   "aggregate". Ignored for `CoProSingle`. Default "perSlide" if `tar_obj`
@@ -462,8 +464,8 @@ getTransferNormCorr <- function(tar_obj,
   }
 
   if (!is_multi) {
-    # Precompute spectral norms using existing helper
-    norm_K12 <- .computeSpecNorm(
+    # Precompute whitened-Frobenius normalizers using existing helper
+    norm_K12 <- .computeCrossKernelNorm(
       object = tar_obj, tol = tol, cts = cts,
       scalePCs = if (length(tar_obj@scalePCs) == 0) FALSE else tar_obj@scalePCs,
       sigmaValues = sigma_choice_tar,
@@ -483,7 +485,7 @@ getTransferNormCorr <- function(tar_obj,
       ct_i <- pair_cell_types[1, pp]
       ct_j <- pair_cell_types[2, pp]
 
-      # Kernel and its spectral norm
+      # Kernel and its whitened-Frobenius normalizer
       K_ij <- getKernelMatrix(tar_obj, sigma = sigma_choice_tar,
                               cellType1 = ct_i, cellType2 = ct_j,
                               verbose = FALSE)
@@ -516,8 +518,8 @@ getTransferNormCorr <- function(tar_obj,
 
   # --- Multi-slide object ---
   slides <- getSlideList(tar_obj)
-  # Precompute spectral norms using existing multi-slide helper
-  norm_K_all <- .computeSpecNormMulti(
+  # Precompute whitened-Frobenius normalizers using existing multi-slide helper
+  norm_K_all <- .computeCrossKernelNormMulti(
     object = tar_obj, tol = tol, cts = cts, slides = slides,
     sigmas_run = sigma_name_tar, nCC = if (length(tar_obj@nCC) == 0) nCC else tar_obj@nCC,
     pair_cell_types = pair_cell_types

@@ -33,6 +33,9 @@ setClassUnion("matrixOrDataFrame", c("matrix", "data.frame"))
 #' @slot pcaGlobal A `list` object storing PCA results for each cell type.
 #' @slot distances A `list` object to store the pairwise distances between any
 #' two cell types of interest.
+#' @slot distanceScaleFactor A single numeric value. The raw-to-normalized
+#' distance scaling factor recorded at `computeDistance` time; persists after
+#' `computeKernelMatrix(dropDistances = TRUE)` clears `@distances`.
 #' @slot geneList A `vector` object with elements being character. To store the
 #' gene names.
 #' @slot kernelMatrices A `list` object. To store the kernel matrix generated
@@ -68,6 +71,12 @@ setClassUnion("matrixOrDataFrame", c("matrix", "data.frame"))
 #' @slot bidirCorrelationPermu A `list` object.
 #'  Bidirectional correlation values
 #' for each sigma value after permutation
+#' @slot conditionalPermu A `list` object storing results of the conditional
+#'  (sequential step-down) permutation test across canonical axes, produced by
+#'  \code{runSkrCCAPermu_Conditional()}. Contains the per-axis raw and
+#'  step-down p-values, observed and null statistics, and the fair-sigma
+#'  selections used to control both sigma-selection and canonical-axis
+#'  multiplicity.
 #' @slot sigmaValueChoice A `numeric` value. The optimal sigma squared based
 #' on the median normalized correlation value.
 #' @name CoPro-class
@@ -111,6 +120,7 @@ setClass("CoPro", contains  = "VIRTUAL",
 
            # Distance & Kernel (Slide-Specific if multiple slideID)
            distances = "list",      # Stores list(slideID = list(ct1 = list(ct2 = dist)))
+           distanceScaleFactor = "numeric", # normalized/raw distance ratio; persists after @distances is dropped
            kernelMatrices = "list", # Stores list(sigma = list(slideID = list(ct1 = list(ct2 = K))))
            sigmaValues = "numeric",
 
@@ -130,7 +140,8 @@ setClass("CoPro", contains  = "VIRTUAL",
            skrCCAPermuOut = "list",
            cellPermu = "list",
            normalizedCorrelationPermu = "list",
-           bidirCorrelationPermu = "list"
+           bidirCorrelationPermu = "list",
+           conditionalPermu = "list"
          ),
          prototype = list(
            cellTypesOfInterest = character(0),
@@ -140,6 +151,7 @@ setClass("CoPro", contains  = "VIRTUAL",
            nCC = numeric(0),
            nPermu = numeric(0),
            sigmaValueChoice = numeric(0),
+           distanceScaleFactor = numeric(0),
            scalePCs = logical(0)
          )
 )

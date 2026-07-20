@@ -551,9 +551,15 @@ setGeneric(
       flat_name <- .createDistMatrixName(i, j, slide = NULL)
       distances[[flat_name]] <- distances[[flat_name]] * scaling_factor
     }
+  } else {
+    scaling_factor <- 1
   }
 
   object@distances <- distances
+  # Persist the raw -> normalized distance scale factor so downstream helpers
+  # (.recoverDistanceScaleFactor / .sigmaAwareBins) keep working after
+  # computeKernelMatrix(dropDistances = TRUE) clears @distances.
+  object@distanceScaleFactor <- scaling_factor
   return(object)
 }
 
@@ -641,9 +647,12 @@ setGeneric(
     }
     flat_name <- .createDistMatrixName(cts, cts, slide = NULL)
     distances[[flat_name]] <- distances_ij * scaling_factor
+  } else {
+    scaling_factor <- 1
   }
 
   object@distances <- distances
+  object@distanceScaleFactor <- scaling_factor
   return(object)
 }
 

@@ -167,23 +167,34 @@
 #' The function supports three permutation methods:
 #'
 #' **"global"**: Simple random shuffling of cells. This breaks ALL spatial
-#' structure and tests against a null of complete spatial randomness.
+#' structure and tests against a null of complete spatial randomness. It is a
+#' *deliberately-broken reference*: by destroying within-type autocorrelation it
+#' inflates the effective sample size (Clifford-Richardson-Hemon 1989) and is
+#' therefore anti-conservative by construction. Keep it for calibration, not as
+#' a default.
 #'
 #' **"bin"** (default): Bin-wise shuffling that preserves local spatial
 #' structure. This tests against a null where cells have spatial autocorrelation
-#' within their type, but no coordination across types.
+#' within their type, but no coordination across types. By default the patch
+#' grid is sized from the bandwidth (see [.sigmaAwareBins()]). This is a
+#' restricted / approximate permutation that is valid under stationarity; under
+#' autocorrelation the within-type cells are not exchangeable, which is exactly
+#' the point (Anderson & ter Braak 2003).
 #'
 #' **"pc"**: PC-space permutation (like DIALOGUE). Shuffles values within each
 #' PC dimension across cells, breaking cell-to-cell correlation while preserving
-#' the marginal distribution of each PC. This is the same approach used by
-#' DIALOGUE's internal significance testing. Use this to compare with DIALOGUE's
-#' conservative behavior.
+#' the marginal distribution of each PC. Like "global" this is a
+#' *deliberately-broken reference* that destroys within-type autocorrelation;
+#' use it to reproduce DIALOGUE-style complete-spatial-randomness behaviour and
+#' to demonstrate FPR inflation, not as a default.
 #'
 #' **"toroidal"**: Toroidal (wrap-around) shift permutation. Shifts all cells'
-#' coordinates by a random amount, wrapping at boundaries. This PERFECTLY
-#' preserves spatial autocorrelation within each cell type because relative
-#' positions are unchanged. Best choice for reducing FPR when spatial
-#' autocorrelation is strong.
+#' coordinates by a random amount, wrapping at boundaries, then re-ranks to a
+#' permutation. This *approximately* preserves within-type spatial
+#' autocorrelation (exactly only on a regular lattice; see
+#' [generate_toroidal_permutations()]) and assumes spatial stationarity and
+#' periodic wrap-around, which is biologically false at tissue edges. Benchmark
+#' it against the sigma-aware "bin" null rather than preferring it a priori.
 #'
 #' ## Which Cell Types to Permute
 #'
@@ -235,8 +246,9 @@
 #'     \item "global": Simple random permutation breaking all spatial structure
 #'     \item "pc": PC-space permutation (like DIALOGUE) - shuffles values within each
 #'       PC dimension, breaking cell correlation while preserving PC distributions
-#'     \item "toroidal": Toroidal shift permutation - perfectly preserves spatial
-#'       autocorrelation by shifting coordinates in wrap-around manner
+#'     \item "toroidal": Toroidal shift permutation - approximately preserves
+#'       spatial autocorrelation by shifting coordinates in a wrap-around manner
+#'       (assumes stationarity/periodicity; see [generate_toroidal_permutations()])
 #'   }
 #' @param permu_which Which cell types to permute:
 #'   \itemize{
@@ -244,10 +256,14 @@
 #'     \item "both": Permute all cell types independently (more conservative)
 #'     \item "first_only": Keep others fixed, permute only the first cell type
 #'   }
-#' @param num_bins_x Number of bins in x direction for bin-wise permutation (default: 10).
-#'   Use `diagnose_bin_distribution()` to choose appropriate values.
+#' @param num_bins_x Number of bins in x direction for bin-wise permutation.
+#'   Default `NULL` sizes the grid automatically from the kernel bandwidth so
+#'   each patch is ~2*sigma wide on the normalized distance scale (see
+#'   [.sigmaAwareBins()]). Pass an explicit integer to override.
+#'   Use `diagnose_bin_distribution()` to inspect a chosen grid.
 #'   **More bins = better preserve local structure = lower FPR.**
-#' @param num_bins_y Number of bins in y direction for bin-wise permutation (default: 10).
+#' @param num_bins_y Number of bins in y direction for bin-wise permutation.
+#'   Default `NULL` (sigma-aware, as for `num_bins_x`). Pass an integer to override.
 #'   **More bins = better preserve local structure = lower FPR.**
 #' @param match_quantile Logical. If TRUE and `permu_method = "bin"`, matches cells
 #'   between tiles based on their relative (quantile) x/y positions. This better
@@ -306,7 +322,7 @@
 runSkrCCAPermu <- function(object, tol = 1e-5, nPermu = 20,
                            maxIter = 200, permu_method = "bin",
                            permu_which = "second_only",
-                           num_bins_x = 10, num_bins_y = 10,
+                           num_bins_x = NULL, num_bins_y = NULL,
                            match_quantile = FALSE,
                            conservative = FALSE,
                            n_cores = 1, verbose = TRUE) {
@@ -374,6 +390,18 @@ runSkrCCAPermu <- function(object, tol = 1e-5, nPermu = 20,
 
   s_name <- paste("sigma", sigmaValueChoice, sep = "_")
 
+  ## Resolve the bin grid for bin-wise permutation.
+  ## When num_bins_x / num_bins_y are NULL (the default), size the patch grid
+  ## from the kernel bandwidth so each patch is ~2*sigma wide on the normalized
+  ## distance scale: large enough to preserve within-type spatial
+  ## autocorrelation, small enough that shuffling whole patches still breaks
+  ## cross-type coordination. Explicit integer values override this.
+  if (permu_method == "bin" && (is.null(num_bins_x) || is.null(num_bins_y))) {
+    bins <- .sigmaAwareBins(object, sigma = sigmaValueChoice, verbose = verbose)
+    num_bins_x <- bins$num_bins_x
+    num_bins_y <- bins$num_bins_y
+  }
+
   ## Print permutation settings
   if (verbose) {
     cat("Permutation settings:\n")
@@ -398,8 +426,8 @@ runSkrCCAPermu <- function(object, tol = 1e-5, nPermu = 20,
       }
     } else if (permu_method == "toroidal") {
       cat("    -> Toroidal (wrap-around) shift permutation\n")
-      cat("    -> PERFECTLY preserves spatial autocorrelation\n")
-      cat("    -> Best for reducing FPR when spatial structure is strong\n")
+      cat("    -> Approximately preserves spatial autocorrelation (assumes stationarity/periodicity)\n")
+      cat("    -> Benchmark against the sigma-aware 'bin' null rather than preferring a priori\n")
     } else if (permu_method == "pc") {
       cat("    -> PC-space permutation (like DIALOGUE)\n")
       cat("    -> Shuffles values within each PC dimension across cells\n")
@@ -636,10 +664,11 @@ runSkrCCAPermu <- function(object, tol = 1e-5, nPermu = 20,
 #' The normalized correlation for each permutation is calculated using the
 #' same formula as the observed data:
 #'
-#' \deqn{NC = \frac{s_1^T K_{12} s_2}{||s_1|| \cdot ||s_2|| \cdot ||K_{12}||_2}}
+#' \deqn{NC = \frac{s_1^T K_{12} s_2}{||s_1|| \cdot ||s_2|| \cdot ||\tilde K_c||_F}}
 #'
 #' where \eqn{s_1} and \eqn{s_2} are cell scores, \eqn{K_{12}} is the kernel
-#' matrix, and \eqn{||K_{12}||_2} is the spectral norm.
+#' matrix, and \eqn{||\tilde K_c||_F} is the whitened-Frobenius norm
+#' \eqn{||R_x^{1/2} K_c R_y^{1/2}||_F}.
 #'
 #' @param object A `CoPro` object with permutation results from `runSkrCCAPermu()`
 #' @param tol Tolerance for approximate SVD calculation (default: 1e-4)
@@ -695,8 +724,8 @@ computeNormalizedCorrelationPermu <- function(object, tol = 1e-4) {
   names(correlation_value) <- permu_names
   s_name <- paste("sigma", sigmaValueChoice, sep = "_")
 
-  ## Calculate spectral norms (only need to do this once)
-  cat("Calculating spectral norms...\n")
+  ## Calculate whitened-Frobenius normalizers (only need to do this once)
+  cat("Calculating whitened-Frobenius normalizers...\n")
   norm_K12 <- setNames(vector(mode = "list", length = 1), s_name)
   norm_K12[[s_name]] <- setNames(vector(mode = "list", length = length(cts)), cts)
 
@@ -711,10 +740,16 @@ computeNormalizedCorrelationPermu <- function(object, tol = 1e-4) {
     K <- getKernelMatrix(object, sigma = sigmaValueChoice,
                          cellType1 = cellType1, cellType2 = cellType2,
                          verbose = FALSE)
-    svd_result <- irlba::irlba(K, nv = 1, tol = tol)
-    norm_K12[[s_name]][[cellType1]][[cellType2]] <- svd_result$d[1]
+    ## matched-sigma within-type kernels as whitening operators
+    Rx <- tryCatch(getKernelMatrix(object, sigma = sigmaValueChoice,
+                     cellType1 = cellType1, cellType2 = cellType1,
+                     verbose = FALSE), error = function(e) NULL)
+    Ry <- tryCatch(getKernelMatrix(object, sigma = sigmaValueChoice,
+                     cellType1 = cellType2, cellType2 = cellType2,
+                     verbose = FALSE), error = function(e) NULL)
+    norm_K12[[s_name]][[cellType1]][[cellType2]] <- .whitenedFrobNorm(K, Rx, Ry)
   }
-  cat("Spectral norms calculated.\n\n")
+  cat("Whitened-Frobenius normalizers calculated.\n\n")
 
   ## Helper function for PC-space permutation (recreate using stored seed)
   permute_pc_matrix_ncorr <- function(pc_mat, seed) {
@@ -908,9 +943,14 @@ compute_ground_truth_ncorr <- function(object,
   s1 <- normalize_vec(scores_ct1)
   s2 <- normalize_vec(scores_ct2)
 
-  ## Calculate spectral norm of kernel matrix
-  svd_result <- irlba::irlba(K, nv = 1, tol = tol)
-  norm_K12 <- svd_result$d[1]
+  ## Whitened-Frobenius normalizer (matched-sigma within-type kernels)
+  Rx <- tryCatch(getKernelMatrix(object, sigma = sigma,
+                   cellType1 = cellType1, cellType2 = cellType1,
+                   verbose = FALSE), error = function(e) NULL)
+  Ry <- tryCatch(getKernelMatrix(object, sigma = sigma,
+                   cellType1 = cellType2, cellType2 = cellType2,
+                   verbose = FALSE), error = function(e) NULL)
+  norm_K12 <- .whitenedFrobNorm(K, Rx, Ry)
 
   ## Calculate normalized correlation
   norm_corr <- as.numeric(t(s1) %*% K %*% s2) / norm_K12
@@ -927,7 +967,11 @@ compute_ground_truth_ncorr <- function(object,
 #' @param cc_index Which canonical correlation component to use (default: 1)
 #' @param alternative Direction of test: "greater" (default), "less", or "two.sided"
 #'
-#' @return List with p-value, observed value, and permutation distribution
+#' @return List with the Phipson & Smyth (2010) permutation p-value (`p_value`,
+#'   never exactly zero), the Monte-Carlo floor `mc_floor = 1 / (n_permu + 1)`,
+#'   the observed value, and the permutation distribution.
+#' @references Phipson B, Smyth GK (2010). Permutation P-values should never be
+#'   zero. \emph{Stat Appl Genet Mol Biol} 9:Article39.
 #'
 #' @examples
 #' \dontrun{
@@ -956,26 +1000,32 @@ calculate_pvalue <- function(object, cc_index = 1, alternative = "greater") {
     x$normalizedCorrelation[x$CC_index == cc_index][1]
   })
 
-  # Calculate p-value
+  # Calculate p-value using the Phipson & Smyth (2010) estimator: the observed
+  # configuration is itself one admissible permutation, so 1 is added to both
+  # numerator and denominator. This is always strictly positive (a permutation
+  # p-value of exactly 0 is invalid); the smallest resolvable value is the
+  # Monte-Carlo floor 1 / (m + 1).
+  m <- length(permu_values)
   if (alternative == "greater") {
-    p_value <- mean(permu_values >= observed)
+    p_value <- (1 + sum(permu_values >= observed)) / (1 + m)
   } else if (alternative == "less") {
-    p_value <- mean(permu_values <= observed)
+    p_value <- (1 + sum(permu_values <= observed)) / (1 + m)
   } else if (alternative == "two.sided") {
-    p_value <- 2 * min(mean(permu_values >= observed),
-                       mean(permu_values <= observed))
-    p_value <- min(p_value, 1)  # Cap at 1
+    p_greater <- (1 + sum(permu_values >= observed)) / (1 + m)
+    p_less <- (1 + sum(permu_values <= observed)) / (1 + m)
+    p_value <- min(2 * min(p_greater, p_less), 1)  # Cap at 1
   } else {
     stop("alternative must be 'greater', 'less', or 'two.sided'")
   }
 
   result <- list(
     p_value = p_value,
+    mc_floor = 1 / (1 + m),
     observed = observed,
     permu_mean = mean(permu_values),
     permu_sd = sd(permu_values),
     permu_values = permu_values,
-    n_permu = length(permu_values),
+    n_permu = m,
     alternative = alternative
   )
 
@@ -1017,9 +1067,12 @@ calculate_pvalue <- function(object, cc_index = 1, alternative = "greater") {
   # Get kernel matrix
   K <- get_kernel_matrix_flat(flat_kernels, sigma, ct1, ct2, slide = NULL)
 
-  # Compute spectral norm
-  svd_result <- irlba::irlba(K, nv = 1, tol = tol)
-  norm_K12 <- svd_result$d[1]
+  # Whitened-Frobenius normalizer (matched-sigma within-type kernels)
+  Rx <- tryCatch(get_kernel_matrix_flat(flat_kernels, sigma, ct1, ct1, slide = NULL),
+                 error = function(e) NULL)
+  Ry <- tryCatch(get_kernel_matrix_flat(flat_kernels, sigma, ct2, ct2, slide = NULL),
+                 error = function(e) NULL)
+  norm_K12 <- .whitenedFrobNorm(K, Rx, Ry)
 
   # Normalized correlation
   numerator <- as.numeric(t(A_w1) %*% K %*% B_w2)
@@ -1062,13 +1115,19 @@ calculate_pvalue <- function(object, cc_index = 1, alternative = "greater") {
 #'   sigma values from the original analysis (object@@sigmaValues)
 #' @param permu_method Method of permutation: "bin", "global", "pc", or "toroidal"
 #' @param permu_which Which cell types to permute: "second_only", "both", "first_only"
-#' @param num_bins_x Number of bins in x for bin-wise permutation
-#' @param num_bins_y Number of bins in y for bin-wise permutation
+#' @param num_bins_x Number of bins in x for bin-wise permutation. Default `NULL`
+#'   sizes the grid from the observed best bandwidth (`sigmaValueChoice`) via
+#'   [.sigmaAwareBins()]; the same grid (and hence the same permutation) is
+#'   shared across the sigma sweep. Pass an integer to override.
+#' @param num_bins_y Number of bins in y for bin-wise permutation. Default `NULL`
+#'   (sigma-aware, as for `num_bins_x`).
 #' @param match_quantile Whether to use quantile matching for bin permutation
 #' @param maxIter Maximum iterations for CCA optimization
 #' @param tol Convergence tolerance
 #' @param n_cores Number of cores for parallel computation (not yet implemented)
 #' @param verbose Whether to print progress messages
+#' @seealso [runSkrCCAPermu_Conditional()] for a sequential step-down test
+#'   across canonical axes (the correct treatment when `nCC > 1`).
 #'
 #' @return CoPro object with fair permutation results stored in:
 #'   \itemize{
@@ -1097,8 +1156,8 @@ runSkrCCAPermu_FairSigma <- function(object,
                                      sigma_values = NULL,
                                      permu_method = "bin",
                                      permu_which = "second_only",
-                                     num_bins_x = 10,
-                                     num_bins_y = 10,
+                                     num_bins_x = NULL,
+                                     num_bins_y = NULL,
                                      match_quantile = FALSE,
                                      maxIter = 200,
                                      tol = 1e-5,
@@ -1153,7 +1212,23 @@ runSkrCCAPermu_FairSigma <- function(object,
   nCC <- object@nCC
 
   if (nCC > 1) {
-    warning("Fair sigma permutation currently only supports nCC = 1. Using first CC.")
+    warning("Fair sigma permutation tests only the first canonical axis (CC1). ",
+            "For axes 2..nCC, use runSkrCCAPermu_Conditional(), which performs ",
+            "a sequential step-down test that controls canonical-axis ",
+            "multiplicity. Using CC1 here.")
+  }
+
+  ## Resolve the bin grid. When num_bins_x / num_bins_y are NULL (the default),
+  ## size the patch grid from the observed best bandwidth (sigmaValueChoice).
+  ## The SAME permutation is reused across the sigma sweep so that the
+  ## max-over-sigma null mirrors the positive cross-scale correlation of the
+  ## observed statistic; re-binning per sigma would inflate the null maximum
+  ## and make the test conservative.
+  if (permu_method == "bin" && (is.null(num_bins_x) || is.null(num_bins_y))) {
+    bins <- .sigmaAwareBins(object, sigma = object@sigmaValueChoice,
+                            verbose = verbose)
+    num_bins_x <- bins$num_bins_x
+    num_bins_y <- bins$num_bins_y
   }
 
   # Get PC matrices
@@ -1304,7 +1379,9 @@ runSkrCCAPermu_FairSigma <- function(object,
     cat(paste("Observed best ncorr:", round(observed_ncorr, 4), "\n"))
     cat(paste("Permutation mean:", round(mean(permu_ncorrs), 4), "\n"))
     cat(paste("Permutation SD:", round(sd(permu_ncorrs), 4), "\n"))
-    cat(paste("P-value:", round(mean(permu_ncorrs >= observed_ncorr), 4), "\n"))
+    cat(paste("P-value (Phipson-Smyth):",
+              round((1 + sum(permu_ncorrs >= observed_ncorr)) / (1 + nPermu), 4),
+              paste0("(MC floor ", round(1 / (1 + nPermu), 4), ")"), "\n"))
     cat("\nSigma selection in permutations:\n")
     cat(paste("  Observed best sigma:", observed_best_sigma, "\n"))
     cat(paste("  Sigma values used:", paste(unique(permu_sigmas), collapse = ", "), "\n"))
@@ -1314,4 +1391,490 @@ runSkrCCAPermu_FairSigma <- function(object,
   }
 
   return(object)
+}
+
+
+#' Fit a single conditional canonical axis (internal kernel)
+#'
+#' Internal numeric kernel for the sequential step-down permutation test. Given
+#' (possibly permuted) PC matrices and the FIXED observed lower-axis weight
+#' directions, it returns the leading canonical axis of the residual after those
+#' lower directions have been deflated, together with that axis' normalized
+#' correlation.
+#'
+#' @details
+#' For axis `k = 1` (no lower directions; `k_minus_1 = 0`) this is exactly the
+#' first-component optimization used by [runSkrCCAPermu_FairSigma()], so the
+#' `k = 1` conditional test reproduces the fair-sigma CC1 test bit-for-bit.
+#'
+#' For `k >= 2` it deflates the observed CC1..CC(k-1) directions from the
+#' cross-product `Y = t(X_i) K_ij X_j` in feature (PC) space, using the SAME
+#' fixed observed directions on every permutation, then optimizes the leading
+#' residual component. Deflating each permutation by the same observed
+#' directions (rather than by that permutation's own leading axis) is what makes
+#' the higher-axis null exchangeable with the observed statistic and removes the
+#' anti-conservative bias of the naive per-axis permutation p-value.
+#'
+#' Under whitened PCs (`scalePCs = TRUE`, so `X^T X = c I`) this Y-space
+#' deflation is algebraically identical to the Freedman-Lane / ter Braak
+#' residualization that removes the observed lower canonical variates from the
+#' data before recomputing `Y`, because
+#' `(I - u u^T) Y (I - v v^T) = Y - (u^T Y v)\, u v^T`.
+#'
+#' The expensive `compute_Y_resi()` can be computed once per (permutation,
+#' sigma) and reused across axes by passing it as `Y_resi`; deflation does not
+#' mutate the supplied structure (copy-on-modify), so the same `Y_resi` is safe
+#' to reuse for every `k`.
+#'
+#' @param PCmats Named list of (possibly permuted) PC matrices, one per cell type.
+#' @param flat_kernels Flat kernel list from the CoPro object.
+#' @param sigma Kernel bandwidth (numeric).
+#' @param cts Cell types of interest.
+#' @param W_lower Named list of observed weight matrices whose first
+#'   `k_minus_1` columns are the fixed deflation directions; ignored when
+#'   `k_minus_1 = 0`.
+#' @param k_minus_1 Number of lower axes to deflate (0 for the first axis).
+#' @param Y_resi Optional precomputed `compute_Y_resi()` structure for this
+#'   (PCmats, sigma); recomputed when `NULL` and `k_minus_1 >= 1`.
+#' @param maxIter,tol Optimization controls.
+#'
+#' @return List with `w` (named list of 1-column weight matrices for axis k) and
+#'   `ncorr` (its normalized correlation).
+#' @importFrom utils capture.output
+#' @keywords internal
+.fitConditionalAxis <- function(PCmats, flat_kernels, sigma, cts,
+                                W_lower = NULL, k_minus_1 = 0,
+                                Y_resi = NULL, maxIter = 200, tol = 1e-5) {
+  if (k_minus_1 <= 0) {
+    # First axis: identical to the fair-sigma CC1 optimization (X-based).
+    invisible(utils::capture.output(
+      w_k <- optimize_bilinear(
+        X_list = PCmats, flat_kernels = flat_kernels, sigma = sigma,
+        max_iter = maxIter, tol = tol
+      )
+    ))
+    names(w_k) <- cts
+  } else {
+    # Conditional axis: deflate the fixed observed lower directions from Y,
+    # then optimize the leading residual component.
+    if (is.null(Y_resi)) {
+      Y_resi <- compute_Y_resi(PCmats, flat_kernels, sigma, cts, slide = NULL)
+    }
+    Yk <- Y_resi
+    for (qq in seq_len(k_minus_1)) {
+      Yk <- apply_deflation(Yk, W_lower, qq, cts)
+    }
+    w_new <- initialize_next_component(Yk, cts)
+    invisible(utils::capture.output(
+      w_k <- bilinear_w_from_Y_resi(
+        w_list_new = w_new, Y_resi = Yk,
+        n_features = ncol(PCmats[[cts[1]]]), max_iter = maxIter, tol = tol
+      )
+    ))
+  }
+
+  # Ensure single-column matrices
+  for (ct in cts) {
+    w_k[[ct]] <- matrix(w_k[[ct]][, 1], ncol = 1)
+  }
+
+  ncorr <- .compute_ncorr_quick(PCmats, w_k, flat_kernels, sigma, cts)
+  list(w = w_k, ncorr = ncorr)
+}
+
+
+#' Conditional (sequential step-down) permutation test across canonical axes
+#'
+#' Performs a permutation test that controls BOTH the sigma-selection
+#' multiplicity (via a fair-sigma max-statistic, as in
+#' [runSkrCCAPermu_FairSigma()]) AND the canonical-axis multiplicity (via a
+#' sequential conditional step-down test). This is the statistically correct
+#' way to assign p-values to CC1, CC2, ... jointly, and it supersedes computing
+#' a separate per-axis p-value from a full multi-component permutation, which is
+#' anti-conservative for axes `k >= 2` when CC1 is strong.
+#'
+#' @details
+#' ## Why a conditional test
+#'
+#' The observed CC2 is obtained by deflating the observed (real) CC1 direction
+#' and optimizing the residual. A naive permutation p-value compares this to the
+#' CC2 of fully re-optimized permutations, where each permutation deflates its
+#' OWN leading axis. Those two statistics are produced by different operators
+#' and are not exchangeable under the null, which biases the CC2 p-value
+#' downward (too many false positives). The conditional test instead deflates
+#' every permutation by the SAME fixed observed CC1..CC(k-1) directions, so the
+#' observed and null axis-`k` statistics share one operator and are exchangeable.
+#'
+#' ## The statistic and step-down rule
+#'
+#' For axis `k`, the statistic is the fair-sigma maximum over the candidate
+#' bandwidths of the residual normalized correlation after deflating the fixed
+#' observed CC1..CC(k-1) directions. The observed value is read from the stored
+#' `normalizedCorrelation` (so it matches [getNormCorr()] exactly); each
+#' permutation re-optimizes the residual leading axis on permuted PCs. The raw
+#' p-value uses the Phipson & Smyth (2010) estimator, which counts the observed
+#' configuration as one admissible permutation so the p-value is never exactly
+#' zero:
+#'
+#' \deqn{p_{\mathrm{raw}}(k) = \frac{1 + \#\{\mathrm{perm}_k \ge \mathrm{obs}_k\}}{1 + m},}
+#'
+#' with Monte-Carlo floor `1 / (m + 1)` (reported as `mc_floor`). Closed
+#' step-down control of the family-wise error rate across ordered axes uses
+#'
+#' \deqn{p_{\mathrm{stepdown}}(k) = \max_{j \le k} p_{\mathrm{raw}}(j),}
+#'
+#' and testing stops at the first axis with `p_stepdown > alpha`; that axis and
+#' all later ones are declared non-significant. No Bonferroni factor is needed.
+#' This is the closed/fixed-sequence test of Marcus, Peritz & Gabriel (1976) and
+#' the permutation "test of canonical axes" of Legendre, Oksanen & ter Braak
+#' (2011).
+#'
+#' ## Relationship to data residualization
+#'
+#' Deflating `Y` by the fixed observed weight directions is algebraically
+#' identical to the Freedman-Lane / ter Braak residualization that removes the
+#' observed lower canonical *variates* from the data before recomputing the
+#' cross-product, whenever the PCs are whitened (`scalePCs = TRUE`, so
+#' `X^T X = c I`): `(I - u u^T) Y (I - v v^T) = Y - (u^T Y v)\, u v^T`. The
+#' fair-sigma maximum over the bandwidth family is the Westfall-Young (1993)
+#' maxT procedure.
+#'
+#' @param object A CoPro object with `runSkrCCA()` and
+#'   `computeNormalizedCorrelation()` already run.
+#' @param nPermu Number of permutations (default 100).
+#' @param sigma_values Candidate bandwidths for the fair-sigma maximum. `NULL`
+#'   uses all `object@sigmaValues` that have kernels and weights.
+#' @param permu_method Permutation null: "bin" (default), "global", "pc", or
+#'   "toroidal". See [runSkrCCAPermu()].
+#' @param permu_which Which cell types to permute: "second_only" (default),
+#'   "both", or "first_only".
+#' @param num_bins_x,num_bins_y Bin grid for `permu_method = "bin"`. Default
+#'   `NULL` is sigma-aware (see [.sigmaAwareBins()]); the same grid is shared
+#'   across the sigma sweep. Pass integers to override.
+#' @param match_quantile Whether to use quantile matching for bin permutation.
+#' @param alpha Family-wise significance level for the step-down rule (default 0.05).
+#' @param maxIter,tol Optimization controls passed to the axis optimizer.
+#' @param verbose Whether to print progress and a summary (default TRUE).
+#'
+#' @return The CoPro object with results stored in the `@conditionalPermu` slot,
+#'   a list whose `per_axis` element is a data frame of `CC_index`,
+#'   `observed_stat`, `observed_sigma`, `p_raw`, `p_stepdown`, `mc_floor`, and
+#'   `significant`, plus the full null matrices for diagnostics. Use
+#'   [calculate_pvalue_stepdown()] to read the per-axis table.
+#'
+#' @references
+#' Phipson B, Smyth GK (2010). Permutation P-values should never be zero.
+#' \emph{Stat Appl Genet Mol Biol} 9:Article39.
+#' Legendre P, Oksanen J, ter Braak CJF (2011). Testing the significance of
+#' canonical axes in redundancy analysis. \emph{Methods Ecol Evol} 2:269-277.
+#' Westfall PH, Young SS (1993). \emph{Resampling-based Multiple Testing}.
+#'
+#' @seealso [runSkrCCAPermu_FairSigma()] (the CC1 / sigma-multiplicity case),
+#'   [calculate_pvalue_stepdown()]
+#'
+#' @examples
+#' \dontrun{
+#' br <- runSkrCCA(br, scalePCs = TRUE, nCC = 3)
+#' br <- computeNormalizedCorrelation(br)
+#' br <- runSkrCCAPermu_Conditional(br, nPermu = 200, permu_method = "bin")
+#' calculate_pvalue_stepdown(br)
+#' }
+#'
+#' @importFrom stats median
+#' @export
+runSkrCCAPermu_Conditional <- function(object,
+                                       nPermu = 100,
+                                       sigma_values = NULL,
+                                       permu_method = "bin",
+                                       permu_which = "second_only",
+                                       num_bins_x = NULL,
+                                       num_bins_y = NULL,
+                                       match_quantile = FALSE,
+                                       alpha = 0.05,
+                                       maxIter = 200,
+                                       tol = 1e-5,
+                                       verbose = TRUE) {
+
+  ## ---- validation ----
+  if (!is(object, "CoPro")) {
+    stop("Input must be a CoPro object")
+  }
+  if (length(object@skrCCAOut) == 0) {
+    stop("Please run runSkrCCA() first")
+  }
+  if (length(object@normalizedCorrelation) == 0) {
+    stop("Please run computeNormalizedCorrelation() first")
+  }
+  if (!(permu_method %in% c("bin", "global", "pc", "toroidal"))) {
+    stop("permu_method must be 'bin', 'global', 'pc', or 'toroidal'.")
+  }
+  if (!(permu_which %in% c("second_only", "both", "first_only"))) {
+    stop("permu_which must be 'second_only', 'both', or 'first_only'.")
+  }
+
+  cts <- object@cellTypesOfInterest
+  if (length(cts) == 0) {
+    stop("cellTypesOfInterest is empty.")
+  }
+  scalePCs <- object@scalePCs
+  nCC <- object@nCC
+  if (length(nCC) == 0 || nCC < 1) {
+    stop("nCC must be >= 1; run runSkrCCA() with the desired number of axes.")
+  }
+  if (length(cts) == 1 && permu_which == "second_only") {
+    warning("With a single cell type, permu_which = 'second_only' gives the ",
+            "identity permutation (no shuffling). Use 'both' or 'first_only' ",
+            "for a within-type permutation test.")
+  }
+
+  ## ---- candidate sigma values (fair-sigma sweep) ----
+  if (is.null(sigma_values)) {
+    sigma_values <- object@sigmaValues
+  }
+  sigma_values <- sigma_values[sigma_values %in% object@sigmaValues]
+  if (length(sigma_values) == 0) {
+    stop("No valid sigma values available for the conditional permutation test.")
+  }
+  sigma_names <- paste("sigma", sigma_values, sep = "_")
+
+  ## Keep only sigma values that have observed skrCCA weights.
+  obs_W <- object@skrCCAOut[sigma_names]
+  keep <- !vapply(obs_W, is.null, logical(1))
+  if (!any(keep)) {
+    stop("No skrCCA weights found for the requested sigma values.")
+  }
+  sigma_values <- sigma_values[keep]
+  sigma_names <- sigma_names[keep]
+  obs_W <- obs_W[keep]
+
+  ## ---- resolve sigma-aware bins (shared across the sigma sweep and axes) ----
+  if (permu_method == "bin" && (is.null(num_bins_x) || is.null(num_bins_y))) {
+    bins <- .sigmaAwareBins(object, sigma = object@sigmaValueChoice,
+                            verbose = verbose)
+    num_bins_x <- bins$num_bins_x
+    num_bins_y <- bins$num_bins_y
+  }
+
+  PCmats <- .getAllPCMats(allPCs = object@pcaGlobal, scalePCs = scalePCs)
+
+  if (verbose) {
+    cat("Running CONDITIONAL (step-down) permutation test\n")
+    cat("================================================\n")
+    cat(sprintf("Axes (nCC): %d | sigma values: %d | permutations: %d\n",
+                nCC, length(sigma_values), nPermu))
+    cat(sprintf("permu_method: %s | permu_which: %s | alpha: %g\n\n",
+                permu_method, permu_which, alpha))
+  }
+
+  ## ---- observed fair-sigma statistic per axis ----
+  ## Read from the stored normalized correlation so it matches getNormCorr()
+  ## exactly; the observed CC_k was produced by deflating the observed
+  ## CC1..CC(k-1), which is precisely the conditional statistic.
+  ncorr_obs <- object@normalizedCorrelation
+  obs_stat <- rep(-Inf, nCC)
+  obs_sigma <- rep(sigma_values[1], nCC)
+  for (si in seq_along(sigma_values)) {
+    df <- ncorr_obs[[sigma_names[si]]]
+    if (is.null(df)) next
+    for (k in seq_len(nCC)) {
+      vk <- df$normalizedCorrelation[df$CC_index == k]
+      if (length(vk) == 0) next
+      vk <- max(vk, na.rm = TRUE)        # over pairs (single pair in manuscript)
+      if (is.finite(vk) && vk > obs_stat[k]) {
+        obs_stat[k] <- vk
+        obs_sigma[k] <- sigma_values[si]
+      }
+    }
+  }
+
+  ## ---- generate permutations once (shared across axes & sigma) ----
+  cell_permu <- .getCellPermu(object = object, permu_method = permu_method,
+                              nPermu = nPermu, cts = cts,
+                              permu_which = permu_which,
+                              num_bins_x = num_bins_x, num_bins_y = num_bins_y,
+                              match_quantile = match_quantile)
+
+  permute_pc_matrix <- function(pc_mat, seed) {
+    set.seed(seed)
+    permuted <- apply(pc_mat, 2, function(x) sample(x, length(x)))
+    rownames(permuted) <- rownames(pc_mat)
+    permuted
+  }
+
+  perm_stat <- matrix(NA_real_, nrow = nPermu, ncol = nCC)
+  perm_sigma <- matrix(sigma_values[1], nrow = nPermu, ncol = nCC)
+  n_failed <- 0L
+
+  if (verbose) cat("Running permutations...\n")
+
+  for (tt in seq_len(nPermu)) {
+    ## build permuted PC matrices
+    PCmats_local <- PCmats
+    for (ct in names(PCmats_local)) {
+      cp <- cell_permu[[ct]]
+      if (is.list(cp) && !is.null(cp$type) && cp$type == "pc_permute") {
+        PCmats_local[[ct]] <- permute_pc_matrix(PCmats[[ct]], cp$seeds[tt])
+      } else {
+        PCmats_local[[ct]] <- PCmats[[ct]][cp[, tt], ]
+      }
+    }
+
+    res <- tryCatch({
+      stat_k <- rep(-Inf, nCC)
+      sig_k <- rep(sigma_values[1], nCC)
+      for (si in seq_along(sigma_values)) {
+        s <- sigma_values[si]
+        sname <- sigma_names[si]
+        ## compute Y once per (permutation, sigma); reuse across axes >= 2
+        Y0 <- if (nCC >= 2) {
+          compute_Y_resi(PCmats_local, object@kernelMatrices, s, cts,
+                         slide = NULL)
+        } else {
+          NULL
+        }
+        for (k in seq_len(nCC)) {
+          fit <- .fitConditionalAxis(
+            PCmats = PCmats_local, flat_kernels = object@kernelMatrices,
+            sigma = s, cts = cts, W_lower = obs_W[[sname]], k_minus_1 = k - 1,
+            Y_resi = Y0, maxIter = maxIter, tol = tol
+          )
+          if (is.finite(fit$ncorr) && fit$ncorr > stat_k[k]) {
+            stat_k[k] <- fit$ncorr
+            sig_k[k] <- s
+          }
+        }
+      }
+      list(stat = stat_k, sigma = sig_k)
+    }, error = function(e) NULL)
+
+    if (is.null(res)) {
+      n_failed <- n_failed + 1L
+    } else {
+      perm_stat[tt, ] <- res$stat
+      perm_sigma[tt, ] <- res$sigma
+    }
+
+    if (verbose && (tt %% 10 == 0 || tt == nPermu)) {
+      cat(sprintf("  Completed %d of %d permutations\n", tt, nPermu))
+    }
+  }
+
+  if (n_failed > 0) {
+    warning(sprintf(paste0("%d of %d permutations failed to optimize and were ",
+                          "dropped from the null. P-values use the remaining ",
+                          "permutations."), n_failed, nPermu))
+  }
+
+  ## ---- step-down p-values ----
+  ## Phipson & Smyth (2010): the observed configuration is itself one admissible
+  ## permutation (the identity), so a valid Monte-Carlo p-value adds 1 to both
+  ## the numerator and the denominator. This guarantees p > 0 (a p-value of
+  ## exactly 0 is invalid) and the smallest resolvable value is the Monte-Carlo
+  ## floor 1 / (n_eff + 1).
+  p_raw <- numeric(nCC)
+  mc_floor <- numeric(nCC)
+  for (k in seq_len(nCC)) {
+    col_k <- perm_stat[!is.na(perm_stat[, k]), k]
+    n_eff <- length(col_k)
+    if (n_eff == 0) {
+      p_raw[k] <- NA_real_
+      mc_floor[k] <- NA_real_
+    } else {
+      p_raw[k] <- (1 + sum(col_k >= obs_stat[k])) / (1 + n_eff)
+      mc_floor[k] <- 1 / (1 + n_eff)
+    }
+  }
+  p_stepdown <- cummax(ifelse(is.na(p_raw), 1, p_raw))  # closed step-down
+
+  ## stop at first non-significant axis
+  first_ns <- which(p_stepdown > alpha)
+  n_sig <- if (length(first_ns) == 0) nCC else (first_ns[1] - 1L)
+  significant <- seq_len(nCC) <= n_sig
+
+  per_axis <- data.frame(
+    CC_index = seq_len(nCC),
+    observed_stat = obs_stat,
+    observed_sigma = obs_sigma,
+    p_raw = p_raw,
+    p_stepdown = p_stepdown,
+    mc_floor = mc_floor,
+    significant = significant,
+    stringsAsFactors = FALSE
+  )
+
+  num_bins_out <- c(
+    x = if (is.null(num_bins_x)) NA_integer_ else as.integer(num_bins_x),
+    y = if (is.null(num_bins_y)) NA_integer_ else as.integer(num_bins_y)
+  )
+
+  object@conditionalPermu <- list(
+    per_axis = per_axis,
+    n_significant_axes = n_sig,
+    alpha = alpha,
+    mc_floor = mc_floor,
+    obs_stats = obs_stat,
+    obs_sigma = obs_sigma,
+    perm_stats = perm_stat,
+    perm_sigma = perm_sigma,
+    sigma_values = sigma_values,
+    nPermu = as.integer(nPermu),
+    n_failed = n_failed,
+    permu_method = permu_method,
+    permu_which = permu_which,
+    num_bins = num_bins_out
+  )
+  object@nPermu <- as.integer(nPermu)
+
+  if (verbose) {
+    cat("\n=== Conditional step-down test complete ===\n")
+    for (k in seq_len(nCC)) {
+      cat(sprintf(paste0("  CC%d: obs = %.4f (sigma = %g)  p_raw = %.4f  ",
+                        "p_stepdown = %.4f  %s\n"),
+                  k, obs_stat[k], obs_sigma[k], p_raw[k], p_stepdown[k],
+                  if (significant[k]) "significant" else "not significant"))
+    }
+    cat(sprintf("  -> %d significant canonical axis/axes at alpha = %g\n",
+                n_sig, alpha))
+    cat(sprintf("  (Phipson-Smyth p-values; Monte-Carlo floor = %.4g with %d permutations)\n",
+                1 / (nPermu + 1), nPermu))
+  }
+
+  return(object)
+}
+
+
+#' Read the step-down per-axis p-value table
+#'
+#' Thin reader for the conditional step-down permutation test produced by
+#' [runSkrCCAPermu_Conditional()].
+#'
+#' @param object A CoPro object with `@conditionalPermu` populated.
+#'
+#' @return A data frame with one row per canonical axis: `CC_index`,
+#'   `observed_stat`, `observed_sigma`, `p_raw`, `p_stepdown`, and
+#'   `significant`. The number of significant axes, `alpha`, and `nPermu` are
+#'   attached as attributes.
+#'
+#' @seealso [runSkrCCAPermu_Conditional()]
+#'
+#' @examples
+#' \dontrun{
+#' br <- runSkrCCAPermu_Conditional(br, nPermu = 200)
+#' calculate_pvalue_stepdown(br)
+#' }
+#'
+#' @export
+calculate_pvalue_stepdown <- function(object) {
+  if (!is(object, "CoPro")) {
+    stop("Input must be a CoPro object")
+  }
+  if (length(object@conditionalPermu) == 0) {
+    stop("Run runSkrCCAPermu_Conditional() first.")
+  }
+  cp <- object@conditionalPermu
+  out <- cp$per_axis
+  attr(out, "n_significant_axes") <- cp$n_significant_axes
+  attr(out, "alpha") <- cp$alpha
+  attr(out, "nPermu") <- cp$nPermu
+  out
 }
