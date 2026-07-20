@@ -81,3 +81,36 @@ test_that("sparse multislide self-kernels match dense self-kernels", {
     }
   }
 })
+
+test_that("sparse self-kernels persist the distance scaling factor", {
+  # The fused sparse self-kernel path builds directly from coordinates, so no
+  # dense @distances survive to reconstruct the normalizer from. It must record
+  # @distanceScaleFactor itself, or .recoverDistanceScaleFactor() (used by the
+  # resampling utilities) silently degrades to NA.
+  obj <- create_test_copro_single(n_cells = 260, n_genes = 20,
+                                  n_cell_types = 2, seed = 614)
+  obj <- subsetData(obj, cellTypesOfInterest = c("CellTypeA", "CellTypeB"))
+
+  sparse <- computeSelfKernel(obj, sigmaValues = 0.1, method = "sparse",
+                              distType = "Euclidean2D", normalizeDistance = TRUE,
+                              verbose = FALSE)
+  expect_length(sparse@distanceScaleFactor, 1L)
+  expect_true(is.finite(sparse@distanceScaleFactor) &&
+                sparse@distanceScaleFactor > 0)
+
+  # The downstream consumer must recover the stored factor, not fall through
+  # to NA now that @distances is absent (the fused sparse path keeps none).
+  recovered <- CoPro:::.recoverDistanceScaleFactor(sparse)
+  expect_false(is.na(recovered))
+  expect_equal(recovered, sparse@distanceScaleFactor)
+
+  # Multi-slide path persists it too.
+  objm <- create_test_copro_multi(n_cells_per_slide = 180, n_slides = 2,
+                                  n_genes = 15, n_cell_types = 2, seed = 615)
+  objm <- subsetData(objm, cellTypesOfInterest = c("CellTypeA", "CellTypeB"))
+  sparsem <- computeSelfKernel(objm, sigmaValues = 0.1, method = "sparse",
+                               distType = "Euclidean2D", verbose = FALSE)
+  expect_length(sparsem@distanceScaleFactor, 1L)
+  expect_true(is.finite(sparsem@distanceScaleFactor) &&
+                sparsem@distanceScaleFactor > 0)
+})

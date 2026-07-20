@@ -771,6 +771,7 @@
          "percentile was found.")
   }
   if (normalizeDistance) {
+    object@distanceScaleFactor <- scaling_factor
     if (verbose) message(sprintf("Self-distance scaling factor: %g", scaling_factor))
   }
 
