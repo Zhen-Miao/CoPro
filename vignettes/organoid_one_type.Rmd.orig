@@ -85,7 +85,7 @@ obj <- subsetData(obj, cellTypesOfInterest = "Epithelial")
 
 ```{r run-pipeline, message=FALSE, results='hide'}
 # PCA
-obj <- computePCA(obj, nPCA = 30, center = TRUE, scale. = TRUE)
+obj <- computePCA(obj, nPCA = 15, center = TRUE, scale. = TRUE)
 
 # Spatial distance (no normalization for this dataset)
 obj <- computeDistance(obj, distType = "Euclidean2D",
