@@ -186,6 +186,57 @@ test_that("multi-cell-type higher axes use orthogonal projection", {
   }
 })
 
+test_that("scalePCs is a pure reparametrization for >2 cell types", {
+  # scalePCs = TRUE feeds whitened X~ = X diag(sdev)^-1 with sdev2_list = NULL;
+  # scalePCs = FALSE feeds raw X with sdev2_list = D = sdev^2. These are the
+  # same data in two coordinate systems (w~ = diag(sdev) w), so every canonical
+  # axis must be identical up to the map w = diag(sdev)^-1 w~. This holds only
+  # because apply_deflation() uses the weighted (oblique) projection for the
+  # >2-type weighted case; a rank-one fallback there breaks it on CC2+.
+  set.seed(20260724)
+  n <- 40
+  p <- 6
+  cell_types <- c("TypeA", "TypeB", "TypeC")
+  X_raw <- setNames(lapply(cell_types, function(x) matrix(rnorm(n * p), n, p)),
+                    cell_types)
+  kernels <- list(
+    "kernel|sigma0.1|TypeA|TypeB" = matrix(rnorm(n * n), n, n),
+    "kernel|sigma0.1|TypeA|TypeC" = matrix(rnorm(n * n), n, n),
+    "kernel|sigma0.1|TypeB|TypeC" = matrix(rnorm(n * n), n, n)
+  )
+  D <- setNames(lapply(cell_types, function(x) runif(p, 0.5, 3)), cell_types)
+  X_white <- setNames(
+    lapply(cell_types, function(ct) sweep(X_raw[[ct]], 2, sqrt(D[[ct]]), "/")),
+    cell_types
+  )
+
+  run <- function(Xin, sdev2) {
+    w1 <- optimize_bilinear(Xin, kernels, sigma = 0.1,
+                            max_iter = 20000, tol = 1e-11, sdev2_list = sdev2)
+    optimize_bilinear_n(Xin, kernels, sigma = 0.1, w_list = w1,
+                        cellTypesOfInterest = cell_types, nCC = 3,
+                        max_iter = 20000, tol = 1e-11, sdev2_list = sdev2)
+  }
+  w_white <- run(X_white, NULL)
+  w_raw <- run(X_raw, D)
+
+  # Compare per axis, sign-aligned globally across all cell types (the only sign
+  # symmetry of the multi-set objective is flipping every block together).
+  for (cc in seq_len(3)) {
+    mapped <- unlist(lapply(cell_types, function(ct)
+      sweep(w_white[[ct]], 1, sqrt(D[[ct]]), "/")[, cc]))
+    raw <- unlist(lapply(cell_types, function(ct) w_raw[[ct]][, cc]))
+    s <- sign(sum(mapped * raw))
+    expect_equal(mapped, s * raw, tolerance = 1e-6)
+  }
+
+  # Raw-coordinate axes satisfy the weighted CCA constraint w' D w = I.
+  for (ct in cell_types) {
+    expect_equal(crossprod(w_raw[[ct]], D[[ct]] * w_raw[[ct]]),
+                 diag(3), tolerance = 1e-8)
+  }
+})
+
 test_that("multi-slide two-type SVD uses the sum of slide operators", {
   set.seed(20260723)
   p <- 6
