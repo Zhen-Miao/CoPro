@@ -28,6 +28,7 @@ reference:
       - "`computePCA,CoProSingle-method`"
       - computeDistance
       - computeKernelMatrix
+      - computeSparseKernel
       - runSkrCCA
       - runGeneSpaceCCA
       - computeNormalizedCorrelation
@@ -81,11 +82,13 @@ reference:
     contents:
       - runSkrCCAPermu
       - runSkrCCAPermu_FairSigma
+      - runSkrCCAPermu_Conditional
       - computeNormalizedCorrelationPermu
       - resample_spatial
       - generate_toroidal_permutations
       - compute_ground_truth_ncorr
       - calculate_pvalue
+      - calculate_pvalue_stepdown
 
   - title: "Visualization"
     desc: "Plotting functions"
