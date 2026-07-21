@@ -90,7 +90,8 @@ rows are cell IDs and columns are <code>CC_1</code>, <code>CC_2</code>, ..., as 
 
 
 <dt id="arg-tol">tol<a class="anchor" aria-label="anchor" href="#arg-tol"></a></dt>
-<dd><p>Numeric tolerance passed to the truncated SVD for spectral norm
+<dd><p>Numeric tolerance (formerly for the truncated SVD; retained for
+backward compatibility, unused by the closed-form whitened-Frobenius norm)
 estimation (default 1e-4).</p></dd>
 
 
@@ -124,10 +125,11 @@ For multi-slide objects in <code>perSlide</code> mode, the data.frame additional
 (e.g., obtained from <code>getTransferCellScores(agg_cell_type = FALSE)</code>).</p>
 <p>The normalized correlation is computed as:
 numerator = t(A_w1) %<em>% K %</em>% B_w2
-denominator = sqrt(sum(A_w1^2)) * sqrt(sum(B_w2^2)) * ||K||_2
+denominator = sqrt(sum(A_w1^2)) * sqrt(sum(B_w2^2)) * ||K_tilde_c||_F
 where A_w1 and B_w2 are the cell score vectors (for the same CC index)
 for cell types A and B respectively, K is the kernel matrix between the two
-cell types at the chosen sigma, and ||K||_2 is the spectral norm of K.</p>
+cell types at the chosen sigma, and ||K_tilde_c||_F is the whitened-Frobenius
+norm ||R_x^(1/2) K_c R_y^(1/2)||_F (R_x, R_y = matched-sigma within-type kernels).</p>
     </div>
 
     <div class="section level2">
@@ -147,7 +149,7 @@ cell types at the chosen sigma, and ||K||_2 is the spectral norm of K.</p>
 </div>
 
 <div class="pkgdown-footer-right">
-  <p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.2.0.</p>
+  <p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.2.1.</p>
 </div>
 
     </footer></div>

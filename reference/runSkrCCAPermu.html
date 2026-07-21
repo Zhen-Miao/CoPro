@@ -65,8 +65,8 @@ by permuting cell assignments while optionally preserving spatial structure.</p>
 <span>  maxIter <span class="op">=</span> <span class="fl">200</span>,</span>
 <span>  permu_method <span class="op">=</span> <span class="st">"bin"</span>,</span>
 <span>  permu_which <span class="op">=</span> <span class="st">"second_only"</span>,</span>
-<span>  num_bins_x <span class="op">=</span> <span class="fl">10</span>,</span>
-<span>  num_bins_y <span class="op">=</span> <span class="fl">10</span>,</span>
+<span>  num_bins_x <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  num_bins_y <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  match_quantile <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  conservative <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  n_cores <span class="op">=</span> <span class="fl">1</span>,</span>
@@ -100,8 +100,9 @@ Increase to 100+ for publication-quality p-values.</p></dd>
 <li><p>"global": Simple random permutation breaking all spatial structure</p></li>
 <li><p>"pc": PC-space permutation (like DIALOGUE) - shuffles values within each
 PC dimension, breaking cell correlation while preserving PC distributions</p></li>
-<li><p>"toroidal": Toroidal shift permutation - perfectly preserves spatial
-autocorrelation by shifting coordinates in wrap-around manner</p></li>
+<li><p>"toroidal": Toroidal shift permutation - approximately preserves
+spatial autocorrelation by shifting coordinates in a wrap-around manner
+(assumes stationarity/periodicity; see <code><a href="generate_toroidal_permutations.html">generate_toroidal_permutations()</a></code>)</p></li>
 </ul></dd>
 
 
@@ -113,13 +114,17 @@ autocorrelation by shifting coordinates in wrap-around manner</p></li>
 
 
 <dt id="arg-num-bins-x">num_bins_x<a class="anchor" aria-label="anchor" href="#arg-num-bins-x"></a></dt>
-<dd><p>Number of bins in x direction for bin-wise permutation (default: 10).
-Use <code><a href="diagnose_bin_distribution.html">diagnose_bin_distribution()</a></code> to choose appropriate values.
+<dd><p>Number of bins in x direction for bin-wise permutation.
+Default <code>NULL</code> sizes the grid automatically from the kernel bandwidth so
+each patch is ~2*sigma wide on the normalized distance scale (see
+<code><a href="dot-sigmaAwareBins.html">.sigmaAwareBins()</a></code>). Pass an explicit integer to override.
+Use <code><a href="diagnose_bin_distribution.html">diagnose_bin_distribution()</a></code> to inspect a chosen grid.
 <strong>More bins = better preserve local structure = lower FPR.</strong></p></dd>
 
 
 <dt id="arg-num-bins-y">num_bins_y<a class="anchor" aria-label="anchor" href="#arg-num-bins-y"></a></dt>
-<dd><p>Number of bins in y direction for bin-wise permutation (default: 10).
+<dd><p>Number of bins in y direction for bin-wise permutation.
+Default <code>NULL</code> (sigma-aware, as for <code>num_bins_x</code>). Pass an integer to override.
 <strong>More bins = better preserve local structure = lower FPR.</strong></p></dd>
 
 
@@ -160,20 +165,31 @@ to find available cores. Parallelization uses the <code>parallel</code> package.
 
 <p>The function supports three permutation methods:</p>
 <p><strong>"global"</strong>: Simple random shuffling of cells. This breaks ALL spatial
-structure and tests against a null of complete spatial randomness.</p>
+structure and tests against a null of complete spatial randomness. It is a
+<em>deliberately-broken reference</em>: by destroying within-type autocorrelation it
+inflates the effective sample size (Clifford-Richardson-Hemon 1989) and is
+therefore anti-conservative by construction. Keep it for calibration, not as
+a default.</p>
 <p><strong>"bin"</strong> (default): Bin-wise shuffling that preserves local spatial
 structure. This tests against a null where cells have spatial autocorrelation
-within their type, but no coordination across types.</p>
+within their type, but no coordination across types. By default the patch
+grid is sized from the bandwidth (see <code><a href="dot-sigmaAwareBins.html">.sigmaAwareBins()</a></code>). This is a
+restricted / approximate permutation that is valid under stationarity; under
+autocorrelation the within-type cells are not exchangeable, which is exactly
+the point (Anderson &amp; ter Braak 2003).</p>
 <p><strong>"pc"</strong>: PC-space permutation (like DIALOGUE). Shuffles values within each
 PC dimension across cells, breaking cell-to-cell correlation while preserving
-the marginal distribution of each PC. This is the same approach used by
-DIALOGUE's internal significance testing. Use this to compare with DIALOGUE's
-conservative behavior.</p>
+the marginal distribution of each PC. Like "global" this is a
+<em>deliberately-broken reference</em> that destroys within-type autocorrelation;
+use it to reproduce DIALOGUE-style complete-spatial-randomness behaviour and
+to demonstrate FPR inflation, not as a default.</p>
 <p><strong>"toroidal"</strong>: Toroidal (wrap-around) shift permutation. Shifts all cells'
-coordinates by a random amount, wrapping at boundaries. This PERFECTLY
-preserves spatial autocorrelation within each cell type because relative
-positions are unchanged. Best choice for reducing FPR when spatial
-autocorrelation is strong.</p>
+coordinates by a random amount, wrapping at boundaries, then re-ranks to a
+permutation. This <em>approximately</em> preserves within-type spatial
+autocorrelation (exactly only on a regular lattice; see
+<code><a href="generate_toroidal_permutations.html">generate_toroidal_permutations()</a></code>) and assumes spatial stationarity and
+periodic wrap-around, which is biologically false at tissue edges. Benchmark
+it against the sigma-aware "bin" null rather than preferring it a priori.</p>
 </div>
 
 <div class="section">
@@ -263,7 +279,7 @@ correlation from permutation results
 </div>
 
 <div class="pkgdown-footer-right">
-  <p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.2.0.</p>
+  <p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.2.1.</p>
 </div>
 
     </footer></div>

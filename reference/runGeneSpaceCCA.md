@@ -188,4 +188,5 @@ Other spatial-pipeline:
 [`computeDistance()`](https://zhen-miao.github.io/CoPro/reference/computeDistance.md),
 [`computeKernelMatrix()`](https://zhen-miao.github.io/CoPro/reference/computeKernelMatrix.md),
 [`computePCA()`](https://zhen-miao.github.io/CoPro/reference/computePCAMulti.md),
+[`computeSparseKernel()`](https://zhen-miao.github.io/CoPro/reference/computeSparseKernel.md),
 [`runSkrCCA()`](https://zhen-miao.github.io/CoPro/reference/runSkrCCA.md)

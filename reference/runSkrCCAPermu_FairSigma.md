@@ -14,8 +14,8 @@ runSkrCCAPermu_FairSigma(
   sigma_values = NULL,
   permu_method = "bin",
   permu_which = "second_only",
-  num_bins_x = 10,
-  num_bins_y = 10,
+  num_bins_x = NULL,
+  num_bins_y = NULL,
   match_quantile = FALSE,
   maxIter = 200,
   tol = 1e-05,
@@ -52,11 +52,16 @@ runSkrCCAPermu_FairSigma(
 
 - num_bins_x:
 
-  Number of bins in x for bin-wise permutation
+  Number of bins in x for bin-wise permutation. Default `NULL` sizes the
+  grid from the observed best bandwidth (`sigmaValueChoice`) via
+  [`.sigmaAwareBins()`](https://zhen-miao.github.io/CoPro/reference/dot-sigmaAwareBins.md);
+  the same grid (and hence the same permutation) is shared across the
+  sigma sweep. Pass an integer to override.
 
 - num_bins_y:
 
-  Number of bins in y for bin-wise permutation
+  Number of bins in y for bin-wise permutation. Default `NULL`
+  (sigma-aware, as for `num_bins_x`).
 
 - match_quantile:
 
@@ -107,6 +112,12 @@ data thus have equal opportunity to optimize sigma selection.
 
 This is more computationally expensive (nPermu \* nSigma CCA runs
 instead of nPermu runs), but provides statistically correct p-values.
+
+## See also
+
+[`runSkrCCAPermu_Conditional()`](https://zhen-miao.github.io/CoPro/reference/runSkrCCAPermu_Conditional.md)
+for a sequential step-down test across canonical axes (the correct
+treatment when `nCC > 1`).
 
 ## Examples
 

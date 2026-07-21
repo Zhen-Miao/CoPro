@@ -6,7 +6,16 @@ set of PC matrices and weights.
 ## Usage
 
 ``` r
-.compute_ncorr_quick(PCmats, w_list, flat_kernels, sigma, cts, tol = 1e-04)
+.compute_ncorr_quick(
+  PCmats,
+  w_list,
+  flat_kernels,
+  sigma,
+  cts,
+  tol = 1e-04,
+  kernel_info = NULL,
+  Y_resi = NULL
+)
 ```
 
 ## Arguments
@@ -34,6 +43,17 @@ set of PC matrices and weights.
 - tol:
 
   Tolerance for SVD computation
+
+- kernel_info:
+
+  Optional precomputed list containing `K` and `norm_K12` for this
+  sigma.
+
+- Y_resi:
+
+  Optional precomputed PC-space operator from `compute_Y_resi()`. When
+  supplied, it is used for the numerator so the kernel-vector product is
+  not repeated.
 
 ## Value
 

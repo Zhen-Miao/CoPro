@@ -147,6 +147,7 @@ convergence, which can help with many cells or many CCs.</p></dd>
 <code><a href="computeDistance.html">computeDistance()</a></code>,
 <code><a href="computeKernelMatrix.html">computeKernelMatrix()</a></code>,
 <code><a href="computePCAMulti.html">computePCA()</a></code>,
+<code><a href="computeSparseKernel.html">computeSparseKernel()</a></code>,
 <code><a href="runGeneSpaceCCA.html">runGeneSpaceCCA()</a></code></p></div>
     </div>
 
@@ -168,11 +169,11 @@ convergence, which can help with many cells or many CCs.</p></dd>
 <span class="r-in"><span><span class="va">obj</span> <span class="op">&lt;-</span> <span class="fu"><a href="computeKernelMatrix.html">computeKernelMatrix</a></span><span class="op">(</span><span class="va">obj</span>, sigmaValues <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.05</span>, <span class="fl">0.1</span><span class="op">)</span>, verbose <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="va">obj</span> <span class="op">&lt;-</span> <span class="fu">runSkrCCA</span><span class="op">(</span><span class="va">obj</span>, scalePCs <span class="op">=</span> <span class="cn">TRUE</span>, nCC <span class="op">=</span> <span class="fl">2</span><span class="op">)</span></span></span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span> Running skrCCA [1/2] for sigma = 0.05 ...</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [1] "Convergence reached at 5 iterations (Max diff = 1.136e-06 )"</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [1] "Convergence reached at 0 iterations (Max diff = 9.936e-15 )"</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1] "Convergence reached at 4 iterations (Max diff = 7.744e-06 )"</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1] "Convergence reached at 0 iterations (Max diff = 1.080e-14 )"</span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span> Running skrCCA [2/2] for sigma = 0.1 ...</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [1] "Convergence reached at 4 iterations (Max diff = 3.926e-06 )"</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [1] "Convergence reached at 0 iterations (Max diff = 1.527e-15 )"</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1] "Convergence reached at 4 iterations (Max diff = 4.003e-07 )"</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1] "Convergence reached at 0 iterations (Max diff = 1.943e-15 )"</span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span> skrCCA finished 2 sigma value(s) in 0.0 s.</span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span> Optimization succeeded for 2 sigma value(s): sigma_0.05, sigma_0.1</span>
 <span class="r-in"><span><span class="co"># }</span></span></span>
@@ -187,7 +188,7 @@ convergence, which can help with many cells or many CCs.</p></dd>
 </div>
 
 <div class="pkgdown-footer-right">
-  <p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.2.0.</p>
+  <p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.2.1.</p>
 </div>
 
     </footer></div>

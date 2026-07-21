@@ -55,7 +55,16 @@ set of PC matrices and weights.</p>
 
     <div class="section level2">
     <h2 id="ref-usage">Usage<a class="anchor" aria-label="anchor" href="#ref-usage"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">.compute_ncorr_quick</span><span class="op">(</span><span class="va">PCmats</span>, <span class="va">w_list</span>, <span class="va">flat_kernels</span>, <span class="va">sigma</span>, <span class="va">cts</span>, tol <span class="op">=</span> <span class="fl">1e-04</span><span class="op">)</span></span></code></pre></div>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">.compute_ncorr_quick</span><span class="op">(</span></span>
+<span>  <span class="va">PCmats</span>,</span>
+<span>  <span class="va">w_list</span>,</span>
+<span>  <span class="va">flat_kernels</span>,</span>
+<span>  <span class="va">sigma</span>,</span>
+<span>  <span class="va">cts</span>,</span>
+<span>  tol <span class="op">=</span> <span class="fl">1e-04</span>,</span>
+<span>  kernel_info <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  Y_resi <span class="op">=</span> <span class="cn">NULL</span></span>
+<span><span class="op">)</span></span></code></pre></div>
     </div>
 
     <div class="section level2">
@@ -85,6 +94,17 @@ set of PC matrices and weights.</p>
 <dt id="arg-tol">tol<a class="anchor" aria-label="anchor" href="#arg-tol"></a></dt>
 <dd><p>Tolerance for SVD computation</p></dd>
 
+
+<dt id="arg-kernel-info">kernel_info<a class="anchor" aria-label="anchor" href="#arg-kernel-info"></a></dt>
+<dd><p>Optional precomputed list containing <code>K</code> and <code>norm_K12</code>
+for this sigma.</p></dd>
+
+
+<dt id="arg-y-resi">Y_resi<a class="anchor" aria-label="anchor" href="#arg-y-resi"></a></dt>
+<dd><p>Optional precomputed PC-space operator from
+<code>compute_Y_resi()</code>. When supplied, it is used for the numerator so the
+kernel-vector product is not repeated.</p></dd>
+
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
@@ -100,7 +120,7 @@ set of PC matrices and weights.</p>
 </div>
 
 <div class="pkgdown-footer-right">
-  <p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.2.0.</p>
+  <p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.2.1.</p>
 </div>
 
     </footer></div>

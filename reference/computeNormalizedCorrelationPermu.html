@@ -79,9 +79,10 @@ stored in <code>@normalizedCorrelationPermu</code></p>
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
     <p>The normalized correlation for each permutation is calculated using the
 same formula as the observed data:</p>
-<p>$$NC = \frac{s_1^T K_{12} s_2}{||s_1|| \cdot ||s_2|| \cdot ||K_{12}||_2}$$</p>
+<p>$$NC = \frac{s_1^T K_{12} s_2}{||s_1|| \cdot ||s_2|| \cdot ||\tilde K_c||_F}$$</p>
 <p>where \(s_1\) and \(s_2\) are cell scores, \(K_{12}\) is the kernel
-matrix, and \(||K_{12}||_2\) is the spectral norm.</p>
+matrix, and \(||\tilde K_c||_F\) is the whitened-Frobenius norm
+\(||R_x^{1/2} K_c R_y^{1/2}||_F\).</p>
     </div>
 
     <div class="section level2">
@@ -110,7 +111,7 @@ matrix, and \(||K_{12}||_2\) is the spectral norm.</p>
 </div>
 
 <div class="pkgdown-footer-right">
-  <p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.2.0.</p>
+  <p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.2.1.</p>
 </div>
 
     </footer></div>

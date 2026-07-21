@@ -19,6 +19,16 @@ computeKernelMatrix(
   minAveCellNeighor = 2,
   rowNormalizeKernel = FALSE,
   colNormalizeKernel = FALSE,
+  method = c("auto", "dense", "sparse"),
+  dropDistances = TRUE,
+  autoThreshold = 5000L,
+  distType = NULL,
+  xDistScale = 1,
+  yDistScale = 1,
+  zDistScale = 1,
+  normalizeDistance = TRUE,
+  normalizeTarget = 0.01,
+  truncateLowDist = TRUE,
   verbose = TRUE
 )
 
@@ -32,6 +42,16 @@ computeKernelMatrix(
   minAveCellNeighor = 2,
   rowNormalizeKernel = FALSE,
   colNormalizeKernel = FALSE,
+  method = c("auto", "dense", "sparse"),
+  dropDistances = TRUE,
+  autoThreshold = 5000L,
+  distType = NULL,
+  xDistScale = 1,
+  yDistScale = 1,
+  zDistScale = 1,
+  normalizeDistance = TRUE,
+  normalizeTarget = 0.01,
+  truncateLowDist = TRUE,
   verbose = TRUE
 )
 
@@ -45,6 +65,16 @@ computeKernelMatrix(
   minAveCellNeighor = 2,
   rowNormalizeKernel = FALSE,
   colNormalizeKernel = FALSE,
+  method = c("auto", "dense", "sparse"),
+  dropDistances = TRUE,
+  autoThreshold = 5000L,
+  distType = NULL,
+  xDistScale = 1,
+  yDistScale = 1,
+  zDistScale = 1,
+  normalizeDistance = TRUE,
+  normalizeTarget = 0.01,
+  truncateLowDist = TRUE,
   verbose = TRUE
 )
 ```
@@ -94,6 +124,49 @@ computeKernelMatrix(
   row or column wise normalization will result in an asymmetric result
   in skrCCA inference.
 
+- method:
+
+  One of `"auto"`, `"dense"`, or `"sparse"`. `"dense"` is the classic
+  path that reads the distance matrices produced by
+  [`computeDistance()`](https://zhen-miao.github.io/CoPro/reference/computeDistance.md).
+  `"sparse"` is a fused, memory-efficient path
+  ([`computeSparseKernel()`](https://zhen-miao.github.io/CoPro/reference/computeSparseKernel.md))
+  that builds sparse `dgCMatrix` kernels directly from coordinates via a
+  fixed-radius neighbor search, never forming a dense `n x n` matrix,
+  and does not require
+  [`computeDistance()`](https://zhen-miao.github.io/CoPro/reference/computeDistance.md)
+  to have been run. Results are numerically equivalent. `"auto"`
+  (default) picks `"sparse"` when any per-slide cell-type block reaches
+  `autoThreshold` cells or when the aggregate dense block workload
+  reaches `autoThreshold^2` entries; otherwise it picks `"dense"`.
+
+- dropDistances:
+
+  Logical. If `TRUE` (default), the (potentially large) `@distances`
+  slot is cleared after kernels are computed, since the downstream
+  pipeline only needs the kernels. Set `FALSE` to keep distances for
+  inspection via
+  [`getDistMat()`](https://zhen-miao.github.io/CoPro/reference/getDistMat.md)
+  or to recompute kernels with new sigma values without rebuilding
+  distances.
+
+- autoThreshold:
+
+  Integer cell count at which `method = "auto"` selects the sparse path
+  for any kernel-block dimension. The sparse path is also selected when
+  aggregate dense block entries reach `autoThreshold^2`. Default 5000
+  (about 200 MB of doubles before temporary matrices and copies).
+
+- distType, xDistScale, yDistScale, zDistScale, normalizeDistance,
+  normalizeTarget, truncateLowDist:
+
+  Distance options used only by the sparse path (see
+  [`computeDistance()`](https://zhen-miao.github.io/CoPro/reference/computeDistance.md)
+  and
+  [`computeSparseKernel()`](https://zhen-miao.github.io/CoPro/reference/computeSparseKernel.md)).
+  `distType` defaults to `"Euclidean3D"` when the coordinates contain a
+  `z` column, otherwise `"Euclidean2D"`.
+
 - verbose:
 
   Whether to output the progress and related information
@@ -118,6 +191,7 @@ To-do: Shall we include row or column normalization of the kernel?
 Other spatial-pipeline:
 [`computeDistance()`](https://zhen-miao.github.io/CoPro/reference/computeDistance.md),
 [`computePCA()`](https://zhen-miao.github.io/CoPro/reference/computePCAMulti.md),
+[`computeSparseKernel()`](https://zhen-miao.github.io/CoPro/reference/computeSparseKernel.md),
 [`runGeneSpaceCCA()`](https://zhen-miao.github.io/CoPro/reference/runGeneSpaceCCA.md),
 [`runSkrCCA()`](https://zhen-miao.github.io/CoPro/reference/runSkrCCA.md)
 

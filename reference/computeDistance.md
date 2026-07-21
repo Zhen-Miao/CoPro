@@ -157,6 +157,7 @@ This requires the igraph package to be installed.
 Other spatial-pipeline:
 [`computeKernelMatrix()`](https://zhen-miao.github.io/CoPro/reference/computeKernelMatrix.md),
 [`computePCA()`](https://zhen-miao.github.io/CoPro/reference/computePCAMulti.md),
+[`computeSparseKernel()`](https://zhen-miao.github.io/CoPro/reference/computeSparseKernel.md),
 [`runGeneSpaceCCA()`](https://zhen-miao.github.io/CoPro/reference/runGeneSpaceCCA.md),
 [`runSkrCCA()`](https://zhen-miao.github.io/CoPro/reference/runSkrCCA.md)
 

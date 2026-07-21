@@ -53,8 +53,24 @@
 </ul></div>
 <div class="section level3">
 <h3 id="new-features-1-1-0">New features<a class="anchor" aria-label="anchor" href="#new-features-1-1-0"></a></h3>
-<ul><li>Added <code><a href="../reference/asCoPro.html">asCoProSingle()</a></code> and <code><a href="../reference/asCoPro.html">asCoProMulti()</a></code> S4 generics for one-call coercion from <code>SingleCellExperiment</code> and <code>Seurat</code> objects into CoPro objects. Conversions are gated on their respective packages being installed and delegate to the existing <code><a href="../reference/newCoProSingle.html">newCoProSingle()</a></code> / <code><a href="../reference/newCoProMulti.html">newCoProMulti()</a></code> constructors so validation stays single-sourced.</li>
-<li>Exposed <code>normalizeTarget</code> argument on <code><a href="../reference/computeDistance.html">computeDistance()</a></code> for users who want to control the target value that the low-percentile cell-cell distance is rescaled to. Default preserves existing behavior.</li>
+<ul><li>Added a sparse, memory-efficient kernel path for large-scale data. <code><a href="../reference/computeKernelMatrix.html">computeKernelMatrix()</a></code> gains a <code>method</code> argument (<code>"auto"</code>, <code>"dense"</code>, <code>"sparse"</code>) defaulting to <code>"auto"</code>, which selects the sparse path when any per-slide cell-type block reaches <code>autoThreshold</code> (default 5000) cells or the aggregate dense workload reaches <code>autoThreshold^2</code> entries. The new <code><a href="../reference/computeSparseKernel.html">computeSparseKernel()</a></code> generic builds sparse <code>dgCMatrix</code> Gaussian kernels directly from coordinates via an exact fixed-radius neighbor search, never forming a dense <code>n x n</code> distance or kernel matrix. Results are numerically equivalent to the dense path (every pair beyond the kernel’s support radius is already zero). The sparse path does not require <code><a href="../reference/computeDistance.html">computeDistance()</a></code> to be run first and supports <code>Euclidean2D</code> / <code>Euclidean3D</code> distances.</li>
+<li>
+<code><a href="../reference/computeKernelMatrix.html">computeKernelMatrix()</a></code> gains <code>dropDistances</code> (default <code>TRUE</code>), which clears the large <code>@distances</code> slot after kernels are computed, since the downstream pipeline only needs the kernels. Set <code>dropDistances = FALSE</code> to retain distances for inspection via <code><a href="../reference/getDistMat.html">getDistMat()</a></code> or to recompute kernels with new sigma values without rebuilding distances.</li>
+<li>Normalized correlation and bandwidth (<code>sigma</code>) selection now normalize by the whitened-Frobenius norm <code>||R_x^{1/2} K_c R_y^{1/2}||_F</code> of the cross-kernel instead of its spectral norm <code>||K||_2</code>. Here <code>K_c</code> is the double-centered cross-kernel and <code>R_x</code>, <code>R_y</code> are the matched-<code>sigma</code> within-type kernels; this norm is the distribution-free null standard deviation of the bilinear statistic <code>a' K b</code> and, unlike the spectral norm, does not rail <code>sigma</code> selection to the grid floor. Affects <code><a href="../reference/computeNormalizedCorrelation.html">computeNormalizedCorrelation()</a></code>, the permutation tests (<code>runSkrCCAPermu*()</code>), and <code>getTransfer*()</code> extrapolation.</li>
+</ul></div>
+<div class="section level3">
+<h3 id="performance-1-1-0">Performance<a class="anchor" aria-label="anchor" href="#performance-1-1-0"></a></h3>
+<ul><li>Fair-sigma and conditional permutation tests now cache kernel normalizers once per bandwidth and reuse each precomputed PC-space operator for fitting and scoring. Sparse whitened-Frobenius normalization also stays sparse via an equivalent low-rank centering formula instead of materializing dense kernels.</li>
+<li>The exact fixed-radius neighbor search used by sparse kernels now runs in a deterministic Rcpp engine, with the original R implementation retained as a reference fallback. Bin-wise permutations precompute bin memberships and neighbor lookups once per cell type, and normalized permutation scoring batches all canonical components instead of rebuilding permuted PC matrices inside every pair/component loop.</li>
+<li>
+<code><a href="../reference/computeSelfKernel.html">computeSelfKernel()</a></code> now supports <code>method = "auto"</code>, <code>"dense"</code>, or <code>"sparse"</code>. Its default automatically builds exact sparse multitype self-kernels directly from coordinates for large workloads or when dense self-distance matrices are unavailable.</li>
+</ul></div>
+<div class="section level3">
+<h3 id="bug-fixes-1-1-0">Bug fixes<a class="anchor" aria-label="anchor" href="#bug-fixes-1-1-0"></a></h3>
+<ul><li><p>Sigma-aware bin sizing no longer silently falls back to a hard-coded 10x10 grid under the default <code>dropDistances = TRUE</code>. The raw-to-normalized distance scale factor is now stored in a new <code>@distanceScaleFactor</code> slot at <code><a href="../reference/computeDistance.html">computeDistance()</a></code> time and recovered from there after <code>@distances</code> is cleared, so <code><a href="../reference/dot-sigmaAwareBins.html">.sigmaAwareBins()</a></code> keeps its bandwidth-aware grid.</p></li>
+<li><p>The bidirectional-correlation kernel normalizations (<code>sinkhorn_knopp</code>, <code>"row_or_col"</code>) now operate on sparse kernels without densifying them.</p></li>
+<li><p>Added <code><a href="../reference/asCoPro.html">asCoProSingle()</a></code> and <code><a href="../reference/asCoPro.html">asCoProMulti()</a></code> S4 generics for one-call coercion from <code>SingleCellExperiment</code> and <code>Seurat</code> objects into CoPro objects. Conversions are gated on their respective packages being installed and delegate to the existing <code><a href="../reference/newCoProSingle.html">newCoProSingle()</a></code> / <code><a href="../reference/newCoProMulti.html">newCoProMulti()</a></code> constructors so validation stays single-sourced.</p></li>
+<li><p>Exposed <code>normalizeTarget</code> argument on <code><a href="../reference/computeDistance.html">computeDistance()</a></code> for users who want to control the target value that the low-percentile cell-cell distance is rescaled to. Default preserves existing behavior.</p></li>
 </ul></div>
 <div class="section level3">
 <h3 id="user-experience-1-1-0">User experience<a class="anchor" aria-label="anchor" href="#user-experience-1-1-0"></a></h3>
@@ -131,7 +147,7 @@
 </div>
 
 <div class="pkgdown-footer-right">
-  <p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.2.0.</p>
+  <p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.2.1.</p>
 </div>
 
     </footer></div>

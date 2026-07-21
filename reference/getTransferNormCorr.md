@@ -38,8 +38,9 @@ getTransferNormCorr(
 
 - tol:
 
-  Numeric tolerance passed to the truncated SVD for spectral norm
-  estimation (default 1e-4).
+  Numeric tolerance (formerly for the truncated SVD; retained for
+  backward compatibility, unused by the closed-form whitened-Frobenius
+  norm) estimation (default 1e-4).
 
 - calculationMode:
 
@@ -75,10 +76,11 @@ but operates on precomputed cell scores (e.g., obtained from
 
 The normalized correlation is computed as: numerator = t(A_w1) %*% K %*%
 B_w2 denominator = sqrt(sum(A_w1^2)) \* sqrt(sum(B_w2^2)) \*
-\|\|K\|\|\_2 where A_w1 and B_w2 are the cell score vectors (for the
-same CC index) for cell types A and B respectively, K is the kernel
-matrix between the two cell types at the chosen sigma, and \|\|K\|\|\_2
-is the spectral norm of K.
+\|\|K_tilde_c\|\|\_F where A_w1 and B_w2 are the cell score vectors (for
+the same CC index) for cell types A and B respectively, K is the kernel
+matrix between the two cell types at the chosen sigma, and
+\|\|K_tilde_c\|\|\_F is the whitened-Frobenius norm \|\|R_x^(1/2) K_c
+R_y^(1/2)\|\|\_F (R_x, R_y = matched-sigma within-type kernels).
 
 ## Examples
 

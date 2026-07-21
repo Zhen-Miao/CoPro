@@ -67,6 +67,7 @@ structure: `list(slideID = list(cellType = pc_matrix))`.
 Other spatial-pipeline:
 [`computeDistance()`](https://zhen-miao.github.io/CoPro/reference/computeDistance.md),
 [`computeKernelMatrix()`](https://zhen-miao.github.io/CoPro/reference/computeKernelMatrix.md),
+[`computeSparseKernel()`](https://zhen-miao.github.io/CoPro/reference/computeSparseKernel.md),
 [`runGeneSpaceCCA()`](https://zhen-miao.github.io/CoPro/reference/runGeneSpaceCCA.md),
 [`runSkrCCA()`](https://zhen-miao.github.io/CoPro/reference/runSkrCCA.md)
 

@@ -49,7 +49,7 @@ optimize_bilinear(
 - sdev2_list:
 
   Optional named list of squared standard deviations per cell type, used
-  for weighted normalization when `scalePCs = TRUE`. Default `NULL`
+  for weighted normalization when `scalePCs = FALSE`. Default `NULL`
   (unweighted).
 
 ## Value

@@ -24,7 +24,15 @@ calculate_pvalue(object, cc_index = 1, alternative = "greater")
 
 ## Value
 
-List with p-value, observed value, and permutation distribution
+List with the Phipson & Smyth (2010) permutation p-value (`p_value`,
+never exactly zero), the Monte-Carlo floor
+`mc_floor = 1 / (n_permu + 1)`, the observed value, and the permutation
+distribution.
+
+## References
+
+Phipson B, Smyth GK (2010). Permutation P-values should never be zero.
+*Stat Appl Genet Mol Biol* 9:Article39.
 
 ## Examples
 

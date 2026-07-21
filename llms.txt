@@ -113,6 +113,8 @@ The main CoPro analysis workflow
   : computeDistance between pairs of cell types
 - [`computeKernelMatrix()`](https://zhen-miao.github.io/CoPro/reference/computeKernelMatrix.md)
   : Compute Kernel Matrix for CoPro
+- [`computeSparseKernel()`](https://zhen-miao.github.io/CoPro/reference/computeSparseKernel.md)
+  : Compute sparse Gaussian kernels directly from coordinates
 - [`runSkrCCA()`](https://zhen-miao.github.io/CoPro/reference/runSkrCCA.md)
   : runSkrCCA
 - [`runGeneSpaceCCA()`](https://zhen-miao.github.io/CoPro/reference/runGeneSpaceCCA.md)
@@ -205,6 +207,9 @@ Statistical significance via spatial permutations
   : Run Spatial CCA with Permutation Testing
 - [`runSkrCCAPermu_FairSigma()`](https://zhen-miao.github.io/CoPro/reference/runSkrCCAPermu_FairSigma.md)
   : Run Permutation Test with Fair Sigma Selection
+- [`runSkrCCAPermu_Conditional()`](https://zhen-miao.github.io/CoPro/reference/runSkrCCAPermu_Conditional.md)
+  : Conditional (sequential step-down) permutation test across canonical
+  axes
 - [`computeNormalizedCorrelationPermu()`](https://zhen-miao.github.io/CoPro/reference/computeNormalizedCorrelationPermu.md)
   : Compute Normalized Correlation for Permutation Results
 - [`resample_spatial()`](https://zhen-miao.github.io/CoPro/reference/resample_spatial.md)
@@ -215,6 +220,8 @@ Statistical significance via spatial permutations
   : Compute Normalized Correlation from Ground Truth Scores
 - [`calculate_pvalue()`](https://zhen-miao.github.io/CoPro/reference/calculate_pvalue.md)
   : Calculate P-value from Permutation Results
+- [`calculate_pvalue_stepdown()`](https://zhen-miao.github.io/CoPro/reference/calculate_pvalue_stepdown.md)
+  : Read the step-down per-axis p-value table
 
 ## Visualization
 

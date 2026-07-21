@@ -14,6 +14,72 @@
 
 ### New features
 
+- Added a sparse, memory-efficient kernel path for large-scale data.
+  [`computeKernelMatrix()`](https://zhen-miao.github.io/CoPro/reference/computeKernelMatrix.md)
+  gains a `method` argument (`"auto"`, `"dense"`, `"sparse"`) defaulting
+  to `"auto"`, which selects the sparse path when any per-slide
+  cell-type block reaches `autoThreshold` (default 5000) cells or the
+  aggregate dense workload reaches `autoThreshold^2` entries. The new
+  [`computeSparseKernel()`](https://zhen-miao.github.io/CoPro/reference/computeSparseKernel.md)
+  generic builds sparse `dgCMatrix` Gaussian kernels directly from
+  coordinates via an exact fixed-radius neighbor search, never forming a
+  dense `n x n` distance or kernel matrix. Results are numerically
+  equivalent to the dense path (every pair beyond the kernel’s support
+  radius is already zero). The sparse path does not require
+  [`computeDistance()`](https://zhen-miao.github.io/CoPro/reference/computeDistance.md)
+  to be run first and supports `Euclidean2D` / `Euclidean3D` distances.
+- [`computeKernelMatrix()`](https://zhen-miao.github.io/CoPro/reference/computeKernelMatrix.md)
+  gains `dropDistances` (default `TRUE`), which clears the large
+  `@distances` slot after kernels are computed, since the downstream
+  pipeline only needs the kernels. Set `dropDistances = FALSE` to retain
+  distances for inspection via
+  [`getDistMat()`](https://zhen-miao.github.io/CoPro/reference/getDistMat.md)
+  or to recompute kernels with new sigma values without rebuilding
+  distances.
+- Normalized correlation and bandwidth (`sigma`) selection now normalize
+  by the whitened-Frobenius norm `||R_x^{1/2} K_c R_y^{1/2}||_F` of the
+  cross-kernel instead of its spectral norm `||K||_2`. Here `K_c` is the
+  double-centered cross-kernel and `R_x`, `R_y` are the matched-`sigma`
+  within-type kernels; this norm is the distribution-free null standard
+  deviation of the bilinear statistic `a' K b` and, unlike the spectral
+  norm, does not rail `sigma` selection to the grid floor. Affects
+  [`computeNormalizedCorrelation()`](https://zhen-miao.github.io/CoPro/reference/computeNormalizedCorrelation.md),
+  the permutation tests (`runSkrCCAPermu*()`), and `getTransfer*()`
+  extrapolation.
+
+### Performance
+
+- Fair-sigma and conditional permutation tests now cache kernel
+  normalizers once per bandwidth and reuse each precomputed PC-space
+  operator for fitting and scoring. Sparse whitened-Frobenius
+  normalization also stays sparse via an equivalent low-rank centering
+  formula instead of materializing dense kernels.
+- The exact fixed-radius neighbor search used by sparse kernels now runs
+  in a deterministic Rcpp engine, with the original R implementation
+  retained as a reference fallback. Bin-wise permutations precompute bin
+  memberships and neighbor lookups once per cell type, and normalized
+  permutation scoring batches all canonical components instead of
+  rebuilding permuted PC matrices inside every pair/component loop.
+- [`computeSelfKernel()`](https://zhen-miao.github.io/CoPro/reference/computeSelfKernel.md)
+  now supports `method = "auto"`, `"dense"`, or `"sparse"`. Its default
+  automatically builds exact sparse multitype self-kernels directly from
+  coordinates for large workloads or when dense self-distance matrices
+  are unavailable.
+
+### Bug fixes
+
+- Sigma-aware bin sizing no longer silently falls back to a hard-coded
+  10x10 grid under the default `dropDistances = TRUE`. The
+  raw-to-normalized distance scale factor is now stored in a new
+  `@distanceScaleFactor` slot at
+  [`computeDistance()`](https://zhen-miao.github.io/CoPro/reference/computeDistance.md)
+  time and recovered from there after `@distances` is cleared, so
+  [`.sigmaAwareBins()`](https://zhen-miao.github.io/CoPro/reference/dot-sigmaAwareBins.md)
+  keeps its bandwidth-aware grid.
+
+- The bidirectional-correlation kernel normalizations (`sinkhorn_knopp`,
+  `"row_or_col"`) now operate on sparse kernels without densifying them.
+
 - Added
   [`asCoProSingle()`](https://zhen-miao.github.io/CoPro/reference/asCoPro.md)
   and
@@ -25,6 +91,7 @@
   /
   [`newCoProMulti()`](https://zhen-miao.github.io/CoPro/reference/newCoProMulti.md)
   constructors so validation stays single-sourced.
+
 - Exposed `normalizeTarget` argument on
   [`computeDistance()`](https://zhen-miao.github.io/CoPro/reference/computeDistance.md)
   for users who want to control the target value that the low-percentile

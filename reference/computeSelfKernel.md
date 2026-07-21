@@ -1,9 +1,10 @@
 # Compute Self-Kernel Matrices for Multiple Cell Types
 
 This function computes within-cell-type kernel matrices for each cell
-type when multiple cell types are present. It requires that
-self-distance matrices have been computed first (using
-computeSelfDistance).
+type when multiple cell types are present. The default `method = "auto"`
+uses existing self-distance matrices for small workloads and builds
+sparse kernels directly from coordinates for large workloads or when
+self-distances have not been materialized.
 
 ## Usage
 
@@ -18,7 +19,16 @@ computeSelfKernel(
   rowNormalizeKernel = FALSE,
   colNormalizeKernel = FALSE,
   verbose = TRUE,
-  overwrite = FALSE
+  overwrite = FALSE,
+  method = c("auto", "dense", "sparse"),
+  autoThreshold = 5000L,
+  distType = NULL,
+  xDistScale = 1,
+  yDistScale = 1,
+  zDistScale = 1,
+  normalizeDistance = TRUE,
+  normalizeTarget = 0.01,
+  truncateLowDist = TRUE
 )
 
 # S4 method for class 'CoProSingle'
@@ -32,7 +42,16 @@ computeSelfKernel(
   rowNormalizeKernel = FALSE,
   colNormalizeKernel = FALSE,
   verbose = TRUE,
-  overwrite = FALSE
+  overwrite = FALSE,
+  method = c("auto", "dense", "sparse"),
+  autoThreshold = 5000L,
+  distType = NULL,
+  xDistScale = 1,
+  yDistScale = 1,
+  zDistScale = 1,
+  normalizeDistance = TRUE,
+  normalizeTarget = 0.01,
+  truncateLowDist = TRUE
 )
 
 # S4 method for class 'CoProMulti'
@@ -46,7 +65,16 @@ computeSelfKernel(
   rowNormalizeKernel = FALSE,
   colNormalizeKernel = FALSE,
   verbose = TRUE,
-  overwrite = FALSE
+  overwrite = FALSE,
+  method = c("auto", "dense", "sparse"),
+  autoThreshold = 5000L,
+  distType = NULL,
+  xDistScale = 1,
+  yDistScale = 1,
+  zDistScale = 1,
+  normalizeDistance = TRUE,
+  normalizeTarget = 0.01,
+  truncateLowDist = TRUE
 )
 ```
 
@@ -54,7 +82,7 @@ computeSelfKernel(
 
 - object:
 
-  A `CoPro` object with multiple cell types and self-distance matrices
+  A `CoPro` object with multiple cell types
 
 - sigmaValues:
 
@@ -92,6 +120,26 @@ computeSelfKernel(
 
   Whether to overwrite existing kernel matrices. If FALSE, will add
   self-kernel matrices to existing cross-type kernels. Default = FALSE
+
+- method:
+
+  One of `"auto"`, `"dense"`, or `"sparse"`. The sparse path constructs
+  exact thresholded self-kernels directly from coordinates and does not
+  require
+  [`computeSelfDistance()`](https://zhen-miao.github.io/CoPro/reference/computeSelfDistance.md).
+
+- autoThreshold:
+
+  Cell-count threshold used by `method = "auto"`. Sparse construction is
+  selected when a self-kernel dimension reaches this value, aggregate
+  dense self-kernel entries reach its square, or required self-distance
+  matrices are absent. Default 5000.
+
+- distType, xDistScale, yDistScale, zDistScale, normalizeDistance,
+  normalizeTarget, truncateLowDist:
+
+  Distance options for the sparse path, matching
+  [`computeKernelMatrix()`](https://zhen-miao.github.io/CoPro/reference/computeKernelMatrix.md).
 
 ## Value
 

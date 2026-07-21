@@ -79,6 +79,16 @@ within the object.</p>
 <span>  minAveCellNeighor <span class="op">=</span> <span class="fl">2</span>,</span>
 <span>  rowNormalizeKernel <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  colNormalizeKernel <span class="op">=</span> <span class="cn">FALSE</span>,</span>
+<span>  method <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"auto"</span>, <span class="st">"dense"</span>, <span class="st">"sparse"</span><span class="op">)</span>,</span>
+<span>  dropDistances <span class="op">=</span> <span class="cn">TRUE</span>,</span>
+<span>  autoThreshold <span class="op">=</span> <span class="fl">5000L</span>,</span>
+<span>  distType <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  xDistScale <span class="op">=</span> <span class="fl">1</span>,</span>
+<span>  yDistScale <span class="op">=</span> <span class="fl">1</span>,</span>
+<span>  zDistScale <span class="op">=</span> <span class="fl">1</span>,</span>
+<span>  normalizeDistance <span class="op">=</span> <span class="cn">TRUE</span>,</span>
+<span>  normalizeTarget <span class="op">=</span> <span class="fl">0.01</span>,</span>
+<span>  truncateLowDist <span class="op">=</span> <span class="cn">TRUE</span>,</span>
 <span>  verbose <span class="op">=</span> <span class="cn">TRUE</span></span>
 <span><span class="op">)</span></span>
 <span></span>
@@ -92,6 +102,16 @@ within the object.</p>
 <span>  minAveCellNeighor <span class="op">=</span> <span class="fl">2</span>,</span>
 <span>  rowNormalizeKernel <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  colNormalizeKernel <span class="op">=</span> <span class="cn">FALSE</span>,</span>
+<span>  method <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"auto"</span>, <span class="st">"dense"</span>, <span class="st">"sparse"</span><span class="op">)</span>,</span>
+<span>  dropDistances <span class="op">=</span> <span class="cn">TRUE</span>,</span>
+<span>  autoThreshold <span class="op">=</span> <span class="fl">5000L</span>,</span>
+<span>  distType <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  xDistScale <span class="op">=</span> <span class="fl">1</span>,</span>
+<span>  yDistScale <span class="op">=</span> <span class="fl">1</span>,</span>
+<span>  zDistScale <span class="op">=</span> <span class="fl">1</span>,</span>
+<span>  normalizeDistance <span class="op">=</span> <span class="cn">TRUE</span>,</span>
+<span>  normalizeTarget <span class="op">=</span> <span class="fl">0.01</span>,</span>
+<span>  truncateLowDist <span class="op">=</span> <span class="cn">TRUE</span>,</span>
 <span>  verbose <span class="op">=</span> <span class="cn">TRUE</span></span>
 <span><span class="op">)</span></span>
 <span></span>
@@ -105,6 +125,16 @@ within the object.</p>
 <span>  minAveCellNeighor <span class="op">=</span> <span class="fl">2</span>,</span>
 <span>  rowNormalizeKernel <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  colNormalizeKernel <span class="op">=</span> <span class="cn">FALSE</span>,</span>
+<span>  method <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"auto"</span>, <span class="st">"dense"</span>, <span class="st">"sparse"</span><span class="op">)</span>,</span>
+<span>  dropDistances <span class="op">=</span> <span class="cn">TRUE</span>,</span>
+<span>  autoThreshold <span class="op">=</span> <span class="fl">5000L</span>,</span>
+<span>  distType <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  xDistScale <span class="op">=</span> <span class="fl">1</span>,</span>
+<span>  yDistScale <span class="op">=</span> <span class="fl">1</span>,</span>
+<span>  zDistScale <span class="op">=</span> <span class="fl">1</span>,</span>
+<span>  normalizeDistance <span class="op">=</span> <span class="cn">TRUE</span>,</span>
+<span>  normalizeTarget <span class="op">=</span> <span class="fl">0.01</span>,</span>
+<span>  truncateLowDist <span class="op">=</span> <span class="cn">TRUE</span>,</span>
 <span>  verbose <span class="op">=</span> <span class="cn">TRUE</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
@@ -157,6 +187,40 @@ normalized? Note that row or column wise normalization will result in an
 asymmetric result in skrCCA inference.</p></dd>
 
 
+<dt id="arg-method">method<a class="anchor" aria-label="anchor" href="#arg-method"></a></dt>
+<dd><p>One of <code>"auto"</code>, <code>"dense"</code>, or <code>"sparse"</code>. <code>"dense"</code> is the
+classic path that reads the distance matrices produced by
+<code><a href="computeDistance.html">computeDistance()</a></code>. <code>"sparse"</code> is a fused, memory-efficient path
+(<code><a href="computeSparseKernel.html">computeSparseKernel()</a></code>) that builds sparse <code>dgCMatrix</code> kernels directly
+from coordinates via a fixed-radius neighbor search, never forming a dense
+<code>n x n</code> matrix, and does not require <code><a href="computeDistance.html">computeDistance()</a></code> to have been run.
+Results are numerically equivalent. <code>"auto"</code> (default) picks <code>"sparse"</code> when
+any per-slide cell-type block reaches <code>autoThreshold</code> cells or when the
+aggregate dense block workload reaches <code>autoThreshold^2</code> entries; otherwise
+it picks <code>"dense"</code>.</p></dd>
+
+
+<dt id="arg-dropdistances">dropDistances<a class="anchor" aria-label="anchor" href="#arg-dropdistances"></a></dt>
+<dd><p>Logical. If <code>TRUE</code> (default), the (potentially large)
+<code>@distances</code> slot is cleared after kernels are computed, since the
+downstream pipeline only needs the kernels. Set <code>FALSE</code> to keep distances
+for inspection via <code><a href="getDistMat.html">getDistMat()</a></code> or to recompute kernels with new sigma
+values without rebuilding distances.</p></dd>
+
+
+<dt id="arg-autothreshold">autoThreshold<a class="anchor" aria-label="anchor" href="#arg-autothreshold"></a></dt>
+<dd><p>Integer cell count at which <code>method = "auto"</code> selects
+the sparse path for any kernel-block dimension. The sparse path is also
+selected when aggregate dense block entries reach <code>autoThreshold^2</code>.
+Default 5000 (about 200 MB of doubles before temporary matrices and copies).</p></dd>
+
+
+<dt id="arg-disttype-xdistscale-ydistscale-zdistscale-normalizedistance-normalizetarget-truncatelowdist">distType, xDistScale, yDistScale, zDistScale, normalizeDistance, normalizeTarget, truncateLowDist<a class="anchor" aria-label="anchor" href="#arg-disttype-xdistscale-ydistscale-zdistscale-normalizedistance-normalizetarget-truncatelowdist"></a></dt>
+<dd><p>Distance options used only by the sparse path (see <code><a href="computeDistance.html">computeDistance()</a></code> and
+<code><a href="computeSparseKernel.html">computeSparseKernel()</a></code>). <code>distType</code> defaults to <code>"Euclidean3D"</code> when the
+coordinates contain a <code>z</code> column, otherwise <code>"Euclidean2D"</code>.</p></dd>
+
+
 <dt id="arg-verbose">verbose<a class="anchor" aria-label="anchor" href="#arg-verbose"></a></dt>
 <dd><p>Whether to output the progress and related information</p></dd>
 
@@ -178,6 +242,7 @@ types</p>
 <p>Other spatial-pipeline:
 <code><a href="computeDistance.html">computeDistance()</a></code>,
 <code><a href="computePCAMulti.html">computePCA()</a></code>,
+<code><a href="computeSparseKernel.html">computeSparseKernel()</a></code>,
 <code><a href="runGeneSpaceCCA.html">runGeneSpaceCCA()</a></code>,
 <code><a href="runSkrCCA.html">runSkrCCA()</a></code></p></div>
     </div>
@@ -205,7 +270,7 @@ types</p>
 </div>
 
 <div class="pkgdown-footer-right">
-  <p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.2.0.</p>
+  <p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.2.1.</p>
 </div>
 
     </footer></div>

@@ -2,7 +2,8 @@
 
 This method calculates the normalized correlation between pairs of cell
 types based on CCA weights and the respective kernel matrix. It uses the
-spectral norm of the kernel matrix for normalization.
+whitened-Frobenius norm \|\|R_x^(1/2) K_c R_y^(1/2)\|\|\_F of the kernel
+for normalization (R_x, R_y = matched-sigma within-type kernels).
 
 ## Usage
 

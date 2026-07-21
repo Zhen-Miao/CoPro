@@ -62,6 +62,12 @@ CoPro object of spatial transcriptomics data
   A `list` object to store the pairwise distances between any two cell
   types of interest.
 
+- `distanceScaleFactor`:
+
+  A single numeric value. The raw-to-normalized distance scaling factor
+  recorded at `computeDistance` time; persists after
+  `computeKernelMatrix(dropDistances = TRUE)` clears `@distances`.
+
 - `geneList`:
 
   A `vector` object with elements being character. To store the gene
@@ -145,6 +151,15 @@ CoPro object of spatial transcriptomics data
 
   A `list` object. Bidirectional correlation values for each sigma value
   after permutation
+
+- `conditionalPermu`:
+
+  A `list` object storing results of the conditional (sequential
+  step-down) permutation test across canonical axes, produced by
+  [`runSkrCCAPermu_Conditional()`](https://zhen-miao.github.io/CoPro/reference/runSkrCCAPermu_Conditional.md).
+  Contains the per-axis raw and step-down p-values, observed and null
+  statistics, and the fair-sigma selections used to control both
+  sigma-selection and canonical-axis multiplicity.
 
 - `sigmaValueChoice`:
 

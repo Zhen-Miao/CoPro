@@ -32,10 +32,11 @@ The normalized correlation for each permutation is calculated using the
 same formula as the observed data:
 
 \$\$NC = \frac{s_1^T K\_{12} s_2}{\|\|s_1\|\| \cdot \|\|s_2\|\| \cdot
-\|\|K\_{12}\|\|\_2}\$\$
+\|\|\tilde K_c\|\|\_F}\$\$
 
 where \\s_1\\ and \\s_2\\ are cell scores, \\K\_{12}\\ is the kernel
-matrix, and \\\|\|K\_{12}\|\|\_2\\ is the spectral norm.
+matrix, and \\\|\|\tilde K_c\|\|\_F\\ is the whitened-Frobenius norm
+\\\|\|R_x^{1/2} K_c R_y^{1/2}\|\|\_F\\.
 
 ## Examples
 

@@ -15,8 +15,8 @@ runSkrCCAPermu(
   maxIter = 200,
   permu_method = "bin",
   permu_which = "second_only",
-  num_bins_x = 10,
-  num_bins_y = 10,
+  num_bins_x = NULL,
+  num_bins_y = NULL,
   match_quantile = FALSE,
   conservative = FALSE,
   n_cores = 1,
@@ -57,8 +57,10 @@ runSkrCCAPermu(
     each PC dimension, breaking cell correlation while preserving PC
     distributions
 
-  - "toroidal": Toroidal shift permutation - perfectly preserves spatial
-    autocorrelation by shifting coordinates in wrap-around manner
+  - "toroidal": Toroidal shift permutation - approximately preserves
+    spatial autocorrelation by shifting coordinates in a wrap-around
+    manner (assumes stationarity/periodicity; see
+    [`generate_toroidal_permutations()`](https://zhen-miao.github.io/CoPro/reference/generate_toroidal_permutations.md))
 
 - permu_which:
 
@@ -72,15 +74,19 @@ runSkrCCAPermu(
 
 - num_bins_x:
 
-  Number of bins in x direction for bin-wise permutation (default: 10).
-  Use
+  Number of bins in x direction for bin-wise permutation. Default `NULL`
+  sizes the grid automatically from the kernel bandwidth so each patch
+  is ~2\*sigma wide on the normalized distance scale (see
+  [`.sigmaAwareBins()`](https://zhen-miao.github.io/CoPro/reference/dot-sigmaAwareBins.md)).
+  Pass an explicit integer to override. Use
   [`diagnose_bin_distribution()`](https://zhen-miao.github.io/CoPro/reference/diagnose_bin_distribution.md)
-  to choose appropriate values. **More bins = better preserve local
+  to inspect a chosen grid. **More bins = better preserve local
   structure = lower FPR.**
 
 - num_bins_y:
 
-  Number of bins in y direction for bin-wise permutation (default: 10).
+  Number of bins in y direction for bin-wise permutation. Default `NULL`
+  (sigma-aware, as for `num_bins_x`). Pass an integer to override.
   **More bins = better preserve local structure = lower FPR.**
 
 - match_quantile:
@@ -120,23 +126,37 @@ CoPro object with permutation results stored in `@skrCCAPermuOut`
 The function supports three permutation methods:
 
 **"global"**: Simple random shuffling of cells. This breaks ALL spatial
-structure and tests against a null of complete spatial randomness.
+structure and tests against a null of complete spatial randomness. It is
+a *deliberately-broken reference*: by destroying within-type
+autocorrelation it inflates the effective sample size
+(Clifford-Richardson-Hemon 1989) and is therefore anti-conservative by
+construction. Keep it for calibration, not as a default.
 
 **"bin"** (default): Bin-wise shuffling that preserves local spatial
 structure. This tests against a null where cells have spatial
-autocorrelation within their type, but no coordination across types.
+autocorrelation within their type, but no coordination across types. By
+default the patch grid is sized from the bandwidth (see
+[`.sigmaAwareBins()`](https://zhen-miao.github.io/CoPro/reference/dot-sigmaAwareBins.md)).
+This is a restricted / approximate permutation that is valid under
+stationarity; under autocorrelation the within-type cells are not
+exchangeable, which is exactly the point (Anderson & ter Braak 2003).
 
 **"pc"**: PC-space permutation (like DIALOGUE). Shuffles values within
 each PC dimension across cells, breaking cell-to-cell correlation while
-preserving the marginal distribution of each PC. This is the same
-approach used by DIALOGUE's internal significance testing. Use this to
-compare with DIALOGUE's conservative behavior.
+preserving the marginal distribution of each PC. Like "global" this is a
+*deliberately-broken reference* that destroys within-type
+autocorrelation; use it to reproduce DIALOGUE-style
+complete-spatial-randomness behaviour and to demonstrate FPR inflation,
+not as a default.
 
 **"toroidal"**: Toroidal (wrap-around) shift permutation. Shifts all
-cells' coordinates by a random amount, wrapping at boundaries. This
-PERFECTLY preserves spatial autocorrelation within each cell type
-because relative positions are unchanged. Best choice for reducing FPR
-when spatial autocorrelation is strong.
+cells' coordinates by a random amount, wrapping at boundaries, then
+re-ranks to a permutation. This *approximately* preserves within-type
+spatial autocorrelation (exactly only on a regular lattice; see
+[`generate_toroidal_permutations()`](https://zhen-miao.github.io/CoPro/reference/generate_toroidal_permutations.md))
+and assumes spatial stationarity and periodic wrap-around, which is
+biologically false at tissue edges. Benchmark it against the sigma-aware
+"bin" null rather than preferring it a priori.
 
 ### Which Cell Types to Permute
 

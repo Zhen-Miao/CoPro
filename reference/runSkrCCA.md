@@ -102,6 +102,7 @@ Other spatial-pipeline:
 [`computeDistance()`](https://zhen-miao.github.io/CoPro/reference/computeDistance.md),
 [`computeKernelMatrix()`](https://zhen-miao.github.io/CoPro/reference/computeKernelMatrix.md),
 [`computePCA()`](https://zhen-miao.github.io/CoPro/reference/computePCAMulti.md),
+[`computeSparseKernel()`](https://zhen-miao.github.io/CoPro/reference/computeSparseKernel.md),
 [`runGeneSpaceCCA()`](https://zhen-miao.github.io/CoPro/reference/runGeneSpaceCCA.md)
 
 ## Examples
@@ -123,11 +124,11 @@ obj <- computeDistance(obj, distType = "Euclidean2D", verbose = FALSE)
 obj <- computeKernelMatrix(obj, sigmaValues = c(0.05, 0.1), verbose = FALSE)
 obj <- runSkrCCA(obj, scalePCs = TRUE, nCC = 2)
 #> Running skrCCA [1/2] for sigma = 0.05 ...
-#> [1] "Convergence reached at 5 iterations (Max diff = 1.136e-06 )"
-#> [1] "Convergence reached at 0 iterations (Max diff = 9.936e-15 )"
+#> [1] "Convergence reached at 4 iterations (Max diff = 7.744e-06 )"
+#> [1] "Convergence reached at 0 iterations (Max diff = 1.080e-14 )"
 #> Running skrCCA [2/2] for sigma = 0.1 ...
-#> [1] "Convergence reached at 4 iterations (Max diff = 3.926e-06 )"
-#> [1] "Convergence reached at 0 iterations (Max diff = 1.527e-15 )"
+#> [1] "Convergence reached at 4 iterations (Max diff = 4.003e-07 )"
+#> [1] "Convergence reached at 0 iterations (Max diff = 1.943e-15 )"
 #> skrCCA finished 2 sigma value(s) in 0.0 s.
 #> Optimization succeeded for 2 sigma value(s): sigma_0.05, sigma_0.1
 # }
