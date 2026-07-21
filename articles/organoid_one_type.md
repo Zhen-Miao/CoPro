@@ -87,7 +87,7 @@ obj <- subsetData(obj, cellTypesOfInterest = "Epithelial")
 ``` r
 
 # PCA
-obj <- computePCA(obj, nPCA = 30, center = TRUE, scale. = TRUE)
+obj <- computePCA(obj, nPCA = 15, center = TRUE, scale. = TRUE)
 
 # Spatial distance (no normalization for this dataset)
 obj <- computeDistance(obj, distType = "Euclidean2D",
@@ -99,18 +99,6 @@ obj <- computeKernelMatrix(obj, sigmaValues = sigma_choice,
                             upperQuantile = 0.85,
                             normalizeKernel = FALSE,
                             lowerLimit = 5e-7)
-```
-
-    ## Warning in .CheckSigmaValuesToRemove(kernel_current = kernel_current,
-    ## lowerLimit = lowerLimit, : Kernel matrix for cell types Epithelial and
-    ## Epithelial with sigma = 0.01 contains too many zeros. Specifically, less than
-    ## 0.0218818380743982 % total counts are above the threshold
-
-    ## Warning in .CheckSigmaValuesToRemove(kernel_current = kernel_current,
-    ## lowerLimit = lowerLimit, : Dropping sigma value of 0.01 because all Gaussian
-    ## kernel values are too small, which will not produce meaningful results.
-
-``` r
 
 # Sparse kernel CCA
 obj <- runSkrCCA(obj, scalePCs = TRUE, maxIter = 500, nCC = 4)
@@ -151,7 +139,7 @@ sigma_opt <- obj@sigmaValueChoice
 cat("Selected sigma:", sigma_opt, "\n")
 ```
 
-    ## Selected sigma: 0.1
+    ## Selected sigma: 0.01
 
 ## Correlation plot
 
@@ -305,20 +293,17 @@ sessionInfo()
     ## [1] stats     graphics  grDevices utils     datasets  methods   base     
     ## 
     ## other attached packages:
-    ## [1] patchwork_1.3.2 ggplot2_4.0.1   CoPro_1.1.0     testthat_3.3.2 
+    ## [1] ggplot2_4.0.2 CoPro_1.1.1   knitr_1.51   
     ## 
     ## loaded via a namespace (and not attached):
-    ##  [1] generics_0.1.4     renv_1.1.7         lattice_0.22-9     magrittr_2.0.4    
-    ##  [5] evaluate_1.0.5     grid_4.5.2         RColorBrewer_1.1-3 pkgload_1.4.1     
-    ##  [9] fastmap_1.2.0      maps_3.4.3         rprojroot_2.1.1    Matrix_1.7-5      
-    ## [13] pkgbuild_1.4.8     sessioninfo_1.2.3  brio_1.1.5         purrr_1.2.1       
-    ## [17] spam_2.11-3        viridisLite_0.4.2  scales_1.4.0       cli_3.6.5         
-    ## [21] rlang_1.1.7        ellipsis_0.3.2     remotes_2.5.0      withr_3.0.2       
-    ## [25] cachem_1.1.0       yaml_2.3.12        devtools_2.4.6     otel_0.2.0        
-    ## [29] tools_4.5.2        parallel_4.5.2     memoise_2.0.1      dplyr_1.1.4       
-    ## [33] vctrs_0.7.1        R6_2.6.1           matrixStats_1.5.0  lifecycle_1.0.5   
-    ## [37] fs_1.6.6           usethis_3.2.1      irlba_2.3.7        pkgconfig_2.0.3   
-    ## [41] desc_1.4.3         pillar_1.11.1      gtable_0.3.6       glue_1.8.0        
-    ## [45] Rcpp_1.1.1         fields_17.1        xfun_0.56          tibble_3.3.1      
-    ## [49] tidyselect_1.2.1   rstudioapi_0.18.0  knitr_1.51         farver_2.1.2      
-    ## [53] labeling_0.4.3     dotCall64_1.2      compiler_4.5.2     S7_0.2.1
+    ##  [1] Matrix_1.7-5       gtable_0.3.6       dplyr_1.2.1        compiler_4.5.2    
+    ##  [5] maps_3.4.3         tidyselect_1.2.1   Rcpp_1.1.1         parallel_4.5.2    
+    ##  [9] splines_4.5.2      scales_1.4.0       lattice_0.22-9     R6_2.6.1          
+    ## [13] labeling_0.4.3     generics_0.1.4     isoband_0.3.0      MASS_7.3-65       
+    ## [17] dotCall64_1.2      tibble_3.3.1       pillar_1.11.1      RColorBrewer_1.1-3
+    ## [21] rlang_1.2.0        xfun_0.57          S7_0.2.1           otel_0.2.0        
+    ## [25] viridisLite_0.4.3  cli_3.6.5          mgcv_1.9-4         withr_3.0.2       
+    ## [29] magrittr_2.0.5     grid_4.5.2         irlba_2.3.7        nlme_3.1-169      
+    ## [33] spam_2.11-3        lifecycle_1.0.5    fields_17.1        vctrs_0.7.2       
+    ## [37] evaluate_1.0.5     glue_1.8.0         farver_2.1.2       matrixStats_1.5.0 
+    ## [41] tools_4.5.2        pkgconfig_2.0.3

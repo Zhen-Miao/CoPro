@@ -147,6 +147,6 @@ The `CoPro` object with sparse kernel matrices in `@kernelMatrices`.
 Other spatial-pipeline:
 [`computeDistance()`](https://zhen-miao.github.io/CoPro/reference/computeDistance.md),
 [`computeKernelMatrix()`](https://zhen-miao.github.io/CoPro/reference/computeKernelMatrix.md),
-[`computePCA()`](https://zhen-miao.github.io/CoPro/reference/computePCAMulti.md),
+[`computePCA()`](https://zhen-miao.github.io/CoPro/reference/computePCA.md),
 [`runGeneSpaceCCA()`](https://zhen-miao.github.io/CoPro/reference/runGeneSpaceCCA.md),
 [`runSkrCCA()`](https://zhen-miao.github.io/CoPro/reference/runSkrCCA.md)

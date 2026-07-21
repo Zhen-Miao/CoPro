@@ -185,12 +185,12 @@ To-do: Shall we include row or column normalization of the kernel?
 ## See also
 
 [`computeDistance()`](https://zhen-miao.github.io/CoPro/reference/computeDistance.md),
-[`computePCA()`](https://zhen-miao.github.io/CoPro/reference/computePCAMulti.md),
+[`computePCA()`](https://zhen-miao.github.io/CoPro/reference/computePCA.md),
 [`runSkrCCA()`](https://zhen-miao.github.io/CoPro/reference/runSkrCCA.md)
 
 Other spatial-pipeline:
 [`computeDistance()`](https://zhen-miao.github.io/CoPro/reference/computeDistance.md),
-[`computePCA()`](https://zhen-miao.github.io/CoPro/reference/computePCAMulti.md),
+[`computePCA()`](https://zhen-miao.github.io/CoPro/reference/computePCA.md),
 [`computeSparseKernel()`](https://zhen-miao.github.io/CoPro/reference/computeSparseKernel.md),
 [`runGeneSpaceCCA()`](https://zhen-miao.github.io/CoPro/reference/runGeneSpaceCCA.md),
 [`runSkrCCA()`](https://zhen-miao.github.io/CoPro/reference/runSkrCCA.md)

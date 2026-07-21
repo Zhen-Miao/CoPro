@@ -1,16 +1,22 @@
-# Compute PCA on Single-Slide Data
+# Compute PCA on Single- or Multi-Slide Data
 
-This method performs PCA on the normalized data stored within the
-`CoProSingle` object. It assumes that the data has already been
-integrated across slides.
-
-This method performs PCA on the normalized data stored within the
-`CoProMulti` object. It assumes that the data has already been
-integrated across slides.
+Performs PCA on the normalized data stored within a `CoProSingle` or
+`CoProMulti` object. For multi-slide objects, the data is assumed to
+have already been integrated into a common space across slides.
 
 ## Usage
 
 ``` r
+computePCA(
+  object,
+  nPCA = 40,
+  center = TRUE,
+  scale. = TRUE,
+  scalePCs = TRUE,
+  dataUse = "raw",
+  center_per_slide = FALSE
+)
+
 # S4 method for class 'CoProSingle'
 computePCA(object, nPCA = 40, center = TRUE, scale. = TRUE, scalePCs = TRUE)
 
@@ -58,3 +64,37 @@ computePCA(
 
   After the global PCA, do we do center per slide again? By default this
   is set to FALSE
+
+## Value
+
+A `CoProMulti` object with the `pcaResults` slot populated. `pcaResults`
+structure: `list(slideID = list(cellType = pc_matrix))`.
+
+## See also
+
+[`computeDistance()`](https://zhen-miao.github.io/CoPro/reference/computeDistance.md),
+[`computeKernelMatrix()`](https://zhen-miao.github.io/CoPro/reference/computeKernelMatrix.md),
+[`runSkrCCA()`](https://zhen-miao.github.io/CoPro/reference/runSkrCCA.md)
+
+Other spatial-pipeline:
+[`computeDistance()`](https://zhen-miao.github.io/CoPro/reference/computeDistance.md),
+[`computeKernelMatrix()`](https://zhen-miao.github.io/CoPro/reference/computeKernelMatrix.md),
+[`computeSparseKernel()`](https://zhen-miao.github.io/CoPro/reference/computeSparseKernel.md),
+[`runGeneSpaceCCA()`](https://zhen-miao.github.io/CoPro/reference/runGeneSpaceCCA.md),
+[`runSkrCCA()`](https://zhen-miao.github.io/CoPro/reference/runSkrCCA.md)
+
+## Examples
+
+``` r
+toy <- readRDS(system.file("extdata", "toy_copro_data.rds", package = "CoPro"))
+obj <- newCoProSingle(
+  normalizedData = toy$normalizedData,
+  locationData   = toy$locationData,
+  metaData       = toy$metaData,
+  cellTypes      = toy$cellTypes
+)
+obj <- subsetData(obj, cellTypesOfInterest = unique(toy$cellTypes))
+obj <- computePCA(obj, nPCA = 10)
+#> Input is dense (matrixarray), performing irlba pca...
+#> Input is dense (matrixarray), performing irlba pca...
+```

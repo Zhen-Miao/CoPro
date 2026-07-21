@@ -9,6 +9,7 @@
 <url><loc>https://zhen-miao.github.io/CoPro/articles/colon_d9_multi_slide.html</loc></url>
 <url><loc>https://zhen-miao.github.io/CoPro/articles/index.html</loc></url>
 <url><loc>https://zhen-miao.github.io/CoPro/articles/kidney_guided_gradient.html</loc></url>
+<url><loc>https://zhen-miao.github.io/CoPro/articles/large_datasets.html</loc></url>
 <url><loc>https://zhen-miao.github.io/CoPro/articles/organoid_one_type.html</loc></url>
 <url><loc>https://zhen-miao.github.io/CoPro/authors.html</loc></url>
 <url><loc>https://zhen-miao.github.io/CoPro/index.html</loc></url>
@@ -27,7 +28,6 @@
 <url><loc>https://zhen-miao.github.io/CoPro/reference/computeNormalizedCorrelation.html</loc></url>
 <url><loc>https://zhen-miao.github.io/CoPro/reference/computeNormalizedCorrelationPermu.html</loc></url>
 <url><loc>https://zhen-miao.github.io/CoPro/reference/computePCA.html</loc></url>
-<url><loc>https://zhen-miao.github.io/CoPro/reference/computePCAMulti.html</loc></url>
 <url><loc>https://zhen-miao.github.io/CoPro/reference/computeRegressionGeneScores.html</loc></url>
 <url><loc>https://zhen-miao.github.io/CoPro/reference/computeSelfBidirCorr.html</loc></url>
 <url><loc>https://zhen-miao.github.io/CoPro/reference/computeSelfDistance.html</loc></url>

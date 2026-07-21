@@ -25,11 +25,8 @@ Create CoPro objects from spatial transcriptomics data
 
 The main CoPro analysis workflow
 
-- [`computePCA()`](https://zhen-miao.github.io/CoPro/reference/computePCAMulti.md)
-  : Compute PCA on Integrated Multi-Slide Data
-- [`computePCA(`*`<CoProSingle>`*`)`](https://zhen-miao.github.io/CoPro/reference/computePCA.md)
-  [`computePCA(`*`<CoProMulti>`*`)`](https://zhen-miao.github.io/CoPro/reference/computePCA.md)
-  : Compute PCA on Single-Slide Data
+- [`computePCA()`](https://zhen-miao.github.io/CoPro/reference/computePCA.md)
+  : Compute PCA on Single- or Multi-Slide Data
 - [`computeDistance()`](https://zhen-miao.github.io/CoPro/reference/computeDistance.md)
   : computeDistance between pairs of cell types
 - [`computeKernelMatrix()`](https://zhen-miao.github.io/CoPro/reference/computeKernelMatrix.md)

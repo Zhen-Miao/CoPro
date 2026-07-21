@@ -1,5 +1,37 @@
 # Changelog
 
+## CoPro 1.1.2
+
+### Documentation
+
+- New vignette *Handling very large datasets (Xenium, large MERFISH)*, a
+  how-to for keeping large runs in memory: sparse/BPCells input, early
+  [`subsetData()`](https://zhen-miao.github.io/CoPro/reference/subsetData.md),
+  small `nPCA` for targeted panels, and (most importantly) skipping
+  [`computeDistance()`](https://zhen-miao.github.io/CoPro/reference/computeDistance.md)
+  in favor of the sparse kernel path
+  (`computeKernelMatrix(method = "auto"/"sparse")` /
+  [`computeSparseKernel()`](https://zhen-miao.github.io/CoPro/reference/computeSparseKernel.md)).
+- Lowered `nPCA` from 40/30 to 15 in the targeted-panel vignettes (brain
+  MERFISH, colon D3, colon D9, organoid) so they follow the documented
+  10–15 guidance for imaging panels. Cell scores and normalized
+  correlations are unaffected by `nPCA`; the change improves gene-weight
+  reproducibility and score transfer, and makes the vignettes consistent
+  with the kidney example.
+
+### Internal
+
+- Removed the fully-commented legacy optimizer file and three unused
+  per-iteration update-vector helpers superseded by the precomputed
+  PC-space operator (`Y_resi`) path. Also removed a stranded file of
+  unexported, never-called soft-deprecation wrappers (`newCoPro`,
+  `newCoProm`, `subsetDataOne`, `subsetDataMulti`, `computePCAMulti`).
+  User-facing error messages that referenced the old `computePCAMulti` /
+  `subsetDataMulti` names now point to `computePCA` / `subsetData`.
+- Consolidated the `computePCA` documentation topic, which was
+  previously split under a stale `computePCAMulti` help page with a
+  bogus method alias.
+
 ## CoPro 1.1.1
 
 ### Performance

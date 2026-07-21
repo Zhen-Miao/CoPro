@@ -119,7 +119,7 @@ obj <- subsetData(obj, cellTypesOfInterest = cell_types)
 ``` r
 
 # PCA
-obj <- computePCA(obj, nPCA = 40, center = TRUE, scale. = TRUE)
+obj <- computePCA(obj, nPCA = 15, center = TRUE, scale. = TRUE)
 
 # Distance and kernel
 obj <- computeDistance(obj, distType = "Euclidean2D")
@@ -444,21 +444,16 @@ sessionInfo()
     ## [1] stats     graphics  grDevices utils     datasets  methods   base     
     ## 
     ## other attached packages:
-    ## [1] patchwork_1.3.2 ggplot2_4.0.1   CoPro_1.1.0     testthat_3.3.2 
+    ## [1] ggplot2_4.0.2 CoPro_1.1.1   knitr_1.51   
     ## 
     ## loaded via a namespace (and not attached):
-    ##  [1] generics_0.1.4     renv_1.1.7         lattice_0.22-9     magrittr_2.0.4    
-    ##  [5] evaluate_1.0.5     grid_4.5.2         RColorBrewer_1.1-3 pkgload_1.4.1     
-    ##  [9] fastmap_1.2.0      maps_3.4.3         rprojroot_2.1.1    Matrix_1.7-5      
-    ## [13] pkgbuild_1.4.8     sessioninfo_1.2.3  brio_1.1.5         purrr_1.2.1       
-    ## [17] spam_2.11-3        viridisLite_0.4.2  scales_1.4.0       isoband_0.3.0     
-    ## [21] cli_3.6.5          rlang_1.1.7        ellipsis_0.3.2     remotes_2.5.0     
-    ## [25] withr_3.0.2        cachem_1.1.0       yaml_2.3.12        devtools_2.4.6    
-    ## [29] otel_0.2.0         tools_4.5.2        parallel_4.5.2     memoise_2.0.1     
-    ## [33] dplyr_1.1.4        vctrs_0.7.1        R6_2.6.1           matrixStats_1.5.0 
-    ## [37] lifecycle_1.0.5    fs_1.6.6           MASS_7.3-65        usethis_3.2.1     
-    ## [41] irlba_2.3.7        pkgconfig_2.0.3    desc_1.4.3         pillar_1.11.1     
-    ## [45] gtable_0.3.6       glue_1.8.0         Rcpp_1.1.1         fields_17.1       
-    ## [49] xfun_0.56          tibble_3.3.1       tidyselect_1.2.1   rstudioapi_0.18.0 
-    ## [53] knitr_1.51         farver_2.1.2       labeling_0.4.3     dotCall64_1.2     
-    ## [57] compiler_4.5.2     S7_0.2.1
+    ##  [1] Matrix_1.7-5       gtable_0.3.6       dplyr_1.2.1        compiler_4.5.2    
+    ##  [5] maps_3.4.3         tidyselect_1.2.1   Rcpp_1.1.1         parallel_4.5.2    
+    ##  [9] scales_1.4.0       lattice_0.22-9     R6_2.6.1           labeling_0.4.3    
+    ## [13] generics_0.1.4     isoband_0.3.0      MASS_7.3-65        dotCall64_1.2     
+    ## [17] tibble_3.3.1       pillar_1.11.1      RColorBrewer_1.1-3 rlang_1.2.0       
+    ## [21] xfun_0.57          S7_0.2.1           otel_0.2.0         viridisLite_0.4.3 
+    ## [25] cli_3.6.5          withr_3.0.2        magrittr_2.0.5     grid_4.5.2        
+    ## [29] irlba_2.3.7        spam_2.11-3        lifecycle_1.0.5    fields_17.1       
+    ## [33] vctrs_0.7.2        evaluate_1.0.5     glue_1.8.0         farver_2.1.2      
+    ## [37] matrixStats_1.5.0  tools_4.5.2        pkgconfig_2.0.3

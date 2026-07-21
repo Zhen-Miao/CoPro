@@ -22,7 +22,7 @@
 
     <a class="navbar-brand me-2" href="index.html">CoPro</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.1.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.1.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -45,6 +45,9 @@
     <li><a class="dropdown-item" href="articles/colon_d0_multi_slide.html">Multi-slide, multi-type joint analysis (Colon Day 0)</a></li>
     <li><a class="dropdown-item" href="articles/colon_d9_multi_slide.html">Multi-slide analysis and score transfer (Colon Day 9)</a></li>
     <li><a class="dropdown-item" href="articles/kidney_guided_gradient.html">Supervised detection of spatial gradients (Kidney)</a></li>
+    <li><hr class="dropdown-divider"></li>
+    <li><h6 class="dropdown-header" data-toc-skip>Performance</h6></li>
+    <li><a class="dropdown-item" href="articles/large_datasets.html">Handling very large datasets (Xenium, large MERFISH)</a></li>
   </ul>
 </li>
 <li class="nav-item"><a class="nav-link" href="news/index.html">Changelog</a></li>
@@ -100,7 +103,7 @@
 <span></span>
 <span><span class="co"># Run the analysis pipeline</span></span>
 <span><span class="va">obj</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/subsetData.html">subsetData</a></span><span class="op">(</span><span class="va">obj</span>, cellTypesOfInterest <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"TypeA"</span>, <span class="st">"TypeB"</span><span class="op">)</span><span class="op">)</span></span>
-<span><span class="va">obj</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/computePCAMulti.html">computePCA</a></span><span class="op">(</span><span class="va">obj</span>, nPCA <span class="op">=</span> <span class="fl">30</span><span class="op">)</span></span>
+<span><span class="va">obj</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/computePCA.html">computePCA</a></span><span class="op">(</span><span class="va">obj</span>, nPCA <span class="op">=</span> <span class="fl">30</span><span class="op">)</span></span>
 <span><span class="va">obj</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/computeDistance.html">computeDistance</a></span><span class="op">(</span><span class="va">obj</span>, distType <span class="op">=</span> <span class="st">"Euclidean2D"</span><span class="op">)</span></span>
 <span><span class="va">obj</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/computeKernelMatrix.html">computeKernelMatrix</a></span><span class="op">(</span><span class="va">obj</span>, sigmaValues <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.05</span>, <span class="fl">0.1</span>, <span class="fl">0.2</span><span class="op">)</span><span class="op">)</span></span>
 <span><span class="va">obj</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/runSkrCCA.html">runSkrCCA</a></span><span class="op">(</span><span class="va">obj</span>, scalePCs <span class="op">=</span> <span class="cn">TRUE</span>, nCC <span class="op">=</span> <span class="fl">2</span><span class="op">)</span></span>

@@ -93,7 +93,7 @@ CoPro object with skrCCA results computed
 
 ## See also
 
-[`computePCA()`](https://zhen-miao.github.io/CoPro/reference/computePCAMulti.md),
+[`computePCA()`](https://zhen-miao.github.io/CoPro/reference/computePCA.md),
 [`computeKernelMatrix()`](https://zhen-miao.github.io/CoPro/reference/computeKernelMatrix.md),
 [`computeNormalizedCorrelation()`](https://zhen-miao.github.io/CoPro/reference/computeNormalizedCorrelation.md),
 [`computeGeneAndCellScores()`](https://zhen-miao.github.io/CoPro/reference/computeGeneAndCellScores.md)
@@ -101,7 +101,7 @@ CoPro object with skrCCA results computed
 Other spatial-pipeline:
 [`computeDistance()`](https://zhen-miao.github.io/CoPro/reference/computeDistance.md),
 [`computeKernelMatrix()`](https://zhen-miao.github.io/CoPro/reference/computeKernelMatrix.md),
-[`computePCA()`](https://zhen-miao.github.io/CoPro/reference/computePCAMulti.md),
+[`computePCA()`](https://zhen-miao.github.io/CoPro/reference/computePCA.md),
 [`computeSparseKernel()`](https://zhen-miao.github.io/CoPro/reference/computeSparseKernel.md),
 [`runGeneSpaceCCA()`](https://zhen-miao.github.io/CoPro/reference/runGeneSpaceCCA.md)
 

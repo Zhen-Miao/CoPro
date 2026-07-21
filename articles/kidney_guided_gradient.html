@@ -20,7 +20,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">CoPro</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.1.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.1.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -43,6 +43,9 @@
     <li><a class="dropdown-item" href="../articles/colon_d0_multi_slide.html">Multi-slide, multi-type joint analysis (Colon Day 0)</a></li>
     <li><a class="dropdown-item" href="../articles/colon_d9_multi_slide.html">Multi-slide analysis and score transfer (Colon Day 9)</a></li>
     <li><a class="dropdown-item" href="../articles/kidney_guided_gradient.html">Supervised detection of spatial gradients (Kidney)</a></li>
+    <li><hr class="dropdown-divider"></li>
+    <li><h6 class="dropdown-header" data-toc-skip>Performance</h6></li>
+    <li><a class="dropdown-item" href="../articles/large_datasets.html">Handling very large datasets (Xenium, large MERFISH)</a></li>
   </ul>
 </li>
 <li class="nav-item"><a class="nav-link" href="../news/index.html">Changelog</a></li>
@@ -224,7 +227,7 @@ tubule. CoPro uses this ordering as a biological prior:</p>
 <span></span>
 <span><span class="co"># For targeted spatial panels (seqFISH, ~1300 genes),</span></span>
 <span><span class="co"># use fewer PCs than for scRNA-seq</span></span>
-<span><span class="va">obj</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/computePCAMulti.html">computePCA</a></span><span class="op">(</span><span class="va">obj</span>, nPCA <span class="op">=</span> <span class="fl">15</span>, center <span class="op">=</span> <span class="cn">TRUE</span>, scale. <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></code></pre></div>
+<span><span class="va">obj</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/computePCA.html">computePCA</a></span><span class="op">(</span><span class="va">obj</span>, nPCA <span class="op">=</span> <span class="fl">15</span>, center <span class="op">=</span> <span class="cn">TRUE</span>, scale. <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></code></pre></div>
 </div>
 <div class="section level2">
 <h2 id="step-2-derive-supervised-tubular-weight-from-nephron-ordering">Step 2: Derive supervised tubular weight from nephron ordering<a class="anchor" aria-label="anchor" href="#step-2-derive-supervised-tubular-weight-from-nephron-ordering"></a>

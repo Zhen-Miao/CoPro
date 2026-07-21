@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">CoPro</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.1.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.1.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -28,6 +28,9 @@
     <li><a class="dropdown-item" href="../articles/colon_d0_multi_slide.html">Multi-slide, multi-type joint analysis (Colon Day 0)</a></li>
     <li><a class="dropdown-item" href="../articles/colon_d9_multi_slide.html">Multi-slide analysis and score transfer (Colon Day 9)</a></li>
     <li><a class="dropdown-item" href="../articles/kidney_guided_gradient.html">Supervised detection of spatial gradients (Kidney)</a></li>
+    <li><hr class="dropdown-divider"></li>
+    <li><h6 class="dropdown-header" data-toc-skip>Performance</h6></li>
+    <li><a class="dropdown-item" href="../articles/large_datasets.html">Handling very large datasets (Xenium, large MERFISH)</a></li>
   </ul></li>
 <li class="active nav-item"><a class="nav-link" href="../news/index.html">Changelog</a></li>
       </ul><ul class="navbar-nav"><li class="nav-item"><form class="form-inline" role="search">
@@ -45,6 +48,19 @@
       <small>Source: <a href="https://github.com/Zhen-Miao/CoPro/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="1.1.2" id="copro-112">CoPro 1.1.2<a class="anchor" aria-label="anchor" href="#copro-112"></a></h2>
+<div class="section level3">
+<h3 id="documentation-1-1-2">Documentation<a class="anchor" aria-label="anchor" href="#documentation-1-1-2"></a></h3>
+<ul><li>New vignette <em>Handling very large datasets (Xenium, large MERFISH)</em>, a how-to for keeping large runs in memory: sparse/BPCells input, early <code><a href="../reference/subsetData.html">subsetData()</a></code>, small <code>nPCA</code> for targeted panels, and (most importantly) skipping <code><a href="../reference/computeDistance.html">computeDistance()</a></code> in favor of the sparse kernel path (<code>computeKernelMatrix(method = "auto"/"sparse")</code> / <code><a href="../reference/computeSparseKernel.html">computeSparseKernel()</a></code>).</li>
+<li>Lowered <code>nPCA</code> from 40/30 to 15 in the targeted-panel vignettes (brain MERFISH, colon D3, colon D9, organoid) so they follow the documented 10–15 guidance for imaging panels. Cell scores and normalized correlations are unaffected by <code>nPCA</code>; the change improves gene-weight reproducibility and score transfer, and makes the vignettes consistent with the kidney example.</li>
+</ul></div>
+<div class="section level3">
+<h3 id="internal-1-1-2">Internal<a class="anchor" aria-label="anchor" href="#internal-1-1-2"></a></h3>
+<ul><li>Removed the fully-commented legacy optimizer file and three unused per-iteration update-vector helpers superseded by the precomputed PC-space operator (<code>Y_resi</code>) path. Also removed a stranded file of unexported, never-called soft-deprecation wrappers (<code>newCoPro</code>, <code>newCoProm</code>, <code>subsetDataOne</code>, <code>subsetDataMulti</code>, <code>computePCAMulti</code>). User-facing error messages that referenced the old <code>computePCAMulti</code> / <code>subsetDataMulti</code> names now point to <code>computePCA</code> / <code>subsetData</code>.</li>
+<li>Consolidated the <code>computePCA</code> documentation topic, which was previously split under a stale <code>computePCAMulti</code> help page with a bogus method alias.</li>
+</ul></div>
+</div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="1.1.1" id="copro-111">CoPro 1.1.1<a class="anchor" aria-label="anchor" href="#copro-111"></a></h2>
 <div class="section level3">

@@ -17,3 +17,8 @@
   9)](https://zhen-miao.github.io/CoPro/articles/colon_d9_multi_slide.md):
 - [Supervised detection of spatial gradients
   (Kidney)](https://zhen-miao.github.io/CoPro/articles/kidney_guided_gradient.md):
+
+### Performance
+
+- [Handling very large datasets (Xenium, large
+  MERFISH)](https://zhen-miao.github.io/CoPro/articles/large_datasets.md):

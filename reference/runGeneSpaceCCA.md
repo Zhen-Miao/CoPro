@@ -132,7 +132,7 @@ The CoPro object with gene weights in `geneScores`, cell scores in
 Requires kernel matrices to already be computed via
 [`computeKernelMatrix`](https://zhen-miao.github.io/CoPro/reference/computeKernelMatrix.md).
 Does NOT require
-[`computePCA`](https://zhen-miao.github.io/CoPro/reference/computePCAMulti.md).
+[`computePCA`](https://zhen-miao.github.io/CoPro/reference/computePCA.md).
 
 The objective maximized is: \$\$f\_{avg}(w) = \frac{1}{S}
 \sum\_{s=1}^{S} \sum\_{A\<B} \frac{w_A^\top C\_{AB}^{(s)}
@@ -187,6 +187,6 @@ degenerate canonical components on heterogeneous datasets. Use
 Other spatial-pipeline:
 [`computeDistance()`](https://zhen-miao.github.io/CoPro/reference/computeDistance.md),
 [`computeKernelMatrix()`](https://zhen-miao.github.io/CoPro/reference/computeKernelMatrix.md),
-[`computePCA()`](https://zhen-miao.github.io/CoPro/reference/computePCAMulti.md),
+[`computePCA()`](https://zhen-miao.github.io/CoPro/reference/computePCA.md),
 [`computeSparseKernel()`](https://zhen-miao.github.io/CoPro/reference/computeSparseKernel.md),
 [`runSkrCCA()`](https://zhen-miao.github.io/CoPro/reference/runSkrCCA.md)
