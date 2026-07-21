@@ -297,8 +297,9 @@
                                        maxIter, tol, n_cores, step_size = 1) {
   
   tryCatch({
-    # For the ordinary two-cell-type problem, one exact SVD of the aggregated
-    # PC-space operator returns every requested axis. Keep the general
+    # For the ordinary two-cell-type problem, one exact SVD of the summed small
+    # PC-space operator returns every requested axis. No stacked cell-level
+    # matrix or block-diagonal kernel is materialized. Keep the general
     # sequential route when the first axis was externally transferred, because
     # later axes must then be conditioned on that supplied direction.
     if (length(cts) == 2L && is.null(transferred_weight_1)) {

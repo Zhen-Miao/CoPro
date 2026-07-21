@@ -941,9 +941,10 @@ optimize_bilinear_multi_slides <- function(X_list_all, flat_kernels, sigma, slid
     X_list_all, flat_kernels, sigma, slides, cell_types, n_cores
   )
 
-  # Stacking samples with a block-diagonal spatial kernel is equivalent to
-  # summing their PC-space operators. The resulting two-type problem therefore
-  # has the same exact SVD solution as the single-slide case.
+  # Stacking samples with a block-diagonal spatial kernel is algebraically
+  # equivalent to summing their PC-space operators. We deliberately keep the
+  # sum and never materialize that larger kernel. The resulting two-type
+  # problem has the same exact SVD solution as the single-slide case.
   if (n_cell_types == 2L) {
     return(solve_two_type_svd(
       Y_aggregate, cell_types, nCC = 1L, sdev2_list = sdev2_list
@@ -1067,9 +1068,10 @@ optimize_bilinear_n_multi_slides <- function(X_list_all, flat_kernels, sigma, sl
     stop(paste("nCC (", nCC, ") must be greater than existing components (", k_start, ")"))
   }
   
-  # Shared weights make sample aggregation exact: sum the PC-space operators
-  # once, then solve and deflate that small aggregate. This is algebraically
-  # identical to stacking samples with a block-diagonal spatial kernel.
+  # Shared weights make sample aggregation exact: sum the small PC-space
+  # operators once, then solve and deflate that aggregate. This is algebraically
+  # identical to stacking samples with a block-diagonal spatial kernel, but we
+  # never materialize that larger kernel.
   Y_resi <- compute_Y_multi_slide(
     X_list_all, flat_kernels, sigma, slides, cell_types, n_cores
   )

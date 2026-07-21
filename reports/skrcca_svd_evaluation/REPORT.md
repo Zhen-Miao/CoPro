@@ -89,6 +89,26 @@ when weights are shared across samples, deflating each sample and then summing
 also agreed with summing first and deflating once to
 (4.97\times10^{-14}). The implementation now follows the latter route.
 
+#### Memory behavior
+
+The production implementation never constructs either the stacked cell-level
+matrix or the block-diagonal kernel above. `compute_Y_multi_slide()` computes
+each sample's (p\times p) contribution and reduces those contributions by
+summation, one cell-type pair at a time. Its persistent operator storage is
+(O(m(m-1)p^2)), independent of the number of cells and samples; parallel
+construction temporarily holds at most (O(Sp^2)) values for the current
+cell-type pair. For the evaluated case (three cell types, 13 samples, 40 PCs),
+these numeric payloads are approximately 75 KiB persistent plus 163 KiB
+temporary, excluding small R object overhead.
+
+The pre-change first-axis implementation already used this memory-efficient
+summation. The change made here is for later axes: the old path retained the
+full pairwise operator list for every sample, requiring
+(O(Sm(m-1)p^2)) storage, whereas the new path reuses the single summed
+operator. Thus the sample aggregation change reduces memory; it does not trade
+memory for speed. The large block matrices in the benchmark script are used
+only to test the reviewer's proposed algebra and are never called by CoPro.
+
 ### Three or more cell types
 
 One can form a symmetric block matrix (B) whose off-diagonal blocks are
@@ -222,8 +242,9 @@ testing. It is promising for future work but is not a drop-in replacement.
   from one exact dense SVD.
 - The public first/subsequent-component optimizers use the same exact two-type
   solution. A transferred first axis retains conditional sequential deflation.
-- Multi-slide optimization sums sample operators before higher-axis deflation,
-  which is exactly equivalent to a block-diagonal sample kernel.
+- Multi-slide optimization retains the existing memory-efficient operator sum
+  and now reuses that sum for higher-axis deflation; no stacked matrix or
+  block-diagonal sample kernel is materialized.
 - Unweighted analyses with more than two cell types use full projected
   deflation, restoring within-cell-type orthogonality.
 - The cached conditional-permutation CC1 path uses the same exact SVD as the
@@ -266,13 +287,16 @@ data (40 PCs, four axes), the SVD weights were identical to the iterative
 weights (absolute cosine 1.000000 for every axis) and reduced the skrCCA solve
 from 35.0 to 3.55 ms (9.9-fold).
 
-We also agree that samples can be absorbed into the spatial operator. Stacking
+We also agree algebraically that samples can be absorbed into the spatial
+operator. Stacking
 the sample-specific (X_{is}) and defining
 (\widetilde K_{ij}=\operatorname{blockdiag}(K_{ij,1},\ldots,K_{ij,S})) gives
 (\widetilde X_i^{\mathsf T}\widetilde K_{ij}\widetilde X_j
 =\sum_sX_{is}^{\mathsf T}K_{ij,s}X_{js}). We now perform the equivalent, more
-memory-efficient operation of summing the small PC-space operators before
-optimization and deflation.
+memory-efficient operation of summing the small PC-space operators. This sum
+was already used for the first axis; we now also reuse it for higher-axis
+deflation rather than storing sample-specific residual operators. At no point
+do we materialize the stacked cell-level matrix or block-diagonal kernel.
 
 The reason we retain a different strategy for three or more cell types is that
 the problem is then multiset rather than ordinary two-set CCA. CoPro constrains
