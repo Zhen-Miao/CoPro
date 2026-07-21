@@ -88,58 +88,6 @@ check_convergence <- function(w_list_new, w_list_old, cell_types) {
   return(current_max_diff)
 }
 
-#' Compute update vector for cell type i in standard case
-#' @param ct_i Cell type i
-#' @param cell_types All cell types
-#' @param X_list Data matrices
-#' @param flat_kernels Flat kernel matrices
-#' @param sigma Sigma value
-#' @param w_list Current weights
-#' @param n_features Number of features
-#' @param slide Slide ID (NULL for single slide)
-#' @return Update vector for ct_i
-#' @noRd
-compute_update_vector_standard <- function(ct_i, cell_types, X_list, flat_kernels, sigma, w_list, n_features, slide = NULL) {
-  w_i_update_vec <- matrix(0, nrow = n_features, ncol = 1)
-  
-  for (ct_j in cell_types) {
-    if (ct_i == ct_j) next
-    
-    # Get K_ij from flat structure
-    K12 <- get_kernel_matrix_flat(flat_kernels, sigma, ct_i, ct_j, slide)
-    
-    # Get matrices and current weights
-    X1 <- X_list[[ct_i]]
-    X2 <- X_list[[ct_j]]
-    w2 <- w_list[[ct_j]]
-    
-    # Efficient calculation: t(X1) %*% (K12 %*% (X2 %*% w2))
-    v2 <- X2 %*% w2
-    kv2 <- K12 %*% v2
-    update_contribution <- crossprod(X1, kv2) # This is Y_ij %*% w_j
-    
-    # update weight vector
-    w_i_update_vec <- w_i_update_vec + update_contribution
-  }
-  
-  return(w_i_update_vec)
-}
-
-#' Compute update vector for within-cell-type case
-#' @param X Data matrix
-#' @param K Kernel matrix
-#' @param w Current weight vector
-#' @return Update vector
-#' @noRd
-compute_update_vector_within <- function(X, K, w) {
-  # Y = t(X) %*% K %*% X for within-cell-type
-  # w_new = Y %*% w = t(X) %*% K %*% X %*% w
-  Xw <- X %*% w
-  KXw <- K %*% Xw
-  w_update <- crossprod(X, KXw)
-  return(w_update)
-}
-
 #' SkrCCA optimization function for multiple groups (Single Slide) - First Component
 #' Uses flat kernel structure for consistent data access
 #'
@@ -839,48 +787,6 @@ compute_Y_multi_slide <- function(X_list_all, flat_kernels, sigma, slides, cell_
   }
   
   return(Y_aggregate)
-}
-
-#' Compute update vector for multi-slide optimization
-#' @param ct_i Cell type to update
-#' @param cell_types All cell types
-#' @param X_list_all List of lists of data matrices
-#' @param flat_kernels Flat kernel matrices
-#' @param sigma Sigma value
-#' @param slides Slide IDs
-#' @param w_list Current weights
-#' @param n_features Number of features
-#' @param n_cores Number of cores
-#' @return Update vector
-#' @noRd
-compute_update_vector_multi_slide <- function(ct_i, cell_types, X_list_all, flat_kernels, 
-                                             sigma, slides, w_list, n_features, n_cores = 1) {
-  n_slides <- length(X_list_all)
-  w_i_update_vec <- matrix(0, nrow = n_features, ncol = 1)
-  
-  for (ct_j in cell_types) {
-    if (ct_i == ct_j) next
-    
-    w_j <- w_list[[ct_j]]
-    
-    # Compute contribution from all slides in parallel
-    contributions <- mclapply(seq_len(n_slides), function(q) {
-      X_i <- X_list_all[[q]][[ct_i]]
-      X_j <- X_list_all[[q]][[ct_j]]
-      K_ij <- get_kernel_matrix_flat(flat_kernels, sigma, ct_i, ct_j, slides[q])
-      
-      # Efficient computation: t(X_i) %*% K_ij %*% (X_j %*% w_j)
-      v_j <- X_j %*% w_j
-      kv_j <- K_ij %*% v_j
-      crossprod(X_i, kv_j)
-    }, mc.cores = n_cores)
-    
-    # Sum contributions from all slides
-    contribution_sum <- Reduce("+", contributions)
-    w_i_update_vec <- w_i_update_vec + contribution_sum
-  }
-  
-  return(w_i_update_vec)
 }
 
 # ============================================================================

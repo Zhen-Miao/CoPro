@@ -120,3 +120,8 @@ articles:
       - colon_d0_multi_slide
       - colon_d9_multi_slide
       - kidney_guided_gradient
+
+  - title: "Performance"
+    navbar: "Performance"
+    contents:
+      - large_datasets

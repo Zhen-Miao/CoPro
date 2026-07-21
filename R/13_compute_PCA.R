@@ -34,8 +34,7 @@
 #' obj <- subsetData(obj, cellTypesOfInterest = unique(toy$cellTypes))
 #' obj <- computePCA(obj, nPCA = 10)
 #' @export
-#' @rdname computePCAMulti
-#' @aliases computePCAMulti,CoProMulti-method
+#' @rdname computePCA
 setGeneric("computePCA",
            function(object, nPCA = 40,
                     center = TRUE, scale. = TRUE,
@@ -185,7 +184,7 @@ setGeneric("computePCA",
   # Check cell types of interest
   cts <- object@cellTypesOfInterest
   if (length(cts) == 0) {
-    stop("cellTypesOfInterest not set. Run subsetDataMulti first.")
+    stop("cellTypesOfInterest not set. Run subsetData first.")
   }
 
   return(cts)

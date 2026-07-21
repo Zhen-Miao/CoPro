@@ -60,7 +60,7 @@ obj <- newCoProSingle(
 obj <- subsetData(obj, cellTypesOfInterest = cell_types)
 
 # Core pipeline
-obj <- computePCA(obj, nPCA = 40, center = TRUE, scale. = TRUE)
+obj <- computePCA(obj, nPCA = 15, center = TRUE, scale. = TRUE)
 obj <- computeDistance(obj, distType = "Euclidean2D",
                        normalizeDistance = FALSE)
 obj <- computeKernelMatrix(obj, sigmaValues = c(0.1, 0.14, 0.2, 0.5))

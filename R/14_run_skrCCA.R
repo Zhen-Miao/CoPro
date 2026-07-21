@@ -43,14 +43,14 @@
     # Multi-slide case
     # pc_data is pcaResults
     if (length(pc_data) == 0) {
-      stop("PCA results missing. Run computePCAMulti.")
+      stop("PCA results missing. Run computePCA.")
     }
 
     
     if (scalePCs) {
       if (is.null(pca_global) || length(pca_global) == 0) {
         stop(paste("Cannot scale PCs: pcaGlobal slot is empty.",
-                   "Ensure computePCAMulti was run successfully."))
+                   "Ensure computePCA was run successfully."))
       }
       
       missing_cts <- cts[!cts %in% names(pca_global)]

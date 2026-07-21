@@ -139,7 +139,7 @@ ref_obj <- newCoProSingle(
 ref_obj <- subsetData(ref_obj, cellTypesOfInterest = cell_types)
 
 # Run pipeline
-ref_obj <- computePCA(ref_obj, nPCA = 40, center = TRUE, scale. = TRUE)
+ref_obj <- computePCA(ref_obj, nPCA = 15, center = TRUE, scale. = TRUE)
 ref_obj <- computeDistance(ref_obj, distType = "Euclidean2D")
 
 sigma_choice <- c(0.005, 0.01, 0.02, 0.05, 0.1)
@@ -276,7 +276,7 @@ tar1_obj <- newCoProSingle(
   cellTypes = dat$cellTypes[tar1_idx]
 )
 tar1_obj <- subsetData(tar1_obj, cellTypesOfInterest = cell_types)
-tar1_obj <- computePCA(tar1_obj, nPCA = 40, center = TRUE, scale. = TRUE)
+tar1_obj <- computePCA(tar1_obj, nPCA = 15, center = TRUE, scale. = TRUE)
 tar1_obj <- computeDistance(tar1_obj, distType = "Euclidean2D")
 tar1_obj <- computeKernelMatrix(tar1_obj, sigmaValues = sigma_choice)
 
@@ -288,7 +288,7 @@ tar2_obj <- newCoProSingle(
   cellTypes = dat$cellTypes[tar2_idx]
 )
 tar2_obj <- subsetData(tar2_obj, cellTypesOfInterest = cell_types)
-tar2_obj <- computePCA(tar2_obj, nPCA = 40, center = TRUE, scale. = TRUE)
+tar2_obj <- computePCA(tar2_obj, nPCA = 15, center = TRUE, scale. = TRUE)
 tar2_obj <- computeDistance(tar2_obj, distType = "Euclidean2D")
 tar2_obj <- computeKernelMatrix(tar2_obj, sigmaValues = sigma_choice)
 ```
@@ -449,7 +449,7 @@ multi_obj <- newCoProMulti(
 multi_obj <- subsetData(multi_obj, cellTypesOfInterest = cell_types)
 
 # The rest of the pipeline is identical
-multi_obj <- computePCA(multi_obj, nPCA = 40, center = TRUE, scale. = TRUE)
+multi_obj <- computePCA(multi_obj, nPCA = 15, center = TRUE, scale. = TRUE)
 multi_obj <- computeDistance(multi_obj, distType = "Euclidean2D")
 multi_obj <- computeKernelMatrix(multi_obj, sigmaValues = sigma_choice)
 multi_obj <- runSkrCCA(multi_obj, scalePCs = TRUE, maxIter = 500, nCC = 2)
