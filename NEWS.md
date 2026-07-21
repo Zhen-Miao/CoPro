@@ -1,3 +1,18 @@
+# CoPro 1.1.1
+
+## Performance
+
+* Two-cell-type skrCCA now solves all requested canonical axes with one exact
+  SVD of the summed PC-space cross-operator. Multi-slide analyses retain the
+  existing memory-efficient summation and do not construct a stacked cell
+  matrix or block-diagonal spatial kernel.
+
+## Bug fixes
+
+* Higher skrCCA axes for three or more cell types now use full two-sided
+  projection deflation, preventing later axes from reusing directions selected
+  by earlier axes under the default scaled-PC formulation.
+
 # CoPro 1.1.0
 
 ## Citation

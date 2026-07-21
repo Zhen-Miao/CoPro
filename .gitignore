@@ -10,5 +10,6 @@ README.knit.md
 *.tar.gz
 *.Rcheck/
 experiments/
+reports/skrcca_svd_evaluation/
 src/*.o
 src/*.so
