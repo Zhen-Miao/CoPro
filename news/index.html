@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">CoPro</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.1.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.1.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -45,6 +45,17 @@
       <small>Source: <a href="https://github.com/Zhen-Miao/CoPro/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="1.1.1" id="copro-111">CoPro 1.1.1<a class="anchor" aria-label="anchor" href="#copro-111"></a></h2>
+<div class="section level3">
+<h3 id="performance-1-1-1">Performance<a class="anchor" aria-label="anchor" href="#performance-1-1-1"></a></h3>
+<ul><li>Two-cell-type skrCCA now solves all requested canonical axes with one exact SVD of the summed PC-space cross-operator. Multi-slide analyses retain the existing memory-efficient summation and do not construct a stacked cell matrix or block-diagonal spatial kernel.</li>
+</ul></div>
+<div class="section level3">
+<h3 id="bug-fixes-1-1-1">Bug fixes<a class="anchor" aria-label="anchor" href="#bug-fixes-1-1-1"></a></h3>
+<ul><li>Higher skrCCA axes for three or more cell types now use full two-sided projection deflation, preventing later axes from reusing directions selected by earlier axes under the default scaled-PC formulation.</li>
+</ul></div>
+</div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="1.1.0" id="copro-110">CoPro 1.1.0<a class="anchor" aria-label="anchor" href="#copro-110"></a></h2>
 <div class="section level3">

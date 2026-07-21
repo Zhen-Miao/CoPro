@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">CoPro</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.1.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.1.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -169,11 +169,7 @@ convergence, which can help with many cells or many CCs.</p></dd>
 <span class="r-in"><span><span class="va">obj</span> <span class="op">&lt;-</span> <span class="fu"><a href="computeKernelMatrix.html">computeKernelMatrix</a></span><span class="op">(</span><span class="va">obj</span>, sigmaValues <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.05</span>, <span class="fl">0.1</span><span class="op">)</span>, verbose <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="va">obj</span> <span class="op">&lt;-</span> <span class="fu">runSkrCCA</span><span class="op">(</span><span class="va">obj</span>, scalePCs <span class="op">=</span> <span class="cn">TRUE</span>, nCC <span class="op">=</span> <span class="fl">2</span><span class="op">)</span></span></span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span> Running skrCCA [1/2] for sigma = 0.05 ...</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [1] "Convergence reached at 4 iterations (Max diff = 7.744e-06 )"</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [1] "Convergence reached at 0 iterations (Max diff = 1.080e-14 )"</span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span> Running skrCCA [2/2] for sigma = 0.1 ...</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [1] "Convergence reached at 4 iterations (Max diff = 4.003e-07 )"</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [1] "Convergence reached at 0 iterations (Max diff = 1.943e-15 )"</span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span> skrCCA finished 2 sigma value(s) in 0.0 s.</span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span> Optimization succeeded for 2 sigma value(s): sigma_0.05, sigma_0.1</span>
 <span class="r-in"><span><span class="co"># }</span></span></span>
