@@ -1,7 +1,8 @@
-#' Compute PCA on Integrated Multi-Slide Data
+#' Compute PCA on Single- or Multi-Slide Data
 #'
-#' Performs PCA on the integrated data stored within the `CoProMulti` object.
-#' Assumes integration has created a common space across slides.
+#' Performs PCA on the normalized data stored within a `CoProSingle` or
+#' `CoProMulti` object. For multi-slide objects, the data is assumed to have
+#' already been integrated into a common space across slides.
 #'
 #' @importFrom stats setNames prcomp
 #' @importFrom irlba prcomp_irlba
@@ -300,11 +301,6 @@ setGeneric("computePCA",
   return(object)
 }
 
-#' Compute PCA on Single-Slide Data
-#'
-#' This method performs PCA on the normalized data stored within the `CoProSingle` object.
-#' It assumes that the data has already been integrated across slides.
-#'
 #' @param object A `CoProSingle` object with the `normalizedData` slot populated.
 #' @param nPCA Number of principal components to compute for each cell type.
 #' @param center Whether to center the matrix before PCA
@@ -326,11 +322,6 @@ setMethod("computePCA", "CoProSingle",
             return(object)
           })
 
-#' Compute PCA on Multi-Slide Data
-#'
-#' This method performs PCA on the normalized data stored within the `CoProMulti` object.
-#' It assumes that the data has already been integrated across slides.
-#'
 #' @param object A `CoProMulti` object with the `normalizedData` slot populated.
 #' @param nPCA Number of principal components to compute for each cell type.
 #' @param center Whether to center the matrix before PCA

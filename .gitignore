@@ -13,3 +13,8 @@ experiments/
 reports/skrcca_svd_evaluation/
 src/*.o
 src/*.so
+
+# Working-directory / rendered artifacts (not part of the package)
+Rplots.pdf
+embedding.tsv
+vignettes/*.html

@@ -4,7 +4,7 @@
 \alias{computePCA}
 \alias{computePCA,CoProSingle-method}
 \alias{computePCA,CoProMulti-method}
-\title{Compute PCA on Integrated Multi-Slide Data}
+\title{Compute PCA on Single- or Multi-Slide Data}
 \usage{
 computePCA(
   object,
@@ -51,14 +51,9 @@ A \code{CoProMulti} object with the \code{pcaResults} slot populated.
 \code{pcaResults} structure: \code{list(slideID = list(cellType = pc_matrix))}.
 }
 \description{
-Performs PCA on the integrated data stored within the \code{CoProMulti} object.
-Assumes integration has created a common space across slides.
-
-This method performs PCA on the normalized data stored within the \code{CoProSingle} object.
-It assumes that the data has already been integrated across slides.
-
-This method performs PCA on the normalized data stored within the \code{CoProMulti} object.
-It assumes that the data has already been integrated across slides.
+Performs PCA on the normalized data stored within a \code{CoProSingle} or
+\code{CoProMulti} object. For multi-slide objects, the data is assumed to have
+already been integrated into a common space across slides.
 }
 \examples{
 toy <- readRDS(system.file("extdata", "toy_copro_data.rds", package = "CoPro"))
