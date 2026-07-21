@@ -100,6 +100,133 @@ test_that("optimize_bilinear_n computes multiple components", {
   expect_equal(ncol(w_list_n$TypeB), 3)
 })
 
+test_that("two-cell-type skrCCA axes equal one exact SVD", {
+  set.seed(20260720)
+  n_a <- 55
+  n_b <- 43
+  p <- 8
+  X_list <- list(
+    TypeA = matrix(rnorm(n_a * p), n_a, p),
+    TypeB = matrix(rnorm(n_b * p), n_b, p)
+  )
+  K <- matrix(rnorm(n_a * n_b), n_a, n_b)
+  kernels <- list("kernel|sigma0.1|TypeA|TypeB" = K)
+  Y <- crossprod(X_list$TypeA, K %*% X_list$TypeB)
+  expected <- svd(Y, nu = 4, nv = 4)
+
+  first <- optimize_bilinear(
+    X_list, kernels, sigma = 0.1, max_iter = 500, tol = 1e-10
+  )
+  result <- optimize_bilinear_n(
+    X_list, kernels, sigma = 0.1, w_list = first,
+    cellTypesOfInterest = names(X_list), nCC = 4,
+    max_iter = 500, tol = 1e-10
+  )
+
+  expect_equal(abs(crossprod(result$TypeA, expected$u)), diag(4),
+               tolerance = 1e-8)
+  expect_equal(abs(crossprod(result$TypeB, expected$v)), diag(4),
+               tolerance = 1e-8)
+  expect_equal(crossprod(result$TypeA), diag(4), tolerance = 1e-10)
+  expect_equal(crossprod(result$TypeB), diag(4), tolerance = 1e-10)
+})
+
+test_that("two-cell-type SVD respects weighted CCA constraints", {
+  set.seed(20260721)
+  n <- 50
+  p <- 7
+  X_list <- list(
+    TypeA = matrix(rnorm(n * p), n, p),
+    TypeB = matrix(rnorm(n * p), n, p)
+  )
+  K <- matrix(rnorm(n * n), n, n)
+  kernels <- list("kernel|sigma0.1|TypeA|TypeB" = K)
+  metrics <- list(TypeA = runif(p, 0.5, 3), TypeB = runif(p, 0.5, 3))
+
+  first <- optimize_bilinear(
+    X_list, kernels, sigma = 0.1, sdev2_list = metrics
+  )
+  result <- optimize_bilinear_n(
+    X_list, kernels, sigma = 0.1, w_list = first,
+    cellTypesOfInterest = names(X_list), nCC = 3,
+    sdev2_list = metrics
+  )
+
+  expect_equal(crossprod(result$TypeA, metrics$TypeA * result$TypeA),
+               diag(3), tolerance = 1e-10)
+  expect_equal(crossprod(result$TypeB, metrics$TypeB * result$TypeB),
+               diag(3), tolerance = 1e-10)
+})
+
+test_that("multi-cell-type higher axes use orthogonal projection", {
+  set.seed(20260722)
+  n <- 45
+  p <- 8
+  cell_types <- c("TypeA", "TypeB", "TypeC")
+  X_list <- setNames(lapply(cell_types, function(x) {
+    matrix(rnorm(n * p), n, p)
+  }), cell_types)
+  kernels <- list(
+    "kernel|sigma0.1|TypeA|TypeB" = matrix(rnorm(n * n), n, n),
+    "kernel|sigma0.1|TypeA|TypeC" = matrix(rnorm(n * n), n, n),
+    "kernel|sigma0.1|TypeB|TypeC" = matrix(rnorm(n * n), n, n)
+  )
+
+  first <- optimize_bilinear(
+    X_list, kernels, sigma = 0.1, max_iter = 1000, tol = 1e-8
+  )
+  result <- optimize_bilinear_n(
+    X_list, kernels, sigma = 0.1, w_list = first,
+    cellTypesOfInterest = cell_types, nCC = 3,
+    max_iter = 1000, tol = 1e-8
+  )
+
+  for (ct in cell_types) {
+    expect_equal(crossprod(result[[ct]]), diag(3), tolerance = 1e-6)
+  }
+})
+
+test_that("multi-slide two-type SVD uses the sum of slide operators", {
+  set.seed(20260723)
+  p <- 6
+  slides <- c("slide1", "slide2")
+  cell_types <- c("TypeA", "TypeB")
+  X_all <- list(
+    slide1 = list(
+      TypeA = matrix(rnorm(35 * p), 35, p),
+      TypeB = matrix(rnorm(28 * p), 28, p)
+    ),
+    slide2 = list(
+      TypeA = matrix(rnorm(30 * p), 30, p),
+      TypeB = matrix(rnorm(32 * p), 32, p)
+    )
+  )
+  K1 <- matrix(rnorm(35 * 28), 35, 28)
+  K2 <- matrix(rnorm(30 * 32), 30, 32)
+  kernels <- list(
+    "kernel|sigma0.1|slide1|TypeA|TypeB" = K1,
+    "kernel|sigma0.1|slide2|TypeA|TypeB" = K2
+  )
+  Y_sum <- crossprod(X_all$slide1$TypeA, K1 %*% X_all$slide1$TypeB) +
+    crossprod(X_all$slide2$TypeA, K2 %*% X_all$slide2$TypeB)
+  expected <- svd(Y_sum, nu = 3, nv = 3)
+
+  first <- optimize_bilinear_multi_slides(
+    X_all, kernels, sigma = 0.1, slides = slides,
+    max_iter = 500, tol = 1e-10
+  )
+  result <- optimize_bilinear_n_multi_slides(
+    X_all, kernels, sigma = 0.1, slides = slides, w_list = first,
+    cellTypesOfInterest = cell_types, nCC = 3,
+    max_iter = 500, tol = 1e-10
+  )
+
+  expect_equal(abs(crossprod(result$TypeA, expected$u)), diag(3),
+               tolerance = 1e-8)
+  expect_equal(abs(crossprod(result$TypeB, expected$v)), diag(3),
+               tolerance = 1e-8)
+})
+
 test_that("weight vectors are normalized", {
   set.seed(42)
   n_cells <- 50

@@ -1,0 +1,34 @@
+R version 4.5.2 (2025-10-31)
+Platform: aarch64-apple-darwin20
+Running under: macOS Tahoe 26.1
+
+Matrix products: default
+BLAS:   /System/Library/Frameworks/Accelerate.framework/Versions/A/Frameworks/vecLib.framework/Versions/A/libBLAS.dylib
+LAPACK: /Library/Frameworks/R.framework/Versions/4.5-arm64/Resources/lib/libRlapack.dylib;  LAPACK version 3.12.1
+
+locale:
+[1] C.UTF-8/C.UTF-8/C.UTF-8/C/C.UTF-8/C.UTF-8
+
+time zone: America/Los_Angeles
+tzcode source: internal
+
+attached base packages:
+[1] stats     graphics  grDevices utils     datasets  methods   base
+
+other attached packages:
+[1] Matrix_1.7-5   CoPro_1.1.0    testthat_3.3.2
+
+loaded via a namespace (and not attached):
+ [1] gtable_0.3.6       dplyr_1.2.1        compiler_4.5.2     brio_1.1.5
+ [5] maps_3.4.3         tidyselect_1.2.1   Rcpp_1.1.1         parallel_4.5.2
+ [9] scales_1.4.0       fastmap_1.2.0      lattice_0.22-9     ggplot2_4.0.2
+[13] R6_2.6.1           generics_0.1.4     dotCall64_1.2      tibble_3.3.1
+[17] desc_1.4.3         rprojroot_2.1.1    pillar_1.11.1      RColorBrewer_1.1-3
+[21] rlang_1.2.0        cachem_1.1.0       S7_0.2.1           fs_2.0.1
+[25] otel_0.2.0         pkgload_1.5.1      viridisLite_0.4.3  memoise_2.0.1
+[29] cli_3.6.5          withr_3.0.2        magrittr_2.0.5     grid_4.5.2
+[33] rstudioapi_0.18.0  irlba_2.3.7        devtools_2.5.0     spam_2.11-3
+[37] lifecycle_1.0.5    fields_17.1        vctrs_0.7.2        glue_1.8.0
+[41] farver_2.1.2       sessioninfo_1.2.3  pkgbuild_1.4.8     purrr_1.2.1
+[45] matrixStats_1.5.0  tools_4.5.2        usethis_3.2.1      pkgconfig_2.0.3
+[49] ellipsis_0.3.3

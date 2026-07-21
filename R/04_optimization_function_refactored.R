@@ -170,12 +170,22 @@ optimize_bilinear <- function(X_list, flat_kernels, sigma, max_iter = 1000,
   if (is.null(cell_types)) stop("Input X_list must be a named list.")
   n_features <- ncol(X_list[[cell_types[1]]])
 
-  # Initialize w_list using SVD
-  w_list <- initialize_weights_svd(X_list, cell_types)
-
   # Precompute small PC-space operator matrices once, then run power iteration
   # using Y_ij %*% w_j. This avoids repeated X' K X products per iteration.
   Y_resi <- compute_Y_resi(X_list, flat_kernels, sigma, cell_types, slide = NULL)
+
+  # With exactly two cell types, the separate unit-norm constraints give the
+  # ordinary singular-vector variational problem. Solve it directly rather
+  # than iterating. optimize_bilinear_n() reuses this result for all axes.
+  if (length(cell_types) == 2L) {
+    return(solve_two_type_svd(
+      Y_resi, cell_types, nCC = 1L, sdev2_list = sdev2_list
+    ))
+  }
+
+  # Initialize the non-SVD cases.
+  w_list <- initialize_weights_svd(X_list, cell_types)
+
   w_list <- bilinear_w_from_Y_resi(
     w_list_new = w_list,
     Y_resi = Y_resi,
@@ -238,6 +248,81 @@ compute_Y_resi <- function(X_list, flat_kernels, sigma, cell_types, slide = NULL
   return(Y_resi)
 }
 
+#' Solve the exact two-cell-type skrCCA problem by SVD
+#'
+#' For two cell types, skrCCA maximizes \code{w1' Y12 w2} subject to one
+#' unit-norm constraint per weight vector. This is exactly the singular-vector
+#' variational problem for \code{Y12}, so one decomposition gives all axes.
+#' When \code{sdev2_list} is supplied, the diagonal CCA metrics are removed
+#' before the SVD and restored afterwards.
+#'
+#' @param Y_resi PC-space operator matrices.
+#' @param cell_types The two cell-type names.
+#' @param nCC Number of axes to return.
+#' @param sdev2_list Optional diagonal CCA metrics.
+#' @return Named list of weight matrices, one per cell type.
+#' @noRd
+solve_two_type_svd <- function(Y_resi, cell_types, nCC = 1L,
+                               sdev2_list = NULL) {
+  if (length(cell_types) != 2L) {
+    stop("solve_two_type_svd requires exactly two cell types")
+  }
+
+  ct1 <- cell_types[[1L]]
+  ct2 <- cell_types[[2L]]
+  Y12 <- as.matrix(Y_resi[[ct1]][[ct2]])
+  max_axes <- min(dim(Y12))
+  if (nCC > max_axes) {
+    stop("nCC cannot exceed the dimension of the two-type PC-space operator (",
+         max_axes, ")")
+  }
+
+  if (!is.null(sdev2_list)) {
+    inv_sqrt_d1 <- 1 / sqrt(sdev2_list[[ct1]])
+    inv_sqrt_d2 <- 1 / sqrt(sdev2_list[[ct2]])
+    Y12 <- sweep(sweep(Y12, 1L, inv_sqrt_d1, "*"),
+                 2L, inv_sqrt_d2, "*")
+  }
+
+  decomp <- svd(Y12, nu = nCC, nv = nCC)
+  W1 <- decomp$u[, seq_len(nCC), drop = FALSE]
+  W2 <- decomp$v[, seq_len(nCC), drop = FALSE]
+
+  if (!is.null(sdev2_list)) {
+    W1 <- sweep(W1, 1L, inv_sqrt_d1, "*")
+    W2 <- sweep(W2, 1L, inv_sqrt_d2, "*")
+  }
+
+  setNames(list(W1, W2), cell_types)
+}
+
+#' Check whether supplied first-axis weights equal the exact two-type solution
+#' @noRd
+matches_two_type_first_axis <- function(w_list, svd_weights, cell_types,
+                                        sdev2_list = NULL,
+                                        tolerance = 1e-4) {
+  cosines <- vapply(cell_types, function(ct) {
+    supplied <- w_list[[ct]][, 1L, drop = TRUE]
+    exact <- svd_weights[[ct]][, 1L, drop = TRUE]
+    if (is.null(sdev2_list)) {
+      cosine <- sum(supplied * exact) /
+        sqrt(sum(supplied^2) * sum(exact^2))
+    } else {
+      metric <- sdev2_list[[ct]]
+      cosine <- sum(metric * supplied * exact) /
+        sqrt(sum(metric * supplied^2) * sum(metric * exact^2))
+    }
+    cosine
+  }, numeric(1))
+
+  # Both blocks may flip together without changing the bilinear direction; an
+  # opposite sign in only one block represents the negative singular pair and
+  # must remain on the conditional sequential path.
+  all(is.finite(cosines)) &&
+    all(abs(abs(cosines) - 1) <= tolerance) &&
+    prod(sign(cosines)) > 0
+}
+
 #' Apply deflation to Y_resi
 #' @param Y_resi Current Y_resi structure
 #' @param w_list Weight list
@@ -245,9 +330,9 @@ compute_Y_resi <- function(X_list, flat_kernels, sigma, cell_types, slide = NULL
 #' @param cell_types Cell type names
 #' @param deflation How to remove the (w1, w2) direction from Y. `"rank1"`
 #'   (default) subtracts the rank-1 bilinear component
-#'   `Y - (w1^T Y w2) w1 w2^T`; when `w1, w2` are the leading singular vectors of
-#'   `Y` (the observed, converged case) this equals the full projection, so the
-#'   observed sequential CCA is unchanged. `"projection"` applies the full
+#'   `Y - (w1^T Y w2) w1 w2^T`; when `w1, w2` are singular vectors of
+#'   `Y` (the ordinary two-cell-type case) this equals the full projection.
+#'   `"projection"` applies the full
 #'   orthogonal projection `(I - u u^T) Y (I - v v^T)` with unit `u, v` -- the
 #'   Freedman-Lane / Legendre-Oksanen-ter Braak (2011) residualization. The two
 #'   agree on the observed `Y` but differ on a permuted `Y` (where `w1, w2` are
@@ -502,10 +587,38 @@ optimize_bilinear_n <- function(X_list, flat_kernels, sigma, w_list,
   # Initialize Y_resi structure using original data
   Y_resi <- compute_Y_resi(X_list, flat_kernels, sigma, cts, slide = NULL)
 
+  # The ordinary two-type run has an exact all-axis SVD. Preserve the
+  # sequential path when a supplied/transferred first axis does not equal the
+  # leading singular direction, because later axes are then conditional on
+  # that external direction.
+  if (n_mat == 2L) {
+    svd_weights <- solve_two_type_svd(
+      Y_resi, cts, nCC = nCC, sdev2_list = sdev2_list
+    )
+    if (matches_two_type_first_axis(
+      w_list, svd_weights, cts, sdev2_list = sdev2_list
+    )) {
+      return(svd_weights)
+    }
+  }
+
   # Loop to compute components k_start + 1 up to nCC
   for (qq in k_start:(nCC - 1)) {
     # Step 1: Apply deflation using component qq
-    Y_resi <- apply_deflation(Y_resi, w_list, qq, cts, sdev2_list)
+    # Rank-one subtraction is identical to projection for two-type singular
+    # vectors, but not for the multi-set (>2 type) stationary equations. Full
+    # projection is required there to keep later axes orthogonal within every
+    # cell type. Weighted projection is not defined, so that case retains the
+    # established weighted rank-one rule.
+    deflation_method <- if (n_mat > 2L && is.null(sdev2_list)) {
+      "projection"
+    } else {
+      "rank1"
+    }
+    Y_resi <- apply_deflation(
+      Y_resi, w_list, qq, cts, sdev2_list,
+      deflation = deflation_method
+    )
 
     # Step 2: Initialize w_list_new for component qq+1
     w_list_new <- initialize_next_component(Y_resi, cts)
@@ -828,6 +941,15 @@ optimize_bilinear_multi_slides <- function(X_list_all, flat_kernels, sigma, slid
     X_list_all, flat_kernels, sigma, slides, cell_types, n_cores
   )
 
+  # Stacking samples with a block-diagonal spatial kernel is equivalent to
+  # summing their PC-space operators. The resulting two-type problem therefore
+  # has the same exact SVD solution as the single-slide case.
+  if (n_cell_types == 2L) {
+    return(solve_two_type_svd(
+      Y_aggregate, cell_types, nCC = 1L, sdev2_list = sdev2_list
+    ))
+  }
+
   # Handle within-cell-type case with direct solution
   if (is_within && direct_solve) {
     ct <- cell_types[1]
@@ -945,49 +1067,49 @@ optimize_bilinear_n_multi_slides <- function(X_list_all, flat_kernels, sigma, sl
     stop(paste("nCC (", nCC, ") must be greater than existing components (", k_start, ")"))
   }
   
-  # Initialize Y_resi for all slides
-  Y_resi_all <- vector("list", n_slides)
-  for (q in seq_len(n_slides)) {
-    Y_resi_all[[q]] <- compute_Y_resi(X_list_all[[q]], flat_kernels, sigma, cell_types, slides[q])
+  # Shared weights make sample aggregation exact: sum the PC-space operators
+  # once, then solve and deflate that small aggregate. This is algebraically
+  # identical to stacking samples with a block-diagonal spatial kernel.
+  Y_resi <- compute_Y_multi_slide(
+    X_list_all, flat_kernels, sigma, slides, cell_types, n_cores
+  )
+
+  # Obtain all ordinary two-type axes from the same exact SVD when the supplied
+  # first axis is the leading singular direction. A transferred first axis
+  # deliberately falls back to conditional sequential deflation.
+  if (n_cell_types == 2L) {
+    svd_weights <- solve_two_type_svd(
+      Y_resi, cell_types, nCC = nCC, sdev2_list = sdev2_list
+    )
+    if (matches_two_type_first_axis(
+      w_list, svd_weights, cell_types, sdev2_list = sdev2_list
+    )) {
+      return(svd_weights)
+    }
   }
   
   # Compute additional components
   for (qq in k_start:(nCC - 1)) {
-    
-    # Step 1: Apply deflation across all slides
-    Y_resi_all <- mclapply(seq_len(n_slides), function(q) {
-      apply_deflation(Y_resi_all[[q]], w_list, qq, cell_types, sdev2_list)
-    }, mc.cores = n_cores)
-    
-    # Step 2: Aggregate deflated Y matrices
-    if (is_within) {
-      ct <- cell_types[1]
-      Y_sum_list <- lapply(Y_resi_all, function(Y_resi) Y_resi[[ct]][[ct]])
-      Y_aggregate <- setNames(list(setNames(list(Reduce("+", Y_sum_list)), ct)), ct)
+
+    # Full projection is needed for unweighted multi-set axes because their
+    # stationary vectors are not pairwise singular vectors. Weighted
+    # projection is not defined, so retain the weighted rank-one rule there.
+    deflation_method <- if (n_cell_types > 2L && is.null(sdev2_list)) {
+      "projection"
     } else {
-      # Initialize aggregate structure
-      Y_aggregate <- setNames(vector("list", n_cell_types), cell_types)
-      for (ct in cell_types) {
-        Y_aggregate[[ct]] <- setNames(vector("list", n_cell_types), cell_types)
-      }
-      
-      # Sum across slides for each pair
-      for (ct_i in cell_types) {
-        for (ct_j in cell_types) {
-          if (ct_i == ct_j) next
-          Y_ij_list <- lapply(Y_resi_all, function(Y_resi) Y_resi[[ct_i]][[ct_j]])
-          Y_aggregate[[ct_i]][[ct_j]] <- Reduce("+", Y_ij_list)
-        }
-      }
+      "rank1"
     }
+    Y_resi <- apply_deflation(
+      Y_resi, w_list, qq, cell_types, sdev2_list,
+      deflation = deflation_method
+    )
     
-    # Step 3: Initialize next component
-    w_list_new <- initialize_next_component(Y_aggregate, cell_types)
+    # Initialize and refine the next component.
+    w_list_new <- initialize_next_component(Y_resi, cell_types)
     
-    # Step 4: Iterative refinement
     w_list_qq_plus_1 <- bilinear_w_from_Y_resi(
       w_list_new = w_list_new,
-      Y_resi = Y_aggregate,
+      Y_resi = Y_resi,
       n_features = n_features,
       max_iter = max_iter,
       tol = tol,
@@ -995,7 +1117,7 @@ optimize_bilinear_n_multi_slides <- function(X_list_all, flat_kernels, sigma, sl
       sdev2_list = sdev2_list
     )
 
-    # Step 5: Append new component
+    # Append the new component.
     for (ct in cell_types) {
       w_list[[ct]] <- cbind(w_list[[ct]], w_list_qq_plus_1[[ct]])
     }

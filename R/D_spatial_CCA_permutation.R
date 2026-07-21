@@ -1509,6 +1509,10 @@ runSkrCCAPermu_FairSigma <- function(object,
         )
       ))
       names(w_k) <- cts
+    } else if (length(cts) == 2L) {
+      # Match optimize_bilinear()'s exact two-type path while reusing the
+      # caller's precomputed PC-space operator.
+      w_k <- solve_two_type_svd(Y_resi, cts, nCC = 1L)
     } else {
       w_new <- initialize_weights_svd(PCmats, cts)
       invisible(utils::capture.output(

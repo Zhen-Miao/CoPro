@@ -297,6 +297,35 @@
                                        maxIter, tol, n_cores, step_size = 1) {
   
   tryCatch({
+    # For the ordinary two-cell-type problem, one exact SVD of the aggregated
+    # PC-space operator returns every requested axis. Keep the general
+    # sequential route when the first axis was externally transferred, because
+    # later axes must then be conditioned on that supplied direction.
+    if (length(cts) == 2L && is.null(transferred_weight_1)) {
+      if (is_multi) {
+        Y_resi <- compute_Y_multi_slide(
+          data_matrices$X_list_all,
+          object@kernelMatrices,
+          sig_val,
+          data_matrices$slides,
+          cts,
+          n_cores
+        )
+      } else {
+        Y_resi <- compute_Y_resi(
+          data_matrices$PCmats,
+          object@kernelMatrices,
+          sig_val,
+          cts,
+          slide = NULL
+        )
+      }
+      return(solve_two_type_svd(
+        Y_resi, cts, nCC = nCC,
+        sdev2_list = data_matrices$sdev2_list
+      ))
+    }
+
     # Get first component
     cca_result_1 <- .getFirstComponent(
       object, sig_name, data_matrices, transferred_weight_1,
