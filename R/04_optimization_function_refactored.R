@@ -285,26 +285,41 @@ matches_two_type_first_axis <- function(w_list, svd_weights, cell_types,
 #'   Freedman-Lane / Legendre-Oksanen-ter Braak (2011) residualization. The two
 #'   agree on the observed `Y` but differ on a permuted `Y` (where `w1, w2` are
 #'   no longer its singular vectors), which is exactly where the conditional
-#'   null lives. `"projection"` is not defined together with `sdev2_list`
-#'   (weighted deflation) and errors if both are supplied.
+#'   null lives. With `sdev2_list` (weighted / `scalePCs = FALSE` deflation),
+#'   `"projection"` uses the oblique projection
+#'   `(I - p1 q1^T) Y (I - q2 p2^T)` with `q = w / sqrt(w' d w)` and `p = d q`
+#'   (`d = sdev^2`), the exact image of the whitened orthogonal projection under
+#'   `X~ = X diag(sdev)^-1`, `w~ = diag(sdev) w`. Using it keeps every canonical
+#'   axis identical to the whitened (`scalePCs = TRUE`) run, so `scalePCs` stays
+#'   a pure reparametrization even for >2 cell types.
 #' @return Updated Y_resi
 #' @noRd
 apply_deflation <- function(Y_resi, w_list, qq, cell_types, sdev2_list = NULL,
                             deflation = c("rank1", "projection")) {
   deflation <- match.arg(deflation)
-  if (deflation == "projection" && !is.null(sdev2_list)) {
-    stop("deflation = 'projection' is not defined with weighted deflation ",
-         "(sdev2_list); use deflation = 'rank1'.")
-  }
   n_mat <- length(cell_types)
   is_within <- (n_mat == 1)
 
-  ## full orthogonal projection (I - uu^T) Y (I - vv^T) with unit u, v
-  proj_deflate <- function(Y1, w1, w2) {
-    u <- w1 / sqrt(sum(w1^2))
-    v <- w2 / sqrt(sum(w2^2))
-    Y1 - u %*% crossprod(u, Y1) - (Y1 %*% v) %*% t(v) +
-      as.numeric(crossprod(u, Y1 %*% v)) * (u %*% t(v))
+  ## Projection deflation. With no metric (d = NULL) this is the full
+  ## orthogonal projection (I - uu^T) Y (I - vv^T) with unit u, v. With a
+  ## diagonal CCA metric d = sdev^2 it is the oblique projection
+  ## (I - p1 q1^T) Y (I - q2 p2^T) with q = w / sqrt(w' d w) and p = d q -- the
+  ## exact image of the whitened orthogonal projection under X~ = X diag(sdev)^-1,
+  ## w~ = diag(sdev) w. This makes the weighted (scalePCs = FALSE) axes equal the
+  ## whitened (scalePCs = TRUE) axes, so scalePCs stays a pure reparametrization.
+  proj_deflate <- function(Y1, w1, w2, d1 = NULL, d2 = NULL) {
+    if (is.null(d1)) {
+      q1 <- w1 / sqrt(sum(w1^2)); p1 <- q1
+    } else {
+      q1 <- w1 / sqrt(sum(w1 * d1 * w1)); p1 <- d1 * q1
+    }
+    if (is.null(d2)) {
+      q2 <- w2 / sqrt(sum(w2^2)); p2 <- q2
+    } else {
+      q2 <- w2 / sqrt(sum(w2 * d2 * w2)); p2 <- d2 * q2
+    }
+    lam <- as.numeric(crossprod(q1, Y1 %*% q2))
+    Y1 - p1 %*% crossprod(q1, Y1) - (Y1 %*% q2) %*% t(p2) + lam * (p1 %*% t(p2))
   }
 
   if (is_within) {
@@ -313,7 +328,8 @@ apply_deflation <- function(Y_resi, w_list, qq, cell_types, sdev2_list = NULL,
     w1 <- w_list[[ct]][, qq, drop = FALSE]
 
     if (deflation == "projection") {
-      Y_resi[[ct]][[ct]] <- proj_deflate(Y1, w1, w1)
+      d_ct <- if (is.null(sdev2_list)) NULL else sdev2_list[[ct]]
+      Y_resi[[ct]][[ct]] <- proj_deflate(Y1, w1, w1, d_ct, d_ct)
     } else {
       deflation_scalar <- (t(w1) %*% Y1 %*% w1)[1, 1]
       if (!is.null(sdev2_list)) {
@@ -336,7 +352,9 @@ apply_deflation <- function(Y_resi, w_list, qq, cell_types, sdev2_list = NULL,
       Y1 <- Y_resi[[i]][[j]]
 
       if (deflation == "projection") {
-        Y_resi[[i]][[j]] <- proj_deflate(Y1, w1, w2)
+        d_i <- if (is.null(sdev2_list)) NULL else sdev2_list[[i]]
+        d_j <- if (is.null(sdev2_list)) NULL else sdev2_list[[j]]
+        Y_resi[[i]][[j]] <- proj_deflate(Y1, w1, w2, d_i, d_j)
       } else {
         deflation_scalar <- (t(w1) %*% Y1 %*% w2)[1, 1]
         if (!is.null(sdev2_list)) {
@@ -556,13 +574,10 @@ optimize_bilinear_n <- function(X_list, flat_kernels, sigma, w_list,
     # Rank-one subtraction is identical to projection for two-type singular
     # vectors, but not for the multi-set (>2 type) stationary equations. Full
     # projection is required there to keep later axes orthogonal within every
-    # cell type. Weighted projection is not defined, so that case retains the
-    # established weighted rank-one rule.
-    deflation_method <- if (n_mat > 2L && is.null(sdev2_list)) {
-      "projection"
-    } else {
-      "rank1"
-    }
+    # cell type. apply_deflation() implements the weighted (oblique) projection
+    # for the scalePCs = FALSE case, so both metrics use projection and give the
+    # same axes -- scalePCs stays a pure reparametrization.
+    deflation_method <- if (n_mat > 2L) "projection" else "rank1"
     Y_resi <- apply_deflation(
       Y_resi, w_list, qq, cts, sdev2_list,
       deflation = deflation_method
@@ -999,14 +1014,11 @@ optimize_bilinear_n_multi_slides <- function(X_list_all, flat_kernels, sigma, sl
   # Compute additional components
   for (qq in k_start:(nCC - 1)) {
 
-    # Full projection is needed for unweighted multi-set axes because their
-    # stationary vectors are not pairwise singular vectors. Weighted
-    # projection is not defined, so retain the weighted rank-one rule there.
-    deflation_method <- if (n_cell_types > 2L && is.null(sdev2_list)) {
-      "projection"
-    } else {
-      "rank1"
-    }
+    # Full projection is needed for multi-set axes because their stationary
+    # vectors are not pairwise singular vectors. apply_deflation() implements
+    # the weighted (oblique) projection for scalePCs = FALSE, so both metrics
+    # use projection and give the same axes.
+    deflation_method <- if (n_cell_types > 2L) "projection" else "rank1"
     Y_resi <- apply_deflation(
       Y_resi, w_list, qq, cell_types, sdev2_list,
       deflation = deflation_method
