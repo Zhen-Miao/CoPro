@@ -160,6 +160,73 @@
   return(cell_permu)
 }
 
+.permutationSdev2 <- function(object, cts) {
+  if (isTRUE(object@scalePCs)) return(NULL)
+  stats::setNames(lapply(cts, function(ct) {
+    sdev <- object@pcaGlobal[[ct]]$sdev
+    if (is.null(sdev) || length(sdev) == 0L) {
+      stop("PCA standard deviations are missing for cell type '", ct, "'.")
+    }
+    sdev^2
+  }), cts)
+}
+
+.permutationProvenance <- function(object) {
+  provenance <- attr(object, "permutationProvenance", exact = TRUE)
+  if (!is.null(provenance)) return(provenance)
+
+  # Backward-compatible inference for objects created before provenance was
+  # recorded. Every stored null row still identifies the sigma it tested.
+  null_sigmas <- unique(unlist(lapply(object@normalizedCorrelationPermu, function(x) {
+    sigma_col <- intersect(c("sigmaValues", "sigmaValue"), names(x))
+    if (length(sigma_col) == 0L) return(numeric())
+    as.numeric(x[[sigma_col[1L]]])
+  })))
+  list(
+    method = "legacy",
+    sigma_values = null_sigmas,
+    sigma_aggregation = if (length(null_sigmas) > 1L) "max" else "fixed",
+    pair_aggregation = "max",
+    sigma_predeclared = NA
+  )
+}
+
+.rejectCellPermutationForMulti <- function(object) {
+  if (inherits(object, "CoProMulti")) {
+    stop(
+      "Cell-level permutation is not replicate-level inference for CoProMulti. ",
+      "Use runSlideLevelInference() to obtain leave-one-replicate-out effects, ",
+      "a replicate sign-flip p-value, and a replicate bootstrap interval."
+    )
+  }
+  invisible(NULL)
+}
+
+.parallelPermutationLapply <- function(indices, FUN, n_cores, verbose = TRUE) {
+  if (!is.numeric(n_cores) || length(n_cores) != 1L ||
+      n_cores < 1L || n_cores != as.integer(n_cores)) {
+    stop("n_cores must be a positive integer.")
+  }
+  if (n_cores == 1L || length(indices) <= 1L) return(lapply(indices, FUN))
+
+  if (!requireNamespace("CoPro", quietly = TRUE)) {
+    warning("Parallel permutation requires an installed CoPro package; ",
+            "falling back to sequential execution.")
+    return(lapply(indices, FUN))
+  }
+  workers <- min(as.integer(n_cores), length(indices))
+  if (verbose) message("Using ", workers, " PSOCK permutation workers.")
+  cluster <- parallel::makeCluster(workers)
+  on.exit(parallel::stopCluster(cluster), add = TRUE)
+  copro_library <- dirname(find.package("CoPro"))
+  parallel::clusterCall(cluster, function(lib) {
+    .libPaths(c(lib, .libPaths()))
+    suppressPackageStartupMessages(library(CoPro))
+    NULL
+  }, copro_library)
+  parallel::parLapply(cluster, indices, FUN)
+}
+
 
 #' Run Spatial CCA with Permutation Testing
 #'
@@ -243,8 +310,8 @@
 #'
 #' @param object A `CoPro` object with CCA already computed via `runSkrCCA()`
 #' @param tol Tolerance for CCA optimization convergence (default: 1e-5)
-#' @param nPermu Number of permutations to run (default: 20).
-#'   Increase to 100+ for publication-quality p-values.
+#' @param nPermu Number of permutations to run (default: 999), giving a
+#'   Monte-Carlo floor of 0.001 under the Phipson--Smyth correction.
 #' @param maxIter Maximum iterations for CCA optimization (default: 200)
 #' @param permu_method Method of permutation:
 #'   \itemize{
@@ -283,6 +350,11 @@
 #'   Set to higher values to speed up permutation testing. Use `parallel::detectCores()`
 #'   to find available cores. Parallelization uses the `parallel` package.
 #' @param verbose Whether to print progress messages (default: TRUE)
+#' @param sigma Optional predeclared sigma value. When supplied, both observed
+#'   and null statistics are evaluated at this fixed sigma. When `NULL`, the
+#'   selected `object@@sigmaValueChoice` is used conditionally and the returned
+#'   p-value is marked as not adjusted for sigma selection; use
+#'   [runSkrCCAPermu_FairSigma()] for a max-over-sigma test.
 #'
 #' @return CoPro object with permutation results stored in `@skrCCAPermuOut`
 #'
@@ -325,18 +397,20 @@
 #'
 #' @importFrom stats setNames
 #' @export
-runSkrCCAPermu <- function(object, tol = 1e-5, nPermu = 20,
+runSkrCCAPermu <- function(object, tol = 1e-5, nPermu = 999,
                            maxIter = 200, permu_method = "bin",
                            permu_which = "second_only",
                            num_bins_x = NULL, num_bins_y = NULL,
                            match_quantile = FALSE,
                            conservative = FALSE,
-                           n_cores = 1, verbose = TRUE) {
+                           n_cores = 1, verbose = TRUE,
+                           sigma = NULL) {
 
   ## Input validation
   if (!is(object, "CoPro")) {
     stop("Input object must be a CoPro object")
   }
+  .rejectCellPermutationForMulti(object)
 
   ## Apply conservative settings if requested
   ## Conservative = better preserve spatial autocorrelation = lower FPR
@@ -384,7 +458,8 @@ runSkrCCAPermu <- function(object, tol = 1e-5, nPermu = 20,
   }
 
   ## Get sigma value
-  sigmaValueChoice <- object@sigmaValueChoice
+  sigma_predeclared <- !is.null(sigma)
+  sigmaValueChoice <- if (sigma_predeclared) sigma else object@sigmaValueChoice
   if (is.null(sigmaValueChoice) || length(sigmaValueChoice) == 0) {
     stop(paste("sigmaValueChoice not set.",
                "Please run computeNormalizedCorrelation() first."))
@@ -472,6 +547,7 @@ runSkrCCAPermu <- function(object, tol = 1e-5, nPermu = 20,
   ## Get PCA matrices
   PCmats <- .getAllPCMats(allPCs = object@pcaGlobal, scalePCs = scalePCs)
   PCmats2 <- PCmats
+  sdev2_list <- .permutationSdev2(object, cts)
 
   ## Step 2: Run CCA for each permutation
   if (verbose) {
@@ -519,7 +595,8 @@ runSkrCCAPermu <- function(object, tol = 1e-5, nPermu = 20,
       flat_kernels = object@kernelMatrices,
       sigma = sigmaValueChoice,
       max_iter = maxIter,
-      tol = tol
+      tol = tol,
+      sdev2_list = sdev2_list
     )
     names(cca_result) <- cts
 
@@ -534,7 +611,8 @@ runSkrCCAPermu <- function(object, tol = 1e-5, nPermu = 20,
         cellTypesOfInterest = cts,
         nCC = nCC,
         max_iter = maxIter,
-        tol = tol
+        tol = tol,
+        sdev2_list = sdev2_list
       )
       return(cca_result_n)
     }
@@ -562,14 +640,20 @@ runSkrCCAPermu <- function(object, tol = 1e-5, nPermu = 20,
     cl <- parallel::makeCluster(n_cores)
     on.exit(parallel::stopCluster(cl), add = TRUE)
 
-    # Load CoPro package in workers
-    parallel::clusterEvalQ(cl, library(CoPro))
+    # Load the exact CoPro installation used by the parent session. This
+    # matters when multiple library trees contain different package versions.
+    copro_library <- dirname(find.package("CoPro"))
+    parallel::clusterCall(cl, function(lib) {
+      .libPaths(c(lib, .libPaths()))
+      suppressPackageStartupMessages(library(CoPro))
+      NULL
+    }, copro_library)
 
     # Export required objects to workers
     flat_kernels_local <- object@kernelMatrices
     parallel::clusterExport(cl, c("PCmats", "cell_permu", "cts", "nCC",
                                   "sigmaValueChoice", "maxIter", "tol",
-                                  "flat_kernels_local"),
+                                  "flat_kernels_local", "sdev2_list"),
                             envir = environment())
 
     # Helper function for PC-space permutation (for parallel workers)
@@ -606,7 +690,8 @@ runSkrCCAPermu <- function(object, tol = 1e-5, nPermu = 20,
         flat_kernels = flat_kernels_local,
         sigma = sigmaValueChoice,
         max_iter = maxIter,
-        tol = tol
+        tol = tol,
+        sdev2_list = sdev2_list
       )
       names(cca_result) <- cts
 
@@ -621,7 +706,8 @@ runSkrCCAPermu <- function(object, tol = 1e-5, nPermu = 20,
           cellTypesOfInterest = cts,
           nCC = nCC,
           max_iter = maxIter,
-          tol = tol
+          tol = tol,
+          sdev2_list = sdev2_list
         )
         return(cca_result_n)
       }
@@ -651,6 +737,15 @@ runSkrCCAPermu <- function(object, tol = 1e-5, nPermu = 20,
   }
 
   object@skrCCAPermuOut <- cca_permu_out
+  attr(object, "permutationProvenance") <- list(
+    method = "fixed_sigma",
+    sigma_values = as.numeric(sigmaValueChoice),
+    sigma_aggregation = "fixed",
+    pair_aggregation = "max",
+    sigma_predeclared = sigma_predeclared,
+    selection_adjusted = sigma_predeclared || length(object@sigmaValues) == 1L,
+    scalePCs = scalePCs
+  )
 
   if (verbose) {
     cat("\nPermutation testing complete.\n")
@@ -703,6 +798,7 @@ computeNormalizedCorrelationPermu <- function(object, tol = 1e-4) {
   if (!is(object, "CoPro")) {
     stop("Input must be a CoPro object")
   }
+  .rejectCellPermutationForMulti(object)
 
   if (length(object@skrCCAPermuOut) == 0) {
     stop(paste("skrCCAPermuOut is not available.",
@@ -718,7 +814,14 @@ computeNormalizedCorrelationPermu <- function(object, tol = 1e-4) {
   }
   scalePCs <- object@scalePCs
 
-  sigmaValueChoice <- object@sigmaValueChoice
+  provenance <- .permutationProvenance(object)
+  sigmaValueChoice <- provenance$sigma_values
+  if (length(sigmaValueChoice) != 1L ||
+      !identical(provenance$sigma_aggregation, "fixed")) {
+    stop("computeNormalizedCorrelationPermu() requires fixed-sigma permutation ",
+         "output. Fair-sigma and conditional methods already store their ",
+         "normalized null statistics.")
+  }
   PCmats <- .getAllPCMats(allPCs = object@pcaGlobal, scalePCs = scalePCs)
   nCC <- object@nCC
 
@@ -735,6 +838,7 @@ computeNormalizedCorrelationPermu <- function(object, tol = 1e-4) {
   norm_K12 <- setNames(vector(mode = "list", length = 1), s_name)
   norm_K12[[s_name]] <- setNames(vector(mode = "list", length = length(cts)), cts)
   kernels <- vector("list", ncol(pair_cell_types))
+  normalizer_cache <- attr(object, "kernelNormalizerCache", exact = TRUE)
 
   for (i in cts) {
     norm_K12[[s_name]][[i]] <- setNames(
@@ -755,7 +859,17 @@ computeNormalizedCorrelationPermu <- function(object, tol = 1e-4) {
     Ry <- tryCatch(getKernelMatrix(object, sigma = sigmaValueChoice,
                      cellType1 = cellType2, cellType2 = cellType2,
                      verbose = FALSE), error = function(e) NULL)
-    norm_K12[[s_name]][[cellType1]][[cellType2]] <- .whitenedFrobNorm(K, Rx, Ry)
+    cache_key <- .kernelNormalizerKey(
+      sigmaValueChoice, cellType1, cellType2, slide = NULL
+    )
+    nrm <- .readKernelNormalizer(normalizer_cache, cache_key, K, Rx, Ry)
+    if (is.null(nrm)) {
+      nrm <- .whitenedFrobNorm(K, Rx, Ry)
+      normalizer_cache <- .cacheKernelNormalizer(
+        normalizer_cache, cache_key, K, Rx, Ry, nrm
+      )
+    }
+    norm_K12[[s_name]][[cellType1]][[cellType2]] <- nrm
   }
   cat("Whitened-Frobenius normalizers calculated.\n\n")
 
@@ -831,6 +945,7 @@ computeNormalizedCorrelationPermu <- function(object, tol = 1e-4) {
 
   ## Store results
   object@normalizedCorrelationPermu <- correlation_value
+  attr(object, "kernelNormalizerCache") <- normalizer_cache
 
   cat("\nNormalized correlation computation complete.\n")
 
@@ -977,7 +1092,9 @@ compute_ground_truth_ncorr <- function(object,
 #'
 #' @return List with the Phipson & Smyth (2010) permutation p-value (`p_value`,
 #'   never exactly zero), the Monte-Carlo floor `mc_floor = 1 / (n_permu + 1)`,
-#'   the observed value, and the permutation distribution.
+#'   the observed value, and the permutation distribution. With more than one
+#'   cell-type pair, the observed and each permutation statistic are both the
+#'   maximum normalized correlation over pairs for the requested axis.
 #' @references Phipson B, Smyth GK (2010). Permutation P-values should never be
 #'   zero. \emph{Stat Appl Genet Mol Biol} 9:Article39.
 #'
@@ -993,20 +1110,41 @@ calculate_pvalue <- function(object, cc_index = 1, alternative = "greater") {
   if (!is(object, "CoPro")) {
     stop("Input must be a CoPro object")
   }
+  .rejectCellPermutationForMulti(object)
 
   if (length(object@normalizedCorrelationPermu) == 0) {
     stop("Run computeNormalizedCorrelationPermu() first")
   }
 
-  # Get observed value
+  provenance <- .permutationProvenance(object)
+
+  # Get the observed value for exactly the sigma family represented by the
+  # null. This prevents a fixed-sigma null from being compared with an
+  # observed max over all fitted sigmas.
   ncorr <- getNormCorr(object)
   ncorr_cc <- ncorr[ncorr$CC_index == cc_index, ]
+  sigma_col <- intersect(c("sigmaValues", "sigmaValue"), names(ncorr_cc))
+  if (length(provenance$sigma_values) > 0L && length(sigma_col) > 0L) {
+    ncorr_cc <- ncorr_cc[
+      ncorr_cc[[sigma_col[1L]]] %in% provenance$sigma_values, , drop = FALSE
+    ]
+  }
+  if (nrow(ncorr_cc) == 0L ||
+      any(!is.finite(ncorr_cc$normalizedCorrelation))) {
+    stop("Observed normalized correlation is missing or non-finite for cc_index.")
+  }
   observed <- max(ncorr_cc$normalizedCorrelation)
 
-  # Get permutation values
-  permu_values <- sapply(object@normalizedCorrelationPermu, function(x) {
-    x$normalizedCorrelation[x$CC_index == cc_index][1]
-  })
+  # Use the same max-over-pairs aggregation as the observed statistic. The old
+  # path selected the first null pair while maximizing the observed rows, which
+  # made the two sides different statistics for three or more cell types.
+  permu_values <- vapply(object@normalizedCorrelationPermu, function(x) {
+    values <- x$normalizedCorrelation[x$CC_index == cc_index]
+    if (length(values) == 0L || any(!is.finite(values))) {
+      stop("A permutation normalized correlation is missing or non-finite for cc_index.")
+    }
+    max(values)
+  }, numeric(1))
 
   # Calculate p-value using the Phipson & Smyth (2010) estimator: the observed
   # configuration is itself one admissible permutation, so 1 is added to both
@@ -1034,8 +1172,26 @@ calculate_pvalue <- function(object, cc_index = 1, alternative = "greater") {
     permu_sd = sd(permu_values),
     permu_values = permu_values,
     n_permu = m,
-    alternative = alternative
+    alternative = alternative,
+    pair_aggregation = "max",
+    sigma_aggregation = provenance$sigma_aggregation,
+    sigma_values = provenance$sigma_values,
+    sigma_predeclared = provenance$sigma_predeclared,
+    selection_adjusted = if (is.null(provenance$selection_adjusted)) {
+      NA
+    } else {
+      provenance$selection_adjusted
+    }
   )
+
+  if (identical(result$selection_adjusted, FALSE)) {
+    warning(
+      "This is a conditional fixed-sigma p-value at a sigma selected from the ",
+      "same data; it is not adjusted for sigma selection. Use ",
+      "runSkrCCAPermu_FairSigma() or pass a predeclared sigma to ",
+      "runSkrCCAPermu()."
+    )
+  }
 
   return(result)
 }
@@ -1063,6 +1219,10 @@ calculate_pvalue <- function(object, cc_index = 1, alternative = "greater") {
 .compute_ncorr_quick <- function(PCmats, w_list, flat_kernels, sigma, cts,
                                  tol = 1e-4, kernel_info = NULL,
                                  Y_resi = NULL) {
+  if (length(cts) > 2L) {
+    stop("Quick permutation scoring supports one predeclared cell-type pair; ",
+         "subset the CoPro object to one pair or use a symmetric multi-pair path.")
+  }
   if (length(cts) == 1) {
     ct1 <- ct2 <- cts[1]
   } else {
@@ -1104,7 +1264,9 @@ calculate_pvalue <- function(object, cc_index = 1, alternative = "greater") {
 # Precompute permutation scoring objects that depend only on sigma. The
 # whitened-Frobenius normalizer is especially expensive for large kernels and
 # must not be recomputed for every permutation or canonical axis.
-.get_ncorr_kernel_info <- function(flat_kernels, sigma, cts) {
+.get_ncorr_kernel_info <- function(flat_kernels, sigma, cts,
+                                   normalizer_cache = NULL,
+                                   slide = NULL) {
   if (length(cts) == 1) {
     ct1 <- ct2 <- cts[1]
   } else {
@@ -1112,17 +1274,22 @@ calculate_pvalue <- function(object, cc_index = 1, alternative = "greater") {
     ct2 <- cts[2]
   }
 
-  K <- get_kernel_matrix_flat(flat_kernels, sigma, ct1, ct2, slide = NULL)
+  K <- get_kernel_matrix_flat(flat_kernels, sigma, ct1, ct2, slide = slide)
   Rx <- tryCatch(
-    get_kernel_matrix_flat(flat_kernels, sigma, ct1, ct1, slide = NULL),
+    get_kernel_matrix_flat(flat_kernels, sigma, ct1, ct1, slide = slide),
     error = function(e) NULL
   )
   Ry <- tryCatch(
-    get_kernel_matrix_flat(flat_kernels, sigma, ct2, ct2, slide = NULL),
+    get_kernel_matrix_flat(flat_kernels, sigma, ct2, ct2, slide = slide),
     error = function(e) NULL
   )
 
-  list(K = K, norm_K12 = .whitenedFrobNorm(K, Rx, Ry))
+  cache_key <- .kernelNormalizerKey(sigma, ct1, ct2, slide = slide)
+  norm_K12 <- .readKernelNormalizer(
+    normalizer_cache, cache_key, K, Rx, Ry
+  )
+  if (is.null(norm_K12)) norm_K12 <- .whitenedFrobNorm(K, Rx, Ry)
+  list(K = K, norm_K12 = norm_K12)
 }
 
 
@@ -1154,7 +1321,7 @@ calculate_pvalue <- function(object, cc_index = 1, alternative = "greater") {
 #'
 #' @param object A CoPro object with CCA already computed via `runSkrCCA()`
 #'   and normalized correlation computed via `computeNormalizedCorrelation()`
-#' @param nPermu Number of permutations to run (default: 100)
+#' @param nPermu Number of permutations to run (default: 999)
 #' @param sigma_values Vector of sigma values to test. If NULL, uses all
 #'   sigma values from the original analysis (object@@sigmaValues)
 #' @param permu_method Method of permutation: "bin", "global", "pc", or "toroidal"
@@ -1168,7 +1335,8 @@ calculate_pvalue <- function(object, cc_index = 1, alternative = "greater") {
 #' @param match_quantile Whether to use quantile matching for bin permutation
 #' @param maxIter Maximum iterations for CCA optimization
 #' @param tol Convergence tolerance
-#' @param n_cores Number of cores for parallel computation (not yet implemented)
+#' @param n_cores Number of PSOCK workers. Each worker holds the PCA and kernel
+#'   inputs, so choose this with available memory in mind.
 #' @param verbose Whether to print progress messages
 #' @seealso [runSkrCCAPermu_Conditional()] for a sequential step-down test
 #'   across canonical axes (the correct treatment when `nCC > 1`).
@@ -1196,7 +1364,7 @@ calculate_pvalue <- function(object, cc_index = 1, alternative = "greater") {
 #'
 #' @export
 runSkrCCAPermu_FairSigma <- function(object,
-                                     nPermu = 100,
+                                     nPermu = 999,
                                      sigma_values = NULL,
                                      permu_method = "bin",
                                      permu_which = "second_only",
@@ -1212,6 +1380,7 @@ runSkrCCAPermu_FairSigma <- function(object,
   if (!is(object, "CoPro")) {
     stop("Input must be a CoPro object")
   }
+  .rejectCellPermutationForMulti(object)
 
   if (length(object@skrCCAOut) == 0) {
     stop("Please run runSkrCCA() first")
@@ -1252,8 +1421,14 @@ runSkrCCAPermu_FairSigma <- function(object,
   }
 
   cts <- object@cellTypesOfInterest
+  if (length(cts) > 2L) {
+    stop("runSkrCCAPermu_FairSigma currently supports one predeclared cell-type ",
+         "pair. Subset to two cell types and adjust the resulting pair-level ",
+         "p-values across the declared family.")
+  }
   scalePCs <- object@scalePCs
   nCC <- object@nCC
+  sdev2_list <- .permutationSdev2(object, cts)
 
   if (nCC > 1) {
     warning("Fair sigma permutation tests only the first canonical axis (CC1). ",
@@ -1299,17 +1474,15 @@ runSkrCCAPermu_FairSigma <- function(object,
     match_quantile = match_quantile
   )
 
-  # Store results
-  permu_results <- vector("list", nPermu)
-  permu_ncorrs <- numeric(nPermu)
-  permu_sigmas <- numeric(nPermu)
-
   # Kernel matrices and their whitened-Frobenius normalizers are invariant to
   # PC permutations. Cache them once per sigma instead of repeating the
   # cubic normalizer calculation nPermu times.
   kernel_info <- lapply(
     sigma_values,
-    function(sigma) .get_ncorr_kernel_info(object@kernelMatrices, sigma, cts)
+    function(sigma) .get_ncorr_kernel_info(
+      object@kernelMatrices, sigma, cts,
+      normalizer_cache = attr(object, "kernelNormalizerCache", exact = TRUE)
+    )
   )
 
   # Helper function for PC-space permutation
@@ -1324,7 +1497,7 @@ runSkrCCAPermu_FairSigma <- function(object,
     cat("Running permutations...\n")
   }
 
-  for (tt in seq_len(nPermu)) {
+  run_one_permutation <- function(tt) {
     # Apply permutation to get permuted PC matrices
     PCmats_local <- PCmats
 
@@ -1355,7 +1528,8 @@ runSkrCCAPermu_FairSigma <- function(object,
       fit <- .fitConditionalAxis(
         PCmats = PCmats_local, flat_kernels = object@kernelMatrices,
         sigma = sigma, cts = cts, k_minus_1 = 0, Y_resi = Y0,
-        kernel_info = kernel_info[[si]], maxIter = maxIter, tol = tol
+        kernel_info = kernel_info[[si]], sdev2_list = sdev2_list,
+        maxIter = maxIter, tol = tol
       )
       cca_result <- fit$w
       ncorr <- fit$ncorr
@@ -1367,19 +1541,20 @@ runSkrCCAPermu_FairSigma <- function(object,
       }
     }
 
-    permu_results[[tt]] <- list(
+    list(
       weights = best_weights,
       sigma = best_sigma,
       ncorr = best_ncorr
     )
-    permu_ncorrs[tt] <- best_ncorr
-    permu_sigmas[tt] <- best_sigma
-
-    # Progress indicator
-    if (verbose && (tt %% 10 == 0 || tt == nPermu)) {
-      cat(paste("  Completed", tt, "of", nPermu, "permutations\n"))
-    }
   }
+
+  permu_results <- .parallelPermutationLapply(
+    seq_len(nPermu), run_one_permutation, n_cores = n_cores,
+    verbose = verbose
+  )
+  permu_ncorrs <- vapply(permu_results, `[[`, numeric(1), "ncorr")
+  permu_sigmas <- vapply(permu_results, `[[`, numeric(1), "sigma")
+  if (verbose) cat("  Completed", nPermu, "permutations\n")
 
   # Store results in object
   object@skrCCAPermuOut <- lapply(permu_results, function(x) x$weights)
@@ -1419,6 +1594,15 @@ runSkrCCAPermu_FairSigma <- function(object,
     sigma_differs = sigma_differs,
     prop_sigma_differs = prop_sigma_differs,
     n_sigma_differs = n_sigma_differs
+  )
+  attr(object, "permutationProvenance") <- list(
+    method = "fair_sigma",
+    sigma_values = as.numeric(sigma_values),
+    sigma_aggregation = "max",
+    pair_aggregation = "max",
+    sigma_predeclared = FALSE,
+    selection_adjusted = TRUE,
+    scalePCs = scalePCs
   )
 
   # Get observed value for comparison
@@ -1465,11 +1649,12 @@ runSkrCCAPermu_FairSigma <- function(object,
 #' the higher-axis null exchangeable with the observed statistic and removes the
 #' anti-conservative bias of the naive per-axis permutation p-value.
 #'
-#' Under whitened PCs (`scalePCs = TRUE`, so `X^T X = c I`) this Y-space
-#' deflation is algebraically identical to the Freedman-Lane / ter Braak
-#' residualization that removes the observed lower canonical variates from the
-#' data before recomputing `Y`, because
-#' `(I - u u^T) Y (I - v v^T) = Y - (u^T Y v)\, u v^T`.
+#' Under whitened PCs (`scalePCs = TRUE`) the fixed directions are removed with
+#' the full projection `(I - u u^T) Y (I - v v^T)`. The simpler rank-one
+#' subtraction is not used here: it agrees with the projection only when the
+#' fixed directions are singular vectors of the current `Y`, which is generally
+#' false after permutation. For `scalePCs = FALSE`, the corresponding weighted
+#' oblique projection is used.
 #'
 #' The expensive `compute_Y_resi()` can be computed once per (permutation,
 #' sigma) and reused across axes by passing it as `Y_resi`; deflation does not
@@ -1488,6 +1673,7 @@ runSkrCCAPermu_FairSigma <- function(object,
 #'   (PCmats, sigma); recomputed when `NULL` and `k_minus_1 >= 1`.
 #' @param kernel_info Optional precomputed kernel and normalizer information
 #'   from `.get_ncorr_kernel_info()`.
+#' @param sdev2_list Optional diagonal CCA metric used when `scalePCs = FALSE`.
 #' @param maxIter,tol Optimization controls.
 #'
 #' @return List with `w` (named list of 1-column weight matrices for axis k) and
@@ -1497,6 +1683,7 @@ runSkrCCAPermu_FairSigma <- function(object,
 .fitConditionalAxis <- function(PCmats, flat_kernels, sigma, cts,
                                 W_lower = NULL, k_minus_1 = 0,
                                 Y_resi = NULL, kernel_info = NULL,
+                                sdev2_list = NULL,
                                 maxIter = 200, tol = 1e-5) {
   if (k_minus_1 <= 0) {
     # First axis: identical to optimize_bilinear(). When Y_resi was already
@@ -1505,21 +1692,23 @@ runSkrCCAPermu_FairSigma <- function(object,
       invisible(utils::capture.output(
         w_k <- optimize_bilinear(
           X_list = PCmats, flat_kernels = flat_kernels, sigma = sigma,
-          max_iter = maxIter, tol = tol
+          max_iter = maxIter, tol = tol, sdev2_list = sdev2_list
         )
       ))
       names(w_k) <- cts
     } else if (length(cts) == 2L) {
       # Match optimize_bilinear()'s exact two-type path while reusing the
       # caller's precomputed PC-space operator.
-      w_k <- solve_two_type_svd(Y_resi, cts, nCC = 1L)
+      w_k <- solve_two_type_svd(
+        Y_resi, cts, nCC = 1L, sdev2_list = sdev2_list
+      )
     } else {
       w_new <- initialize_weights_svd(PCmats, cts)
       invisible(utils::capture.output(
         w_k <- bilinear_w_from_Y_resi(
           w_list_new = w_new, Y_resi = Y_resi,
           n_features = ncol(PCmats[[cts[1]]]),
-          max_iter = maxIter, tol = tol
+          max_iter = maxIter, tol = tol, sdev2_list = sdev2_list
         )
       ))
     }
@@ -1531,13 +1720,20 @@ runSkrCCAPermu_FairSigma <- function(object,
     }
     Yk <- Y_resi
     for (qq in seq_len(k_minus_1)) {
-      Yk <- apply_deflation(Yk, W_lower, qq, cts)
+      # Fixed observed directions are not singular vectors of a permuted Y.
+      # Full (weighted when needed) projection is therefore required; rank-one
+      # subtraction only agrees with projection on the observed operator.
+      Yk <- apply_deflation(
+        Yk, W_lower, qq, cts, sdev2_list = sdev2_list,
+        deflation = "projection"
+      )
     }
     w_new <- initialize_next_component(Yk, cts)
     invisible(utils::capture.output(
       w_k <- bilinear_w_from_Y_resi(
         w_list_new = w_new, Y_resi = Yk,
-        n_features = ncol(PCmats[[cts[1]]]), max_iter = maxIter, tol = tol
+        n_features = stats::setNames(vapply(PCmats[cts], ncol, integer(1)), cts),
+        max_iter = maxIter, tol = tol, sdev2_list = sdev2_list
       )
     ))
   }
@@ -1603,17 +1799,16 @@ runSkrCCAPermu_FairSigma <- function(object,
 #'
 #' ## Relationship to data residualization
 #'
-#' Deflating `Y` by the fixed observed weight directions is algebraically
-#' identical to the Freedman-Lane / ter Braak residualization that removes the
-#' observed lower canonical *variates* from the data before recomputing the
-#' cross-product, whenever the PCs are whitened (`scalePCs = TRUE`, so
-#' `X^T X = c I`): `(I - u u^T) Y (I - v v^T) = Y - (u^T Y v)\, u v^T`. The
-#' fair-sigma maximum over the bandwidth family is the Westfall-Young (1993)
-#' maxT procedure.
+#' The fixed directions are removed using the full projection
+#' `(I - u u^T) Y (I - v v^T)` for whitened PCs, or its weighted oblique
+#' counterpart for unscaled PCs. Rank-one subtraction is deliberately avoided
+#' because the observed directions are not generally singular vectors of a
+#' permuted operator. The fair-sigma maximum over the bandwidth family is the
+#' Westfall-Young (1993) maxT procedure.
 #'
 #' @param object A CoPro object with `runSkrCCA()` and
 #'   `computeNormalizedCorrelation()` already run.
-#' @param nPermu Number of permutations (default 100).
+#' @param nPermu Number of permutations (default 999).
 #' @param sigma_values Candidate bandwidths for the fair-sigma maximum. `NULL`
 #'   uses all `object@sigmaValues` that have kernels and weights.
 #' @param permu_method Permutation null: "bin" (default), "global", "pc", or
@@ -1627,6 +1822,8 @@ runSkrCCAPermu_FairSigma <- function(object,
 #' @param alpha Family-wise significance level for the step-down rule (default 0.05).
 #' @param maxIter,tol Optimization controls passed to the axis optimizer.
 #' @param verbose Whether to print progress and a summary (default TRUE).
+#' @param n_cores Number of PSOCK workers. Each worker holds the PCA and kernel
+#'   inputs, so choose this with available memory in mind.
 #'
 #' @return The CoPro object with results stored in the `@conditionalPermu` slot,
 #'   a list whose `per_axis` element is a data frame of `CC_index`,
@@ -1655,7 +1852,7 @@ runSkrCCAPermu_FairSigma <- function(object,
 #' @importFrom stats median
 #' @export
 runSkrCCAPermu_Conditional <- function(object,
-                                       nPermu = 100,
+                                       nPermu = 999,
                                        sigma_values = NULL,
                                        permu_method = "bin",
                                        permu_which = "second_only",
@@ -1665,12 +1862,14 @@ runSkrCCAPermu_Conditional <- function(object,
                                        alpha = 0.05,
                                        maxIter = 200,
                                        tol = 1e-5,
-                                       verbose = TRUE) {
+                                       verbose = TRUE,
+                                       n_cores = 1) {
 
   ## ---- validation ----
   if (!is(object, "CoPro")) {
     stop("Input must be a CoPro object")
   }
+  .rejectCellPermutationForMulti(object)
   if (length(object@skrCCAOut) == 0) {
     stop("Please run runSkrCCA() first")
   }
@@ -1688,8 +1887,14 @@ runSkrCCAPermu_Conditional <- function(object,
   if (length(cts) == 0) {
     stop("cellTypesOfInterest is empty.")
   }
+  if (length(cts) > 2L) {
+    stop("runSkrCCAPermu_Conditional currently supports one predeclared cell-type ",
+         "pair. Subset to two cell types; higher-axis and multi-pair selection ",
+         "must not be combined implicitly.")
+  }
   scalePCs <- object@scalePCs
   nCC <- object@nCC
+  sdev2_list <- .permutationSdev2(object, cts)
   if (length(nCC) == 0 || nCC < 1) {
     stop("nCC must be >= 1; run runSkrCCA() with the desired number of axes.")
   }
@@ -1781,12 +1986,15 @@ runSkrCCAPermu_Conditional <- function(object,
   # Precomputing them removes nPermu * nCC repeated normalizer products.
   kernel_info <- lapply(
     sigma_values,
-    function(sigma) .get_ncorr_kernel_info(object@kernelMatrices, sigma, cts)
+    function(sigma) .get_ncorr_kernel_info(
+      object@kernelMatrices, sigma, cts,
+      normalizer_cache = attr(object, "kernelNormalizerCache", exact = TRUE)
+    )
   )
 
   if (verbose) cat("Running permutations...\n")
 
-  for (tt in seq_len(nPermu)) {
+  run_one_permutation <- function(tt) {
     ## build permuted PC matrices
     PCmats_local <- PCmats
     for (ct in names(PCmats_local)) {
@@ -1812,6 +2020,7 @@ runSkrCCAPermu_Conditional <- function(object,
             PCmats = PCmats_local, flat_kernels = object@kernelMatrices,
             sigma = s, cts = cts, W_lower = obs_W[[sname]], k_minus_1 = k - 1,
             Y_resi = Y0, kernel_info = kernel_info[[si]],
+            sdev2_list = sdev2_list,
             maxIter = maxIter, tol = tol
           )
           if (is.finite(fit$ncorr) && fit$ncorr > stat_k[k]) {
@@ -1823,17 +2032,23 @@ runSkrCCAPermu_Conditional <- function(object,
       list(stat = stat_k, sigma = sig_k)
     }, error = function(e) NULL)
 
+    res
+  }
+
+  permutation_results <- .parallelPermutationLapply(
+    seq_len(nPermu), run_one_permutation, n_cores = n_cores,
+    verbose = verbose
+  )
+  for (tt in seq_len(nPermu)) {
+    res <- permutation_results[[tt]]
     if (is.null(res)) {
       n_failed <- n_failed + 1L
     } else {
       perm_stat[tt, ] <- res$stat
       perm_sigma[tt, ] <- res$sigma
     }
-
-    if (verbose && (tt %% 10 == 0 || tt == nPermu)) {
-      cat(sprintf("  Completed %d of %d permutations\n", tt, nPermu))
-    }
   }
+  if (verbose) cat(sprintf("  Completed %d permutations\n", nPermu))
 
   if (n_failed > 0) {
     warning(sprintf(paste0("%d of %d permutations failed to optimize and were ",
@@ -1897,7 +2112,19 @@ runSkrCCAPermu_Conditional <- function(object,
     n_failed = n_failed,
     permu_method = permu_method,
     permu_which = permu_which,
-    num_bins = num_bins_out
+    num_bins = num_bins_out,
+    scalePCs = scalePCs,
+    deflation = "projection",
+    statistic = "max_over_sigma"
+  )
+  attr(object, "permutationProvenance") <- list(
+    method = "conditional_stepdown",
+    sigma_values = as.numeric(sigma_values),
+    sigma_aggregation = "max",
+    pair_aggregation = "max",
+    sigma_predeclared = FALSE,
+    selection_adjusted = TRUE,
+    scalePCs = scalePCs
   )
   object@nPermu <- as.integer(nPermu)
 
@@ -1953,4 +2180,280 @@ calculate_pvalue_stepdown <- function(object) {
   attr(out, "alpha") <- cp$alpha
   attr(out, "nPermu") <- cp$nPermu
   out
+}
+
+#' Replicate-level inference for multi-slide CoPro analyses
+#'
+#' Estimates an equal-replicate spatial coordination effect without treating
+#' cells as biological replicates. For each replicate, canonical weights and
+#' the bandwidth are learned from all other replicates and evaluated only on
+#' the held-out replicate. The held-out effects are combined with equal weight.
+#'
+#' @details
+#' `replicate_id` may group several slides from the same donor. Every fold then
+#' leaves out all slides belonging to one donor. Sigma selection is performed
+#' using training slides only, so the held-out effect is not evaluated at a
+#' bandwidth selected from that replicate.
+#'
+#' The p-value uses sign flips of the replicate-level held-out effects and
+#' therefore assumes independent replicates and a symmetric null distribution
+#' around zero. Up to 15 replicates all sign patterns are enumerated exactly;
+#' larger analyses use `n_resamples` Monte-Carlo sign flips with the
+#' Phipson--Smyth correction. The confidence interval is a percentile bootstrap
+#' over replicates. Both summaries target the equal-replicate mean.
+#'
+#' @param object A `CoProMulti` object after [computePCA()] and kernel
+#'   construction. Exactly two cell types are currently supported.
+#' @param cc_index Canonical axis to evaluate.
+#' @param sigma_values Candidate sigma values. Defaults to all fitted kernel
+#'   bandwidths.
+#' @param replicate_id Optional slide-to-replicate mapping. Supply a vector
+#'   named by `getSlideList(object)`; an unnamed vector is matched in slide
+#'   order. Defaults to one independent replicate per slide.
+#' @param alternative One of `"greater"`, `"less"`, or `"two.sided"`.
+#' @param n_resamples Number of Monte-Carlo sign flips and bootstrap resamples.
+#' @param conf_level Bootstrap confidence level.
+#' @param seed Optional random seed.
+#' @param verbose Print fold progress.
+#'
+#' @return A list of class `CoProSlideInference` containing the equal-replicate
+#'   effect, confidence interval, replicate sign-flip p-value, Monte-Carlo
+#'   floor, and one held-out result per replicate.
+#' @family spatial-pipeline
+#' @export
+runSlideLevelInference <- function(object, cc_index = 1,
+                                   sigma_values = NULL,
+                                   replicate_id = NULL,
+                                   alternative = "greater",
+                                   n_resamples = 9999,
+                                   conf_level = 0.95,
+                                   seed = NULL,
+                                   verbose = TRUE) {
+  if (!inherits(object, "CoProMulti")) {
+    stop("runSlideLevelInference() requires a CoProMulti object.")
+  }
+  cts <- object@cellTypesOfInterest
+  if (length(cts) != 2L) {
+    stop("Replicate-level inference currently requires exactly two cell types.")
+  }
+  if (length(object@pcaResults) == 0L || length(object@pcaGlobal) == 0L) {
+    stop("PCA results are missing. Run computePCA() first.")
+  }
+  if (length(object@kernelMatrices) == 0L) {
+    stop("Kernel matrices are missing.")
+  }
+  if (!is.numeric(cc_index) || length(cc_index) != 1L ||
+      cc_index < 1L || cc_index != as.integer(cc_index)) {
+    stop("cc_index must be a positive integer.")
+  }
+  alternative <- match.arg(alternative, c("greater", "less", "two.sided"))
+  if (!is.numeric(n_resamples) || length(n_resamples) != 1L ||
+      n_resamples < 99L || n_resamples != as.integer(n_resamples)) {
+    stop("n_resamples must be an integer >= 99.")
+  }
+  if (!is.numeric(conf_level) || length(conf_level) != 1L ||
+      conf_level <= 0 || conf_level >= 1) {
+    stop("conf_level must be in (0, 1).")
+  }
+
+  slides <- getSlideList(object)
+  if (is.null(replicate_id)) {
+    replicate_id <- stats::setNames(slides, slides)
+  } else {
+    if (length(replicate_id) != length(slides)) {
+      stop("replicate_id must have one value per slide.")
+    }
+    if (is.null(names(replicate_id))) {
+      names(replicate_id) <- slides
+    }
+    if (!all(slides %in% names(replicate_id))) {
+      stop("A named replicate_id must contain every slide name.")
+    }
+    replicate_id <- replicate_id[slides]
+  }
+  if (anyNA(replicate_id) || any(!nzchar(as.character(replicate_id)))) {
+    stop("replicate_id cannot contain missing or empty values.")
+  }
+  replicate_id <- as.character(replicate_id)
+  names(replicate_id) <- slides
+  replicate_slides <- split(slides, replicate_id)
+  n_replicates <- length(replicate_slides)
+  if (n_replicates < 2L) {
+    stop("At least two independent replicates are required.")
+  }
+  if (n_replicates < 5L) {
+    warning("Fewer than five independent replicates: p-value resolution and ",
+            "bootstrap coverage will be limited.")
+  }
+
+  if (is.null(sigma_values)) sigma_values <- object@sigmaValues
+  sigma_values <- unique(as.numeric(sigma_values))
+  sigma_values <- sigma_values[sigma_values %in% object@sigmaValues]
+  if (length(sigma_values) == 0L) {
+    stop("No requested sigma_values are available in the object.")
+  }
+
+  X_all <- .preparePCMatrices(
+    pc_data = object@pcaResults, pca_global = object@pcaGlobal,
+    scalePCs = object@scalePCs, slides = slides, cts = cts
+  )
+  feature_counts <- vapply(X_all[[slides[1L]]][cts], ncol, integer(1))
+  if (cc_index > min(feature_counts)) {
+    stop("cc_index exceeds the available PCA rank.")
+  }
+  sdev2_list <- .permutationSdev2(object, cts)
+
+  # Cache every small PC-space operator and kernel normalizer once. Subsequent
+  # folds only add small matrices and multiply held-out score vectors.
+  Y_by_sigma <- stats::setNames(vector("list", length(sigma_values)),
+                                as.character(sigma_values))
+  kernel_info <- stats::setNames(vector("list", length(sigma_values)),
+                                 as.character(sigma_values))
+  for (sigma in sigma_values) {
+    skey <- as.character(sigma)
+    Y_by_sigma[[skey]] <- stats::setNames(lapply(slides, function(slide) {
+      compute_Y_resi(X_all[[slide]], object@kernelMatrices, sigma, cts,
+                     slide = slide)
+    }), slides)
+    kernel_info[[skey]] <- stats::setNames(lapply(slides, function(slide) {
+      .get_ncorr_kernel_info(
+        object@kernelMatrices, sigma, cts,
+        normalizer_cache = attr(object, "kernelNormalizerCache", exact = TRUE),
+        slide = slide
+      )
+    }), slides)
+  }
+
+  score_slide <- function(slide, weights, sigma) {
+    info <- kernel_info[[as.character(sigma)]][[slide]]
+    s1 <- X_all[[slide]][[cts[1L]]] %*%
+      weights[[cts[1L]]][, cc_index, drop = FALSE]
+    s2 <- X_all[[slide]][[cts[2L]]] %*%
+      weights[[cts[2L]]][, cc_index, drop = FALSE]
+    denominator <- sqrt(sum(s1^2)) * sqrt(sum(s2^2)) * info$norm_K12
+    if (!is.finite(denominator) || denominator <= 1e-12) return(NA_real_)
+    as.numeric(crossprod(s1, info$K %*% s2)) / denominator
+  }
+
+  fold_rows <- vector("list", n_replicates)
+  replicate_names <- names(replicate_slides)
+  for (fold in seq_along(replicate_names)) {
+    replicate <- replicate_names[fold]
+    heldout <- replicate_slides[[replicate]]
+    training <- setdiff(slides, heldout)
+    if (length(training) == 0L) stop("A fold has no training slides.")
+
+    candidate <- lapply(sigma_values, function(sigma) {
+      skey <- as.character(sigma)
+      Y12 <- Reduce(
+        "+",
+        lapply(training, function(slide) {
+          Y_by_sigma[[skey]][[slide]][[cts[1L]]][[cts[2L]]]
+        })
+      )
+      Y_train <- stats::setNames(vector("list", 2L), cts)
+      Y_train[[cts[1L]]] <- stats::setNames(vector("list", 2L), cts)
+      Y_train[[cts[2L]]] <- stats::setNames(vector("list", 2L), cts)
+      Y_train[[cts[1L]]][[cts[2L]]] <- Y12
+      Y_train[[cts[2L]]][[cts[1L]]] <- t(Y12)
+      weights <- solve_two_type_svd(
+        Y_train, cts, nCC = cc_index, sdev2_list = sdev2_list
+      )
+      training_scores <- vapply(
+        training, score_slide, numeric(1), weights = weights, sigma = sigma
+      )
+      heldout_scores <- vapply(
+        heldout, score_slide, numeric(1), weights = weights, sigma = sigma
+      )
+      list(
+        sigma = sigma,
+        training_score = mean(training_scores, na.rm = TRUE),
+        heldout_score = mean(heldout_scores, na.rm = TRUE),
+        slide_scores = heldout_scores
+      )
+    })
+    training_stats <- vapply(candidate, `[[`, numeric(1), "training_score")
+    if (all(!is.finite(training_stats))) {
+      stop("No finite training statistic in fold for replicate '", replicate, "'.")
+    }
+    chosen <- candidate[[which.max(training_stats)]]
+    fold_rows[[fold]] <- data.frame(
+      replicate = replicate,
+      heldout_slides = paste(heldout, collapse = ","),
+      selected_sigma = chosen$sigma,
+      training_statistic = chosen$training_score,
+      heldout_effect = chosen$heldout_score,
+      stringsAsFactors = FALSE
+    )
+    if (verbose) {
+      message(sprintf(
+        "  Held out %s: sigma = %g, effect = %.4f",
+        replicate, chosen$sigma, chosen$heldout_score
+      ))
+    }
+  }
+  folds <- do.call(rbind, fold_rows)
+  effects <- folds$heldout_effect
+  if (any(!is.finite(effects))) {
+    stop("At least one held-out replicate effect is non-finite.")
+  }
+  estimate <- mean(effects)
+
+  if (!is.null(seed)) set.seed(seed)
+  stat_transform <- switch(
+    alternative,
+    greater = function(x) x,
+    less = function(x) -x,
+    two.sided = function(x) abs(x)
+  )
+  observed_test <- stat_transform(estimate)
+  if (n_replicates <= 15L) {
+    patterns <- 0:(2^n_replicates - 1L)
+    null_stats <- vapply(patterns, function(pattern) {
+      signs <- ifelse(
+        bitwAnd(pattern, bitwShiftL(1L, seq_len(n_replicates) - 1L)) != 0L,
+        1, -1
+      )
+      stat_transform(mean(effects * signs))
+    }, numeric(1))
+    p_value <- mean(null_stats >= observed_test)
+    mc_floor <- 1 / length(null_stats)
+    null_method <- "exact_replicate_sign_flip"
+  } else {
+    null_stats <- replicate(
+      n_resamples,
+      stat_transform(mean(effects * sample(c(-1, 1), n_replicates,
+                                           replace = TRUE)))
+    )
+    p_value <- (1 + sum(null_stats >= observed_test)) / (n_resamples + 1)
+    mc_floor <- 1 / (n_resamples + 1)
+    null_method <- "monte_carlo_replicate_sign_flip"
+  }
+
+  bootstrap_estimates <- replicate(
+    n_resamples, mean(sample(effects, n_replicates, replace = TRUE))
+  )
+  alpha <- (1 - conf_level) / 2
+  conf_int <- as.numeric(stats::quantile(
+    bootstrap_estimates, probs = c(alpha, 1 - alpha), names = FALSE,
+    type = 8
+  ))
+
+  result <- list(
+    estimate = estimate,
+    conf_int = conf_int,
+    conf_level = conf_level,
+    p_value = p_value,
+    mc_floor = mc_floor,
+    alternative = alternative,
+    null_method = null_method,
+    n_replicates = n_replicates,
+    replicate_effects = folds,
+    sigma_values = sigma_values,
+    cc_index = as.integer(cc_index),
+    estimand = "equal-replicate mean held-out normalized correlation",
+    selection_adjusted = TRUE
+  )
+  class(result) <- c("CoProSlideInference", "list")
+  result
 }

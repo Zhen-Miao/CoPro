@@ -114,12 +114,12 @@ surrogate (sigma values held fixed at the previous iterate when computing
 each weight update), making the algorithm an ALS-style alternating
 maximization rather than exact coordinate ascent.
 
-Memory scales as
-\eqn{O(G^2 \times S \times (C + C(C-1)/2))}
-for precomputed covariance matrices: \eqn{S} slides, each storing \eqn{C}
-self-covariances and \eqn{C(C-1)/2} cross-covariances of size
-\eqn{G \times G}. For example G=5000, S=10, C=3 gives \eqn{10 \times 6}
-matrices of \eqn{200} MB each, approximately 12 GB.
+Covariances are applied as matrix-free operators. The implementation keeps
+standardized \code{Z} matrices and kernel blocks and evaluates
+\verb{Z_i' K_ij (Z_j w_j)} on demand, avoiding the former dense \verb{G x G}
+self- and cross-covariance cache. In Euclidean streaming mode, kernels are
+constructed directly as sparse fixed-radius matrices, so neither a dense
+distance matrix nor a dense kernel is formed.
 
 Per-slide gene handling: each (slide, cell type) expression matrix is
 independently centered and scaled. A gene with zero variance on a
@@ -137,8 +137,10 @@ Storage: gene-space CCA results live in \code{@skrCCAOut} under the
 \code{@geneScores} and \code{@cellScores} directly, so no further call
 is needed.
 
-Streaming mode (\code{streaming = TRUE}) reduces peak memory to roughly
-one slide's pairwise n x n footprint at a time. Distance normalization
+Streaming mode (\code{streaming = TRUE}) uses exact fixed-radius neighbor
+search for Euclidean coordinates and retains sparse kernel operators.
+Morphology-aware distances still require a dense per-slide distance block.
+Distance normalization
 defaults to \code{normalizationScope = "global"} (a single factor across
 all slides, matching the slot-based pipeline's semantics under
 \code{normalizeDistance = TRUE}); under a fixed RNG seed the streaming
@@ -158,6 +160,7 @@ Other spatial-pipeline:
 \code{\link{computeKernelMatrix}()},
 \code{\link{computePCA}()},
 \code{\link{computeSparseKernel}()},
-\code{\link{runSkrCCA}()}
+\code{\link{runSkrCCA}()},
+\code{\link{runSlideLevelInference}()}
 }
 \concept{spatial-pipeline}

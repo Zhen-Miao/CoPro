@@ -13,11 +13,60 @@ NULL
 # Internal Helpers
 # ============================================================================
 
+.new_genespace_self_operator <- function(Z) {
+  structure(
+    list(Z = Z, scale = 1 / nrow(Z)),
+    class = "CoProGeneSelfOperator"
+  )
+}
+
+.new_genespace_cross_operator <- function(Z_i, K, Z_j) {
+  structure(
+    list(
+      Z_i = Z_i, K = K, Z_j = Z_j,
+      scale = 1 / sqrt(nrow(Z_i) * nrow(Z_j)),
+      transposed = FALSE
+    ),
+    class = "CoProGeneCrossOperator"
+  )
+}
+
+.transpose_genespace_cross_operator <- function(x) {
+  x$transposed <- !isTRUE(x$transposed)
+  x
+}
+
+.genespace_n_genes <- function(x) {
+  if (inherits(x, "CoProGeneSelfOperator")) return(ncol(x$Z))
+  nrow(x)
+}
+
+.genespace_self_quad <- function(x, w) {
+  if (inherits(x, "CoProGeneSelfOperator")) {
+    score <- x$Z %*% w
+    return(as.numeric(crossprod(score)) * x$scale)
+  }
+  as.numeric(crossprod(w, x %*% w))
+}
+
+.genespace_cross_mult <- function(x, w) {
+  if (!inherits(x, "CoProGeneCrossOperator")) return(x %*% w)
+  if (!isTRUE(x$transposed)) {
+    return(x$scale * crossprod(x$Z_i, x$K %*% (x$Z_j %*% w)))
+  }
+  x$scale * crossprod(x$Z_j, t(x$K) %*% (x$Z_i %*% w))
+}
+
+.genespace_cross_bilinear <- function(w_i, x, w_j) {
+  as.numeric(crossprod(w_i, .genespace_cross_mult(x, w_j)))
+}
+
 #' Retrieve cross-covariance matrix handling directional asymmetry
 #' @param C_cross_s Cross-covariance list for one slide
 #' @param ct_i First cell type
 #' @param ct_j Second cell type
-#' @return G x G cross-covariance matrix C_{ct_i, ct_j}
+#' @return A cross-covariance matrix or matrix-free operator for
+#'   C_{ct_i, ct_j}.
 #' @noRd
 .get_C_cross <- function(C_cross_s, ct_i, ct_j) {
   key_forward <- paste0(ct_i, "-", ct_j)
@@ -26,7 +75,11 @@ NULL
   if (key_forward %in% names(C_cross_s)) {
     return(C_cross_s[[key_forward]])
   } else if (key_reverse %in% names(C_cross_s)) {
-    return(t(C_cross_s[[key_reverse]]))
+    reverse <- C_cross_s[[key_reverse]]
+    if (inherits(reverse, "CoProGeneCrossOperator")) {
+      return(.transpose_genespace_cross_operator(reverse))
+    }
+    return(t(reverse))
   } else {
     stop(paste("Cross-covariance not found for pair:", ct_i, "-", ct_j))
   }
@@ -46,7 +99,7 @@ NULL
     sigma_all[[s]] <- setNames(vector("list", length(cell_types)), cell_types)
     for (ct in cell_types) {
       w <- w_list[[ct]]
-      val <- as.numeric(t(w) %*% C_self_slide[[s]][[ct]] %*% w)
+      val <- .genespace_self_quad(C_self_slide[[s]][[ct]], w)
       sigma_all[[s]][[ct]] <- max(sqrt(max(val, 0)), 1e-12)
     }
   }
@@ -75,7 +128,9 @@ NULL
       ct_i <- pair[1]
       ct_j <- pair[2]
       C_ij <- .get_C_cross(C_cross_slide[[s]], ct_i, ct_j)
-      rho_s <- as.numeric(t(w_list[[ct_i]]) %*% C_ij %*% w_list[[ct_j]]) /
+      rho_s <- .genespace_cross_bilinear(
+        w_list[[ct_i]], C_ij, w_list[[ct_j]]
+      ) /
         (sigma_all[[s]][[ct_i]] * sigma_all[[s]][[ct_j]])
       obj <- obj + rho_s
     }
@@ -93,10 +148,10 @@ NULL
 #' the average per-slide canonical correlation across all slides. Each slide's
 #' contribution is self-normalized by its own score standard deviation.
 #'
-#' @param C_self_slide Named list of per-slide self-covariance matrices.
-#'   Structure: \code{C_self_slide[[slide]][[cell_type]]} = G x G matrix.
-#' @param C_cross_slide Named list of per-slide cross-covariance matrices.
-#'   Structure: \code{C_cross_slide[[slide]][["ctA-ctB"]]} = G x G matrix.
+#' @param C_self_slide Named list of per-slide self-covariance matrices or
+#'   matrix-free operators.
+#' @param C_cross_slide Named list of per-slide cross-covariance matrices or
+#'   matrix-free operators.
 #' @param slides Character vector of slide IDs.
 #' @param cell_types Character vector of cell type names.
 #' @param max_iter Maximum iterations (default 3000). Must be >= 1.
@@ -120,7 +175,9 @@ optimize_genespace_avg_corr <- function(C_self_slide, C_cross_slide,
   }
 
   S <- length(slides)
-  n_genes <- nrow(C_self_slide[[slides[1]]][[cell_types[1]]])
+  n_genes <- .genespace_n_genes(
+    C_self_slide[[slides[1]]][[cell_types[1]]]
+  )
 
   # Initialize with random unit vectors
   w_list <- setNames(
@@ -154,7 +211,8 @@ optimize_genespace_avg_corr <- function(C_self_slide, C_cross_slide,
           if (ct_j == ct_i) next
           sig_j <- sigma_all[[s]][[ct_j]]
           C_ij <- .get_C_cross(C_cross_slide[[s]], ct_i, ct_j)
-          update <- update + (1 / sig_i) * C_ij %*% (w_list_old[[ct_j]] / sig_j)
+          update <- update + (1 / sig_i) *
+            .genespace_cross_mult(C_ij, w_list_old[[ct_j]] / sig_j)
         }
       }
       update <- update / S
@@ -243,7 +301,9 @@ optimize_genespace_avg_corr_n <- function(C_self_slide, C_cross_slide,
     stop("max_iter must be a positive integer.")
   }
   S <- length(slides)
-  n_genes <- nrow(C_self_slide[[slides[1]]][[cell_types[1]]])
+  n_genes <- .genespace_n_genes(
+    C_self_slide[[slides[1]]][[cell_types[1]]]
+  )
   k_start <- ncol(w_list[[cell_types[1]]])
 
   if (nCC <= k_start) {
@@ -281,7 +341,8 @@ optimize_genespace_avg_corr_n <- function(C_self_slide, C_cross_slide,
             if (ct_j == ct_i) next
             sig_j <- sigma_all[[s]][[ct_j]]
             C_ij <- .get_C_cross(C_cross_slide[[s]], ct_i, ct_j)
-            update <- update + (1 / sig_i) * C_ij %*% (w_current_old[[ct_j]] / sig_j)
+            update <- update + (1 / sig_i) *
+              .genespace_cross_mult(C_ij, w_current_old[[ct_j]] / sig_j)
           }
         }
         update <- update / S

@@ -494,9 +494,12 @@ setGeneric(
           next
         }
 
-        ## Vectorized regression: beta_g = sum(x_g_centered * cs_centered) / sum(cs_centered^2)
-        X_c <- scale(X, center = TRUE, scale = FALSE)
-        betas <- as.vector(crossprod(X_c, cs_c) / denom)
+        ## Because cs_c sums to zero, centering every expression column is
+        ## algebraically unnecessary:
+        ##   (X - 1 colMeans(X))' cs_c = X' cs_c.
+        ## Keeping X sparse avoids a dense cells-by-genes temporary for every
+        ## sigma and canonical axis.
+        betas <- as.vector(crossprod(X, cs_c) / denom)
         geneScoresReg[[gene_flat_name]][, cc_name] <- betas
       }
 

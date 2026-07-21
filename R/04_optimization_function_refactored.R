@@ -116,7 +116,9 @@ optimize_bilinear <- function(X_list, flat_kernels, sigma, max_iter = 1000,
 
   cell_types <- names(X_list)
   if (is.null(cell_types)) stop("Input X_list must be a named list.")
-  n_features <- ncol(X_list[[cell_types[1]]])
+  feature_counts <- stats::setNames(
+    vapply(X_list[cell_types], ncol, integer(1)), cell_types
+  )
 
   # Precompute small PC-space operator matrices once, then run power iteration
   # using Y_ij %*% w_j. This avoids repeated X' K X products per iteration.
@@ -137,7 +139,7 @@ optimize_bilinear <- function(X_list, flat_kernels, sigma, max_iter = 1000,
   w_list <- bilinear_w_from_Y_resi(
     w_list_new = w_list,
     Y_resi = Y_resi,
-    n_features = n_features,
+    n_features = feature_counts,
     max_iter = max_iter,
     tol = tol,
     step_size = step_size,
@@ -427,7 +429,9 @@ initialize_next_component <- function(Y_resi, cell_types) {
 #' @note the structure of Y_resi is Y_resi\[[ct1\]\]\[[ct2\]\]
 #' @param w_list_new Initial named list of weight vectors
 #' @param Y_resi Named list of residual matrices 
-#' @param n_features Number of features
+#' @param n_features Number of features. May be a named vector with one value
+#'   per cell type; retained for backward compatibility because dimensions are
+#'   now derived from the weight vectors themselves.
 #' @param max_iter Maximum iterations
 #' @param tol Tolerance
 #' @param step_size Step size for damped power iteration (default 1)
@@ -468,7 +472,10 @@ bilinear_w_from_Y_resi <- function(w_list_new, Y_resi,
       # Standard multi-cell-type case - use direct accumulation
       for (ct_i in cell_types) {
         # We can directly accumulate since we're just summing
-        w_i_update_vec <- matrix(0, nrow = n_features, ncol = 1)
+        # Cell types can legitimately retain different PCA ranks when their
+        # sample sizes differ. Allocate from the current block rather than the
+        # first cell type's feature count.
+        w_i_update_vec <- matrix(0, nrow = nrow(w_list_new[[ct_i]]), ncol = 1)
         for (ct_j in cell_types) {
           if (ct_i == ct_j) next
           w2 <- w_list_new[[ct_j]]
@@ -536,7 +543,9 @@ optimize_bilinear_n <- function(X_list, flat_kernels, sigma, w_list,
       !all(cts %in% names(X_list)) || !all(cts %in% names(w_list))) {
     stop("Input lists length or names do not match cellTypesOfInterest.")
   }
-  n_features <- ncol(X_list[[cts[1]]])
+  feature_counts <- stats::setNames(
+    vapply(X_list[cts], ncol, integer(1)), cts
+  )
 
   # Check input w_list dimensions
   k_start <- ncol(w_list[[cts[1]]]) ## we expect this value to be one
@@ -590,7 +599,7 @@ optimize_bilinear_n <- function(X_list, flat_kernels, sigma, w_list,
     w_list_qq_plus_1 <- bilinear_w_from_Y_resi(
       w_list_new = w_list_new,
       Y_resi = Y_resi,
-      n_features = n_features,
+      n_features = feature_counts,
       max_iter = max_iter,
       tol = tol,
       step_size = step_size,
@@ -669,8 +678,12 @@ validate_multi_slide_inputs <- function(X_list_all, K_list_all = NULL,
     stop("Cell types in data do not match expected cell types.")
   }
   
-  # Get number of features from first slide, first cell type
-  n_features <- ncol(X_list_all[[1]][[cell_types[1]]])
+  # Feature counts must be stable across slides for a given cell type, but
+  # need not be identical between cell types.
+  feature_counts <- stats::setNames(
+    vapply(cell_types, function(ct) ncol(X_list_all[[1]][[ct]]), integer(1)),
+    cell_types
+  )
   
   # Validate dimensions across all slides and cell types
   for (q in seq_len(n_slides)) {
@@ -678,7 +691,8 @@ validate_multi_slide_inputs <- function(X_list_all, K_list_all = NULL,
       if (!ct %in% names(X_list_all[[q]])) {
         stop(paste("Cell type", ct, "missing in slide", q))
       }
-      if (!is.matrix(X_list_all[[q]][[ct]]) || ncol(X_list_all[[q]][[ct]]) != n_features) {
+      if (!is.matrix(X_list_all[[q]][[ct]]) ||
+          ncol(X_list_all[[q]][[ct]]) != feature_counts[[ct]]) {
         stop(paste("Invalid or inconsistent feature count in slide", q, "cell type", ct))
       }
     }
@@ -688,7 +702,8 @@ validate_multi_slide_inputs <- function(X_list_all, K_list_all = NULL,
     n_slides = n_slides,
     cell_types = cell_types,
     n_cell_types = n_cell_types,
-    n_features = n_features
+    n_features = feature_counts,
+    feature_counts = feature_counts
   ))
 }
 
@@ -843,7 +858,7 @@ optimize_bilinear_multi_slides <- function(X_list_all, flat_kernels, sigma, slid
   n_slides <- validated$n_slides
   cell_types <- validated$cell_types
   n_cell_types <- validated$n_cell_types
-  n_features <- validated$n_features
+  feature_counts <- validated$feature_counts
   
   # Check if this is within-cell-type case
   is_within <- (n_cell_types == 1)
@@ -918,7 +933,7 @@ optimize_bilinear_multi_slides <- function(X_list_all, flat_kernels, sigma, slid
   w_list <- bilinear_w_from_Y_resi(
     w_list_new = w_list,
     Y_resi = Y_aggregate,
-    n_features = n_features,
+    n_features = feature_counts,
     max_iter = max_iter,
     tol = tol,
     step_size = step_size,
@@ -968,7 +983,7 @@ optimize_bilinear_n_multi_slides <- function(X_list_all, flat_kernels, sigma, sl
   n_slides <- validated$n_slides
   cell_types <- cellTypesOfInterest
   n_cell_types <- length(cell_types)
-  n_features <- validated$n_features
+  feature_counts <- validated$feature_counts
   is_within <- (n_cell_types == 1)
   
   # Validate w_list
@@ -1030,7 +1045,7 @@ optimize_bilinear_n_multi_slides <- function(X_list_all, flat_kernels, sigma, sl
     w_list_qq_plus_1 <- bilinear_w_from_Y_resi(
       w_list_new = w_list_new,
       Y_resi = Y_resi,
-      n_features = n_features,
+      n_features = feature_counts,
       max_iter = max_iter,
       tol = tol,
       step_size = step_size,

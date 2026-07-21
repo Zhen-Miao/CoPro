@@ -21,6 +21,43 @@ test_that("computePCA works for CoProSingle", {
   expect_equal(ncol(pca_a$x), 10)
 })
 
+test_that("sparse PCA uses implicit centering and scaling", {
+  set.seed(20260725)
+  dense <- matrix(rpois(2400, lambda = 0.15), nrow = 60, ncol = 40)
+  rownames(dense) <- paste0("cell", seq_len(nrow(dense)))
+  colnames(dense) <- paste0("gene", seq_len(ncol(dense)))
+  sparse <- methods::as(Matrix::Matrix(dense, sparse = TRUE), "dgCMatrix")
+
+  set.seed(11)
+  fit_sparse <- CoPro:::.run_pca_irlba(sparse, 5, center = TRUE, scale. = TRUE)
+  set.seed(11)
+  fit_dense <- CoPro:::.run_pca_irlba(dense, 5, center = TRUE, scale. = TRUE)
+
+  expect_s4_class(sparse, "dgCMatrix")
+  expect_equal(fit_sparse$sdev, fit_dense$sdev, tolerance = 1e-7)
+  expect_equal(abs(fit_sparse$rotation), abs(fit_dense$rotation),
+               tolerance = 1e-6)
+})
+
+test_that("computePCA chooses one feasible rank across imbalanced cell types", {
+  dat <- generate_test_data_single(n_cells = 60, n_genes = 30, seed = 101)
+  dat$cellTypes <- c(rep("A", 12), rep("B", 24), rep("C", 24))
+  obj <- newCoProSingle(
+    normalizedData = dat$normalizedData,
+    locationData = dat$locationData,
+    metaData = dat$metaData,
+    cellTypes = dat$cellTypes
+  )
+  obj <- subsetData(obj, cellTypesOfInterest = c("A", "B", "C"))
+
+  suppressWarnings(
+    obj <- computePCA(obj, nPCA = 15, center = TRUE, scale. = TRUE)
+  )
+  ranks <- vapply(obj@pcaGlobal, function(x) ncol(x$x), integer(1))
+  expect_equal(unname(ranks), rep(obj@nPCA, 3))
+  expect_equal(obj@nPCA, 11)
+})
+
 test_that("computePCA works for single cell type", {
   obj <- create_test_copro_single(n_cells = 100, n_cell_types = 2, seed = 42)
   obj <- subsetData(obj, cellTypesOfInterest = c("CellTypeA"))
@@ -325,6 +362,21 @@ test_that("computeRegressionGeneScores respects sigma parameter", {
   expect_false(any(grepl("sigma0.05", reg_names)))
 })
 
+test_that("uncentered sparse crossproduct equals centered regression scores", {
+  set.seed(20260726)
+  X <- methods::as(
+    Matrix::rsparsematrix(200, 80, density = 0.03), "dgCMatrix"
+  )
+  score <- rnorm(nrow(X))
+  score <- score - mean(score)
+
+  expected <- as.vector(crossprod(
+    scale(as.matrix(X), center = TRUE, scale = FALSE), score
+  ))
+  actual <- as.vector(crossprod(X, score))
+  expect_equal(actual, expected, tolerance = 1e-12)
+})
+
 test_that("computeNormalizedCorrelation works for CoProMulti aggregate mode", {
   obj <- create_test_copro_multi(n_cells_per_slide = 60, n_slides = 2,
                                  n_cell_types = 2, seed = 42)
@@ -344,4 +396,3 @@ test_that("computeNormalizedCorrelation works for CoProMulti aggregate mode", {
   expect_true("aggregateCorrelation" %in% colnames(agg_df))
   expect_true(is.numeric(agg_df$sigmaValue))
 })
-

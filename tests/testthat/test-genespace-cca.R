@@ -766,6 +766,39 @@ test_that("reverse-key lookup in .get_C_cross works", {
   )
 })
 
+test_that("matrix-free gene-space operators equal explicit covariances", {
+  set.seed(20260728)
+  Zi <- matrix(rnorm(45 * 18), 45, 18)
+  Zj <- matrix(rnorm(38 * 18), 38, 18)
+  K <- Matrix::rsparsematrix(45, 38, density = 0.08)
+  wi <- matrix(rnorm(18), 18, 1)
+  wj <- matrix(rnorm(18), 18, 1)
+
+  self_matrix <- crossprod(Zi) / nrow(Zi)
+  cross_matrix <- crossprod(Zi, K %*% Zj) /
+    sqrt(nrow(Zi) * nrow(Zj))
+  self_operator <- CoPro:::.new_genespace_self_operator(Zi)
+  cross_operator <- CoPro:::.new_genespace_cross_operator(Zi, K, Zj)
+
+  expect_equal(
+    CoPro:::.genespace_self_quad(self_operator, wi),
+    as.numeric(crossprod(wi, self_matrix %*% wi)),
+    tolerance = 1e-11
+  )
+  expect_equal(
+    CoPro:::.genespace_cross_mult(cross_operator, wj),
+    cross_matrix %*% wj,
+    tolerance = 1e-11
+  )
+  expect_equal(
+    CoPro:::.genespace_cross_mult(
+      CoPro:::.transpose_genespace_cross_operator(cross_operator), wi
+    ),
+    t(cross_matrix) %*% wi,
+    tolerance = 1e-11
+  )
+})
+
 test_that(".prepareGeneSpaceData drops slides below the per-slide cell threshold", {
   # The threshold (CoPro:::.min_cells_per_slide, default 10) protects the
   # G x G covariance estimates from low-rank-induced noise. We drop a

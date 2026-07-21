@@ -7,7 +7,7 @@
 runSkrCCAPermu(
   object,
   tol = 1e-05,
-  nPermu = 20,
+  nPermu = 999,
   maxIter = 200,
   permu_method = "bin",
   permu_which = "second_only",
@@ -16,7 +16,8 @@ runSkrCCAPermu(
   match_quantile = FALSE,
   conservative = FALSE,
   n_cores = 1,
-  verbose = TRUE
+  verbose = TRUE,
+  sigma = NULL
 )
 }
 \arguments{
@@ -24,8 +25,8 @@ runSkrCCAPermu(
 
 \item{tol}{Tolerance for CCA optimization convergence (default: 1e-5)}
 
-\item{nPermu}{Number of permutations to run (default: 20).
-Increase to 100+ for publication-quality p-values.}
+\item{nPermu}{Number of permutations to run (default: 999), giving a
+Monte-Carlo floor of 0.001 under the Phipson--Smyth correction.}
 
 \item{maxIter}{Maximum iterations for CCA optimization (default: 200)}
 
@@ -73,6 +74,12 @@ Set to higher values to speed up permutation testing. Use \code{parallel::detect
 to find available cores. Parallelization uses the \code{parallel} package.}
 
 \item{verbose}{Whether to print progress messages (default: TRUE)}
+
+\item{sigma}{Optional predeclared sigma value. When supplied, both observed
+and null statistics are evaluated at this fixed sigma. When \code{NULL}, the
+selected \code{object@sigmaValueChoice} is used conditionally and the returned
+p-value is marked as not adjusted for sigma selection; use
+\code{\link[=runSkrCCAPermu_FairSigma]{runSkrCCAPermu_FairSigma()}} for a max-over-sigma test.}
 }
 \value{
 CoPro object with permutation results stored in \verb{@skrCCAPermuOut}

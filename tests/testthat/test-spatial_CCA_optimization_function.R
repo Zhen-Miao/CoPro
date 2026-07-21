@@ -186,6 +186,33 @@ test_that("multi-cell-type higher axes use orthogonal projection", {
   }
 })
 
+test_that("multiset optimizer supports different feature counts by cell type", {
+  set.seed(20260727)
+  n <- 36
+  dims <- c(TypeA = 5L, TypeB = 7L, TypeC = 9L)
+  X_list <- lapply(dims, function(p) matrix(rnorm(n * p), n, p))
+  kernels <- list(
+    "kernel|sigma0.1|TypeA|TypeB" = matrix(rnorm(n * n), n, n),
+    "kernel|sigma0.1|TypeA|TypeC" = matrix(rnorm(n * n), n, n),
+    "kernel|sigma0.1|TypeB|TypeC" = matrix(rnorm(n * n), n, n)
+  )
+
+  first <- optimize_bilinear(
+    X_list, kernels, sigma = 0.1, max_iter = 1000, tol = 1e-8
+  )
+  result <- optimize_bilinear_n(
+    X_list, kernels, sigma = 0.1, w_list = first,
+    cellTypesOfInterest = names(dims), nCC = 3,
+    max_iter = 1000, tol = 1e-8
+  )
+
+  expect_equal(vapply(result, nrow, integer(1)), dims)
+  expect_equal(unname(vapply(result, ncol, integer(1))), rep(3L, 3))
+  for (ct in names(dims)) {
+    expect_equal(crossprod(result[[ct]]), diag(3), tolerance = 1e-6)
+  }
+})
+
 test_that("scalePCs is a pure reparametrization for >2 cell types", {
   # scalePCs = TRUE feeds whitened X~ = X diag(sdev)^-1 with sdev2_list = NULL;
   # scalePCs = FALSE feeds raw X with sdev2_list = D = sdev^2. These are the

@@ -15,10 +15,9 @@
 #' @param center Whether to center the matrix before PCA
 #' @param scale. Whether to scale the matrix before PCA
 #' @param scalePCs Whether to scale (whiten) PCs by their standard deviation
-#'   before downstream CCA optimization. Default `TRUE` (recommended). When
-#'   PCs are whitened, the unit-norm constraint `||w|| = 1` is equivalent to
-#'   the standard CCA constraint `||w'X'Xw|| = 1`. Setting this to `FALSE`
-#'   distorts the constraint space and may produce unreliable results.
+#'   before downstream CCA optimization. Default `TRUE`. With `FALSE`, CoPro
+#'   carries the diagonal PC-variance metric through observed, permutation,
+#'   and deflation calculations, so this is a supported reparameterization.
 #'
 #' @return A `CoProMulti` object with the `pcaResults` slot populated.
 #'         `pcaResults` structure: `list(slideID = list(cellType = pc_matrix))`.
@@ -56,14 +55,6 @@ setGeneric("computePCA",
   }
   if (!is.logical(scalePCs) || length(scalePCs) != 1) {
     stop("scalePCs must be a single logical value")
-  }
-  if (!scalePCs) {
-    warning(paste(
-      "scalePCs = FALSE is not recommended. When PCs are whitened (scaled),",
-      "the unit-norm constraint ||w|| = 1 is equivalent to the standard CCA",
-      "constraint ||w'X'Xw|| = 1. Without whitening, the optimization may",
-      "produce unreliable results because the constraint space is distorted."
-    ))
   }
 }
 
@@ -106,6 +97,82 @@ setGeneric("computePCA",
   inherits(x, "IterableMatrix")
 }
 
+.max_pca_rank <- function(mat) {
+  max(0L, min(nrow(mat) - 1L, ncol(mat) - 1L))
+}
+
+.resolve_common_pca_rank <- function(matrices, nPCA, cts) {
+  missing <- cts[vapply(matrices, is.null, logical(1))]
+  if (length(missing) > 0L) {
+    stop("PCA input is missing for cell type(s): ",
+         paste(missing, collapse = ", "))
+  }
+  max_ranks <- stats::setNames(
+    vapply(matrices, .max_pca_rank, integer(1)), cts
+  )
+  if (any(max_ranks < 1L)) {
+    bad <- names(max_ranks)[max_ranks < 1L]
+    stop("PCA requires at least two cells and two genes for every cell type. ",
+         "Insufficient data for: ", paste(bad, collapse = ", "))
+  }
+
+  common_rank <- min(as.integer(nPCA), min(max_ranks))
+  if (common_rank < nPCA) {
+    limiting <- names(max_ranks)[max_ranks == min(max_ranks)]
+    warning(
+      "nPCA (", nPCA, ") exceeds the common feasible rank across cell types. ",
+      "Using ", common_rank, " PCs for every cell type; limiting type(s): ",
+      paste(limiting, collapse = ", "), "."
+    )
+  }
+  common_rank
+}
+
+# Compute centering/scaling vectors without materializing a centered sparse
+# matrix. irlba applies these vectors inside its matrix products.
+.sparse_pca_parameters <- function(mat, center, scale.,
+                                   zero_sd_threshold = 1e-3,
+                                   nz_propion_threshold = 0.01) {
+  n <- nrow(mat)
+  means <- as.numeric(Matrix::colMeans(mat))
+  sumsq <- as.numeric(Matrix::colSums(mat ^ 2))
+
+  center_arg <- if (center) means else FALSE
+  scale_arg <- FALSE
+  if (scale.) {
+    variance <- if (center) {
+      pmax((sumsq - n * means^2) / max(1, n - 1L), 0)
+    } else {
+      sumsq / max(1, n - 1L)
+    }
+    scale_values <- sqrt(variance)
+    nz_prop <- as.numeric(Matrix::colSums(mat != 0)) / n
+    unsafe <- !is.finite(scale_values) |
+      scale_values < zero_sd_threshold |
+      nz_prop < nz_propion_threshold
+    scale_values[unsafe] <- 1
+    scale_arg <- scale_values
+  }
+
+  list(center = center_arg, scale = scale_arg)
+}
+
+.run_pca_irlba <- function(mat, nPCA, center, scale.) {
+  if (inherits(mat, "sparseMatrix")) {
+    params <- .sparse_pca_parameters(mat, center, scale.)
+    message("Input is sparse (", class(mat)[1],
+            "), performing implicitly centered/scaled irlba PCA...")
+    return(prcomp_irlba(
+      mat, n = nPCA, center = params$center, scale. = params$scale
+    ))
+  }
+
+  scaled_data <- .apply_centering_scaling(mat, center, scale.)
+  message("Input is dense (", class(scaled_data)[1],
+          "), performing irlba PCA...")
+  prcomp_irlba(scaled_data, center = FALSE, scale. = FALSE, n = nPCA)
+}
+
 .compute_pca_single <- function(object, nPCA = 40, center = TRUE, scale. = TRUE, scalePCs = TRUE, cts) {
   # PCA results will be saved under the name of cell types
   object@pcaGlobal <- setNames(
@@ -113,26 +180,19 @@ setGeneric("computePCA",
     cts
   )
 
+  matrices <- stats::setNames(lapply(cts, function(ct) {
+    object@normalizedDataSub[object@cellTypesSub == ct, , drop = FALSE]
+  }), cts)
+  nPCA_use <- .resolve_common_pca_rank(matrices, nPCA, cts)
+
   # Iterate over cell types
   for (ct in cts) {
     # Cell type specific subset
-    sub_data <- object@normalizedDataSub[object@cellTypesSub == ct, ]
-
-    # Apply centering and scaling
-    scaled_data <- .apply_centering_scaling(sub_data, center, scale.)
-
-    # Guard against nPCA exceeding data dimensions
-    max_pca <- min(nrow(scaled_data) - 1, ncol(scaled_data))
-    if (nPCA >= max_pca) {
-      warning(paste0("nPCA (", nPCA, ") exceeds max allowed (", max_pca,
-                     ") for cell type '", ct, "'. Reducing to ", max(1, max_pca - 1), "."))
-      nPCA_use <- max(1, max_pca - 1)
-    } else {
-      nPCA_use <- nPCA
-    }
+    sub_data <- matrices[[ct]]
 
     # PCA on the matrix that is already centered and scaled
-    if (.is_bpcells(scaled_data)) {
+    if (.is_bpcells(sub_data)) {
+      scaled_data <- .apply_centering_scaling(sub_data, center, scale.)
       message("Input is BPCell (", class(scaled_data), "), performing BPCell svd...")
       sv <- BPCells::svds(scaled_data, k = nPCA_use, nu = nPCA_use, nv = nPCA_use, threads = 0L)
       x_scores <- sweep(sv$u, 2, sv$d, `*`)
@@ -157,13 +217,12 @@ setGeneric("computePCA",
       )
       class(pca) <- "prcomp"
     } else {
-      message("Input is dense (", class(scaled_data), "), performing irlba pca...")
-      pca <- prcomp_irlba(scaled_data, center = FALSE, scale. = FALSE, n = nPCA_use)
+      pca <- .run_pca_irlba(sub_data, nPCA_use, center, scale.)
     }
     object@pcaGlobal[[ct]] <- pca
   }
 
-  object@nPCA <- nPCA
+  object@nPCA <- nPCA_use
   object@scalePCs <- scalePCs
 
   return(object)
@@ -193,7 +252,7 @@ setGeneric("computePCA",
 
 .compute_pca_multi <- function(object, nPCA = 40, center = TRUE, scale. = TRUE,
                                scalePCs = TRUE, dataUse = "raw", center_per_slide = FALSE, cts) {
-      slides <- getSlideList(object)
+  slides <- getSlideList(object)
 
   # Initialize pcaResults structure
   pca_results_all <- setNames(vector("list", length = length(slides)), slides)
@@ -202,6 +261,15 @@ setGeneric("computePCA",
   }
 
   pca_global <- setNames(vector("list", length = length(cts)), cts)
+
+  matrices <- stats::setNames(lapply(cts, function(ct) {
+    if (dataUse == "integrated") {
+      object@integratedData[[ct]]
+    } else {
+      object@normalizedDataSub[object@cellTypesSub == ct, , drop = FALSE]
+    }
+  }), cts)
+  nPCA_use <- .resolve_common_pca_rank(matrices, nPCA, cts)
 
   # Perform PCA per cell type on the integrated data
   for (ct in cts) {
@@ -214,9 +282,9 @@ setGeneric("computePCA",
 
     # Get the appropriate data matrix
     if (dataUse == "integrated") {
-      mat_ct <- object@integratedData[[ct]]
+      mat_ct <- matrices[[ct]]
     } else { # raw
-      mat_ct <- object@normalizedDataSub[object@cellTypesSub == ct, ]
+      mat_ct <- matrices[[ct]]
     }
 
     # Ensure it's a matrix
@@ -232,24 +300,9 @@ setGeneric("computePCA",
            ". Expected ", expected_rows, " rows, got ", nrow(mat_ct))
     }
 
-    # Apply centering and scaling
-    scaled_data <- .apply_centering_scaling(mat_ct, center, scale.)
-    if (center || scale.) {
-      message("Data centered and/or scaled")
-    }
-
-    # Guard against nPCA exceeding data dimensions
-    max_pca <- min(nrow(scaled_data) - 1, ncol(scaled_data))
-    if (nPCA >= max_pca) {
-      warning(paste0("nPCA (", nPCA, ") exceeds max allowed (", max_pca,
-                     ") for cell type '", ct, "'. Reducing to ", max(1, max_pca - 1), "."))
-      nPCA_use <- max(1, max_pca - 1)
-    } else {
-      nPCA_use <- nPCA
-    }
-
     # Perform PCA on the combined integrated data for this cell type
-    if (.is_bpcells(scaled_data)) {
+    if (.is_bpcells(mat_ct)) {
+      scaled_data <- .apply_centering_scaling(mat_ct, center, scale.)
       message("Input is BPCell (", paste(class(scaled_data), collapse = ", "),
               "), performing BPCell svd...")
       sv <- BPCells::svds(scaled_data, k = nPCA_use, nu = nPCA_use, nv = nPCA_use, threads = 0L)
@@ -270,8 +323,7 @@ setGeneric("computePCA",
       )
       class(pca_ct) <- "prcomp"
     } else {
-      pca_ct <- prcomp_irlba(scaled_data, n = nPCA_use,
-                             center = FALSE, scale. = FALSE)
+      pca_ct <- .run_pca_irlba(mat_ct, nPCA_use, center, scale.)
     }
     message("PCA computed for cell type: ", ct)
     pca_global[[ct]] <- pca_ct
@@ -295,7 +347,7 @@ setGeneric("computePCA",
 
   object@pcaGlobal <- pca_global
   object@pcaResults <- pca_results_all
-  object@nPCA <- nPCA
+  object@nPCA <- nPCA_use
   object@scalePCs <- scalePCs
 
   return(object)
