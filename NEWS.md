@@ -17,6 +17,11 @@
   summarized by a replicate sign-flip test and replicate bootstrap interval.
   Cell-level permutation functions now reject `CoProMulti` objects rather than
   presenting cell shuffles as replicate-level inference.
+* Permutation provenance is bound to the null it describes. Running
+  `runSkrCCAPermu_Conditional()` after a base `runSkrCCAPermu()` on the same
+  object no longer re-labels the base-path null, so a later `calculate_pvalue()`
+  returns the same p-value and sigma-selection warning regardless of what else
+  has been run on the object.
 
 ## Performance
 
@@ -31,7 +36,9 @@
   distance or kernel matrices.
 * Kernel normalizers are cached on the CoPro object with matrix signatures for
   safe reuse. Fair-sigma and conditional permutations now honor `n_cores` via
-  memory-explicit PSOCK workers.
+  memory-explicit PSOCK workers. When CoPro is not installed (for example under
+  `devtools::load_all()`), `n_cores > 1` now falls back to sequential execution
+  with a warning instead of aborting inside the worker.
 
 ## Documentation
 

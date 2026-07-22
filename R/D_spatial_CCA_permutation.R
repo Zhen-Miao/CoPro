@@ -202,6 +202,20 @@
   invisible(NULL)
 }
 
+# Resolve the library directory that holds an *installed* CoPro, or NULL when
+# CoPro is only available via devtools::load_all(). PSOCK workers start fresh R
+# sessions and must library(CoPro); under load_all() find.package() points at the
+# source tree (which has no Meta/package.rds and cannot be loaded in a worker).
+# Callers fall back to sequential execution when this returns NULL.
+.installedCoProLibrary <- function() {
+  pkg_dir <- tryCatch(find.package("CoPro"), error = function(e) NULL)
+  if (is.null(pkg_dir) ||
+      !file.exists(file.path(pkg_dir, "Meta", "package.rds"))) {
+    return(NULL)
+  }
+  dirname(pkg_dir)
+}
+
 .parallelPermutationLapply <- function(indices, FUN, n_cores, verbose = TRUE) {
   if (!is.numeric(n_cores) || length(n_cores) != 1L ||
       n_cores < 1L || n_cores != as.integer(n_cores)) {
@@ -209,16 +223,17 @@
   }
   if (n_cores == 1L || length(indices) <= 1L) return(lapply(indices, FUN))
 
-  if (!requireNamespace("CoPro", quietly = TRUE)) {
-    warning("Parallel permutation requires an installed CoPro package; ",
-            "falling back to sequential execution.")
+  copro_library <- .installedCoProLibrary()
+  if (is.null(copro_library)) {
+    warning("Parallel permutation requires an installed CoPro package ",
+            "(devtools::load_all() is not sufficient); falling back to ",
+            "sequential execution. Run devtools::install() to enable it.")
     return(lapply(indices, FUN))
   }
   workers <- min(as.integer(n_cores), length(indices))
   if (verbose) message("Using ", workers, " PSOCK permutation workers.")
   cluster <- parallel::makeCluster(workers)
   on.exit(parallel::stopCluster(cluster), add = TRUE)
-  copro_library <- dirname(find.package("CoPro"))
   parallel::clusterCall(cluster, function(lib) {
     .libPaths(c(lib, .libPaths()))
     suppressPackageStartupMessages(library(CoPro))
@@ -618,16 +633,20 @@ runSkrCCAPermu <- function(object, tol = 1e-5, nPermu = 999,
     }
   }
 
+  copro_library <- NULL
   if (n_cores > 1) {
-    # Parallel execution using PSOCK cluster
-    # Note: Requires CoPro to be INSTALLED (not just loaded with devtools::load_all())
-    # Fork-based parallelism (mclapply) causes segfaults with BLAS/irlba on macOS
-
-    # Check if CoPro is installed
-    if (!requireNamespace("CoPro", quietly = TRUE)) {
-      warning("Parallel execution requires CoPro to be installed (not just loaded).\n",
-              "Falling back to sequential execution.\n",
-              "To enable parallelism, run: devtools::install() first.")
+    # Parallel execution using a PSOCK cluster.
+    # Requires CoPro to be INSTALLED (not just devtools::load_all()'ed): fresh
+    # PSOCK workers must library(CoPro), and under load_all() find.package()
+    # resolves to the source tree (no Meta/package.rds), which cannot be loaded
+    # in a worker. Fork-based parallelism (mclapply) segfaults with BLAS/irlba
+    # on macOS, so it is not used.
+    copro_library <- .installedCoProLibrary()
+    if (is.null(copro_library)) {
+      warning("Parallel execution requires an installed CoPro package ",
+              "(devtools::load_all() is not sufficient).\n",
+              "Falling back to sequential execution. ",
+              "Run devtools::install() first to enable parallelism.")
       n_cores <- 1
     }
   }
@@ -642,7 +661,6 @@ runSkrCCAPermu <- function(object, tol = 1e-5, nPermu = 999,
 
     # Load the exact CoPro installation used by the parent session. This
     # matters when multiple library trees contain different package versions.
-    copro_library <- dirname(find.package("CoPro"))
     parallel::clusterCall(cl, function(lib) {
       .libPaths(c(lib, .libPaths()))
       suppressPackageStartupMessages(library(CoPro))
@@ -943,8 +961,13 @@ computeNormalizedCorrelationPermu <- function(object, tol = 1e-4) {
     }
   }
 
-  ## Store results
-  object@normalizedCorrelationPermu <- correlation_value
+  ## Store results. Bind the provenance describing this null onto the null
+  ## itself, so a later runSkrCCAPermu_Conditional()/_FairSigma() call that
+  ## overwrites the shared object-level provenance attribute cannot silently
+  ## re-label it when calculate_pvalue() reads it back.
+  object@normalizedCorrelationPermu <- `attr<-`(
+    correlation_value, "provenance", .permutationProvenance(object)
+  )
   attr(object, "kernelNormalizerCache") <- normalizer_cache
 
   cat("\nNormalized correlation computation complete.\n")
@@ -1116,7 +1139,12 @@ calculate_pvalue <- function(object, cc_index = 1, alternative = "greater") {
     stop("Run computeNormalizedCorrelationPermu() first")
   }
 
-  provenance <- .permutationProvenance(object)
+  # Prefer the provenance bound to the null itself; the shared object-level
+  # attribute can be overwritten by a later runSkrCCAPermu_Conditional() call,
+  # which would otherwise re-label this null and change the reported p-value.
+  provenance <- attr(object@normalizedCorrelationPermu, "provenance",
+                     exact = TRUE)
+  if (is.null(provenance)) provenance <- .permutationProvenance(object)
 
   # Get the observed value for exactly the sigma family represented by the
   # null. This prevents a fixed-sigma null from being compared with an
@@ -1603,6 +1631,11 @@ runSkrCCAPermu_FairSigma <- function(object,
     sigma_predeclared = FALSE,
     selection_adjusted = TRUE,
     scalePCs = scalePCs
+  )
+  # Bind this provenance to the null slot as well (see calculate_pvalue()).
+  object@normalizedCorrelationPermu <- `attr<-`(
+    object@normalizedCorrelationPermu, "provenance",
+    attr(object, "permutationProvenance", exact = TRUE)
   )
 
   # Get observed value for comparison
