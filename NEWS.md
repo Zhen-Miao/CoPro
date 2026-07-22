@@ -25,6 +25,12 @@
 
 ## Performance
 
+* One-cell-type skrCCA now solves the symmetric quadratic problem directly
+  with an exact symmetric eigendecomposition, selecting the largest algebraic
+  eigenvalues and obtaining all requested axes from one factorization.
+* Sparse within-cell-type kernels are stored as symmetric `dsCMatrix` objects,
+  so only one triangle is retained. Cross-type and asymmetrically normalized
+  kernels remain general `dgCMatrix` objects.
 * Sparse expression PCA now passes centering and scaling vectors directly to
   `irlba` instead of materializing a dense centered matrix. All cell types use
   one common feasible PCA rank, and multiset optimizers are also dimension-aware.

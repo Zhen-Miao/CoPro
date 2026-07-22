@@ -137,8 +137,22 @@ test_that("runSkrCCA works for single cell type", {
   
   # Run skrCCA
   obj <- runSkrCCA(obj, scalePCs = TRUE, nCC = 2, maxIter = 100)
-  
+
   expect_true(length(obj@skrCCAOut) > 0)
+  expect_equal(ncol(obj@skrCCAOut[[1]][["CellTypeA"]]), 2)
+
+  # The same exact all-axis path is used inside permutation fits.
+  obj <- suppressMessages(computeNormalizedCorrelation(obj))
+  obj <- suppressWarnings(suppressMessages(
+    runSkrCCAPermu(obj, nPermu = 2, permu_method = "global",
+                   maxIter = 100, verbose = FALSE)
+  ))
+  expect_equal(length(obj@skrCCAPermuOut), 2)
+  expect_true(all(vapply(
+    obj@skrCCAPermuOut,
+    function(x) ncol(x[["CellTypeA"]]) == 2L,
+    logical(1)
+  )))
 })
 
 test_that("runSkrCCA requires kernel matrices", {

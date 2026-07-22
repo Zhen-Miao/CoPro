@@ -63,6 +63,77 @@ test_that("optimize_bilinear works for single cell type (within)", {
   expect_equal(ncol(result$TypeA), 1)
 })
 
+test_that("one-cell-type optimization selects largest algebraic eigenvalues", {
+  # A four-cycle is a valid symmetric, non-negative, hollow proximity kernel.
+  # On the centered PC subspace below, Y has eigenvalues 0 and -2. Power
+  # iteration selects -2 because it has largest magnitude, but maximizing w'Yw
+  # must select the largest algebraic eigenvalue, 0.
+  K <- matrix(c(
+    0, 1, 0, 1,
+    1, 0, 1, 0,
+    0, 1, 0, 1,
+    1, 0, 1, 0
+  ), 4, 4, byrow = TRUE)
+  X <- cbind(
+    c(1, -1, 1, -1) / 2,
+    c(1, 0, -1, 0) / sqrt(2)
+  )
+  X_list <- list(TypeA = X)
+  kernels <- list("kernel|sigma0.1|TypeA|TypeA" = K)
+
+  result <- optimize_bilinear(X_list, kernels, sigma = 0.1)
+  Y <- crossprod(X, K %*% X)
+
+  expect_equal(as.numeric(crossprod(result$TypeA, Y %*% result$TypeA)),
+               0, tolerance = 1e-12)
+})
+
+test_that("one-cell-type optimization returns all exact eigen axes", {
+  set.seed(20260722)
+  n <- 60
+  p <- 7
+  X <- matrix(rnorm(n * p), n, p)
+  K0 <- matrix(rnorm(n * n), n, n)
+  K <- (K0 + t(K0)) / 2
+  X_list <- list(TypeA = X)
+  kernels <- list("kernel|sigma0.1|TypeA|TypeA" = K)
+  Y <- compute_symmetric_Y(X, K)
+  expected <- eigen(Y, symmetric = TRUE)
+
+  first <- optimize_bilinear(X_list, kernels, sigma = 0.1)
+  result <- optimize_bilinear_n(
+    X_list, kernels, sigma = 0.1, w_list = first,
+    cellTypesOfInterest = "TypeA", nCC = 4
+  )
+
+  expect_equal(abs(crossprod(result$TypeA,
+                             expected$vectors[, 1:4, drop = FALSE])),
+               diag(4), tolerance = 1e-10)
+  expect_equal(crossprod(result$TypeA), diag(4), tolerance = 1e-10)
+})
+
+test_that("one-cell-type eigen solver uses symmetric part and weighted metric", {
+  set.seed(20260723)
+  p <- 6
+  Y <- matrix(rnorm(p * p), p, p)  # deliberately asymmetric
+  metric <- runif(p, 0.5, 3)
+  Y_resi <- list(TypeA = list(TypeA = Y))
+  result <- solve_one_type_eigen(
+    Y_resi, "TypeA", nCC = 3, sdev2_list = list(TypeA = metric)
+  )
+
+  inv_sqrt_d <- 1 / sqrt(metric)
+  Ys <- (Y + t(Y)) / 2
+  transformed <- sweep(sweep(Ys, 1, inv_sqrt_d, "*"),
+                       2, inv_sqrt_d, "*")
+  expected <- eigen(transformed, symmetric = TRUE)$vectors[, 1:3, drop = FALSE]
+  mapped <- sweep(result$TypeA, 1, sqrt(metric), "*")
+
+  expect_equal(abs(crossprod(mapped, expected)), diag(3), tolerance = 1e-10)
+  expect_equal(crossprod(result$TypeA, metric * result$TypeA),
+               diag(3), tolerance = 1e-10)
+})
+
 test_that("optimize_bilinear_n computes multiple components", {
   set.seed(42)
   n_cells <- 50

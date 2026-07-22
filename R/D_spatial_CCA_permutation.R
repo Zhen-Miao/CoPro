@@ -605,6 +605,22 @@ runSkrCCAPermu <- function(object, tol = 1e-5, nPermu = 999,
       }
     }
 
+    # One- and two-type problems have exact decompositions. Form the small
+    # PC-space operator once per permutation and obtain every requested axis
+    # from one eigendecomposition/SVD.
+    if (length(cts) <= 2L) {
+      Y_resi <- compute_Y_resi(
+        X_list = PCmats_local,
+        flat_kernels = object@kernelMatrices,
+        sigma = sigmaValueChoice,
+        cell_types = cts
+      )
+      if (length(cts) == 1L) {
+        return(solve_one_type_eigen(Y_resi, cts, nCC, sdev2_list))
+      }
+      return(solve_two_type_svd(Y_resi, cts, nCC, sdev2_list))
+    }
+
     cca_result <- optimize_bilinear(
       X_list = PCmats_local,
       flat_kernels = object@kernelMatrices,
@@ -616,9 +632,9 @@ runSkrCCAPermu <- function(object, tol = 1e-5, nPermu = 999,
     names(cca_result) <- cts
 
     if (nCC == 1) {
-      return(cca_result)
+      cca_result
     } else {
-      cca_result_n <- optimize_bilinear_n(
+      optimize_bilinear_n(
         X_list = PCmats_local,
         flat_kernels = object@kernelMatrices,
         sigma = sigmaValueChoice,
@@ -629,7 +645,6 @@ runSkrCCAPermu <- function(object, tol = 1e-5, nPermu = 999,
         tol = tol,
         sdev2_list = sdev2_list
       )
-      return(cca_result_n)
     }
   }
 
@@ -703,6 +718,23 @@ runSkrCCAPermu <- function(object, tol = 1e-5, nPermu = 999,
         }
       }
 
+      if (length(cts) <= 2L) {
+        compute_Y <- utils::getFromNamespace("compute_Y_resi", "CoPro")
+        Y_resi <- compute_Y(
+          X_list = PCmats_local,
+          flat_kernels = flat_kernels_local,
+          sigma = sigmaValueChoice,
+          cell_types = cts
+        )
+        solver_name <- if (length(cts) == 1L) {
+          "solve_one_type_eigen"
+        } else {
+          "solve_two_type_svd"
+        }
+        solver <- utils::getFromNamespace(solver_name, "CoPro")
+        return(solver(Y_resi, cts, nCC, sdev2_list))
+      }
+
       cca_result <- CoPro::optimize_bilinear(
         X_list = PCmats_local,
         flat_kernels = flat_kernels_local,
@@ -714,9 +746,9 @@ runSkrCCAPermu <- function(object, tol = 1e-5, nPermu = 999,
       names(cca_result) <- cts
 
       if (nCC == 1) {
-        return(cca_result)
+        cca_result
       } else {
-        cca_result_n <- CoPro::optimize_bilinear_n(
+        CoPro::optimize_bilinear_n(
           X_list = PCmats_local,
           flat_kernels = flat_kernels_local,
           sigma = sigmaValueChoice,
@@ -727,7 +759,6 @@ runSkrCCAPermu <- function(object, tol = 1e-5, nPermu = 999,
           tol = tol,
           sdev2_list = sdev2_list
         )
-        return(cca_result_n)
       }
     }
 
@@ -1729,6 +1760,10 @@ runSkrCCAPermu_FairSigma <- function(object,
         )
       ))
       names(w_k) <- cts
+    } else if (length(cts) == 1L) {
+      w_k <- solve_one_type_eigen(
+        Y_resi, cts, nCC = 1L, sdev2_list = sdev2_list
+      )
     } else if (length(cts) == 2L) {
       # Match optimize_bilinear()'s exact two-type path while reusing the
       # caller's precomputed PC-space operator.
@@ -1761,14 +1796,20 @@ runSkrCCAPermu_FairSigma <- function(object,
         deflation = "projection"
       )
     }
-    w_new <- initialize_next_component(Yk, cts)
-    invisible(utils::capture.output(
-      w_k <- bilinear_w_from_Y_resi(
-        w_list_new = w_new, Y_resi = Yk,
-        n_features = stats::setNames(vapply(PCmats[cts], ncol, integer(1)), cts),
-        max_iter = maxIter, tol = tol, sdev2_list = sdev2_list
+    if (length(cts) == 1L) {
+      w_k <- solve_one_type_eigen(
+        Yk, cts, nCC = 1L, sdev2_list = sdev2_list
       )
-    ))
+    } else {
+      w_new <- initialize_next_component(Yk, cts)
+      invisible(utils::capture.output(
+        w_k <- bilinear_w_from_Y_resi(
+          w_list_new = w_new, Y_resi = Yk,
+          n_features = stats::setNames(vapply(PCmats[cts], ncol, integer(1)), cts),
+          max_iter = maxIter, tol = tol, sdev2_list = sdev2_list
+        )
+      ))
+    }
   }
 
   # Ensure single-column matrices

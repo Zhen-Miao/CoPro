@@ -35,7 +35,7 @@ test_that("sparse multitype self-kernels match dense self-kernels", {
     for (ct in obj@cellTypesOfInterest) {
       Kd <- getSelfKernelMatrix(dense, sigma, ct, verbose = FALSE)
       Ks <- getSelfKernelMatrix(sparse, sigma, ct, verbose = FALSE)
-      expect_s4_class(Ks, "dgCMatrix")
+      expect_s4_class(Ks, "dsCMatrix")
       expect_true(all(Matrix::diag(Ks) == 0))
       expect_equal(as.matrix(Ks), Kd, tolerance = 1e-8,
                    ignore_attr = TRUE)
@@ -55,7 +55,7 @@ test_that("self-kernel auto dispatches to sparse without dense distances", {
   for (ct in obj@cellTypesOfInterest) {
     expect_s4_class(
       getSelfKernelMatrix(out, 0.1, ct, verbose = FALSE),
-      "dgCMatrix"
+      "dsCMatrix"
     )
   }
 })
@@ -75,7 +75,7 @@ test_that("sparse multislide self-kernels match dense self-kernels", {
     for (ct in obj@cellTypesOfInterest) {
       Kd <- getSelfKernelMatrix(dense, 0.1, ct, slide, verbose = FALSE)
       Ks <- getSelfKernelMatrix(sparse, 0.1, ct, slide, verbose = FALSE)
-      expect_s4_class(Ks, "dgCMatrix")
+      expect_s4_class(Ks, "dsCMatrix")
       expect_equal(as.matrix(Ks), Kd, tolerance = 1e-8,
                    ignore_attr = TRUE)
     }

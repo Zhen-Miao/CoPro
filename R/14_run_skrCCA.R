@@ -297,12 +297,11 @@
                                        maxIter, tol, n_cores, step_size = 1) {
   
   tryCatch({
-    # For the ordinary two-cell-type problem, one exact SVD of the summed small
-    # PC-space operator returns every requested axis. No stacked cell-level
-    # matrix or block-diagonal kernel is materialized. Keep the general
+    # The ordinary one- and two-cell-type problems have exact all-axis direct
+    # solutions. Form the small PC-space operator once per sigma. Keep the
     # sequential route when the first axis was externally transferred, because
     # later axes must then be conditioned on that supplied direction.
-    if (length(cts) == 2L && is.null(transferred_weight_1)) {
+    if (length(cts) <= 2L && is.null(transferred_weight_1)) {
       if (is_multi) {
         Y_resi <- compute_Y_multi_slide(
           data_matrices$X_list_all,
@@ -320,6 +319,12 @@
           cts,
           slide = NULL
         )
+      }
+      if (length(cts) == 1L) {
+        return(solve_one_type_eigen(
+          Y_resi, cts, nCC = nCC,
+          sdev2_list = data_matrices$sdev2_list
+        ))
       }
       return(solve_two_type_svd(
         Y_resi, cts, nCC = nCC,
