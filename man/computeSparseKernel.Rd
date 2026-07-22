@@ -108,10 +108,12 @@ The \code{CoPro} object with sparse kernel matrices in \verb{@kernelMatrices}.
 \description{
 A fused, memory-efficient alternative to \code{\link[=computeDistance]{computeDistance()}} +
 \code{\link[=computeKernelMatrix]{computeKernelMatrix()}} for large datasets. It builds, for every cell-type
-pair (and within-type), a sparse \code{dgCMatrix} Gaussian kernel using a
-fixed-radius neighbor search, never forming a dense \verb{n x n} matrix. Results
-are numerically equivalent to the dense path (every pair beyond the kernel's
-support radius is zero anyway). Distances are not stored.
+pair (and within-type), a sparse Gaussian kernel using a fixed-radius
+neighbor search, never forming a dense \verb{n x n} matrix. Within-type kernels
+are stored with one triangle as symmetric \code{dsCMatrix} objects; cross-type
+kernels, and kernels made asymmetric by row/column normalization, use
+\code{dgCMatrix}. Results are numerically equivalent to the dense path (every pair
+beyond the kernel's support radius is zero anyway). Distances are not stored.
 }
 \seealso{
 \code{\link[=computeKernelMatrix]{computeKernelMatrix()}}, \code{\link[=computeDistance]{computeDistance()}}
@@ -121,6 +123,7 @@ Other spatial-pipeline:
 \code{\link{computeKernelMatrix}()},
 \code{\link{computePCA}()},
 \code{\link{runGeneSpaceCCA}()},
-\code{\link{runSkrCCA}()}
+\code{\link{runSkrCCA}()},
+\code{\link{runSlideLevelInference}()}
 }
 \concept{spatial-pipeline}

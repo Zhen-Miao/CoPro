@@ -13,6 +13,7 @@
   k_minus_1 = 0,
   Y_resi = NULL,
   kernel_info = NULL,
+  sdev2_list = NULL,
   maxIter = 200,
   tol = 1e-05
 )
@@ -37,6 +38,8 @@
 
 \item{kernel_info}{Optional precomputed kernel and normalizer information
 from \code{.get_ncorr_kernel_info()}.}
+
+\item{sdev2_list}{Optional diagonal CCA metric used when \code{scalePCs = FALSE}.}
 
 \item{maxIter, tol}{Optimization controls.}
 }
@@ -64,11 +67,12 @@ directions (rather than by that permutation's own leading axis) is what makes
 the higher-axis null exchangeable with the observed statistic and removes the
 anti-conservative bias of the naive per-axis permutation p-value.
 
-Under whitened PCs (\code{scalePCs = TRUE}, so \verb{X^T X = c I}) this Y-space
-deflation is algebraically identical to the Freedman-Lane / ter Braak
-residualization that removes the observed lower canonical variates from the
-data before recomputing \code{Y}, because
-\verb{(I - u u^T) Y (I - v v^T) = Y - (u^T Y v)\\, u v^T}.
+Under whitened PCs (\code{scalePCs = TRUE}) the fixed directions are removed with
+the full projection \verb{(I - u u^T) Y (I - v v^T)}. The simpler rank-one
+subtraction is not used here: it agrees with the projection only when the
+fixed directions are singular vectors of the current \code{Y}, which is generally
+false after permutation. For \code{scalePCs = FALSE}, the corresponding weighted
+oblique projection is used.
 
 The expensive \code{compute_Y_resi()} can be computed once per (permutation,
 sigma) and reused across axes by passing it as \code{Y_resi}; deflation does not

@@ -146,6 +146,38 @@ test_that("conditional k = 1 p-value equals fair-sigma p-value", {
   expect_equal(pf, pc, tolerance = 1e-12)
 })
 
+test_that("calculate_pvalue uses the same max-over-pairs statistic in every row", {
+  skip_on_cran()
+  obj <- .cond_pipeline(nCC = 1)
+  observed <- max(getNormCorr(obj)$normalizedCorrelation)
+  make_null <- function(values) {
+    data.frame(
+      sigmaValues = obj@sigmaValueChoice,
+      cellType1 = c("A", "A"),
+      cellType2 = c("B", "C"),
+      CC_index = c(1L, 1L),
+      normalizedCorrelation = values,
+      stringsAsFactors = FALSE
+    )
+  }
+  obj@normalizedCorrelationPermu <- list(
+    permu_1 = make_null(c(observed - 2, observed + 2)),
+    permu_2 = make_null(c(observed - 2, observed - 1))
+  )
+
+  result <- calculate_pvalue(obj, cc_index = 1, alternative = "greater")
+  expect_equal(unname(result$permu_values), c(observed + 2, observed - 1))
+  expect_equal(result$p_value, 2 / 3)
+  expect_identical(result$pair_aggregation, "max")
+})
+
+test_that("quick permutation scoring does not silently use the first pair", {
+  expect_error(
+    .compute_ncorr_quick(list(), list(), list(), 0.1, c("A", "B", "C")),
+    "one predeclared cell-type pair"
+  )
+})
+
 test_that("step-down p-values are monotone with stop-at-first-NS", {
   skip_on_cran()
   obj <- .cond_pipeline(nCC = 3)
@@ -220,4 +252,153 @@ test_that("Y-deflation equals Freedman-Lane data residualization (whitened PCs)"
     expect_equal(leading_sv(Ydef), leading_sv(Yres), tolerance = 1e-6,
                  info = paste("CC", k))
   }
+})
+
+test_that("conditional null projects fixed axes from a permuted operator", {
+  skip_on_cran()
+  obj <- .cond_pipeline(nCC = 2)
+  cts <- obj@cellTypesOfInterest
+  sigma <- obj@sigmaValueChoice
+  PCm <- .getAllPCMats(obj@pcaGlobal, obj@scalePCs)
+  # A deterministic non-identity permutation makes the observed directions no
+  # longer singular vectors of the current operator.
+  PCm[[cts[2]]] <- PCm[[cts[2]]][rev(seq_len(nrow(PCm[[cts[2]]]))), , drop = FALSE]
+  Y0 <- compute_Y_resi(PCm, obj@kernelMatrices, sigma, cts)
+  W <- obj@skrCCAOut[[paste0("sigma_", sigma)]]
+
+  projected <- apply_deflation(
+    Y0, W, 1L, cts, deflation = "projection"
+  )[[cts[1]]][[cts[2]]]
+  rank1 <- apply_deflation(
+    Y0, W, 1L, cts, deflation = "rank1"
+  )[[cts[1]]][[cts[2]]]
+  w1 <- W[[cts[1]]][, 1L, drop = FALSE]
+  w2 <- W[[cts[2]]][, 1L, drop = FALSE]
+
+  expect_lt(sqrt(sum(crossprod(w1, projected)^2)), 1e-8)
+  expect_lt(sqrt(sum((projected %*% w2)^2)), 1e-8)
+  expect_gt(sqrt(sum(crossprod(w1, rank1)^2)) +
+              sqrt(sum((rank1 %*% w2)^2)), 1e-4)
+})
+
+test_that("fixed-sigma p-values never maximize the observed statistic over other sigmas", {
+  skip_on_cran()
+  obj <- .cond_pipeline(nCC = 1)
+  fixed_sigma <- min(obj@sigmaValues)
+  observed_fixed <- max(
+    getNormCorr(obj)$normalizedCorrelation[
+      getNormCorr(obj)$sigmaValues == fixed_sigma
+    ]
+  )
+  attr(obj, "permutationProvenance") <- list(
+    method = "fixed_sigma", sigma_values = fixed_sigma,
+    sigma_aggregation = "fixed", pair_aggregation = "max",
+    sigma_predeclared = TRUE, selection_adjusted = TRUE
+  )
+  obj@normalizedCorrelationPermu <- lapply(c(-1, 1), function(offset) {
+    data.frame(
+      sigmaValues = fixed_sigma,
+      cellType1 = "CellTypeA", cellType2 = "CellTypeB", CC_index = 1L,
+      normalizedCorrelation = observed_fixed + offset
+    )
+  })
+
+  result <- calculate_pvalue(obj)
+  expect_equal(result$observed, observed_fixed)
+  expect_identical(result$sigma_aggregation, "fixed")
+  expect_true(result$selection_adjusted)
+})
+
+test_that("permutation fits preserve unscaled-PC CCA metrics", {
+  skip_on_cran()
+  obj <- create_test_copro_single(n_cells = 90, n_cell_types = 2, seed = 77)
+  obj <- subsetData(obj, cellTypesOfInterest = c("CellTypeA", "CellTypeB"))
+  obj <- computeDistance(obj, normalizeDistance = TRUE, verbose = FALSE)
+  obj <- computeKernelMatrix(obj, sigmaValues = 0.1, verbose = FALSE)
+  suppressWarnings(
+    obj <- computePCA(obj, nPCA = 7, scalePCs = FALSE)
+  )
+  obj <- runSkrCCA(obj, scalePCs = FALSE, nCC = 2)
+  obj <- computeNormalizedCorrelation(obj)
+  set.seed(8)
+  obj <- suppressWarnings(runSkrCCAPermu(
+    obj, nPermu = 10, permu_method = "global", sigma = 0.1,
+    verbose = FALSE
+  ))
+
+  metrics <- lapply(obj@pcaGlobal, function(x) x$sdev^2)
+  first <- obj@skrCCAPermuOut[[1L]]
+  for (ct in obj@cellTypesOfInterest) {
+    expect_equal(
+      crossprod(first[[ct]], metrics[[ct]] * first[[ct]]),
+      diag(2), tolerance = 1e-9
+    )
+  }
+})
+
+test_that("calculate_pvalue() provenance stays bound to its null after a later conditional run", {
+  skip_on_cran()
+  # Regression: permutationProvenance was a single object-level attribute.
+  # runSkrCCAPermu_Conditional() overwrote it without touching the base-path
+  # null in @normalizedCorrelationPermu, so a subsequent calculate_pvalue()
+  # paired that null with conditional provenance -- silently changing the
+  # reported p-value and suppressing the sigma-selection warning. Provenance is
+  # now bound to the null itself.
+  obj <- .cond_pipeline(nCC = 2)
+
+  set.seed(1)
+  obj <- suppressMessages(suppressWarnings(
+    runSkrCCAPermu(obj, nPermu = 25, permu_method = "global", verbose = FALSE)))
+  obj <- suppressMessages(computeNormalizedCorrelationPermu(obj))
+  pv_before <- suppressWarnings(calculate_pvalue(obj, cc_index = 1))
+
+  null_before <- lapply(obj@normalizedCorrelationPermu,
+                        function(x) x$normalizedCorrelation)
+
+  cond <- suppressMessages(suppressWarnings(
+    runSkrCCAPermu_Conditional(obj, nPermu = 25, permu_method = "global",
+                               verbose = FALSE)))
+
+  # The conditional run overwrites the shared object-level provenance...
+  expect_identical(attr(cond, "permutationProvenance")$method,
+                   "conditional_stepdown")
+  # ...but leaves the base-path null it does not own untouched...
+  expect_equal(lapply(cond@normalizedCorrelationPermu,
+                      function(x) x$normalizedCorrelation),
+               null_before)
+  # ...so calculate_pvalue() returns exactly the same result as before it ran.
+  pv_after <- suppressWarnings(calculate_pvalue(cond, cc_index = 1))
+  expect_equal(pv_after$p_value, pv_before$p_value)
+  expect_identical(pv_after$selection_adjusted, pv_before$selection_adjusted)
+  expect_equal(pv_after$sigma_values, pv_before$sigma_values)
+})
+
+test_that("n_cores > 1 falls back to sequential under load_all instead of crashing", {
+  skip_on_cran()
+  # Regression: the PSOCK bootstrap used dirname(find.package("CoPro")) +
+  # library(CoPro) in fresh workers, which errors when CoPro is only
+  # devtools::load_all()'ed (this project's documented dev workflow, and how
+  # this test itself runs). It must now fall back to sequential with a warning,
+  # not abort inside clusterCall().
+  if (!is.null(.installedCoProLibrary())) {
+    skip("CoPro is installed; the load_all() PSOCK fallback path is not exercised.")
+  }
+  obj <- .cond_pipeline(nCC = 2)
+
+  set.seed(7)
+  warns <- character(0)
+  res <- withCallingHandlers(
+    suppressMessages(
+      runSkrCCAPermu_Conditional(obj, nPermu = 12, permu_method = "global",
+                                 n_cores = 2, verbose = FALSE)),
+    warning = function(w) {
+      warns <<- c(warns, conditionMessage(w))
+      invokeRestart("muffleWarning")
+    }
+  )
+  expect_true(any(grepl("sequential", warns)))
+  expect_s4_class(res, "CoPro")
+  p_raw <- res@conditionalPermu$per_axis$p_raw
+  expect_length(p_raw, 2L)
+  expect_true(all(is.finite(p_raw) & p_raw > 0 & p_raw <= 1))
 })

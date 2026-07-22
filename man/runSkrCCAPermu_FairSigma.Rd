@@ -6,7 +6,7 @@
 \usage{
 runSkrCCAPermu_FairSigma(
   object,
-  nPermu = 100,
+  nPermu = 999,
   sigma_values = NULL,
   permu_method = "bin",
   permu_which = "second_only",
@@ -23,7 +23,7 @@ runSkrCCAPermu_FairSigma(
 \item{object}{A CoPro object with CCA already computed via \code{runSkrCCA()}
 and normalized correlation computed via \code{computeNormalizedCorrelation()}}
 
-\item{nPermu}{Number of permutations to run (default: 100)}
+\item{nPermu}{Number of permutations to run (default: 999)}
 
 \item{sigma_values}{Vector of sigma values to test. If NULL, uses all
 sigma values from the original analysis (object@sigmaValues)}
@@ -46,7 +46,8 @@ shared across the sigma sweep. Pass an integer to override.}
 
 \item{tol}{Convergence tolerance}
 
-\item{n_cores}{Number of cores for parallel computation (not yet implemented)}
+\item{n_cores}{Number of PSOCK workers. Each worker holds the PCA and kernel
+inputs, so choose this with available memory in mind.}
 
 \item{verbose}{Whether to print progress messages}
 }

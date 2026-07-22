@@ -15,11 +15,11 @@ optimize_genespace_avg_corr(
 )
 }
 \arguments{
-\item{C_self_slide}{Named list of per-slide self-covariance matrices.
-Structure: \code{C_self_slide[[slide]][[cell_type]]} = G x G matrix.}
+\item{C_self_slide}{Named list of per-slide self-covariance matrices or
+matrix-free operators.}
 
-\item{C_cross_slide}{Named list of per-slide cross-covariance matrices.
-Structure: \code{C_cross_slide[[slide]][["ctA-ctB"]]} = G x G matrix.}
+\item{C_cross_slide}{Named list of per-slide cross-covariance matrices or
+matrix-free operators.}
 
 \item{slides}{Character vector of slide IDs.}
 

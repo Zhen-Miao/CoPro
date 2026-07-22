@@ -1,5 +1,51 @@
 # CoPro 1.1.2
 
+## Inference
+
+* Conditional CC2+ permutation tests now use full projection of the fixed
+  observed lower axes on every permuted operator. The weighted oblique form is
+  used with `scalePCs = FALSE`, and the PC-variance metric is now propagated
+  through every observed and null fit.
+* Permutation results record their tested sigma family and aggregation rule.
+  `calculate_pvalue()` now compares fixed-sigma nulls only with the observed
+  statistic at that sigma, identifies conditional p-values at a data-selected
+  fixed sigma, and retains max-over-sigma inference for fair-sigma tests.
+  Permutation defaults increase to 999 (Monte-Carlo floor 0.001).
+* Added `runSlideLevelInference()` for `CoProMulti`: weights and sigma are
+  learned without each held-out biological replicate, held-out normalized
+  correlations are combined with equal replicate weight, and uncertainty is
+  summarized by a replicate sign-flip test and replicate bootstrap interval.
+  Cell-level permutation functions now reject `CoProMulti` objects rather than
+  presenting cell shuffles as replicate-level inference.
+* Permutation provenance is bound to the null it describes. Running
+  `runSkrCCAPermu_Conditional()` after a base `runSkrCCAPermu()` on the same
+  object no longer re-labels the base-path null, so a later `calculate_pvalue()`
+  returns the same p-value and sigma-selection warning regardless of what else
+  has been run on the object.
+
+## Performance
+
+* One-cell-type skrCCA now solves the symmetric quadratic problem directly
+  with an exact symmetric eigendecomposition, selecting the largest algebraic
+  eigenvalues and obtaining all requested axes from one factorization.
+* Sparse within-cell-type kernels are stored as symmetric `dsCMatrix` objects,
+  so only one triangle is retained. Cross-type and asymmetrically normalized
+  kernels remain general `dgCMatrix` objects.
+* Sparse expression PCA now passes centering and scaling vectors directly to
+  `irlba` instead of materializing a dense centered matrix. All cell types use
+  one common feasible PCA rank, and multiset optimizers are also dimension-aware.
+* Regression gene scores use the identity `X' (s - mean(s))` and no longer
+  construct a centered dense expression matrix for every sigma and axis.
+* Gene-space CCA now applies self- and cross-covariances as matrix-free
+  operators (`Z_i' K_ij (Z_j w)`) instead of storing dense `G x G` matrices.
+  Euclidean streaming builds exact sparse fixed-radius kernels without dense
+  distance or kernel matrices.
+* Kernel normalizers are cached on the CoPro object with matrix signatures for
+  safe reuse. Fair-sigma and conditional permutations now honor `n_cores` via
+  memory-explicit PSOCK workers. When CoPro is not installed (for example under
+  `devtools::load_all()`), `n_cores > 1` now falls back to sequential execution
+  with a warning instead of aborting inside the worker.
+
 ## Documentation
 
 * New vignette *Handling very large datasets (Xenium, large MERFISH)*, a how-to

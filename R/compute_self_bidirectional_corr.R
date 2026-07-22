@@ -377,10 +377,18 @@ getTransferSelfBidirCorr <- function(tar_obj,
     # Optimized row/column normalization
     K_row_sum <- rowSums(K_self)
     K_col_sum <- colSums(K_self)
+    K_row_sum[K_row_sum == 0] <- 1
+    K_col_sum[K_col_sum == 0] <- 1
 
-    # More efficient normalization using vectorized operations
-    K_row_norm <- K_self / K_row_sum  # Broadcasting division
-    K_col_norm <- sweep(K_self, 2, K_col_sum, "/")  # More efficient than t(t(K) / K_col_sum)
+    # Diagonal scaling preserves sparse storage, including triangular dsCMatrix
+    # self-kernels. Division/sweep would materialize a dense matrix.
+    if (inherits(K_self, "sparseMatrix")) {
+      K_row_norm <- Matrix::Diagonal(x = 1 / K_row_sum) %*% K_self
+      K_col_norm <- K_self %*% Matrix::Diagonal(x = 1 / K_col_sum)
+    } else {
+      K_row_norm <- K_self / K_row_sum
+      K_col_norm <- sweep(K_self, 2, K_col_sum, "/")
+    }
 
     # Use crossprod for more efficient matrix multiplication
     KA <- crossprod(K_row_norm, A_w)  # Equivalent to t(K_row_norm) %*% A_w

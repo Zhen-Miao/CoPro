@@ -456,10 +456,12 @@ kernel_from_distance <- function(
 #' @param method One of `"auto"`, `"dense"`, or `"sparse"`. `"dense"` is the
 #'  classic path that reads the distance matrices produced by
 #'  [computeDistance()]. `"sparse"` is a fused, memory-efficient path
-#'  ([computeSparseKernel()]) that builds sparse `dgCMatrix` kernels directly
-#'  from coordinates via a fixed-radius neighbor search, never forming a dense
+#'  ([computeSparseKernel()]) that builds sparse kernels directly from
+#'  coordinates via a fixed-radius neighbor search, never forming a dense
 #'  `n x n` matrix, and does not require [computeDistance()] to have been run.
-#'  Results are numerically equivalent. `"auto"` (default) picks `"sparse"` when
+#'  Symmetric within-type kernels retain one triangle in a `dsCMatrix`;
+#'  cross-type and asymmetrically normalized kernels use `dgCMatrix`. Results
+#'  are numerically equivalent. `"auto"` (default) picks `"sparse"` when
 #'  any per-slide cell-type block reaches `autoThreshold` cells or when the
 #'  aggregate dense block workload reaches `autoThreshold^2` entries; otherwise
 #'  it picks `"dense"`.

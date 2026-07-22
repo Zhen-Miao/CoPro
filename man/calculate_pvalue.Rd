@@ -16,7 +16,9 @@ calculate_pvalue(object, cc_index = 1, alternative = "greater")
 \value{
 List with the Phipson & Smyth (2010) permutation p-value (\code{p_value},
 never exactly zero), the Monte-Carlo floor \code{mc_floor = 1 / (n_permu + 1)},
-the observed value, and the permutation distribution.
+the observed value, and the permutation distribution. With more than one
+cell-type pair, the observed and each permutation statistic are both the
+maximum normalized correlation over pairs for the requested axis.
 }
 \description{
 Helper function to calculate p-value from permutation testing results.

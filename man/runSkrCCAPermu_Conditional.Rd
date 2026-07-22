@@ -6,7 +6,7 @@
 \usage{
 runSkrCCAPermu_Conditional(
   object,
-  nPermu = 100,
+  nPermu = 999,
   sigma_values = NULL,
   permu_method = "bin",
   permu_which = "second_only",
@@ -16,14 +16,15 @@ runSkrCCAPermu_Conditional(
   alpha = 0.05,
   maxIter = 200,
   tol = 1e-05,
-  verbose = TRUE
+  verbose = TRUE,
+  n_cores = 1
 )
 }
 \arguments{
 \item{object}{A CoPro object with \code{runSkrCCA()} and
 \code{computeNormalizedCorrelation()} already run.}
 
-\item{nPermu}{Number of permutations (default 100).}
+\item{nPermu}{Number of permutations (default 999).}
 
 \item{sigma_values}{Candidate bandwidths for the fair-sigma maximum. \code{NULL}
 uses all \code{object@sigmaValues} that have kernels and weights.}
@@ -45,6 +46,9 @@ across the sigma sweep. Pass integers to override.}
 \item{maxIter, tol}{Optimization controls passed to the axis optimizer.}
 
 \item{verbose}{Whether to print progress and a summary (default TRUE).}
+
+\item{n_cores}{Number of PSOCK workers. Each worker holds the PCA and kernel
+inputs, so choose this with available memory in mind.}
 }
 \value{
 The CoPro object with results stored in the \verb{@conditionalPermu} slot,
@@ -102,13 +106,12 @@ the permutation "test of canonical axes" of Legendre, Oksanen & ter Braak
 
 \subsection{Relationship to data residualization}{
 
-Deflating \code{Y} by the fixed observed weight directions is algebraically
-identical to the Freedman-Lane / ter Braak residualization that removes the
-observed lower canonical \emph{variates} from the data before recomputing the
-cross-product, whenever the PCs are whitened (\code{scalePCs = TRUE}, so
-\verb{X^T X = c I}): \verb{(I - u u^T) Y (I - v v^T) = Y - (u^T Y v)\\, u v^T}. The
-fair-sigma maximum over the bandwidth family is the Westfall-Young (1993)
-maxT procedure.
+The fixed directions are removed using the full projection
+\verb{(I - u u^T) Y (I - v v^T)} for whitened PCs, or its weighted oblique
+counterpart for unscaled PCs. Rank-one subtraction is deliberately avoided
+because the observed directions are not generally singular vectors of a
+permuted operator. The fair-sigma maximum over the bandwidth family is the
+Westfall-Young (1993) maxT procedure.
 }
 }
 \examples{

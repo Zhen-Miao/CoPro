@@ -103,10 +103,11 @@
   list(Z_by_slide = Z_by_slide, genes = genes, slides = valid_slides)
 }
 
-#' Precompute per-slide G x G covariance matrices
+#' Prepare per-slide matrix-free covariance operators
 #'
-#' For each slide, computes self-covariance (C_self) and kernel-smoothed
-#' cross-covariance (C_cross) matrices in gene space.
+#' For each slide, retains the factors needed to apply self-covariance and
+#' kernel-smoothed cross-covariance operators in gene space without forming
+#' dense G x G matrices.
 #'
 #' @param Z_by_slide Standardized expression matrices per slide per cell type
 #' @param flat_kernels Flat list of kernel matrices from CoPro object
@@ -135,7 +136,7 @@
 
     for (ct in cell_types) {
       Z <- Z_by_slide[[s]][[ct]]
-      C_self[[s]][[ct]] <- crossprod(Z) / nrow(Z)
+      C_self[[s]][[ct]] <- .new_genespace_self_operator(Z)
     }
 
     for (pair in pairs) {
@@ -147,9 +148,7 @@
       Z_j <- Z_by_slide[[s]][[ct_j]]
       K_ij <- get_kernel_matrix_flat(flat_kernels, sigma, ct_i, ct_j, slide = s)
 
-      n_i <- nrow(Z_i)
-      n_j <- nrow(Z_j)
-      C_cross[[s]][[key]] <- crossprod(Z_i, K_ij %*% Z_j) / sqrt(n_i * n_j)
+      C_cross[[s]][[key]] <- .new_genespace_cross_operator(Z_i, K_ij, Z_j)
     }
   }
 
@@ -261,9 +260,9 @@
 #' Single-pass over slides. For each slide and each cell-type pair, computes
 #' the pairwise distance, derives a per-slide scaling factor from the
 #' minimum low-percentile across that slide's pairs, builds the kernel,
-#' and reduces to a G x G cross-covariance. The n x n distance and kernel
-#' matrices are released before the next slide is processed, so the
-#' resident n x n footprint stays at one slide's worth of pairs at a time.
+#' and retains a matrix-free cross-covariance operator. Euclidean kernels are
+#' built directly from fixed-radius neighbor triplets; morphology-aware kernels
+#' retain the dense per-slide fallback.
 #'
 #' Differs from \code{.precomputeCovarianceMatrices + computeDistance +
 #' computeKernelMatrix}: distance normalization is computed per slide
@@ -298,6 +297,20 @@
 
   pairs <- combn(cell_types, 2, simplify = FALSE)
   scope <- d$normalizationScope
+  sparse_euclidean <- d$distType %in% c("Euclidean2D", "Euclidean3D")
+
+  coordinate_cache <- new.env(parent = emptyenv())
+  get_pair_coordinates <- function(slide, ct) {
+    key <- paste(slide, ct, sep = "|")
+    if (is.null(coordinate_cache[[key]])) {
+      coordinate_cache[[key]] <- .getCoordinateMatrix(
+        object, ct, d$distType,
+        d$xDistScale, d$yDistScale, d$zDistScale,
+        slideID = slide
+      )
+    }
+    coordinate_cache[[key]]
+  }
 
   C_self <- setNames(vector("list", length(slides)), slides)
   C_cross <- setNames(vector("list", length(slides)), slides)
@@ -307,7 +320,7 @@
     C_self[[s]] <- setNames(vector("list", length(cell_types)), cell_types)
     for (ct in cell_types) {
       Z <- Z_by_slide[[s]][[ct]]
-      C_self[[s]][[ct]] <- crossprod(Z) / nrow(Z)
+      C_self[[s]][[ct]] <- .new_genespace_self_operator(Z)
     }
   }
 
@@ -317,8 +330,10 @@
   # between scopes is what we do with the percentiles afterwards.
   per_slide_percentiles <- vector("list", length(slides))
   names(per_slide_percentiles) <- slides
+  for (s in slides) per_slide_percentiles[[s]] <- rep(NA_real_, length(pairs))
 
-  if (isTRUE(d$normalizeDistance)) {
+  need_percentiles <- isTRUE(d$normalizeDistance) || isTRUE(d$truncateLowDist)
+  if (need_percentiles) {
     if (verbose && scope == "global") {
       message("  Streaming phase 1: per-pair percentiles (global scope)...")
     }
@@ -327,16 +342,23 @@
       for (pp in seq_along(pairs)) {
         ct_i <- pairs[[pp]][1]
         ct_j <- pairs[[pp]][2]
-        dist_mat <- .streamingPairDistance(object, s, ct_i, ct_j, d)
-        proc <- .processDistanceMatrix(dist_mat, d$truncateLowDist)
-        pcts[pp] <- proc$percentile
-        rm(dist_mat, proc)
-        gc(verbose = FALSE, full = TRUE)
+        if (sparse_euclidean) {
+          A <- get_pair_coordinates(s, ct_i)
+          B <- get_pair_coordinates(s, ct_j)
+          p <- .pairPercentileProb(nrow(A), nrow(B))
+          pcts[pp] <- .lowPercentileBlock(A, B, p)$percentile
+        } else {
+          dist_mat <- .streamingPairDistance(object, s, ct_i, ct_j, d)
+          proc <- .processDistanceMatrix(dist_mat, d$truncateLowDist)
+          pcts[pp] <- proc$percentile
+          rm(dist_mat, proc)
+          gc(verbose = FALSE, full = TRUE)
+        }
       }
       per_slide_percentiles[[s]] <- pcts
     }
 
-    if (scope == "global") {
+    if (isTRUE(d$normalizeDistance) && scope == "global") {
       all_pcts <- unlist(per_slide_percentiles)
       finite_pcts <- all_pcts[is.finite(all_pcts) & !is.na(all_pcts)]
       if (length(finite_pcts) == 0) {
@@ -349,7 +371,7 @@
     }
   }
 
-  # ---- Phase 2: per-slide kernel + G x G reduction ----
+  # ---- Phase 2: per-slide kernel + matrix-free operator ----
   for (s in slides) {
     if (verbose) message(sprintf("  Streaming slide: %s", s))
 
@@ -371,41 +393,58 @@
       slide_scaling <- 1
     }
 
-    # Per-pair distance + kernel + reduction; each pair's n x n matrices
-    # live only until that pair's G x G covariance is computed.
+    # Per-pair kernel construction. Euclidean blocks stay sparse; the retained
+    # operator applies Z_i' K (Z_j w) without forming a G x G covariance.
     C_cross[[s]] <- list()
     for (pp in seq_along(pairs)) {
       ct_i <- pairs[[pp]][1]
       ct_j <- pairs[[pp]][2]
       key <- paste0(ct_i, "-", ct_j)
 
-      dist_mat <- .streamingPairDistance(object, s, ct_i, ct_j, d)
-      proc <- .processDistanceMatrix(dist_mat, d$truncateLowDist)
-      dist_mat <- proc$distances * slide_scaling
-      rm(proc)
+      if (sparse_euclidean) {
+        A <- get_pair_coordinates(s, ct_i)
+        B <- get_pair_coordinates(s, ct_j)
+        block <- .buildBlockTriplets(
+          A, B, per_slide_percentiles[[s]][pp], slide_scaling,
+          max_sigma = sigma, lowerLimit = k$lowerLimit,
+          truncateLowDist = d$truncateLowDist
+        )
+        kernel_mat <- if (is.null(block)) {
+          Matrix::sparseMatrix(
+            i = integer(), j = integer(), x = numeric(),
+            dims = c(nrow(A), nrow(B))
+          )
+        } else {
+          .sparseKernelFromTriplets(block, sigma, k$lowerLimit)
+        }
+        kernel_mat <- .processSparseKernelMatrix(
+          kernel_mat, k$lowerLimit, k$upperQuantile,
+          k$normalizeKernel, k$rowNormalizeKernel, k$colNormalizeKernel
+        )
+      } else {
+        dist_mat <- .streamingPairDistance(object, s, ct_i, ct_j, d)
+        proc <- .processDistanceMatrix(dist_mat, d$truncateLowDist)
+        dist_mat <- proc$distances * slide_scaling
+        rm(proc)
 
-      kernel_mat <- kernel_from_distance(
-        sigma = sigma, dist_mat = dist_mat,
-        lower_limit = k$lowerLimit
-      )
-      rm(dist_mat)
-      gc(verbose = FALSE, full = TRUE)
+        kernel_mat <- kernel_from_distance(
+          sigma = sigma, dist_mat = dist_mat,
+          lower_limit = k$lowerLimit
+        )
+        rm(dist_mat)
+        gc(verbose = FALSE, full = TRUE)
 
-      kernel_mat <- .processKernelMatrix(
-        kernel_mat, k$lowerLimit, k$upperQuantile,
-        k$normalizeKernel, k$rowNormalizeKernel, k$colNormalizeKernel
-      )
+        kernel_mat <- .processKernelMatrix(
+          kernel_mat, k$lowerLimit, k$upperQuantile,
+          k$normalizeKernel, k$rowNormalizeKernel, k$colNormalizeKernel
+        )
+      }
 
       Z_i <- Z_by_slide[[s]][[ct_i]]
       Z_j <- Z_by_slide[[s]][[ct_j]]
-      n_i <- nrow(Z_i)
-      n_j <- nrow(Z_j)
-
-      C_cross[[s]][[key]] <- crossprod(Z_i, kernel_mat %*% Z_j) /
-        sqrt(n_i * n_j)
-
-      rm(kernel_mat)
-      gc(verbose = FALSE, full = TRUE)
+      C_cross[[s]][[key]] <- .new_genespace_cross_operator(
+        Z_i, kernel_mat, Z_j
+      )
     }
   }
 
@@ -558,12 +597,12 @@
 #' each weight update), making the algorithm an ALS-style alternating
 #' maximization rather than exact coordinate ascent.
 #'
-#' Memory scales as
-#' \eqn{O(G^2 \times S \times (C + C(C-1)/2))}
-#' for precomputed covariance matrices: \eqn{S} slides, each storing \eqn{C}
-#' self-covariances and \eqn{C(C-1)/2} cross-covariances of size
-#' \eqn{G \times G}. For example G=5000, S=10, C=3 gives \eqn{10 \times 6}
-#' matrices of \eqn{200} MB each, approximately 12 GB.
+#' Covariances are applied as matrix-free operators. The implementation keeps
+#' standardized `Z` matrices and kernel blocks and evaluates
+#' `Z_i' K_ij (Z_j w_j)` on demand, avoiding the former dense `G x G`
+#' self- and cross-covariance cache. In Euclidean streaming mode, kernels are
+#' constructed directly as sparse fixed-radius matrices, so neither a dense
+#' distance matrix nor a dense kernel is formed.
 #'
 #' Per-slide gene handling: each (slide, cell type) expression matrix is
 #' independently centered and scaled. A gene with zero variance on a
@@ -581,8 +620,10 @@
 #' \code{@@geneScores} and \code{@@cellScores} directly, so no further call
 #' is needed.
 #'
-#' Streaming mode (\code{streaming = TRUE}) reduces peak memory to roughly
-#' one slide's pairwise n x n footprint at a time. Distance normalization
+#' Streaming mode (\code{streaming = TRUE}) uses exact fixed-radius neighbor
+#' search for Euclidean coordinates and retains sparse kernel operators.
+#' Morphology-aware distances still require a dense per-slide distance block.
+#' Distance normalization
 #' defaults to \code{normalizationScope = "global"} (a single factor across
 #' all slides, matching the slot-based pipeline's semantics under
 #' \code{normalizeDistance = TRUE}); under a fixed RNG seed the streaming
@@ -703,9 +744,9 @@ setMethod(
                       paste(cts, collapse = ", ")))
     }
 
-    # Step 2: Precompute G x G covariance matrices
+    # Step 2: prepare matrix-free covariance operators
     if (streaming) {
-      if (verbose) message("Step 2: Streaming covariance precompute...")
+      if (verbose) message("Step 2: Preparing streaming covariance operators...")
       covmats <- .streamingCovariancePrecompute(
         object, gsd$Z_by_slide, sigma,
         gsd$slides, cts,
@@ -717,7 +758,7 @@ setMethod(
         object@sigmaValues <- c(object@sigmaValues, sigma)
       }
     } else {
-      if (verbose) message("Step 2: Precomputing covariance matrices...")
+      if (verbose) message("Step 2: Preparing covariance operators...")
       covmats <- .precomputeCovarianceMatrices(
         gsd$Z_by_slide, object@kernelMatrices, sigma,
         gsd$slides, cts

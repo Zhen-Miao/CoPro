@@ -1,6 +1,7 @@
 # Scaling smoke test for the sparse kernel path. Confirms that, at a size where
 # the dense n x n kernel would be infeasible, the sparse path (a) is selected by
-# method = "auto", (b) returns a genuinely sparse dgCMatrix, and (c) completes
+# method = "auto", (b) returns a triangular symmetric sparse matrix, and (c)
+# completes
 # quickly. Skipped on CI to keep CI fast.
 
 test_that("sparse path scales to large data without forming dense matrices", {
@@ -20,7 +21,7 @@ test_that("sparse path scales to large data without forming dense matrices", {
   K <- getKernelMatrix(obj, sigma = 0.1, cellType1 = "CellTypeA",
                        cellType2 = "CellTypeA", verbose = FALSE)
 
-  expect_s4_class(K, "dgCMatrix")
+  expect_s4_class(K, "dsCMatrix")
   expect_equal(dim(K), c(n, n))
   # The dense kernel would have n^2 = 4.84e8 entries (~3.9 GB of doubles);
   # the sparse kernel must hold only a small fraction of that.
@@ -52,7 +53,7 @@ test_that("sparse path crosses the 2^31 pair-count boundary without overflow", {
   K <- getKernelMatrix(obj, sigma = 0.1, cellType1 = "CellTypeA",
                        cellType2 = "CellTypeA", verbose = FALSE)
 
-  expect_s4_class(K, "dgCMatrix")
+  expect_s4_class(K, "dsCMatrix")
   expect_equal(dim(K), c(n, n))
   expect_gt(length(K@x), 0L)
   # An overflowed N / percentile / sigma check would surface as NA kernel values

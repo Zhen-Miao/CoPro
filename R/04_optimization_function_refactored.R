@@ -116,15 +116,23 @@ optimize_bilinear <- function(X_list, flat_kernels, sigma, max_iter = 1000,
 
   cell_types <- names(X_list)
   if (is.null(cell_types)) stop("Input X_list must be a named list.")
-  n_features <- ncol(X_list[[cell_types[1]]])
+  feature_counts <- stats::setNames(
+    vapply(X_list[cell_types], ncol, integer(1)), cell_types
+  )
 
   # Precompute small PC-space operator matrices once, then run power iteration
   # using Y_ij %*% w_j. This avoids repeated X' K X products per iteration.
   Y_resi <- compute_Y_resi(X_list, flat_kernels, sigma, cell_types, slide = NULL)
 
-  # With exactly two cell types, the separate unit-norm constraints give the
-  # ordinary singular-vector variational problem. Solve it directly rather
-  # than iterating. optimize_bilinear_n() reuses this result for all axes.
+  # The one-type problem is a symmetric Rayleigh-quotient problem, while the
+  # two-type problem is an ordinary singular-vector variational problem. Both
+  # have exact direct solutions and should not enter power iteration.
+  if (length(cell_types) == 1L) {
+    return(solve_one_type_eigen(
+      Y_resi, cell_types, nCC = 1L, sdev2_list = sdev2_list
+    ))
+  }
+
   if (length(cell_types) == 2L) {
     return(solve_two_type_svd(
       Y_resi, cell_types, nCC = 1L, sdev2_list = sdev2_list
@@ -137,7 +145,7 @@ optimize_bilinear <- function(X_list, flat_kernels, sigma, max_iter = 1000,
   w_list <- bilinear_w_from_Y_resi(
     w_list_new = w_list,
     Y_resi = Y_resi,
-    n_features = n_features,
+    n_features = feature_counts,
     max_iter = max_iter,
     tol = tol,
     step_size = step_size,
@@ -172,7 +180,7 @@ compute_Y_resi <- function(X_list, flat_kernels, sigma, cell_types, slide = NULL
     Y_resi[[ct]] <- setNames(list(NULL), ct)
     X <- X_list[[ct]]
     K <- get_kernel_matrix_flat(flat_kernels, sigma, ct, ct, slide)
-    Y_resi[[ct]][[ct]] <- crossprod(X, K %*% X)
+    Y_resi[[ct]][[ct]] <- compute_symmetric_Y(X, K)
   } else {
     # Standard case: initialize structure for all pairs
     for (ct_i in cell_types) {
@@ -184,7 +192,7 @@ compute_Y_resi <- function(X_list, flat_kernels, sigma, cell_types, slide = NULL
     for (pp in seq_len(ncol(pair_cell_types))) {
       i <- pair_cell_types[1, pp]
       j <- pair_cell_types[2, pp]
-      
+
       K12 <- get_kernel_matrix_flat(flat_kernels, sigma, i, j, slide)
       Y_ij <- crossprod(X_list[[i]], K12 %*% X_list[[j]])
       
@@ -194,6 +202,84 @@ compute_Y_resi <- function(X_list, flat_kernels, sigma, cell_types, slide = NULL
   }
   
   return(Y_resi)
+}
+
+#' Form the symmetric one-type PC-space operator efficiently
+#'
+#' Computes \code{Y = X' K X} by first applying the (possibly triangularly
+#' stored) symmetric kernel to all PC columns. This ordering uses one
+#' \code{n_cells x n_PC} temporary and avoids either expanding a sparse
+#' symmetric kernel or forming a much larger \code{n_PC x n_cells} product.
+#' The final explicit symmetrization is a numerical no-op for an exactly
+#' symmetric kernel and makes the quadratic objective well-defined if a user
+#' supplied kernel has small asymmetry.
+#'
+#' @param X Cell-by-PC score matrix.
+#' @param K Within-cell-type spatial kernel.
+#' @return Symmetric base numeric matrix in PC space.
+#' @noRd
+compute_symmetric_Y <- function(X, K) {
+  Y <- as.matrix(crossprod(X, K %*% X))
+  (Y + t(Y)) * 0.5
+}
+
+#' Solve the exact one-cell-type skrCCA problem by symmetric eigendecomposition
+#'
+#' For one cell type, skrCCA maximizes \code{w' Y w} subject to a unit-norm
+#' constraint. Rayleigh--Ritz therefore selects the largest algebraic
+#' eigenvalues, not the eigenvalues of largest absolute magnitude. When
+#' \code{sdev2_list} is supplied, this is the generalized eigenproblem
+#' \code{Y w = lambda D w}; it is solved through the symmetric transform
+#' \code{D^-1/2 Y D^-1/2}.
+#'
+#' @param Y_resi PC-space operator structure.
+#' @param cell_types The single cell-type name.
+#' @param nCC Number of axes to return.
+#' @param sdev2_list Optional diagonal CCA metric.
+#' @return Named one-element list containing the weight matrix.
+#' @noRd
+solve_one_type_eigen <- function(Y_resi, cell_types, nCC = 1L,
+                                 sdev2_list = NULL) {
+  if (length(cell_types) != 1L) {
+    stop("solve_one_type_eigen requires exactly one cell type")
+  }
+  if (!is.numeric(nCC) || length(nCC) != 1L || nCC < 1L ||
+      nCC != as.integer(nCC)) {
+    stop("nCC must be a positive integer")
+  }
+
+  ct <- cell_types[[1L]]
+  Y <- as.matrix(Y_resi[[ct]][[ct]])
+  if (nrow(Y) != ncol(Y)) {
+    stop("The one-type PC-space operator must be square")
+  }
+  if (nCC > nrow(Y)) {
+    stop("nCC cannot exceed the dimension of the one-type PC-space operator (",
+         nrow(Y), ")")
+  }
+
+  # w'Yw depends only on the symmetric part, including when a caller supplies
+  # a row- or column-normalized kernel that is not exactly symmetric.
+  Y <- (Y + t(Y)) * 0.5
+  inv_sqrt_d <- NULL
+  if (!is.null(sdev2_list)) {
+    d <- sdev2_list[[ct]]
+    if (length(d) != nrow(Y) || any(!is.finite(d)) || any(d <= 0)) {
+      stop("sdev2_list for ", ct,
+           " must contain one finite positive value per PC")
+    }
+    inv_sqrt_d <- 1 / sqrt(d)
+    Y <- sweep(sweep(Y, 1L, inv_sqrt_d, "*"),
+               2L, inv_sqrt_d, "*")
+    Y <- (Y + t(Y)) * 0.5
+  }
+
+  decomp <- eigen(Y, symmetric = TRUE)
+  W <- decomp$vectors[, seq_len(nCC), drop = FALSE]
+  if (!is.null(inv_sqrt_d)) {
+    W <- sweep(W, 1L, inv_sqrt_d, "*")
+  }
+  setNames(list(W), ct)
 }
 
 #' Solve the exact two-cell-type skrCCA problem by SVD
@@ -269,6 +355,25 @@ matches_two_type_first_axis <- function(w_list, svd_weights, cell_types,
   all(is.finite(cosines)) &&
     all(abs(abs(cosines) - 1) <= tolerance) &&
     prod(sign(cosines)) > 0
+}
+
+#' Check whether supplied first-axis weights equal the exact one-type solution
+#' @noRd
+matches_one_type_first_axis <- function(w_list, eigen_weights, cell_types,
+                                        sdev2_list = NULL,
+                                        tolerance = 1e-4) {
+  ct <- cell_types[[1L]]
+  supplied <- w_list[[ct]][, 1L, drop = TRUE]
+  exact <- eigen_weights[[ct]][, 1L, drop = TRUE]
+  if (is.null(sdev2_list)) {
+    cosine <- sum(supplied * exact) /
+      sqrt(sum(supplied^2) * sum(exact^2))
+  } else {
+    metric <- sdev2_list[[ct]]
+    cosine <- sum(metric * supplied * exact) /
+      sqrt(sum(metric * supplied^2) * sum(metric * exact^2))
+  }
+  is.finite(cosine) && abs(abs(cosine) - 1) <= tolerance
 }
 
 #' Apply deflation to Y_resi
@@ -427,7 +532,9 @@ initialize_next_component <- function(Y_resi, cell_types) {
 #' @note the structure of Y_resi is Y_resi\[[ct1\]\]\[[ct2\]\]
 #' @param w_list_new Initial named list of weight vectors
 #' @param Y_resi Named list of residual matrices 
-#' @param n_features Number of features
+#' @param n_features Number of features. May be a named vector with one value
+#'   per cell type; retained for backward compatibility because dimensions are
+#'   now derived from the weight vectors themselves.
 #' @param max_iter Maximum iterations
 #' @param tol Tolerance
 #' @param step_size Step size for damped power iteration (default 1)
@@ -468,7 +575,10 @@ bilinear_w_from_Y_resi <- function(w_list_new, Y_resi,
       # Standard multi-cell-type case - use direct accumulation
       for (ct_i in cell_types) {
         # We can directly accumulate since we're just summing
-        w_i_update_vec <- matrix(0, nrow = n_features, ncol = 1)
+        # Cell types can legitimately retain different PCA ranks when their
+        # sample sizes differ. Allocate from the current block rather than the
+        # first cell type's feature count.
+        w_i_update_vec <- matrix(0, nrow = nrow(w_list_new[[ct_i]]), ncol = 1)
         for (ct_j in cell_types) {
           if (ct_i == ct_j) next
           w2 <- w_list_new[[ct_j]]
@@ -536,7 +646,9 @@ optimize_bilinear_n <- function(X_list, flat_kernels, sigma, w_list,
       !all(cts %in% names(X_list)) || !all(cts %in% names(w_list))) {
     stop("Input lists length or names do not match cellTypesOfInterest.")
   }
-  n_features <- ncol(X_list[[cts[1]]])
+  feature_counts <- stats::setNames(
+    vapply(X_list[cts], ncol, integer(1)), cts
+  )
 
   # Check input w_list dimensions
   k_start <- ncol(w_list[[cts[1]]]) ## we expect this value to be one
@@ -552,6 +664,20 @@ optimize_bilinear_n <- function(X_list, flat_kernels, sigma, w_list,
 
   # Initialize Y_resi structure using original data
   Y_resi <- compute_Y_resi(X_list, flat_kernels, sigma, cts, slide = NULL)
+
+  # In an ordinary one-type run, one symmetric eigendecomposition returns all
+  # axes. Preserve the conditional route when the caller supplied a different
+  # first direction (for example, a transferred weight).
+  if (n_mat == 1L) {
+    eigen_weights <- solve_one_type_eigen(
+      Y_resi, cts, nCC = nCC, sdev2_list = sdev2_list
+    )
+    if (matches_one_type_first_axis(
+      w_list, eigen_weights, cts, sdev2_list = sdev2_list
+    )) {
+      return(eigen_weights)
+    }
+  }
 
   # The ordinary two-type run has an exact all-axis SVD. Preserve the
   # sequential path when a supplied/transferred first axis does not equal the
@@ -577,24 +703,31 @@ optimize_bilinear_n <- function(X_list, flat_kernels, sigma, w_list,
     # cell type. apply_deflation() implements the weighted (oblique) projection
     # for the scalePCs = FALSE case, so both metrics use projection and give the
     # same axes -- scalePCs stays a pure reparametrization.
-    deflation_method <- if (n_mat > 2L) "projection" else "rank1"
+    deflation_method <- if (n_mat == 2L) "rank1" else "projection"
     Y_resi <- apply_deflation(
       Y_resi, w_list, qq, cts, sdev2_list,
       deflation = deflation_method
     )
 
-    # Step 2: Initialize w_list_new for component qq+1
-    w_list_new <- initialize_next_component(Y_resi, cts)
+    if (n_mat == 1L) {
+      # The residual remains a symmetric generalized eigenproblem.
+      w_list_qq_plus_1 <- solve_one_type_eigen(
+        Y_resi, cts, nCC = 1L, sdev2_list = sdev2_list
+      )
+    } else {
+      # Step 2: Initialize w_list_new for component qq+1
+      w_list_new <- initialize_next_component(Y_resi, cts)
 
-    # Step 3: Iterative refinement using the helper function
-    w_list_qq_plus_1 <- bilinear_w_from_Y_resi(
-      w_list_new = w_list_new,
-      Y_resi = Y_resi,
-      n_features = n_features,
-      max_iter = max_iter,
-      tol = tol,
-      step_size = step_size,
-      sdev2_list = sdev2_list)
+      # Step 3: Iterative refinement using the helper function
+      w_list_qq_plus_1 <- bilinear_w_from_Y_resi(
+        w_list_new = w_list_new,
+        Y_resi = Y_resi,
+        n_features = feature_counts,
+        max_iter = max_iter,
+        tol = tol,
+        step_size = step_size,
+        sdev2_list = sdev2_list)
+    }
 
     # Step 4: Add the new component (qq+1) to w_list
     for (ct in cts) {
@@ -669,8 +802,12 @@ validate_multi_slide_inputs <- function(X_list_all, K_list_all = NULL,
     stop("Cell types in data do not match expected cell types.")
   }
   
-  # Get number of features from first slide, first cell type
-  n_features <- ncol(X_list_all[[1]][[cell_types[1]]])
+  # Feature counts must be stable across slides for a given cell type, but
+  # need not be identical between cell types.
+  feature_counts <- stats::setNames(
+    vapply(cell_types, function(ct) ncol(X_list_all[[1]][[ct]]), integer(1)),
+    cell_types
+  )
   
   # Validate dimensions across all slides and cell types
   for (q in seq_len(n_slides)) {
@@ -678,7 +815,8 @@ validate_multi_slide_inputs <- function(X_list_all, K_list_all = NULL,
       if (!ct %in% names(X_list_all[[q]])) {
         stop(paste("Cell type", ct, "missing in slide", q))
       }
-      if (!is.matrix(X_list_all[[q]][[ct]]) || ncol(X_list_all[[q]][[ct]]) != n_features) {
+      if (!is.matrix(X_list_all[[q]][[ct]]) ||
+          ncol(X_list_all[[q]][[ct]]) != feature_counts[[ct]]) {
         stop(paste("Invalid or inconsistent feature count in slide", q, "cell type", ct))
       }
     }
@@ -688,7 +826,8 @@ validate_multi_slide_inputs <- function(X_list_all, K_list_all = NULL,
     n_slides = n_slides,
     cell_types = cell_types,
     n_cell_types = n_cell_types,
-    n_features = n_features
+    n_features = feature_counts,
+    feature_counts = feature_counts
   ))
 }
 
@@ -741,7 +880,7 @@ compute_Y_slide <- function(X_list, flat_kernels, sigma, slide, ct_i, ct_j) {
     # Within-cell-type case
     X <- X_list[[ct_i]]
     K <- get_kernel_matrix_flat(flat_kernels, sigma, ct_i, ct_i, slide)
-    return(crossprod(X, K %*% X))
+    return(compute_symmetric_Y(X, K))
   } else {
     # Between-cell-type case
     X1 <- X_list[[ct_i]]
@@ -843,7 +982,7 @@ optimize_bilinear_multi_slides <- function(X_list_all, flat_kernels, sigma, slid
   n_slides <- validated$n_slides
   cell_types <- validated$cell_types
   n_cell_types <- validated$n_cell_types
-  n_features <- validated$n_features
+  feature_counts <- validated$feature_counts
   
   # Check if this is within-cell-type case
   is_within <- (n_cell_types == 1)
@@ -874,41 +1013,9 @@ optimize_bilinear_multi_slides <- function(X_list_all, flat_kernels, sigma, slid
 
   # Handle within-cell-type case with direct solution
   if (is_within && direct_solve) {
-    ct <- cell_types[1]
-    Y_sum <- Y_aggregate[[ct]][[ct]]
-
-    # When scalePCs=FALSE, solve generalized eigen problem Y w = λ D w
-    # via transform: D^{-1/2} Y D^{-1/2} z = λ z, then w = D^{-1/2} z
-    if (!is.null(sdev2_list)) {
-      inv_sqrt_d <- 1 / sqrt(sdev2_list[[ct]])
-      # D^{-1/2} Y D^{-1/2} (element-wise for diagonal D)
-      Y_sum <- sweep(sweep(Y_sum, 1, inv_sqrt_d, "*"), 2, inv_sqrt_d, "*")
-    }
-
-    # Direct eigenvalue solution
-    eigen_result <- tryCatch(
-      eigen(Y_sum, symmetric = TRUE),
-      error = function(e) {
-        warning(paste("Eigen decomposition failed:", e$message, 
-                     "\nFalling back to iterative method"))
-        return(NULL)
-      }
-    )
-    
-    if (!is.null(eigen_result)) {
-      z <- eigen_result$vectors[, 1, drop = FALSE]
-      if (!is.null(sdev2_list)) {
-        # Transform back: w = D^{-1/2} z, then normalize under weighted norm
-        w <- z * (1 / sqrt(sdev2_list[[ct]]))
-        w <- normalize_vec_weighted(w, sdev2_list[[ct]])
-      } else {
-        w <- z
-      }
-      w_list <- setNames(list(w), ct)
-      message(paste("Direct solution found, largest eigenvalue:",
-                   round(eigen_result$values[1], 6)))
-      return(w_list)
-    }
+    return(solve_one_type_eigen(
+      Y_aggregate, cell_types, nCC = 1L, sdev2_list = sdev2_list
+    ))
   }
   
   # Initialize weights
@@ -918,7 +1025,7 @@ optimize_bilinear_multi_slides <- function(X_list_all, flat_kernels, sigma, slid
   w_list <- bilinear_w_from_Y_resi(
     w_list_new = w_list,
     Y_resi = Y_aggregate,
-    n_features = n_features,
+    n_features = feature_counts,
     max_iter = max_iter,
     tol = tol,
     step_size = step_size,
@@ -968,7 +1075,7 @@ optimize_bilinear_n_multi_slides <- function(X_list_all, flat_kernels, sigma, sl
   n_slides <- validated$n_slides
   cell_types <- cellTypesOfInterest
   n_cell_types <- length(cell_types)
-  n_features <- validated$n_features
+  feature_counts <- validated$feature_counts
   is_within <- (n_cell_types == 1)
   
   # Validate w_list
@@ -997,6 +1104,17 @@ optimize_bilinear_n_multi_slides <- function(X_list_all, flat_kernels, sigma, sl
     X_list_all, flat_kernels, sigma, slides, cell_types, n_cores
   )
 
+  if (n_cell_types == 1L) {
+    eigen_weights <- solve_one_type_eigen(
+      Y_resi, cell_types, nCC = nCC, sdev2_list = sdev2_list
+    )
+    if (matches_one_type_first_axis(
+      w_list, eigen_weights, cell_types, sdev2_list = sdev2_list
+    )) {
+      return(eigen_weights)
+    }
+  }
+
   # Obtain all ordinary two-type axes from the same exact SVD when the supplied
   # first axis is the leading singular direction. A transferred first axis
   # deliberately falls back to conditional sequential deflation.
@@ -1018,24 +1136,30 @@ optimize_bilinear_n_multi_slides <- function(X_list_all, flat_kernels, sigma, sl
     # vectors are not pairwise singular vectors. apply_deflation() implements
     # the weighted (oblique) projection for scalePCs = FALSE, so both metrics
     # use projection and give the same axes.
-    deflation_method <- if (n_cell_types > 2L) "projection" else "rank1"
+    deflation_method <- if (n_cell_types == 2L) "rank1" else "projection"
     Y_resi <- apply_deflation(
       Y_resi, w_list, qq, cell_types, sdev2_list,
       deflation = deflation_method
     )
     
-    # Initialize and refine the next component.
-    w_list_new <- initialize_next_component(Y_resi, cell_types)
-    
-    w_list_qq_plus_1 <- bilinear_w_from_Y_resi(
-      w_list_new = w_list_new,
-      Y_resi = Y_resi,
-      n_features = n_features,
-      max_iter = max_iter,
-      tol = tol,
-      step_size = step_size,
-      sdev2_list = sdev2_list
-    )
+    if (n_cell_types == 1L) {
+      w_list_qq_plus_1 <- solve_one_type_eigen(
+        Y_resi, cell_types, nCC = 1L, sdev2_list = sdev2_list
+      )
+    } else {
+      # Initialize and refine the next component.
+      w_list_new <- initialize_next_component(Y_resi, cell_types)
+
+      w_list_qq_plus_1 <- bilinear_w_from_Y_resi(
+        w_list_new = w_list_new,
+        Y_resi = Y_resi,
+        n_features = feature_counts,
+        max_iter = max_iter,
+        tol = tol,
+        step_size = step_size,
+        sdev2_list = sdev2_list
+      )
+    }
 
     # Append the new component.
     for (ct in cell_types) {

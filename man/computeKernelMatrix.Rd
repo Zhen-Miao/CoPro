@@ -104,10 +104,12 @@ asymmetric result in skrCCA inference.}
 \item{method}{One of \code{"auto"}, \code{"dense"}, or \code{"sparse"}. \code{"dense"} is the
 classic path that reads the distance matrices produced by
 \code{\link[=computeDistance]{computeDistance()}}. \code{"sparse"} is a fused, memory-efficient path
-(\code{\link[=computeSparseKernel]{computeSparseKernel()}}) that builds sparse \code{dgCMatrix} kernels directly
-from coordinates via a fixed-radius neighbor search, never forming a dense
+(\code{\link[=computeSparseKernel]{computeSparseKernel()}}) that builds sparse kernels directly from
+coordinates via a fixed-radius neighbor search, never forming a dense
 \verb{n x n} matrix, and does not require \code{\link[=computeDistance]{computeDistance()}} to have been run.
-Results are numerically equivalent. \code{"auto"} (default) picks \code{"sparse"} when
+Symmetric within-type kernels retain one triangle in a \code{dsCMatrix};
+cross-type and asymmetrically normalized kernels use \code{dgCMatrix}. Results
+are numerically equivalent. \code{"auto"} (default) picks \code{"sparse"} when
 any per-slide cell-type block reaches \code{autoThreshold} cells or when the
 aggregate dense block workload reaches \code{autoThreshold^2} entries; otherwise
 it picks \code{"dense"}.}
@@ -167,6 +169,7 @@ Other spatial-pipeline:
 \code{\link{computePCA}()},
 \code{\link{computeSparseKernel}()},
 \code{\link{runGeneSpaceCCA}()},
-\code{\link{runSkrCCA}()}
+\code{\link{runSkrCCA}()},
+\code{\link{runSlideLevelInference}()}
 }
 \concept{spatial-pipeline}

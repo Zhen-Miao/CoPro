@@ -1,6 +1,7 @@
 # Equivalence tests for the sparse fixed-radius kernel path (method = "sparse")
 # against the dense path (method = "dense"). The sparse path must reproduce the
-# dense result numerically while returning sparse dgCMatrix kernels.
+# dense result numerically while returning sparse dgCMatrix cross-kernels and
+# triangularly stored dsCMatrix within-type kernels.
 
 # Flip the sign of `x` (per column vector) to best match a reference, so weight
 # vectors that are equal up to sign compare as equal.
@@ -89,8 +90,40 @@ test_that("sparse kernels match dense kernels for a single (within-type) cell ty
     Kd <- getKernelMatrix(dense, sigma = s, cellType1 = "CellTypeA",
                           cellType2 = "CellTypeA", verbose = FALSE)
     # within-type diagonal must be exactly zero (mirrors diag = Inf -> K = 0)
+    expect_s4_class(Ks, "dsCMatrix")
     expect_true(all(Matrix::diag(Ks) == 0))
+    expect_equal(2L * length(Ks@x), Matrix::nnzero(Ks))
     expect_equal(as.matrix(Ks), as.matrix(Kd), tolerance = 1e-8, ignore_attr = TRUE)
+  }
+})
+
+test_that("within-type sparse storage follows symmetry-preserving normalization", {
+  obj <- create_test_copro_single(n_cells = 180, n_genes = 25,
+                                  n_cell_types = 2, seed = 31)
+  obj <- subsetData(obj, cellTypesOfInterest = "CellTypeA")
+  with_dist <- computeDistance(obj, distType = "Euclidean2D", verbose = FALSE)
+
+  for (row_normalize in c(FALSE, TRUE)) {
+    dense <- computeKernelMatrix(
+      with_dist, sigmaValues = 0.1, method = "dense",
+      normalizeKernel = !row_normalize,
+      rowNormalizeKernel = row_normalize,
+      dropDistances = FALSE, verbose = FALSE
+    )
+    sparse <- computeKernelMatrix(
+      obj, sigmaValues = 0.1, method = "sparse",
+      normalizeKernel = !row_normalize,
+      rowNormalizeKernel = row_normalize,
+      distType = "Euclidean2D", verbose = FALSE
+    )
+    Kd <- getKernelMatrix(dense, 0.1, "CellTypeA", "CellTypeA",
+                          verbose = FALSE)
+    Ks <- getKernelMatrix(sparse, 0.1, "CellTypeA", "CellTypeA",
+                          verbose = FALSE)
+
+    expect_s4_class(Ks, if (row_normalize) "dgCMatrix" else "dsCMatrix")
+    expect_equal(as.matrix(Ks), as.matrix(Kd), tolerance = 1e-8,
+                 ignore_attr = TRUE)
   }
 })
 

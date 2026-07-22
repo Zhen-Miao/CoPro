@@ -144,6 +144,51 @@ setGeneric(
   sqrt(max(sum(M * Kc), 0))
 }
 
+.kernelNormalizerKey <- function(sigma, cellType1, cellType2, slide = NULL) {
+  paste(
+    format(sigma, scientific = FALSE, trim = TRUE),
+    if (is.null(slide)) "single" else slide,
+    cellType1, cellType2, sep = "|"
+  )
+}
+
+.kernelMatrixSignature <- function(x) {
+  if (is.null(x)) return("NULL")
+  values <- if (inherits(x, "sparseMatrix")) x@x else as.numeric(x)
+  paste(
+    nrow(x), ncol(x), length(values),
+    format(sum(values), digits = 16),
+    format(sum(values^2), digits = 16),
+    sep = ":"
+  )
+}
+
+.kernelNormalizerSignature <- function(K, Rx = NULL, Ry = NULL) {
+  paste(
+    .kernelMatrixSignature(K),
+    .kernelMatrixSignature(Rx),
+    .kernelMatrixSignature(Ry),
+    sep = "||"
+  )
+}
+
+.cacheKernelNormalizer <- function(cache, key, K, Rx, Ry, value) {
+  cache[[key]] <- list(
+    value = as.numeric(value),
+    signature = .kernelNormalizerSignature(K, Rx, Ry)
+  )
+  cache
+}
+
+.readKernelNormalizer <- function(cache, key, K, Rx, Ry) {
+  entry <- cache[[key]]
+  if (is.null(entry) || !is.finite(entry$value)) return(NULL)
+  if (!identical(entry$signature, .kernelNormalizerSignature(K, Rx, Ry))) {
+    return(NULL)
+  }
+  entry$value
+}
+
 .computeCrossKernelNorm <- function(object, tol = 1e-4, cts, scalePCs,
  sigmaValues, nCC, pair_cell_types) {
   ## Whitened-Frobenius normalizer ||R_x^{1/2} K_c R_y^{1/2}||_F per (sigma,
@@ -154,6 +199,8 @@ setGeneric(
   sigma_names <- paste("sigma", sigmaValues, sep = "_")
   norm_K12 <- setNames(vector(mode = "list", length = length(sigma_names)),
                        sigma_names)
+  normalizer_cache <- attr(object, "kernelNormalizerCache", exact = TRUE)
+  if (is.null(normalizer_cache)) normalizer_cache <- list()
 
   for (t in sigma_names) {
     norm_K12[[t]] <- setNames(vector(mode = "list", length = length(cts)),
@@ -180,7 +227,16 @@ setGeneric(
       Ry <- tryCatch(getKernelMatrix(object, sigma = sigma_val,
                        cellType1 = cellType2, cellType2 = cellType2,
                        verbose = FALSE), error = function(e) NULL)
-      nrm <- .whitenedFrobNorm(K, Rx, Ry)
+      cache_key <- .kernelNormalizerKey(
+        sigma_val, cellType1, cellType2, slide = NULL
+      )
+      nrm <- .readKernelNormalizer(normalizer_cache, cache_key, K, Rx, Ry)
+      if (is.null(nrm)) {
+        nrm <- .whitenedFrobNorm(K, Rx, Ry)
+        normalizer_cache <- .cacheKernelNormalizer(
+          normalizer_cache, cache_key, K, Rx, Ry, nrm
+        )
+      }
       norm_K12[[t]][[cellType1]][[cellType2]] <- nrm
       # Frobenius norm is transpose-invariant: store the mirror for symmetry
       if (cellType1 != cellType2) {
@@ -190,6 +246,8 @@ setGeneric(
   }
 
   message("Finished calculating whitened-Frobenius normalizers.")
+
+  attr(norm_K12, "kernelNormalizerCache") <- normalizer_cache
 
   return(norm_K12)
 }
@@ -213,6 +271,8 @@ setGeneric(
   norm_K12 <- .computeCrossKernelNorm(object, tol = tol, cts = cts,
    scalePCs = scalePCs, sigmaValues = sigmaValues, nCC = nCC,
    pair_cell_types = pair_cell_types)
+  attr(object, "kernelNormalizerCache") <-
+    attr(norm_K12, "kernelNormalizerCache", exact = TRUE)
 
   for (tt in seq_along(sigmaValues)) {
     t <- sigma_names[tt]
@@ -350,6 +410,8 @@ setMethod(
   # --- Precompute whitened-Frobenius normalizers (Per Slide, Per Sigma) ---
   message("Calculating whitened-Frobenius normalizers (can take time)...")
   norm_K_all <- setNames(vector("list", length = length(sigmas_run)), sigmas_run)
+  normalizer_cache <- attr(object, "kernelNormalizerCache", exact = TRUE)
+  if (is.null(normalizer_cache)) normalizer_cache <- list()
 
   for (sig_name in sigmas_run) {
     sigma_val <- as.numeric(gsub("sigma_", "", sig_name))
@@ -381,10 +443,21 @@ setMethod(
           Ry <- tryCatch(getKernelMatrix(object, sigma = sigma_val, cellType1 = ct_j,
                           cellType2 = ct_j, slide = sID, verbose = FALSE),
                          error = function(e) NULL)
-          nrm <- tryCatch(.whitenedFrobNorm(K, Rx, Ry), error = function(e) {
+          cache_key <- .kernelNormalizerKey(
+            sigma_val, ct_i, ct_j, slide = sID
+          )
+          nrm <- .readKernelNormalizer(
+            normalizer_cache, cache_key, K, Rx, Ry
+          )
+          if (is.null(nrm)) nrm <- tryCatch(.whitenedFrobNorm(K, Rx, Ry), error = function(e) {
             warning(paste("Normalizer failed for K[", sID, ",", ct_i, ",", ct_j, "]:", e$message))
             NA
           })
+          if (is.finite(nrm)) {
+            normalizer_cache <- .cacheKernelNormalizer(
+              normalizer_cache, cache_key, K, Rx, Ry, nrm
+            )
+          }
           norm_K_slide[[ct_i]][[ct_j]] <- nrm
           norm_K_slide[[ct_j]][[ct_i]] <- nrm # symmetry (Frobenius transpose-invariant)
         } else {
@@ -398,6 +471,7 @@ setMethod(
   }
 
   message("Finished calculating whitened-Frobenius normalizers.")
+  attr(norm_K_all, "kernelNormalizerCache") <- normalizer_cache
   return(norm_K_all)
 }
 
@@ -420,6 +494,8 @@ setMethod(
 
   norm_K_all <- .computeCrossKernelNormMulti(object, tol = tol, cts = cts,
    slides = slides, sigmas_run = sigmas_run, nCC = nCC, pair_cell_types = pair_cell_types)
+  attr(object, "kernelNormalizerCache") <-
+    attr(norm_K_all, "kernelNormalizerCache", exact = TRUE)
   
   # --- Calculate Correlation ---
   correlation_results <- setNames(vector("list", length = length(sigmas_run)), sigmas_run)

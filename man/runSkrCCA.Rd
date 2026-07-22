@@ -96,6 +96,7 @@ Other spatial-pipeline:
 \code{\link{computeKernelMatrix}()},
 \code{\link{computePCA}()},
 \code{\link{computeSparseKernel}()},
-\code{\link{runGeneSpaceCCA}()}
+\code{\link{runGeneSpaceCCA}()},
+\code{\link{runSlideLevelInference}()}
 }
 \concept{spatial-pipeline}

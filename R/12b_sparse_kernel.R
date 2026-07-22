@@ -2,8 +2,9 @@
 # Sparse, exact Gaussian-kernel construction via fixed-radius neighbor search
 # -----------------------------------------------------------------------------
 # A fused replacement for computeDistance() + computeKernelMatrix() that goes
-# directly from spatial coordinates to a sparse `dgCMatrix` kernel, never
-# materializing a dense n x n distance or kernel matrix.
+# directly from spatial coordinates to a sparse kernel, never materializing a
+# dense n x n distance or kernel matrix. Symmetric within-type kernels retain
+# one triangle in a `dsCMatrix`; cross-type kernels use a `dgCMatrix`.
 #
 # Exactness: the Gaussian kernel exp(-0.5 (d/sigma)^2) is below `lowerLimit`
 # precisely when d > sigma * sqrt(-2 log(lowerLimit)). The dense path already
@@ -307,14 +308,40 @@
 }
 
 #' Assemble the raw sparse Gaussian kernel for one block at one sigma.
+#' @param symmetric If \code{TRUE}, retain only the upper triangle and return a
+#'   symmetric compressed-column matrix. Within-type triplets contain both
+#'   directions, so this nearly halves persistent sparse-kernel storage.
 #' @noRd
-.sparseKernelFromTriplets <- function(bt, sigma, lowerLimit) {
+.sparseKernelFromTriplets <- function(bt, sigma, lowerLimit,
+                                      symmetric = FALSE) {
   k <- exp(-0.5 * (bt$dscaled / sigma)^2)
   keep <- k >= lowerLimit
+  if (symmetric) {
+    if (bt$n_i != bt$n_j) {
+      stop("Symmetric sparse kernel storage requires a square block")
+    }
+    keep <- keep & bt$i <= bt$j
+  }
   Matrix::sparseMatrix(
     i = bt$i[keep], j = bt$j[keep], x = k[keep],
-    dims = c(bt$n_i, bt$n_j)
+    dims = c(bt$n_i, bt$n_j), symmetric = symmetric
   )
+}
+
+#' Count represented sparse entries above a threshold
+#'
+#' A \code{dsCMatrix} stores one triangle, while kernel-validity checks are
+#' defined on the represented full matrix. Self-kernels have a zero diagonal,
+#' so every stored value represents two off-diagonal entries.
+#' @noRd
+.countSparseKernelAbove <- function(K, threshold) {
+  stored <- sum(K@x > threshold)
+  if (inherits(K, "symmetricMatrix")) {
+    diagonal <- Matrix::diag(K)
+    diagonal_count <- sum(diagonal > threshold)
+    return(2 * stored - diagonal_count)
+  }
+  stored
 }
 
 #' Sparse analogue of .CheckSigmaValuesToRemove (single-slide, proportion-based)
@@ -325,7 +352,7 @@
   # make the proportion comparison silently incorrect on large data).
   n1 <- as.numeric(nrow(K)); n2 <- as.numeric(ncol(K))
   minPropZero <- minAveCellNeighor * min(n1, n2) / (n1 * n2)
-  prop_above <- sum(K@x > lowerLimit) / (n1 * n2)
+  prop_above <- .countSparseKernelAbove(K, lowerLimit) / (n1 * n2)
   if (prop_above < minPropZero) {
     warning(paste("Kernel matrix for cell types", i, "and", j,
                   "with sigma =", sigma_choose,
@@ -350,7 +377,8 @@
 .checkSparseKernelValidityMulti <- function(K, lowerLimit, minAveCellNeighor,
                                             sigma_val, ct_i, ct_j, sID) {
   n1 <- nrow(K); n2 <- ncol(K)
-  if (sum(K@x > lowerLimit) < minAveCellNeighor * min(n1, n2)) {
+  if (.countSparseKernelAbove(K, lowerLimit) <
+      minAveCellNeighor * min(n1, n2)) {
     warning(paste("Kernel matrix for", ct_i, "-", ct_j, "in slide", sID,
                   "with sigma =", sigma_val, "is too sparse."))
     return(FALSE)
@@ -369,6 +397,12 @@
   }
   K <- as(K, "CsparseMatrix")
   valid <- K@x  # all stored values are >= lowerLimit, no NA
+  if (inherits(K, "symmetricMatrix")) {
+    # The dense/full sparse path contains both copies of every off-diagonal
+    # value. Preserve its exact type-7 quantile behavior while retaining only
+    # one copy in persistent storage.
+    valid <- rep(valid, each = 2L)
+  }
   if (length(valid) == 0) {
     warning("No valid kernel values found above lowerLimit")
     return(K)
@@ -517,15 +551,20 @@
       blk <- blocks[[b]]
       bt <- block_tri[[b]]
       flat_name <- .createKernelMatrixName(sigma_choose, blk$i, blk$j, slide = NULL)
+      symmetric_storage <- blk$within &&
+        !rowNormalizeKernel && !colNormalizeKernel
 
       if (is.null(bt)) {
         # no near pairs at all: empty kernel
         Kraw <- Matrix::sparseMatrix(i = integer(0), j = integer(0), x = numeric(0),
                                      dims = c(nrow(ct_coords[[blk$i]]),
                                               if (blk$within) nrow(ct_coords[[blk$i]])
-                                              else nrow(ct_coords[[blk$j]])))
+                                              else nrow(ct_coords[[blk$j]])),
+                                     symmetric = symmetric_storage)
       } else {
-        Kraw <- .sparseKernelFromTriplets(bt, sigma_choose, lowerLimit)
+        Kraw <- .sparseKernelFromTriplets(
+          bt, sigma_choose, lowerLimit, symmetric = symmetric_storage
+        )
       }
 
       should_remove <- .checkSparseSigmaRemove(
@@ -653,7 +692,11 @@
       blk <- blocks[[b]]
       bt <- block_tri[[b]]
       if (is.null(bt)) next
-      Kraw <- .sparseKernelFromTriplets(bt, sigma_val, lowerLimit)
+      symmetric_storage <- blk$within &&
+        !rowNormalizeKernel && !colNormalizeKernel
+      Kraw <- .sparseKernelFromTriplets(
+        bt, sigma_val, lowerLimit, symmetric = symmetric_storage
+      )
       if (!.checkSparseKernelValidityMulti(Kraw, lowerLimit, minAveCellNeighor,
                                            sigma_val, blk$i, blk$j, blk$slide)) {
         next
@@ -802,13 +845,17 @@
       blk <- blocks[[b]]
       coords <- get_coords(blk$slide, blk$i)
       bt <- block_tri[[b]]
+      symmetric_storage <- !rowNormalizeKernel && !colNormalizeKernel
       Kraw <- if (is.null(bt)) {
         Matrix::sparseMatrix(
           i = integer(0), j = integer(0), x = numeric(0),
-          dims = c(nrow(coords), nrow(coords))
+          dims = c(nrow(coords), nrow(coords)),
+          symmetric = symmetric_storage
         )
       } else {
-        .sparseKernelFromTriplets(bt, sigma, lowerLimit)
+        .sparseKernelFromTriplets(
+          bt, sigma, lowerLimit, symmetric = symmetric_storage
+        )
       }
 
       valid <- if (is_multi) {
@@ -858,10 +905,12 @@
 #'
 #' A fused, memory-efficient alternative to [computeDistance()] +
 #' [computeKernelMatrix()] for large datasets. It builds, for every cell-type
-#' pair (and within-type), a sparse `dgCMatrix` Gaussian kernel using a
-#' fixed-radius neighbor search, never forming a dense `n x n` matrix. Results
-#' are numerically equivalent to the dense path (every pair beyond the kernel's
-#' support radius is zero anyway). Distances are not stored.
+#' pair (and within-type), a sparse Gaussian kernel using a fixed-radius
+#' neighbor search, never forming a dense `n x n` matrix. Within-type kernels
+#' are stored with one triangle as symmetric `dsCMatrix` objects; cross-type
+#' kernels, and kernels made asymmetric by row/column normalization, use
+#' `dgCMatrix`. Results are numerically equivalent to the dense path (every pair
+#' beyond the kernel's support radius is zero anyway). Distances are not stored.
 #'
 #' @inheritParams computeKernelMatrix
 #' @param distType "Euclidean2D" or "Euclidean3D" (Morphology-Aware is not
