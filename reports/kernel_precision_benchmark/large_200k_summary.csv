@@ -1,0 +1,9 @@
+"metric","float64_current","float32_streamed_parallel","relative_change"
+"peak_rss_gib",8.367584,2.830811,-0.6616932
+"all_kernel_storage_gib",2.752820,1.841231,-0.3311474
+"maximum_neighbor_temporary_gib",2.540958,1.086106,-0.5725603
+"all_15_kernel_build_seconds",27.244,9.745,-0.6423116
+"largest_kernel_xky_seconds",2.184,0.478,-0.7811355
+"largest_kernel_nonzeros",137831652,137831652,0
+"xky_relative_frobenius_error",0,0.000001234648,0.000001234648
+"worst_four_component_cell_score_nrmse",0,0.000001173082,0.000001173082

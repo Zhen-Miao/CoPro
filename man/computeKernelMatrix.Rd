@@ -168,6 +168,7 @@ Other spatial-pipeline:
 \code{\link{computeDistance}()},
 \code{\link{computePCA}()},
 \code{\link{computeSparseKernel}()},
+\code{\link{computeSparseKernelFloat32}()},
 \code{\link{runGeneSpaceCCA}()},
 \code{\link{runSkrCCA}()},
 \code{\link{runSlideLevelInference}()}

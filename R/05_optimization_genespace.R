@@ -52,9 +52,15 @@ NULL
 .genespace_cross_mult <- function(x, w) {
   if (!inherits(x, "CoProGeneCrossOperator")) return(x %*% w)
   if (!isTRUE(x$transposed)) {
-    return(x$scale * crossprod(x$Z_i, x$K %*% (x$Z_j %*% w)))
+    return(x$scale * crossprod(
+      x$Z_i,
+      .float32KernelMatMult(x$K, x$Z_j %*% w)
+    ))
   }
-  x$scale * crossprod(x$Z_j, t(x$K) %*% (x$Z_i %*% w))
+  x$scale * crossprod(
+    x$Z_j,
+    .float32KernelMatMult(t(x$K), x$Z_i %*% w)
+  )
 }
 
 .genespace_cross_bilinear <- function(w_i, x, w_j) {

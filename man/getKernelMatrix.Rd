@@ -13,7 +13,8 @@ getKernelMatrix(
   cellType2,
   slide = NULL,
   returnTranspose = FALSE,
-  verbose = TRUE
+  verbose = TRUE,
+  materialize = TRUE
 )
 
 \S4method{getKernelMatrix}{CoProSingle}(
@@ -23,7 +24,8 @@ getKernelMatrix(
   cellType2,
   slide = NULL,
   returnTranspose = FALSE,
-  verbose = TRUE
+  verbose = TRUE,
+  materialize = TRUE
 )
 
 \S4method{getKernelMatrix}{CoProMulti}(
@@ -33,7 +35,8 @@ getKernelMatrix(
   cellType2,
   slide = NULL,
   returnTranspose = FALSE,
-  verbose = TRUE
+  verbose = TRUE,
+  materialize = TRUE
 )
 }
 \arguments{
@@ -50,9 +53,15 @@ getKernelMatrix(
 \item{returnTranspose}{If TRUE, forces return of transpose when accessing symmetric matrices}
 
 \item{verbose}{Whether to print detailed error messages}
+
+\item{materialize}{For float32 kernels, whether to return a temporary
+standard double-precision sparse \code{Matrix}. The default is \code{TRUE} for
+compatibility with plotting, transfer, and user code that performs
+ordinary matrix algebra. Set to \code{FALSE} to retain the encoded kernel.}
 }
 \value{
-Kernel matrix as a numeric matrix
+A standard kernel matrix, or an encoded float32 kernel when
+\code{materialize = FALSE}.
 }
 \description{
 A unified accessor function for kernel matrices that handles the complex

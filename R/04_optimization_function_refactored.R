@@ -194,7 +194,7 @@ compute_Y_resi <- function(X_list, flat_kernels, sigma, cell_types, slide = NULL
       j <- pair_cell_types[2, pp]
 
       K12 <- get_kernel_matrix_flat(flat_kernels, sigma, i, j, slide)
-      Y_ij <- crossprod(X_list[[i]], K12 %*% X_list[[j]])
+      Y_ij <- .kernelXKY(X_list[[i]], K12, X_list[[j]])
       
       Y_resi[[i]][[j]] <- Y_ij
       Y_resi[[j]][[i]] <- t(Y_ij)
@@ -219,7 +219,7 @@ compute_Y_resi <- function(X_list, flat_kernels, sigma, cell_types, slide = NULL
 #' @return Symmetric base numeric matrix in PC space.
 #' @noRd
 compute_symmetric_Y <- function(X, K) {
-  Y <- as.matrix(crossprod(X, K %*% X))
+  Y <- .kernelXKY(X, K, X)
   (Y + t(Y)) * 0.5
 }
 
@@ -886,7 +886,7 @@ compute_Y_slide <- function(X_list, flat_kernels, sigma, slide, ct_i, ct_j) {
     X1 <- X_list[[ct_i]]
     X2 <- X_list[[ct_j]]
     K12 <- get_kernel_matrix_flat(flat_kernels, sigma, ct_i, ct_j, slide)
-    return(crossprod(X1, K12 %*% X2))
+    return(.kernelXKY(X1, K12, X2))
   }
 }
 

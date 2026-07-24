@@ -1,0 +1,9 @@
+"object","encoding","bytes","persistent_in_current_pipeline"
+"kernel_matrices","double_Matrix_current",173416552,TRUE
+"temporary_distance_triplets","double_current_temporary",160151192,FALSE
+"kernel_matrices","fp32",115628344,FALSE
+"kernel_matrices","fp16",86738672,FALSE
+"kernel_matrices","bins100",72307504,FALSE
+"temporary_distance_triplets","fp32",120114056,FALSE
+"temporary_distance_triplets","fp16",100095392,FALSE
+"temporary_distance_triplets","bins100",90088600,FALSE

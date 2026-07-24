@@ -122,6 +122,7 @@ Other spatial-pipeline:
 \code{\link{computeDistance}()},
 \code{\link{computeKernelMatrix}()},
 \code{\link{computePCA}()},
+\code{\link{computeSparseKernelFloat32}()},
 \code{\link{runGeneSpaceCCA}()},
 \code{\link{runSkrCCA}()},
 \code{\link{runSlideLevelInference}()}

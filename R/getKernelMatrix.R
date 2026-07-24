@@ -9,9 +9,14 @@
 #' @param cellType2 Second cell type name  
 #' @param slide Slide ID (required for CoProMulti objects, ignored for CoProSingle)
 #' @param returnTranspose If TRUE, forces return of transpose when accessing symmetric matrices
+#' @param materialize For float32 kernels, whether to return a temporary
+#'   standard double-precision sparse `Matrix`. The default is `TRUE` for
+#'   compatibility with plotting, transfer, and user code that performs
+#'   ordinary matrix algebra. Set to `FALSE` to retain the encoded kernel.
 #' @param verbose Whether to print detailed error messages
 #'
-#' @return Kernel matrix as a numeric matrix
+#' @return A standard kernel matrix, or an encoded float32 kernel when
+#'   `materialize = FALSE`.
 #' @family accessors
 #' @seealso [computeKernelMatrix()], [getDistMat()]
 #' @export
@@ -20,31 +25,40 @@
 #' @aliases getKernelMatrix,CoProMulti-method
 setGeneric("getKernelMatrix",
            function(object, sigma, cellType1, cellType2, slide = NULL, 
-                   returnTranspose = FALSE, verbose = TRUE) 
+                   returnTranspose = FALSE, verbose = TRUE,
+                   materialize = TRUE)
              standardGeneric("getKernelMatrix"))
 
 #' @rdname getKernelMatrix
 #' @export
 setMethod("getKernelMatrix", "CoProSingle",
           function(object, sigma, cellType1, cellType2, slide = NULL, 
-                   returnTranspose = FALSE, verbose = TRUE) {
+                   returnTranspose = FALSE, verbose = TRUE,
+                   materialize = TRUE) {
             .getKernelMatrixSingle(object, sigma, cellType1, cellType2, 
-                                 returnTranspose, verbose)
+                                 returnTranspose = returnTranspose,
+                                 verbose = verbose,
+                                 materialize = materialize)
           })
 
 #' @rdname getKernelMatrix  
 #' @export
 setMethod("getKernelMatrix", "CoProMulti",
           function(object, sigma, cellType1, cellType2, slide = NULL, 
-                   returnTranspose = FALSE, verbose = TRUE) {
+                   returnTranspose = FALSE, verbose = TRUE,
+                   materialize = TRUE) {
             .getKernelMatrixMulti(object, sigma, cellType1, cellType2, 
-                                slide, returnTranspose, verbose)
+                                slide = slide,
+                                returnTranspose = returnTranspose,
+                                verbose = verbose,
+                                materialize = materialize)
           })
 
 #' Internal function for single slide kernel matrix access
 #' @noRd
 .getKernelMatrixSingle <- function(object, sigma, cellType1, cellType2, 
-                                 returnTranspose = FALSE, verbose = TRUE) {
+                                 returnTranspose = FALSE,
+                                 verbose = TRUE, materialize = TRUE) {
   
   # Input validation
   .validateKernelInputs(object, sigma, cellType1, cellType2, verbose)
@@ -56,13 +70,17 @@ setMethod("getKernelMatrix", "CoProMulti",
   
   # Always use flat structure access
   return(.getKernelMatrixFlat(object@kernelMatrices, sigma, cellType1, cellType2, 
-                             slide = NULL, returnTranspose, verbose))
+                             slide = NULL,
+                             returnTranspose = returnTranspose,
+                             verbose = verbose,
+                             materialize = materialize))
 }
 
 #' Internal function for multi slide kernel matrix access
 #' @noRd
 .getKernelMatrixMulti <- function(object, sigma, cellType1, cellType2, slide,
-                                returnTranspose = FALSE, verbose = TRUE) {
+                                returnTranspose = FALSE,
+                                verbose = TRUE, materialize = TRUE) {
   
   # Input validation
   .validateKernelInputs(object, sigma, cellType1, cellType2, verbose)
@@ -83,7 +101,10 @@ setMethod("getKernelMatrix", "CoProMulti",
   
   # Always use flat structure access
   return(.getKernelMatrixFlat(object@kernelMatrices, sigma, cellType1, cellType2, 
-                             slide = slide, returnTranspose, verbose))
+                             slide = slide,
+                             returnTranspose = returnTranspose,
+                             verbose = verbose,
+                             materialize = materialize))
 }
 
 
@@ -142,7 +163,14 @@ setMethod("getKernelMatrix", "CoProMulti",
 #' Access kernel matrix from flat structure
 #' @noRd
 .getKernelMatrixFlat <- function(flat_kernels, sigma, cellType1, cellType2, slide = NULL,
-                                returnTranspose = FALSE, verbose = TRUE) {
+                                returnTranspose = FALSE,
+                                verbose = TRUE, materialize = TRUE) {
+  finalize_kernel <- function(kernel_matrix) {
+    if (materialize && .isFloat32SparseKernel(kernel_matrix)) {
+      return(asDoubleSparseMatrix(kernel_matrix))
+    }
+    kernel_matrix
+  }
   
   # Create the expected flat name
   flat_name <- .createKernelMatrixName(sigma, cellType1, cellType2, slide)
@@ -151,9 +179,9 @@ setMethod("getKernelMatrix", "CoProMulti",
   if (flat_name %in% names(flat_kernels)) {
     kernel_matrix <- flat_kernels[[flat_name]]
     if (returnTranspose) {
-      return(t(kernel_matrix))
+      return(finalize_kernel(t(kernel_matrix)))
     } else {
-      return(kernel_matrix)
+      return(finalize_kernel(kernel_matrix))
     }
   }
   
@@ -166,12 +194,12 @@ setMethod("getKernelMatrix", "CoProMulti",
       message(paste("Using transpose of kernel matrix for", cellType2, "->", cellType1))
     }
     if (returnTranspose) {
-      return(kernel_matrix)  # Don't transpose again
+      return(finalize_kernel(kernel_matrix))  # Don't transpose again
     } else {
-      return(t(kernel_matrix))
+      return(finalize_kernel(t(kernel_matrix)))
     }
   }
   
   # If we get here, kernel not found
   .throwKernelNotFoundError(sigma, cellType1, cellType2, slide)
-} 
+}
