@@ -22,13 +22,13 @@ optimize_genespace_avg_corr(
 
 - C_self_slide:
 
-  Named list of per-slide self-covariance matrices. Structure:
-  `C_self_slide[[slide]][[cell_type]]` = G x G matrix.
+  Named list of per-slide self-covariance matrices or matrix-free
+  operators.
 
 - C_cross_slide:
 
-  Named list of per-slide cross-covariance matrices. Structure:
-  `C_cross_slide[[slide]][["ctA-ctB"]]` = G x G matrix.
+  Named list of per-slide cross-covariance matrices or matrix-free
+  operators.
 
 - slides:
 

@@ -4,10 +4,13 @@ A fused, memory-efficient alternative to
 [`computeDistance()`](https://zhen-miao.github.io/CoPro/reference/computeDistance.md) +
 [`computeKernelMatrix()`](https://zhen-miao.github.io/CoPro/reference/computeKernelMatrix.md)
 for large datasets. It builds, for every cell-type pair (and
-within-type), a sparse `dgCMatrix` Gaussian kernel using a fixed-radius
-neighbor search, never forming a dense `n x n` matrix. Results are
-numerically equivalent to the dense path (every pair beyond the kernel's
-support radius is zero anyway). Distances are not stored.
+within-type), a sparse Gaussian kernel using a fixed-radius neighbor
+search, never forming a dense `n x n` matrix. Within-type kernels are
+stored with one triangle as symmetric `dsCMatrix` objects; cross-type
+kernels, and kernels made asymmetric by row/column normalization, use
+`dgCMatrix`. Results are numerically equivalent to the dense path (every
+pair beyond the kernel's support radius is zero anyway). Distances are
+not stored.
 
 ## Usage
 
@@ -148,5 +151,7 @@ Other spatial-pipeline:
 [`computeDistance()`](https://zhen-miao.github.io/CoPro/reference/computeDistance.md),
 [`computeKernelMatrix()`](https://zhen-miao.github.io/CoPro/reference/computeKernelMatrix.md),
 [`computePCA()`](https://zhen-miao.github.io/CoPro/reference/computePCA.md),
+[`computeSparseKernelFloat32()`](https://zhen-miao.github.io/CoPro/reference/computeSparseKernelFloat32.md),
 [`runGeneSpaceCCA()`](https://zhen-miao.github.io/CoPro/reference/runGeneSpaceCCA.md),
-[`runSkrCCA()`](https://zhen-miao.github.io/CoPro/reference/runSkrCCA.md)
+[`runSkrCCA()`](https://zhen-miao.github.io/CoPro/reference/runSkrCCA.md),
+[`runSlideLevelInference()`](https://zhen-miao.github.io/CoPro/reference/runSlideLevelInference.md)

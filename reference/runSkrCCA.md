@@ -103,7 +103,9 @@ Other spatial-pipeline:
 [`computeKernelMatrix()`](https://zhen-miao.github.io/CoPro/reference/computeKernelMatrix.md),
 [`computePCA()`](https://zhen-miao.github.io/CoPro/reference/computePCA.md),
 [`computeSparseKernel()`](https://zhen-miao.github.io/CoPro/reference/computeSparseKernel.md),
-[`runGeneSpaceCCA()`](https://zhen-miao.github.io/CoPro/reference/runGeneSpaceCCA.md)
+[`computeSparseKernelFloat32()`](https://zhen-miao.github.io/CoPro/reference/computeSparseKernelFloat32.md),
+[`runGeneSpaceCCA()`](https://zhen-miao.github.io/CoPro/reference/runGeneSpaceCCA.md),
+[`runSlideLevelInference()`](https://zhen-miao.github.io/CoPro/reference/runSlideLevelInference.md)
 
 ## Examples
 
@@ -118,8 +120,8 @@ obj <- newCoProSingle(
 )
 obj <- subsetData(obj, cellTypesOfInterest = unique(toy$cellTypes))
 obj <- computePCA(obj, nPCA = 10)
-#> Input is dense (matrixarray), performing irlba pca...
-#> Input is dense (matrixarray), performing irlba pca...
+#> Input is dense (matrix), performing irlba PCA...
+#> Input is dense (matrix), performing irlba PCA...
 obj <- computeDistance(obj, distType = "Euclidean2D", verbose = FALSE)
 obj <- computeKernelMatrix(obj, sigmaValues = c(0.05, 0.1), verbose = FALSE)
 obj <- runSkrCCA(obj, scalePCs = TRUE, nCC = 2)

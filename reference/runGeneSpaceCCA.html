@@ -196,12 +196,12 @@ deflation in weight space. The power iteration uses a frozen-sigma
 surrogate (sigma values held fixed at the previous iterate when computing
 each weight update), making the algorithm an ALS-style alternating
 maximization rather than exact coordinate ascent.</p>
-<p>Memory scales as
-\(O(G^2 \times S \times (C + C(C-1)/2))\)
-for precomputed covariance matrices: \(S\) slides, each storing \(C\)
-self-covariances and \(C(C-1)/2\) cross-covariances of size
-\(G \times G\). For example G=5000, S=10, C=3 gives \(10 \times 6\)
-matrices of \(200\) MB each, approximately 12 GB.</p>
+<p>Covariances are applied as matrix-free operators. The implementation keeps
+standardized <code>Z</code> matrices and kernel blocks and evaluates
+<code>Z_i' K_ij (Z_j w_j)</code> on demand, avoiding the former dense <code>G x G</code>
+self- and cross-covariance cache. In Euclidean streaming mode, kernels are
+constructed directly as sparse fixed-radius matrices, so neither a dense
+distance matrix nor a dense kernel is formed.</p>
 <p>Per-slide gene handling: each (slide, cell type) expression matrix is
 independently centered and scaled. A gene with zero variance on a
 particular (slide, cell type) pair is set to zero on that slide and
@@ -216,8 +216,10 @@ than 10 cells are dropped with a warning.</p>
 (PCA-space) outputs; gene-space CCA already populates
 <code>@geneScores</code> and <code>@cellScores</code> directly, so no further call
 is needed.</p>
-<p>Streaming mode (<code>streaming = TRUE</code>) reduces peak memory to roughly
-one slide's pairwise n x n footprint at a time. Distance normalization
+<p>Streaming mode (<code>streaming = TRUE</code>) uses exact fixed-radius neighbor
+search for Euclidean coordinates and retains sparse kernel operators.
+Morphology-aware distances still require a dense per-slide distance block.
+Distance normalization
 defaults to <code>normalizationScope = "global"</code> (a single factor across
 all slides, matching the slot-based pipeline's semantics under
 <code>normalizeDistance = TRUE</code>); under a fixed RNG seed the streaming
@@ -237,7 +239,9 @@ degenerate canonical components on heterogeneous datasets. Use
 <code><a href="computeKernelMatrix.html">computeKernelMatrix()</a></code>,
 <code><a href="computePCA.html">computePCA()</a></code>,
 <code><a href="computeSparseKernel.html">computeSparseKernel()</a></code>,
-<code><a href="runSkrCCA.html">runSkrCCA()</a></code></p></div>
+<code><a href="computeSparseKernelFloat32.html">computeSparseKernelFloat32()</a></code>,
+<code><a href="runSkrCCA.html">runSkrCCA()</a></code>,
+<code><a href="runSlideLevelInference.html">runSlideLevelInference()</a></code></p></div>
     </div>
 
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>

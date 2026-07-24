@@ -10,7 +10,7 @@ applied only to observed data.
 ``` r
 runSkrCCAPermu_FairSigma(
   object,
-  nPermu = 100,
+  nPermu = 999,
   sigma_values = NULL,
   permu_method = "bin",
   permu_which = "second_only",
@@ -35,7 +35,7 @@ runSkrCCAPermu_FairSigma(
 
 - nPermu:
 
-  Number of permutations to run (default: 100)
+  Number of permutations to run (default: 999)
 
 - sigma_values:
 
@@ -77,7 +77,8 @@ runSkrCCAPermu_FairSigma(
 
 - n_cores:
 
-  Number of cores for parallel computation (not yet implemented)
+  Number of PSOCK workers. Each worker holds the PCA and kernel inputs,
+  so choose this with available memory in mind.
 
 - verbose:
 

@@ -11,7 +11,7 @@ structure.
 runSkrCCAPermu(
   object,
   tol = 1e-05,
-  nPermu = 20,
+  nPermu = 999,
   maxIter = 200,
   permu_method = "bin",
   permu_which = "second_only",
@@ -20,7 +20,8 @@ runSkrCCAPermu(
   match_quantile = FALSE,
   conservative = FALSE,
   n_cores = 1,
-  verbose = TRUE
+  verbose = TRUE,
+  sigma = NULL
 )
 ```
 
@@ -37,8 +38,8 @@ runSkrCCAPermu(
 
 - nPermu:
 
-  Number of permutations to run (default: 20). Increase to 100+ for
-  publication-quality p-values.
+  Number of permutations to run (default: 999), giving a Monte-Carlo
+  floor of 0.001 under the Phipson–Smyth correction.
 
 - maxIter:
 
@@ -114,6 +115,15 @@ runSkrCCAPermu(
 - verbose:
 
   Whether to print progress messages (default: TRUE)
+
+- sigma:
+
+  Optional predeclared sigma value. When supplied, both observed and
+  null statistics are evaluated at this fixed sigma. When `NULL`, the
+  selected `object@sigmaValueChoice` is used conditionally and the
+  returned p-value is marked as not adjusted for sigma selection; use
+  [`runSkrCCAPermu_FairSigma()`](https://zhen-miao.github.io/CoPro/reference/runSkrCCAPermu_FairSigma.md)
+  for a max-over-sigma test.
 
 ## Value
 

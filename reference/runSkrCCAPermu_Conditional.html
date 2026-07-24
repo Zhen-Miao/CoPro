@@ -75,7 +75,7 @@ anti-conservative for axes <code>k &gt;= 2</code> when CC1 is strong.</p>
     <h2 id="ref-usage">Usage<a class="anchor" aria-label="anchor" href="#ref-usage"></a></h2>
     <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">runSkrCCAPermu_Conditional</span><span class="op">(</span></span>
 <span>  <span class="va">object</span>,</span>
-<span>  nPermu <span class="op">=</span> <span class="fl">100</span>,</span>
+<span>  nPermu <span class="op">=</span> <span class="fl">999</span>,</span>
 <span>  sigma_values <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  permu_method <span class="op">=</span> <span class="st">"bin"</span>,</span>
 <span>  permu_which <span class="op">=</span> <span class="st">"second_only"</span>,</span>
@@ -85,7 +85,8 @@ anti-conservative for axes <code>k &gt;= 2</code> when CC1 is strong.</p>
 <span>  alpha <span class="op">=</span> <span class="fl">0.05</span>,</span>
 <span>  maxIter <span class="op">=</span> <span class="fl">200</span>,</span>
 <span>  tol <span class="op">=</span> <span class="fl">1e-05</span>,</span>
-<span>  verbose <span class="op">=</span> <span class="cn">TRUE</span></span>
+<span>  verbose <span class="op">=</span> <span class="cn">TRUE</span>,</span>
+<span>  n_cores <span class="op">=</span> <span class="fl">1</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -99,7 +100,7 @@ anti-conservative for axes <code>k &gt;= 2</code> when CC1 is strong.</p>
 
 
 <dt id="arg-npermu">nPermu<a class="anchor" aria-label="anchor" href="#arg-npermu"></a></dt>
-<dd><p>Number of permutations (default 100).</p></dd>
+<dd><p>Number of permutations (default 999).</p></dd>
 
 
 <dt id="arg-sigma-values">sigma_values<a class="anchor" aria-label="anchor" href="#arg-sigma-values"></a></dt>
@@ -137,6 +138,11 @@ across the sigma sweep. Pass integers to override.</p></dd>
 
 <dt id="arg-verbose">verbose<a class="anchor" aria-label="anchor" href="#arg-verbose"></a></dt>
 <dd><p>Whether to print progress and a summary (default TRUE).</p></dd>
+
+
+<dt id="arg-n-cores">n_cores<a class="anchor" aria-label="anchor" href="#arg-n-cores"></a></dt>
+<dd><p>Number of PSOCK workers. Each worker holds the PCA and kernel
+inputs, so choose this with available memory in mind.</p></dd>
 
 </dl></div>
     <div class="section level2">
@@ -191,13 +197,12 @@ the permutation "test of canonical axes" of Legendre, Oksanen &amp; ter Braak
 <h3 id="relationship-to-data-residualization">Relationship to data residualization<a class="anchor" aria-label="anchor" href="#relationship-to-data-residualization"></a></h3>
 
 
-<p>Deflating <code>Y</code> by the fixed observed weight directions is algebraically
-identical to the Freedman-Lane / ter Braak residualization that removes the
-observed lower canonical <em>variates</em> from the data before recomputing the
-cross-product, whenever the PCs are whitened (<code>scalePCs = TRUE</code>, so
-<code>X^T X = c I</code>): <code>(I - u u^T) Y (I - v v^T) = Y - (u^T Y v)\, u v^T</code>. The
-fair-sigma maximum over the bandwidth family is the Westfall-Young (1993)
-maxT procedure.</p>
+<p>The fixed directions are removed using the full projection
+<code>(I - u u^T) Y (I - v v^T)</code> for whitened PCs, or its weighted oblique
+counterpart for unscaled PCs. Rank-one subtraction is deliberately avoided
+because the observed directions are not generally singular vectors of a
+permuted operator. The fair-sigma maximum over the bandwidth family is the
+Westfall-Young (1993) maxT procedure.</p>
 </div>
 
     </div>

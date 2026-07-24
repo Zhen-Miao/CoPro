@@ -14,7 +14,7 @@ is anti-conservative for axes `k >= 2` when CC1 is strong.
 ``` r
 runSkrCCAPermu_Conditional(
   object,
-  nPermu = 100,
+  nPermu = 999,
   sigma_values = NULL,
   permu_method = "bin",
   permu_which = "second_only",
@@ -24,7 +24,8 @@ runSkrCCAPermu_Conditional(
   alpha = 0.05,
   maxIter = 200,
   tol = 1e-05,
-  verbose = TRUE
+  verbose = TRUE,
+  n_cores = 1
 )
 ```
 
@@ -40,7 +41,7 @@ runSkrCCAPermu_Conditional(
 
 - nPermu:
 
-  Number of permutations (default 100).
+  Number of permutations (default 999).
 
 - sigma_values:
 
@@ -80,6 +81,11 @@ runSkrCCAPermu_Conditional(
 - verbose:
 
   Whether to print progress and a summary (default TRUE).
+
+- n_cores:
+
+  Number of PSOCK workers. Each worker holds the PCA and kernel inputs,
+  so choose this with available memory in mind.
 
 ## Value
 
@@ -133,13 +139,12 @@ Oksanen & ter Braak (2011).
 
 ### Relationship to data residualization
 
-Deflating `Y` by the fixed observed weight directions is algebraically
-identical to the Freedman-Lane / ter Braak residualization that removes
-the observed lower canonical *variates* from the data before recomputing
-the cross-product, whenever the PCs are whitened (`scalePCs = TRUE`, so
-`X^T X = c I`): `(I - u u^T) Y (I - v v^T) = Y - (u^T Y v)\, u v^T`. The
-fair-sigma maximum over the bandwidth family is the Westfall-Young
-(1993) maxT procedure.
+The fixed directions are removed using the full projection
+`(I - u u^T) Y (I - v v^T)` for whitened PCs, or its weighted oblique
+counterpart for unscaled PCs. Rank-one subtraction is deliberately
+avoided because the observed directions are not generally singular
+vectors of a permuted operator. The fair-sigma maximum over the
+bandwidth family is the Westfall-Young (1993) maxT procedure.
 
 ## References
 

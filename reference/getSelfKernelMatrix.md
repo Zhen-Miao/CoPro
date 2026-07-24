@@ -6,7 +6,14 @@ computeSelfKernel.
 ## Usage
 
 ``` r
-getSelfKernelMatrix(object, sigma, cellType, slide = NULL, verbose = TRUE)
+getSelfKernelMatrix(
+  object,
+  sigma,
+  cellType,
+  slide = NULL,
+  verbose = TRUE,
+  materialize = TRUE
+)
 ```
 
 ## Arguments
@@ -30,6 +37,11 @@ getSelfKernelMatrix(object, sigma, cellType, slide = NULL, verbose = TRUE)
 - verbose:
 
   Whether to print error messages
+
+- materialize:
+
+  For encoded float32 kernels, whether to return a temporary standard
+  double-precision sparse matrix.
 
 ## Value
 

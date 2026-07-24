@@ -112,6 +112,8 @@ The main CoPro analysis workflow
   : Compute Kernel Matrix for CoPro
 - [`computeSparseKernel()`](https://zhen-miao.github.io/CoPro/reference/computeSparseKernel.md)
   : Compute sparse Gaussian kernels directly from coordinates
+- [`computeSparseKernelFloat32()`](https://zhen-miao.github.io/CoPro/reference/computeSparseKernelFloat32.md)
+  : Compute block-streamed float32 sparse Gaussian kernels
 - [`runSkrCCA()`](https://zhen-miao.github.io/CoPro/reference/runSkrCCA.md)
   : runSkrCCA
 - [`runGeneSpaceCCA()`](https://zhen-miao.github.io/CoPro/reference/runGeneSpaceCCA.md)
@@ -207,6 +209,8 @@ Statistical significance via spatial permutations
 - [`runSkrCCAPermu_Conditional()`](https://zhen-miao.github.io/CoPro/reference/runSkrCCAPermu_Conditional.md)
   : Conditional (sequential step-down) permutation test across canonical
   axes
+- [`runSlideLevelInference()`](https://zhen-miao.github.io/CoPro/reference/runSlideLevelInference.md)
+  : Replicate-level inference for multi-slide CoPro analyses
 - [`computeNormalizedCorrelationPermu()`](https://zhen-miao.github.io/CoPro/reference/computeNormalizedCorrelationPermu.md)
   : Compute Normalized Correlation for Permutation Results
 - [`resample_spatial()`](https://zhen-miao.github.io/CoPro/reference/resample_spatial.md)
@@ -237,6 +241,10 @@ Helper and optimization functions
   : Download example datasets for CoPro vignettes
 - [`assignDistanceManually()`](https://zhen-miao.github.io/CoPro/reference/assignDistanceManually.md)
   : Assign distance matrix manually
+- [`asDoubleSparseMatrix()`](https://zhen-miao.github.io/CoPro/reference/asDoubleSparseMatrix.md)
+  : Decode a float32 kernel into a standard sparse Matrix
+- [`materializeFloat32Kernels()`](https://zhen-miao.github.io/CoPro/reference/materializeFloat32Kernels.md)
+  : Materialize all encoded kernels in a CoPro object
 - [`optimize_bilinear()`](https://zhen-miao.github.io/CoPro/reference/optimize_bilinear.md)
   : SkrCCA optimization function for multiple groups (Single Slide) -
   First Component Uses flat kernel structure for consistent data access

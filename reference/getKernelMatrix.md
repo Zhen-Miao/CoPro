@@ -13,7 +13,8 @@ getKernelMatrix(
   cellType2,
   slide = NULL,
   returnTranspose = FALSE,
-  verbose = TRUE
+  verbose = TRUE,
+  materialize = TRUE
 )
 
 # S4 method for class 'CoProSingle'
@@ -24,7 +25,8 @@ getKernelMatrix(
   cellType2,
   slide = NULL,
   returnTranspose = FALSE,
-  verbose = TRUE
+  verbose = TRUE,
+  materialize = TRUE
 )
 
 # S4 method for class 'CoProMulti'
@@ -35,7 +37,8 @@ getKernelMatrix(
   cellType2,
   slide = NULL,
   returnTranspose = FALSE,
-  verbose = TRUE
+  verbose = TRUE,
+  materialize = TRUE
 )
 ```
 
@@ -69,9 +72,17 @@ getKernelMatrix(
 
   Whether to print detailed error messages
 
+- materialize:
+
+  For float32 kernels, whether to return a temporary standard
+  double-precision sparse `Matrix`. The default is `TRUE` for
+  compatibility with plotting, transfer, and user code that performs
+  ordinary matrix algebra. Set to `FALSE` to retain the encoded kernel.
+
 ## Value
 
-Kernel matrix as a numeric matrix
+A standard kernel matrix, or an encoded float32 kernel when
+`materialize = FALSE`.
 
 ## See also
 

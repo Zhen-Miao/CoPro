@@ -18,6 +18,7 @@ axis' normalized correlation.
   k_minus_1 = 0,
   Y_resi = NULL,
   kernel_info = NULL,
+  sdev2_list = NULL,
   maxIter = 200,
   tol = 1e-05
 )
@@ -60,6 +61,10 @@ axis' normalized correlation.
   Optional precomputed kernel and normalizer information from
   `.get_ncorr_kernel_info()`.
 
+- sdev2_list:
+
+  Optional diagonal CCA metric used when `scalePCs = FALSE`.
+
 - maxIter, tol:
 
   Optimization controls.
@@ -86,11 +91,12 @@ is what makes the higher-axis null exchangeable with the observed
 statistic and removes the anti-conservative bias of the naive per-axis
 permutation p-value.
 
-Under whitened PCs (`scalePCs = TRUE`, so `X^T X = c I`) this Y-space
-deflation is algebraically identical to the Freedman-Lane / ter Braak
-residualization that removes the observed lower canonical variates from
-the data before recomputing `Y`, because
-`(I - u u^T) Y (I - v v^T) = Y - (u^T Y v)\, u v^T`.
+Under whitened PCs (`scalePCs = TRUE`) the fixed directions are removed
+with the full projection `(I - u u^T) Y (I - v v^T)`. The simpler
+rank-one subtraction is not used here: it agrees with the projection
+only when the fixed directions are singular vectors of the current `Y`,
+which is generally false after permutation. For `scalePCs = FALSE`, the
+corresponding weighted oblique projection is used.
 
 The expensive `compute_Y_resi()` can be computed once per (permutation,
 sigma) and reused across axes by passing it as `Y_resi`; deflation does

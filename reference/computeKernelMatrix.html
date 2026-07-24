@@ -194,10 +194,12 @@ asymmetric result in skrCCA inference.</p></dd>
 <dd><p>One of <code>"auto"</code>, <code>"dense"</code>, or <code>"sparse"</code>. <code>"dense"</code> is the
 classic path that reads the distance matrices produced by
 <code><a href="computeDistance.html">computeDistance()</a></code>. <code>"sparse"</code> is a fused, memory-efficient path
-(<code><a href="computeSparseKernel.html">computeSparseKernel()</a></code>) that builds sparse <code>dgCMatrix</code> kernels directly
-from coordinates via a fixed-radius neighbor search, never forming a dense
+(<code><a href="computeSparseKernel.html">computeSparseKernel()</a></code>) that builds sparse kernels directly from
+coordinates via a fixed-radius neighbor search, never forming a dense
 <code>n x n</code> matrix, and does not require <code><a href="computeDistance.html">computeDistance()</a></code> to have been run.
-Results are numerically equivalent. <code>"auto"</code> (default) picks <code>"sparse"</code> when
+Symmetric within-type kernels retain one triangle in a <code>dsCMatrix</code>;
+cross-type and asymmetrically normalized kernels use <code>dgCMatrix</code>. Results
+are numerically equivalent. <code>"auto"</code> (default) picks <code>"sparse"</code> when
 any per-slide cell-type block reaches <code>autoThreshold</code> cells or when the
 aggregate dense block workload reaches <code>autoThreshold^2</code> entries; otherwise
 it picks <code>"dense"</code>.</p></dd>
@@ -246,8 +248,10 @@ types</p>
 <code><a href="computeDistance.html">computeDistance()</a></code>,
 <code><a href="computePCA.html">computePCA()</a></code>,
 <code><a href="computeSparseKernel.html">computeSparseKernel()</a></code>,
+<code><a href="computeSparseKernelFloat32.html">computeSparseKernelFloat32()</a></code>,
 <code><a href="runGeneSpaceCCA.html">runGeneSpaceCCA()</a></code>,
-<code><a href="runSkrCCA.html">runSkrCCA()</a></code></p></div>
+<code><a href="runSkrCCA.html">runSkrCCA()</a></code>,
+<code><a href="runSlideLevelInference.html">runSlideLevelInference()</a></code></p></div>
     </div>
 
     <div class="section level2">

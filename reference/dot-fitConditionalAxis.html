@@ -76,6 +76,7 @@ correlation.</p>
 <span>  k_minus_1 <span class="op">=</span> <span class="fl">0</span>,</span>
 <span>  Y_resi <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  kernel_info <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  sdev2_list <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  maxIter <span class="op">=</span> <span class="fl">200</span>,</span>
 <span>  tol <span class="op">=</span> <span class="fl">1e-05</span></span>
 <span><span class="op">)</span></span></code></pre></div>
@@ -121,6 +122,10 @@ correlation.</p>
 from <code>.get_ncorr_kernel_info()</code>.</p></dd>
 
 
+<dt id="arg-sdev-list">sdev2_list<a class="anchor" aria-label="anchor" href="#arg-sdev-list"></a></dt>
+<dd><p>Optional diagonal CCA metric used when <code>scalePCs = FALSE</code>.</p></dd>
+
+
 <dt id="arg-maxiter-tol">maxIter, tol<a class="anchor" aria-label="anchor" href="#arg-maxiter-tol"></a></dt>
 <dd><p>Optimization controls.</p></dd>
 
@@ -142,11 +147,12 @@ residual component. Deflating each permutation by the same observed
 directions (rather than by that permutation's own leading axis) is what makes
 the higher-axis null exchangeable with the observed statistic and removes the
 anti-conservative bias of the naive per-axis permutation p-value.</p>
-<p>Under whitened PCs (<code>scalePCs = TRUE</code>, so <code>X^T X = c I</code>) this Y-space
-deflation is algebraically identical to the Freedman-Lane / ter Braak
-residualization that removes the observed lower canonical variates from the
-data before recomputing <code>Y</code>, because
-<code>(I - u u^T) Y (I - v v^T) = Y - (u^T Y v)\, u v^T</code>.</p>
+<p>Under whitened PCs (<code>scalePCs = TRUE</code>) the fixed directions are removed with
+the full projection <code>(I - u u^T) Y (I - v v^T)</code>. The simpler rank-one
+subtraction is not used here: it agrees with the projection only when the
+fixed directions are singular vectors of the current <code>Y</code>, which is generally
+false after permutation. For <code>scalePCs = FALSE</code>, the corresponding weighted
+oblique projection is used.</p>
 <p>The expensive <code>compute_Y_resi()</code> can be computed once per (permutation,
 sigma) and reused across axes by passing it as <code>Y_resi</code>; deflation does not
 mutate the supplied structure (copy-on-modify), so the same <code>Y_resi</code> is safe

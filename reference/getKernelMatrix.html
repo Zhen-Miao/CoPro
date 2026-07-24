@@ -65,7 +65,8 @@ nested structure and provides symmetric access when needed.</p>
 <span>  <span class="va">cellType2</span>,</span>
 <span>  slide <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  returnTranspose <span class="op">=</span> <span class="cn">FALSE</span>,</span>
-<span>  verbose <span class="op">=</span> <span class="cn">TRUE</span></span>
+<span>  verbose <span class="op">=</span> <span class="cn">TRUE</span>,</span>
+<span>  materialize <span class="op">=</span> <span class="cn">TRUE</span></span>
 <span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># S4 method for class 'CoProSingle'</span></span>
@@ -76,7 +77,8 @@ nested structure and provides symmetric access when needed.</p>
 <span>  <span class="va">cellType2</span>,</span>
 <span>  slide <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  returnTranspose <span class="op">=</span> <span class="cn">FALSE</span>,</span>
-<span>  verbose <span class="op">=</span> <span class="cn">TRUE</span></span>
+<span>  verbose <span class="op">=</span> <span class="cn">TRUE</span>,</span>
+<span>  materialize <span class="op">=</span> <span class="cn">TRUE</span></span>
 <span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># S4 method for class 'CoProMulti'</span></span>
@@ -87,7 +89,8 @@ nested structure and provides symmetric access when needed.</p>
 <span>  <span class="va">cellType2</span>,</span>
 <span>  slide <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  returnTranspose <span class="op">=</span> <span class="cn">FALSE</span>,</span>
-<span>  verbose <span class="op">=</span> <span class="cn">TRUE</span></span>
+<span>  verbose <span class="op">=</span> <span class="cn">TRUE</span>,</span>
+<span>  materialize <span class="op">=</span> <span class="cn">TRUE</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -122,10 +125,18 @@ nested structure and provides symmetric access when needed.</p>
 <dt id="arg-verbose">verbose<a class="anchor" aria-label="anchor" href="#arg-verbose"></a></dt>
 <dd><p>Whether to print detailed error messages</p></dd>
 
+
+<dt id="arg-materialize">materialize<a class="anchor" aria-label="anchor" href="#arg-materialize"></a></dt>
+<dd><p>For float32 kernels, whether to return a temporary
+standard double-precision sparse <code>Matrix</code>. The default is <code>TRUE</code> for
+compatibility with plotting, transfer, and user code that performs
+ordinary matrix algebra. Set to <code>FALSE</code> to retain the encoded kernel.</p></dd>
+
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
-    <p>Kernel matrix as a numeric matrix</p>
+    <p>A standard kernel matrix, or an encoded float32 kernel when
+<code>materialize = FALSE</code>.</p>
     </div>
     <div class="section level2">
     <h2 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a></h2>

@@ -80,8 +80,10 @@ Other spatial-pipeline:
 [`computeDistance()`](https://zhen-miao.github.io/CoPro/reference/computeDistance.md),
 [`computeKernelMatrix()`](https://zhen-miao.github.io/CoPro/reference/computeKernelMatrix.md),
 [`computeSparseKernel()`](https://zhen-miao.github.io/CoPro/reference/computeSparseKernel.md),
+[`computeSparseKernelFloat32()`](https://zhen-miao.github.io/CoPro/reference/computeSparseKernelFloat32.md),
 [`runGeneSpaceCCA()`](https://zhen-miao.github.io/CoPro/reference/runGeneSpaceCCA.md),
-[`runSkrCCA()`](https://zhen-miao.github.io/CoPro/reference/runSkrCCA.md)
+[`runSkrCCA()`](https://zhen-miao.github.io/CoPro/reference/runSkrCCA.md),
+[`runSlideLevelInference()`](https://zhen-miao.github.io/CoPro/reference/runSlideLevelInference.md)
 
 ## Examples
 
@@ -95,6 +97,6 @@ obj <- newCoProSingle(
 )
 obj <- subsetData(obj, cellTypesOfInterest = unique(toy$cellTypes))
 obj <- computePCA(obj, nPCA = 10)
-#> Input is dense (matrixarray), performing irlba pca...
-#> Input is dense (matrixarray), performing irlba pca...
+#> Input is dense (matrix), performing irlba PCA...
+#> Input is dense (matrix), performing irlba PCA...
 ```
