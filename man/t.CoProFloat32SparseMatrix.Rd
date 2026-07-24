@@ -12,3 +12,4 @@
 \description{
 Transpose an encoded CoPro float32 sparse matrix without copying its values
 }
+\keyword{internal}
