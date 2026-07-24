@@ -65,7 +65,8 @@ Uses flat kernel structure for consistent data access</p>
 <span>  max_iter <span class="op">=</span> <span class="fl">1000</span>,</span>
 <span>  tol <span class="op">=</span> <span class="fl">1e-05</span>,</span>
 <span>  step_size <span class="op">=</span> <span class="fl">1</span>,</span>
-<span>  sdev2_list <span class="op">=</span> <span class="cn">NULL</span></span>
+<span>  sdev2_list <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  Y_resi <span class="op">=</span> <span class="cn">NULL</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -103,6 +104,14 @@ convergence, which can help with many cells or many CCs.</p></dd>
 <dd><p>Optional named list of squared standard deviations per
 cell type, used for weighted normalization when <code>scalePCs = FALSE</code>.
 Default <code>NULL</code> (unweighted).</p></dd>
+
+
+<dt id="arg-y-resi">Y_resi<a class="anchor" aria-label="anchor" href="#arg-y-resi"></a></dt>
+<dd><p>Optional precomputed PC-space operators for this data set,
+in the structure returned by <code>compute_Y_resi()</code>. Supplying them
+skips the sparse kernel products, which is what lets a permutation test
+reuse a factorized operator across draws. Default <code>NULL</code> (computed
+here).</p></dd>
 
 </dl></div>
     <div class="section level2">

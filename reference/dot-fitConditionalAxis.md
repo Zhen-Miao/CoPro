@@ -19,6 +19,7 @@ axis' normalized correlation.
   Y_resi = NULL,
   kernel_info = NULL,
   sdev2_list = NULL,
+  grams = NULL,
   maxIter = 200,
   tol = 1e-05
 )
@@ -64,6 +65,11 @@ axis' normalized correlation.
 - sdev2_list:
 
   Optional diagonal CCA metric used when `scalePCs = FALSE`.
+
+- grams:
+
+  Optional per-cell-type Gram matrices forwarded to
+  [`.compute_ncorr_quick()`](https://zhen-miao.github.io/CoPro/reference/dot-compute_ncorr_quick.md).
 
 - maxIter, tol:
 

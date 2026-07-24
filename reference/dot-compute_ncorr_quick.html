@@ -66,7 +66,8 @@ set of PC matrices and weights.</p>
 <span>  <span class="va">cts</span>,</span>
 <span>  tol <span class="op">=</span> <span class="fl">1e-04</span>,</span>
 <span>  kernel_info <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  Y_resi <span class="op">=</span> <span class="cn">NULL</span></span>
+<span>  Y_resi <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  grams <span class="op">=</span> <span class="cn">NULL</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -107,6 +108,12 @@ for this sigma.</p></dd>
 <dd><p>Optional precomputed PC-space operator from
 <code>compute_Y_resi()</code>. When supplied, it is used for the numerator so the
 kernel-vector product is not repeated.</p></dd>
+
+
+<dt id="arg-grams">grams<a class="anchor" aria-label="anchor" href="#arg-grams"></a></dt>
+<dd><p>Optional named list of per-cell-type Gram matrices
+<code>crossprod(X)</code> used for the score norms in the denominator. Valid whenever
+the permutation is a bijection on cells; see <code>.permutationGrams()</code>.</p></dd>
 
 </dl></div>
     <div class="section level2">

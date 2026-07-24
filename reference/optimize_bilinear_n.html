@@ -68,7 +68,8 @@ Uses flat kernel structure for consistent data access</p>
 <span>  max_iter <span class="op">=</span> <span class="fl">1000</span>,</span>
 <span>  tol <span class="op">=</span> <span class="fl">1e-05</span>,</span>
 <span>  step_size <span class="op">=</span> <span class="fl">1</span>,</span>
-<span>  sdev2_list <span class="op">=</span> <span class="cn">NULL</span></span>
+<span>  sdev2_list <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  Y_resi <span class="op">=</span> <span class="cn">NULL</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -115,6 +116,12 @@ Uses flat kernel structure for consistent data access</p>
 <dt id="arg-sdev-list">sdev2_list<a class="anchor" aria-label="anchor" href="#arg-sdev-list"></a></dt>
 <dd><p>Optional named list of squared standard deviations per
 cell type for weighted normalization. Default <code>NULL</code>.</p></dd>
+
+
+<dt id="arg-y-resi">Y_resi<a class="anchor" aria-label="anchor" href="#arg-y-resi"></a></dt>
+<dd><p>Optional precomputed PC-space operators for this data set,
+in the structure returned by <code>compute_Y_resi()</code>. Supplying them
+skips the sparse kernel products. Default <code>NULL</code> (computed here).</p></dd>
 
 </dl></div>
     <div class="section level2">

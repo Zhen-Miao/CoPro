@@ -13,7 +13,8 @@ optimize_bilinear(
   max_iter = 1000,
   tol = 1e-05,
   step_size = 1,
-  sdev2_list = NULL
+  sdev2_list = NULL,
+  Y_resi = NULL
 )
 ```
 
@@ -51,6 +52,13 @@ optimize_bilinear(
   Optional named list of squared standard deviations per cell type, used
   for weighted normalization when `scalePCs = FALSE`. Default `NULL`
   (unweighted).
+
+- Y_resi:
+
+  Optional precomputed PC-space operators for this data set, in the
+  structure returned by `compute_Y_resi()`. Supplying them skips the
+  sparse kernel products, which is what lets a permutation test reuse a
+  factorized operator across draws. Default `NULL` (computed here).
 
 ## Value
 

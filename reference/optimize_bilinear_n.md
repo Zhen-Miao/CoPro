@@ -16,7 +16,8 @@ optimize_bilinear_n(
   max_iter = 1000,
   tol = 1e-05,
   step_size = 1,
-  sdev2_list = NULL
+  sdev2_list = NULL,
+  Y_resi = NULL
 )
 ```
 
@@ -63,6 +64,12 @@ optimize_bilinear_n(
 
   Optional named list of squared standard deviations per cell type for
   weighted normalization. Default `NULL`.
+
+- Y_resi:
+
+  Optional precomputed PC-space operators for this data set, in the
+  structure returned by `compute_Y_resi()`. Supplying them skips the
+  sparse kernel products. Default `NULL` (computed here).
 
 ## Value
 

@@ -77,6 +77,7 @@ correlation.</p>
 <span>  Y_resi <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  kernel_info <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  sdev2_list <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  grams <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  maxIter <span class="op">=</span> <span class="fl">200</span>,</span>
 <span>  tol <span class="op">=</span> <span class="fl">1e-05</span></span>
 <span><span class="op">)</span></span></code></pre></div>
@@ -124,6 +125,11 @@ from <code>.get_ncorr_kernel_info()</code>.</p></dd>
 
 <dt id="arg-sdev-list">sdev2_list<a class="anchor" aria-label="anchor" href="#arg-sdev-list"></a></dt>
 <dd><p>Optional diagonal CCA metric used when <code>scalePCs = FALSE</code>.</p></dd>
+
+
+<dt id="arg-grams">grams<a class="anchor" aria-label="anchor" href="#arg-grams"></a></dt>
+<dd><p>Optional per-cell-type Gram matrices forwarded to
+<code><a href="dot-compute_ncorr_quick.html">.compute_ncorr_quick()</a></code>.</p></dd>
 
 
 <dt id="arg-maxiter-tol">maxIter, tol<a class="anchor" aria-label="anchor" href="#arg-maxiter-tol"></a></dt>

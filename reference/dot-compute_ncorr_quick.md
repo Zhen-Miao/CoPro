@@ -14,7 +14,8 @@ set of PC matrices and weights.
   cts,
   tol = 1e-04,
   kernel_info = NULL,
-  Y_resi = NULL
+  Y_resi = NULL,
+  grams = NULL
 )
 ```
 
@@ -54,6 +55,12 @@ set of PC matrices and weights.
   Optional precomputed PC-space operator from `compute_Y_resi()`. When
   supplied, it is used for the numerator so the kernel-vector product is
   not repeated.
+
+- grams:
+
+  Optional named list of per-cell-type Gram matrices `crossprod(X)` used
+  for the score norms in the denominator. Valid whenever the permutation
+  is a bijection on cells; see `.permutationGrams()`.
 
 ## Value
 
