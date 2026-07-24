@@ -12,3 +12,4 @@
 \description{
 Dimension names of an encoded CoPro float32 sparse matrix
 }
+\keyword{internal}

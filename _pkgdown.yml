@@ -29,6 +29,7 @@ reference:
       - computeDistance
       - computeKernelMatrix
       - computeSparseKernel
+      - computeSparseKernelFloat32
       - runSkrCCA
       - runGeneSpaceCCA
       - computeNormalizedCorrelation
@@ -83,6 +84,7 @@ reference:
       - runSkrCCAPermu
       - runSkrCCAPermu_FairSigma
       - runSkrCCAPermu_Conditional
+      - runSlideLevelInference
       - computeNormalizedCorrelationPermu
       - resample_spatial
       - generate_toroidal_permutations
@@ -101,6 +103,8 @@ reference:
     contents:
       - copro_download_data
       - assignDistanceManually
+      - asDoubleSparseMatrix
+      - materializeFloat32Kernels
       - optimize_bilinear
       - optimize_bilinear_multi_slides
       - optimize_bilinear_n

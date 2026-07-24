@@ -43,6 +43,7 @@
 
 #' Dimensions of an encoded CoPro float32 sparse matrix
 #' @param x A `CoProFloat32SparseMatrix`.
+#' @keywords internal
 #' @export
 dim.CoProFloat32SparseMatrix <- function(x) {
   if (isTRUE(x$transposed)) rev(x$Dim) else x$Dim
@@ -51,6 +52,7 @@ dim.CoProFloat32SparseMatrix <- function(x) {
 #' Transpose an encoded CoPro float32 sparse matrix without copying its values
 #' @param x A `CoProFloat32SparseMatrix`.
 #' @method t CoProFloat32SparseMatrix
+#' @keywords internal
 #' @export
 t.CoProFloat32SparseMatrix <- function(x) {
   if (isTRUE(x$symmetric)) return(x)
@@ -61,6 +63,7 @@ t.CoProFloat32SparseMatrix <- function(x) {
 
 #' Dimension names of an encoded CoPro float32 sparse matrix
 #' @param x A `CoProFloat32SparseMatrix`.
+#' @keywords internal
 #' @export
 dimnames.CoProFloat32SparseMatrix <- function(x) {
   x$Dimnames
