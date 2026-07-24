@@ -25,6 +25,29 @@
 
 ## Performance
 
+* Added `computeSparseKernelFloat32()` for large single- and multi-slide
+  analyses with any number of cell types. It streams one neighbor block at a
+  time, retains temporary distances as float32, writes kernels directly into a
+  compact float32 CSR representation, stores one-type kernels as a symmetric
+  triangle, and uses a row-parallel float32 `X1' K X2` operator without an
+  `n_cells x nPCA` intermediate. On the included 200k-cell single-slide
+  tiled-colon benchmark, peak RSS fell from 8.37 to 2.83 GiB and the largest
+  operator product was 4.57x faster with eight threads while four-component
+  cell-score NRMSE remained below 1.2e-6. On an eight-slide 200k-cell
+  production-API benchmark, peak RSS fell from 8.86 to 2.34 GiB and kernel
+  construction was 2.09x faster. Public kernel accessors temporarily
+  materialize standard sparse matrices for legacy plotting and transfer code;
+  `materializeFloat32Kernels()` provides a whole-object compatibility escape
+  hatch. Global, row, and column kernel normalization now remain in float32,
+  including asymmetric normalized self-kernels. The ordinary centered
+  Frobenius objective norm is computed directly from encoded value sums;
+  exact whitened Frobenius normalization retains a temporary double-sparse
+  compatibility fallback. The operator thread count is now determined
+  automatically from the cores actually allocated to the process, honoring
+  common HPC scheduler variables (`SLURM_CPUS_PER_TASK`, `NSLOTS`,
+  `PBS_NUM_PPN`, `LSB_DJOB_NUMPROC`) and `OMP_NUM_THREADS` so a single-core
+  allocation no longer oversubscribes a shared node; set
+  `options(CoPro.float32Threads=)` to override.
 * One-cell-type skrCCA now solves the symmetric quadratic problem directly
   with an exact symmetric eigendecomposition, selecting the largest algebraic
   eigenvalues and obtaining all requested axes from one factorization.

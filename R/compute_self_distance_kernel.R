@@ -707,10 +707,13 @@ getSelfDistMat <- function(object, cellType, slide = NULL, verbose = TRUE) {
 #' @param cellType Cell type name
 #' @param slide Slide ID (for CoProMulti objects)
 #' @param verbose Whether to print error messages
+#' @param materialize For encoded float32 kernels, whether to return a
+#'   temporary standard double-precision sparse matrix.
 #'
 #' @return Self-kernel matrix for the specified parameters
 #' @export
-getSelfKernelMatrix <- function(object, sigma, cellType, slide = NULL, verbose = TRUE) {
+getSelfKernelMatrix <- function(object, sigma, cellType, slide = NULL,
+                                verbose = TRUE, materialize = TRUE) {
   if (inherits(object, "CoProMulti") && is.null(slide)) {
     stop("slide parameter is required for CoProMulti objects")
   }
@@ -730,5 +733,9 @@ getSelfKernelMatrix <- function(object, sigma, cellType, slide = NULL, verbose =
     return(NULL)
   }
 
-  return(object@kernelMatrices[[flat_name]])
+  kernel <- object@kernelMatrices[[flat_name]]
+  if (materialize && .isFloat32SparseKernel(kernel)) {
+    kernel <- asDoubleSparseMatrix(kernel)
+  }
+  kernel
 }

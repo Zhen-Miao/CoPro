@@ -69,6 +69,7 @@ Other spatial-pipeline:
 \code{\link{computeKernelMatrix}()},
 \code{\link{computePCA}()},
 \code{\link{computeSparseKernel}()},
+\code{\link{computeSparseKernelFloat32}()},
 \code{\link{runGeneSpaceCCA}()},
 \code{\link{runSkrCCA}()}
 }

@@ -10,6 +10,83 @@ Rcpp::Rostream<true>&  Rcpp::Rcout = Rcpp::Rcpp_cout_get();
 Rcpp::Rostream<false>& Rcpp::Rcerr = Rcpp::Rcpp_cerr_get();
 #endif
 
+// float32_csr_gaussian_kernels_cpp
+List float32_csr_gaussian_kernels_cpp(NumericMatrix A, NumericMatrix B, NumericVector sigmas, double percentile, double scaling_factor, double lower_limit, double upper_quantile, bool truncate_low_distance, bool symmetric, int normalization);
+RcppExport SEXP _CoPro_float32_csr_gaussian_kernels_cpp(SEXP ASEXP, SEXP BSEXP, SEXP sigmasSEXP, SEXP percentileSEXP, SEXP scaling_factorSEXP, SEXP lower_limitSEXP, SEXP upper_quantileSEXP, SEXP truncate_low_distanceSEXP, SEXP symmetricSEXP, SEXP normalizationSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::traits::input_parameter< NumericMatrix >::type A(ASEXP);
+    Rcpp::traits::input_parameter< NumericMatrix >::type B(BSEXP);
+    Rcpp::traits::input_parameter< NumericVector >::type sigmas(sigmasSEXP);
+    Rcpp::traits::input_parameter< double >::type percentile(percentileSEXP);
+    Rcpp::traits::input_parameter< double >::type scaling_factor(scaling_factorSEXP);
+    Rcpp::traits::input_parameter< double >::type lower_limit(lower_limitSEXP);
+    Rcpp::traits::input_parameter< double >::type upper_quantile(upper_quantileSEXP);
+    Rcpp::traits::input_parameter< bool >::type truncate_low_distance(truncate_low_distanceSEXP);
+    Rcpp::traits::input_parameter< bool >::type symmetric(symmetricSEXP);
+    Rcpp::traits::input_parameter< int >::type normalization(normalizationSEXP);
+    rcpp_result_gen = Rcpp::wrap(float32_csr_gaussian_kernels_cpp(A, B, sigmas, percentile, scaling_factor, lower_limit, upper_quantile, truncate_low_distance, symmetric, normalization));
+    return rcpp_result_gen;
+END_RCPP
+}
+// float32_csr_xky_cpp
+NumericMatrix float32_csr_xky_cpp(IntegerVector p, IntegerVector j, RawVector x, IntegerVector dims, NumericMatrix x_left, NumericMatrix x_right, int n_threads, bool symmetric);
+RcppExport SEXP _CoPro_float32_csr_xky_cpp(SEXP pSEXP, SEXP jSEXP, SEXP xSEXP, SEXP dimsSEXP, SEXP x_leftSEXP, SEXP x_rightSEXP, SEXP n_threadsSEXP, SEXP symmetricSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::traits::input_parameter< IntegerVector >::type p(pSEXP);
+    Rcpp::traits::input_parameter< IntegerVector >::type j(jSEXP);
+    Rcpp::traits::input_parameter< RawVector >::type x(xSEXP);
+    Rcpp::traits::input_parameter< IntegerVector >::type dims(dimsSEXP);
+    Rcpp::traits::input_parameter< NumericMatrix >::type x_left(x_leftSEXP);
+    Rcpp::traits::input_parameter< NumericMatrix >::type x_right(x_rightSEXP);
+    Rcpp::traits::input_parameter< int >::type n_threads(n_threadsSEXP);
+    Rcpp::traits::input_parameter< bool >::type symmetric(symmetricSEXP);
+    rcpp_result_gen = Rcpp::wrap(float32_csr_xky_cpp(p, j, x, dims, x_left, x_right, n_threads, symmetric));
+    return rcpp_result_gen;
+END_RCPP
+}
+// float32_csr_matmul_cpp
+NumericMatrix float32_csr_matmul_cpp(IntegerVector p, IntegerVector j, RawVector x, IntegerVector dims, NumericMatrix input, int n_threads, bool transpose, bool symmetric);
+RcppExport SEXP _CoPro_float32_csr_matmul_cpp(SEXP pSEXP, SEXP jSEXP, SEXP xSEXP, SEXP dimsSEXP, SEXP inputSEXP, SEXP n_threadsSEXP, SEXP transposeSEXP, SEXP symmetricSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::traits::input_parameter< IntegerVector >::type p(pSEXP);
+    Rcpp::traits::input_parameter< IntegerVector >::type j(jSEXP);
+    Rcpp::traits::input_parameter< RawVector >::type x(xSEXP);
+    Rcpp::traits::input_parameter< IntegerVector >::type dims(dimsSEXP);
+    Rcpp::traits::input_parameter< NumericMatrix >::type input(inputSEXP);
+    Rcpp::traits::input_parameter< int >::type n_threads(n_threadsSEXP);
+    Rcpp::traits::input_parameter< bool >::type transpose(transposeSEXP);
+    Rcpp::traits::input_parameter< bool >::type symmetric(symmetricSEXP);
+    rcpp_result_gen = Rcpp::wrap(float32_csr_matmul_cpp(p, j, x, dims, input, n_threads, transpose, symmetric));
+    return rcpp_result_gen;
+END_RCPP
+}
+// float32_csr_sums_cpp
+List float32_csr_sums_cpp(IntegerVector p, IntegerVector j, RawVector x, IntegerVector dims, bool symmetric);
+RcppExport SEXP _CoPro_float32_csr_sums_cpp(SEXP pSEXP, SEXP jSEXP, SEXP xSEXP, SEXP dimsSEXP, SEXP symmetricSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::traits::input_parameter< IntegerVector >::type p(pSEXP);
+    Rcpp::traits::input_parameter< IntegerVector >::type j(jSEXP);
+    Rcpp::traits::input_parameter< RawVector >::type x(xSEXP);
+    Rcpp::traits::input_parameter< IntegerVector >::type dims(dimsSEXP);
+    Rcpp::traits::input_parameter< bool >::type symmetric(symmetricSEXP);
+    rcpp_result_gen = Rcpp::wrap(float32_csr_sums_cpp(p, j, x, dims, symmetric));
+    return rcpp_result_gen;
+END_RCPP
+}
+// float32_csr_values_cpp
+NumericVector float32_csr_values_cpp(RawVector x);
+RcppExport SEXP _CoPro_float32_csr_values_cpp(SEXP xSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::traits::input_parameter< RawVector >::type x(xSEXP);
+    rcpp_result_gen = Rcpp::wrap(float32_csr_values_cpp(x));
+    return rcpp_result_gen;
+END_RCPP
+}
 // frnn_grid_cpp
 List frnn_grid_cpp(NumericMatrix A, SEXP B_sexp, double radius);
 RcppExport SEXP _CoPro_frnn_grid_cpp(SEXP ASEXP, SEXP B_sexpSEXP, SEXP radiusSEXP) {
@@ -24,6 +101,11 @@ END_RCPP
 }
 
 static const R_CallMethodDef CallEntries[] = {
+    {"_CoPro_float32_csr_gaussian_kernels_cpp", (DL_FUNC) &_CoPro_float32_csr_gaussian_kernels_cpp, 10},
+    {"_CoPro_float32_csr_xky_cpp", (DL_FUNC) &_CoPro_float32_csr_xky_cpp, 8},
+    {"_CoPro_float32_csr_matmul_cpp", (DL_FUNC) &_CoPro_float32_csr_matmul_cpp, 8},
+    {"_CoPro_float32_csr_sums_cpp", (DL_FUNC) &_CoPro_float32_csr_sums_cpp, 5},
+    {"_CoPro_float32_csr_values_cpp", (DL_FUNC) &_CoPro_float32_csr_values_cpp, 1},
     {"_CoPro_frnn_grid_cpp", (DL_FUNC) &_CoPro_frnn_grid_cpp, 3},
     {NULL, NULL, 0}
 };

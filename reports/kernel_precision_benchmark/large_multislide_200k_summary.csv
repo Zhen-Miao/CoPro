@@ -1,0 +1,7 @@
+"metric","float64_current","float32_streamed","relative_change"
+"peak_rss_gib",8.862274170,2.337081909,-0.736288692
+"all_kernel_storage_gib",2.677884594,1.955237880,-0.269857303
+"all_120_kernel_build_seconds",25.539,12.207,-0.522064294
+"represented_nonzeros",239519800,239519800,0
+"maximum_relative_kernel_sum_error",0,0.000000173843157,0.000000173843157
+"maximum_relative_kernel_sum_squares_error",0,0.000000410941442,0.000000410941442

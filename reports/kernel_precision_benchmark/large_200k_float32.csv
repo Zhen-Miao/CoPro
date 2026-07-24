@@ -1,0 +1,2 @@
+"mode","cells","threads","build_elapsed_sec","kernel_bytes","temporary_neighbor_bytes","selected_nnz","xky_median_sec","xky_min_sec","xky_max_sec"
+"float32",200000,8,9.745,1977006704,1166197596,137831652,0.477999999999998,0.471999999999998,0.506999999999998

@@ -4,7 +4,14 @@
 \alias{getSelfKernelMatrix}
 \title{Get Self-Kernel Matrix}
 \usage{
-getSelfKernelMatrix(object, sigma, cellType, slide = NULL, verbose = TRUE)
+getSelfKernelMatrix(
+  object,
+  sigma,
+  cellType,
+  slide = NULL,
+  verbose = TRUE,
+  materialize = TRUE
+)
 }
 \arguments{
 \item{object}{A CoPro object}
@@ -16,6 +23,9 @@ getSelfKernelMatrix(object, sigma, cellType, slide = NULL, verbose = TRUE)
 \item{slide}{Slide ID (for CoProMulti objects)}
 
 \item{verbose}{Whether to print error messages}
+
+\item{materialize}{For encoded float32 kernels, whether to return a
+temporary standard double-precision sparse matrix.}
 }
 \value{
 Self-kernel matrix for the specified parameters

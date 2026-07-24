@@ -1,0 +1,4 @@
+"cells","assumption","all_kernel_double_gib","all_kernel_fp32_gib","all_kernel_fp16_gib","all_X_double_gib","largest_KX_double_gib","largest_KX_float32_gib","XKY_peak_double_gib","XKY_peak_fp32_kernel_float32_compute_gib","XKY_peak_fp16_kernel_float32_compute_gib","build_peak_double_kernel_double_distance_gib","build_peak_fp16_kernel_float32_distance_gib"
+11666,"colon cell-type proportions and constant neighbors per cell",0.1615067,0.1076873,0.08078168,0.003476739,0.002785921,0.001392961,0.16776936,0.11255700,0.08565138,0.3106592,0.1926466
+200000,"colon cell-type proportions and constant neighbors per cell",2.768845,1.846173,1.384908,0.05960464,0.04776138,0.02388069,2.87621102,1.92965833,1.46839333,5.325890,3.302702
+400000,"colon cell-type proportions and constant neighbors per cell",5.537691,3.692347,2.769816,0.1192093,0.09552275,0.04776138,5.75242305,3.85931768,2.93678668,10.651780,6.605404

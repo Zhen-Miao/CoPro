@@ -1,0 +1,3 @@
+"representation","maximum_resident_bytes","peak_footprint_bytes","maximum_resident_mib","relative_rss_reduction"
+"all_double_Matrix_kernels_and_double_X",371081216,338070208,353.890625,0
+"all_fp16_encoded_kernels_double_X_float32_XKY",282902528,253626816,269.796875,0.237625827

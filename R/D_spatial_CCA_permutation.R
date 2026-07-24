@@ -899,15 +899,17 @@ computeNormalizedCorrelationPermu <- function(object, tol = 1e-4) {
     cellType2 <- pair_cell_types[2, pp]
     K <- getKernelMatrix(object, sigma = sigmaValueChoice,
                          cellType1 = cellType1, cellType2 = cellType2,
-                         verbose = FALSE)
+                         verbose = FALSE, materialize = FALSE)
     kernels[[pp]] <- K
     ## matched-sigma within-type kernels as whitening operators
     Rx <- tryCatch(getKernelMatrix(object, sigma = sigmaValueChoice,
                      cellType1 = cellType1, cellType2 = cellType1,
-                     verbose = FALSE), error = function(e) NULL)
+                     verbose = FALSE, materialize = FALSE),
+                   error = function(e) NULL)
     Ry <- tryCatch(getKernelMatrix(object, sigma = sigmaValueChoice,
                      cellType1 = cellType2, cellType2 = cellType2,
-                     verbose = FALSE), error = function(e) NULL)
+                     verbose = FALSE, materialize = FALSE),
+                   error = function(e) NULL)
     cache_key <- .kernelNormalizerKey(
       sigmaValueChoice, cellType1, cellType2, slide = NULL
     )
@@ -977,8 +979,10 @@ computeNormalizedCorrelationPermu <- function(object, tol = 1e-4) {
       K <- kernels[[pp]]
       norm_K12_sel <- norm_K12[[s_name]][[cellType1]][[cellType2]]
 
-      numerators <- colSums(scores[[cellType1]] *
-                              (K %*% scores[[cellType2]]))
+      numerators <- colSums(
+        scores[[cellType1]] *
+          .float32KernelMatMult(K, scores[[cellType2]])
+      )
       denominators <- score_norms[[cellType1]] * score_norms[[cellType2]] *
         norm_K12_sel
       out_idx <- pp + (seq_len(nCC) - 1L) * ncol(pair_cell_types)
@@ -1105,7 +1109,7 @@ compute_ground_truth_ncorr <- function(object,
   ## Get kernel matrix
   K <- getKernelMatrix(object, sigma = sigma,
                        cellType1 = cellType1, cellType2 = cellType2,
-                       verbose = FALSE)
+                       verbose = FALSE, materialize = FALSE)
 
   ## Normalize scores (subtract mean, divide by norm)
   normalize_vec <- function(x) {
@@ -1123,14 +1127,16 @@ compute_ground_truth_ncorr <- function(object,
   ## Whitened-Frobenius normalizer (matched-sigma within-type kernels)
   Rx <- tryCatch(getKernelMatrix(object, sigma = sigma,
                    cellType1 = cellType1, cellType2 = cellType1,
-                   verbose = FALSE), error = function(e) NULL)
+                   verbose = FALSE, materialize = FALSE),
+                 error = function(e) NULL)
   Ry <- tryCatch(getKernelMatrix(object, sigma = sigma,
                    cellType1 = cellType2, cellType2 = cellType2,
-                   verbose = FALSE), error = function(e) NULL)
+                   verbose = FALSE, materialize = FALSE),
+                 error = function(e) NULL)
   norm_K12 <- .whitenedFrobNorm(K, Rx, Ry)
 
   ## Calculate normalized correlation
-  norm_corr <- as.numeric(t(s1) %*% K %*% s2) / norm_K12
+  norm_corr <- .kernelXKY(s1, K, s2)[1, 1] / norm_K12
 
   return(norm_corr)
 }
@@ -1312,7 +1318,7 @@ calculate_pvalue <- function(object, cc_index = 1, alternative = "greater") {
   numerator <- if (!is.null(Y12)) {
     as.numeric(crossprod(w1, Y12 %*% w2))
   } else {
-    as.numeric(crossprod(A_w1, K %*% B_w2))
+    .kernelXKY(A_w1, K, B_w2)[1, 1]
   }
   denominator <- sqrt(sum(A_w1^2)) * sqrt(sum(B_w2^2)) * norm_K12
 
@@ -2406,7 +2412,7 @@ runSlideLevelInference <- function(object, cc_index = 1,
       weights[[cts[2L]]][, cc_index, drop = FALSE]
     denominator <- sqrt(sum(s1^2)) * sqrt(sum(s2^2)) * info$norm_K12
     if (!is.finite(denominator) || denominator <= 1e-12) return(NA_real_)
-    as.numeric(crossprod(s1, info$K %*% s2)) / denominator
+    .kernelXKY(s1, info$K, s2)[1, 1] / denominator
   }
 
   fold_rows <- vector("list", n_replicates)

@@ -83,6 +83,50 @@ setGeneric(
 #' @return Scalar whitened-Frobenius norm.
 #' @keywords internal
 .whitenedFrobNorm <- function(K, Rx = NULL, Ry = NULL) {
+  if (.isFloat32SparseKernel(K)) {
+    if (!is.null(Rx) || !is.null(Ry)) {
+      K_double <- asDoubleSparseMatrix(K)
+      Rx_double <- if (identical(Rx, K)) {
+        K_double
+      } else if (.isFloat32SparseKernel(Rx)) {
+        asDoubleSparseMatrix(Rx)
+      } else {
+        Rx
+      }
+      Ry_double <- if (identical(Ry, K)) {
+        K_double
+      } else if (identical(Ry, Rx)) {
+        Rx_double
+      } else if (.isFloat32SparseKernel(Ry)) {
+        asDoubleSparseMatrix(Ry)
+      } else {
+        Ry
+      }
+      return(.whitenedFrobNorm(K_double, Rx_double, Ry_double))
+    }
+    nr <- nrow(K)
+    nc <- ncol(K)
+    sums <- .float32KernelSums(K)
+    rmean <- sums$rowSums / nc
+    cmean <- sums$colSums / nr
+    grand_mean <- sum(sums$rowSums) / (as.numeric(nr) * nc)
+    norm2 <- sums$sumSquares -
+      nc * sum(rmean^2) -
+      nr * sum(cmean^2) +
+      as.numeric(nr) * nc * grand_mean^2
+    return(sqrt(max(as.numeric(norm2), 0)))
+  }
+
+  ## K is double here, but a within-type whitening operator may still be an
+  ## encoded float32 kernel -- e.g. a cross kernel built in double while the
+  ## self-kernels supplied as Rx/Ry were built with computeSparseKernelFloat32,
+  ## or vice versa on the same object. Decode any float32 operator to double so
+  ## the formulas below apply; whitening needs only the values, so the temporary
+  ## double copy is exact. (.isFloat32SparseKernel(NULL) is FALSE, so NULL Rx/Ry
+  ## pass through untouched.)
+  if (.isFloat32SparseKernel(Rx)) Rx <- asDoubleSparseMatrix(Rx)
+  if (.isFloat32SparseKernel(Ry)) Ry <- asDoubleSparseMatrix(Ry)
+
   ## Sparse fixed-radius kernels can be very large. Double-centering a sparse
   ## matrix explicitly makes it dense, and coercing the matched within-type
   ## kernels to base matrices compounds that memory cost. Use the equivalent
@@ -154,6 +198,15 @@ setGeneric(
 
 .kernelMatrixSignature <- function(x) {
   if (is.null(x)) return("NULL")
+  if (.isFloat32SparseKernel(x)) {
+    sums <- .float32KernelSums(x)
+    return(paste(
+      nrow(x), ncol(x), .float32KernelNnz(x),
+      format(sum(sums$rowSums), digits = 16),
+      format(sums$sumSquares, digits = 16),
+      sep = ":"
+    ))
+  }
   values <- if (inherits(x, "sparseMatrix")) x@x else as.numeric(x)
   paste(
     nrow(x), ncol(x), length(values),
@@ -218,15 +271,17 @@ setGeneric(
       cellType2 <- pair_cell_types[2, pp]
       K <- getKernelMatrix(object, sigma = sigma_val,
                            cellType1 = cellType1, cellType2 = cellType2,
-                           verbose = FALSE)
+                           verbose = FALSE, materialize = FALSE)
       ## matched-sigma within-type kernels serve as the whitening operators;
       ## if unavailable, .whitenedFrobNorm falls back to ||K_c||_F
       Rx <- tryCatch(getKernelMatrix(object, sigma = sigma_val,
                        cellType1 = cellType1, cellType2 = cellType1,
-                       verbose = FALSE), error = function(e) NULL)
+                       verbose = FALSE, materialize = FALSE),
+                     error = function(e) NULL)
       Ry <- tryCatch(getKernelMatrix(object, sigma = sigma_val,
                        cellType1 = cellType2, cellType2 = cellType2,
-                       verbose = FALSE), error = function(e) NULL)
+                       verbose = FALSE, materialize = FALSE),
+                     error = function(e) NULL)
       cache_key <- .kernelNormalizerKey(
         sigma_val, cellType1, cellType2, slide = NULL
       )
@@ -296,7 +351,7 @@ setGeneric(
 
       K <- getKernelMatrix(object, sigma = sigma_val,
                            cellType1 = cellType1, cellType2 = cellType2,
-                           verbose = FALSE)
+                           verbose = FALSE, materialize = FALSE)
       norm_K12_sel <- norm_K12[[t]][[cellType1]][[cellType2]]
       if (is.null(norm_K12_sel) || !is.finite(norm_K12_sel)) {
         warning(paste("Normalizer unavailable for", cellType1, "-", cellType2, "at", t, "- skipping"))
@@ -317,7 +372,7 @@ setGeneric(
         A_w1 <- A %*% w_1
         B_w2 <- B %*% w_2
 
-        numerator <- (t(A_w1) %*% K %*% B_w2)[1, 1]
+        numerator <- .kernelXKY(A_w1, K, B_w2)[1, 1]
         denominator <- sqrt(sum(A_w1^2)) * sqrt(sum(B_w2^2)) * norm_K12_sel
 
         correlation_value[[t]]$"normalizedCorrelation"[
@@ -431,17 +486,20 @@ setMethod(
         # Retrieve kernel matrix via accessor (works with flat storage)
         K <- tryCatch({
           getKernelMatrix(object, sigma = sigma_val, cellType1 = ct_i, cellType2 = ct_j,
-                          slide = sID, verbose = FALSE)
+                          slide = sID, verbose = FALSE,
+                          materialize = FALSE)
         }, error = function(e) NULL)
 
         if (!is.null(K) && nrow(K) > 0 && ncol(K) > 0) {
           # matched-sigma within-type kernels for this slide are the whitening
           # operators; fall back to ||K_c||_F if either is unavailable
           Rx <- tryCatch(getKernelMatrix(object, sigma = sigma_val, cellType1 = ct_i,
-                          cellType2 = ct_i, slide = sID, verbose = FALSE),
+                          cellType2 = ct_i, slide = sID, verbose = FALSE,
+                          materialize = FALSE),
                          error = function(e) NULL)
           Ry <- tryCatch(getKernelMatrix(object, sigma = sigma_val, cellType1 = ct_j,
-                          cellType2 = ct_j, slide = sID, verbose = FALSE),
+                          cellType2 = ct_j, slide = sID, verbose = FALSE,
+                          materialize = FALSE),
                          error = function(e) NULL)
           cache_key <- .kernelNormalizerKey(
             sigma_val, ct_i, ct_j, slide = sID
@@ -535,7 +593,8 @@ setMethod(
                            cellType1 = ct_i,
                            cellType2 = ct_j,
                            slide = sID,
-                           verbose = FALSE)
+                           verbose = FALSE,
+                           materialize = FALSE)
           }, error = function(e) NULL)
           norm_K_ij <- norm_K_slide[[ct_i]][[ct_j]]
 
@@ -550,7 +609,7 @@ setMethod(
             Xiw <- X_i %*% w_i
             Xjw <- X_j %*% w_j
 
-            numerator <- (t(Xiw) %*% K_ij %*% Xjw)[1, 1]
+            numerator <- .kernelXKY(Xiw, K_ij, Xjw)[1, 1]
             denom_norm <- sqrt(sum(Xiw^2)) * sqrt(sum(Xjw^2)) * norm_K_ij
 
             norm_corr_val <- ifelse(abs(denom_norm) < 1e-9, 0, numerator / denom_norm)
@@ -605,7 +664,8 @@ setMethod(
                            cellType1 = ct_i,
                            cellType2 = ct_j,
                            slide = sID,
-                           verbose = FALSE)
+                           verbose = FALSE,
+                           materialize = FALSE)
           }, error = function(e) NULL)
           norm_K_ij <- norm_K_slide[[ct_i]][[ct_j]]
           
@@ -639,7 +699,8 @@ setMethod(
             Xiw <- slide_data$X_i %*% w_i
             Xjw <- slide_data$X_j %*% w_j
             
-            total_numerator <- total_numerator + (t(Xiw) %*% slide_data$K_ij %*% Xjw)[1, 1]
+            total_numerator <- total_numerator +
+              .kernelXKY(Xiw, slide_data$K_ij, Xjw)[1, 1]
             total_norm_sum_i <- total_norm_sum_i + sum(Xiw^2)
             total_norm_sum_j <- total_norm_sum_j + sum(Xjw^2)
             total_K_norm <- total_K_norm + slide_data$norm_K_ij
