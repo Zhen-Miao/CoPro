@@ -384,7 +384,6 @@ getTransferCellScores <- function(ref_obj, tar_obj, sigma_choice,
 #' # res <- getTransferNormCorr(tar_obj, trans_scores, sigma_choice = 2.0)
 #'
 #' @importFrom utils combn
-#' @importFrom irlba irlba
 #' @export
 getTransferNormCorr <- function(tar_obj,
                                 transfer_cell_scores,

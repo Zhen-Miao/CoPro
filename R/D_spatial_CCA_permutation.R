@@ -216,32 +216,6 @@
   dirname(pkg_dir)
 }
 
-.parallelPermutationLapply <- function(indices, FUN, n_cores, verbose = TRUE) {
-  if (!is.numeric(n_cores) || length(n_cores) != 1L ||
-      n_cores < 1L || n_cores != as.integer(n_cores)) {
-    stop("n_cores must be a positive integer.")
-  }
-  if (n_cores == 1L || length(indices) <= 1L) return(lapply(indices, FUN))
-
-  copro_library <- .installedCoProLibrary()
-  if (is.null(copro_library)) {
-    warning("Parallel permutation requires an installed CoPro package ",
-            "(devtools::load_all() is not sufficient); falling back to ",
-            "sequential execution. Run devtools::install() to enable it.")
-    return(lapply(indices, FUN))
-  }
-  workers <- min(as.integer(n_cores), length(indices))
-  if (verbose) message("Using ", workers, " PSOCK permutation workers.")
-  cluster <- parallel::makeCluster(workers)
-  on.exit(parallel::stopCluster(cluster), add = TRUE)
-  parallel::clusterCall(cluster, function(lib) {
-    .libPaths(c(lib, .libPaths()))
-    suppressPackageStartupMessages(library(CoPro))
-    NULL
-  }, copro_library)
-  parallel::parLapply(cluster, indices, FUN)
-}
-
 
 #' Run Spatial CCA with Permutation Testing
 #'
@@ -533,9 +507,7 @@ runSkrCCAPermu <- function(object, tol = 1e-5, nPermu = 999,
   }
 
   ## Initialize output
-  cca_permu_out <- vector("list", length = nPermu)
   permu_names <- paste("permu", 1:nPermu, sep = "_")
-  names(cca_permu_out) <- permu_names
 
   ## Step 1: Generate cell permutations
   if (verbose) {
@@ -561,7 +533,6 @@ runSkrCCAPermu <- function(object, tol = 1e-5, nPermu = 999,
 
   ## Get PCA matrices
   PCmats <- .getAllPCMats(allPCs = object@pcaGlobal, scalePCs = scalePCs)
-  PCmats2 <- PCmats
   sdev2_list <- .permutationSdev2(object, cts)
 
   ## Step 2: Run CCA for each permutation
@@ -575,215 +546,27 @@ runSkrCCAPermu <- function(object, tol = 1e-5, nPermu = 999,
   }
 
 
-  # Helper function for PC-space permutation (like DIALOGUE)
-  # Shuffles values within each PC column across cells
-  # Uses seed for reproducibility
-  permute_pc_matrix <- function(pc_mat, seed = NULL) {
-    if (!is.null(seed)) {
-      set.seed(seed)
-    }
-    # Apply permutation within each column (PC dimension)
-    # This is exactly what DIALOGUE does: apply(X1, 2, function(x) sample(x, length(x)))
-    permuted <- apply(pc_mat, 2, function(x) sample(x, length(x)))
-    rownames(permuted) <- rownames(pc_mat)
-    return(permuted)
-  }
+  # Cell types held fixed across every draw let their side of X' K X be
+  # multiplied by the kernel once, instead of once per draw. See
+  # R/D0_permutation_plan.R for the identity, its cost, and the escape hatch.
+  plan <- .buildYPlan(
+    PCmats = PCmats,
+    flat_kernels = object@kernelMatrices,
+    sigma = sigmaValueChoice,
+    cts = cts,
+    fixed = .fixedPermutationTypes(cell_permu, cts)
+  )
 
-  # Define worker function for single permutation
-  run_single_permu <- function(tt) {
-    PCmats_local <- PCmats
+  worker <- .makeSkrCCAPermuWorker(
+    PCmats = PCmats, plan = plan, cts = cts, nCC = nCC,
+    sdev2_list = sdev2_list, maxIter = maxIter, tol = tol
+  )
 
-    for (i in names(PCmats_local)) {
-      if (is.list(cell_permu[[i]]) && !is.null(cell_permu[[i]]$type) && 
-          cell_permu[[i]]$type == "pc_permute") {
-        # PC-space permutation: shuffle within each PC column using stored seed
-        seed <- cell_permu[[i]]$seeds[tt]
-        PCmats_local[[i]] <- permute_pc_matrix(PCmats[[i]], seed = seed)
-      } else {
-        # Standard index-based permutation (global or bin)
-        PCmats_local[[i]] <- PCmats[[i]][cell_permu[[i]][, tt], ]
-      }
-    }
-
-    # One- and two-type problems have exact decompositions. Form the small
-    # PC-space operator once per permutation and obtain every requested axis
-    # from one eigendecomposition/SVD.
-    if (length(cts) <= 2L) {
-      Y_resi <- compute_Y_resi(
-        X_list = PCmats_local,
-        flat_kernels = object@kernelMatrices,
-        sigma = sigmaValueChoice,
-        cell_types = cts
-      )
-      if (length(cts) == 1L) {
-        return(solve_one_type_eigen(Y_resi, cts, nCC, sdev2_list))
-      }
-      return(solve_two_type_svd(Y_resi, cts, nCC, sdev2_list))
-    }
-
-    cca_result <- optimize_bilinear(
-      X_list = PCmats_local,
-      flat_kernels = object@kernelMatrices,
-      sigma = sigmaValueChoice,
-      max_iter = maxIter,
-      tol = tol,
-      sdev2_list = sdev2_list
-    )
-    names(cca_result) <- cts
-
-    if (nCC == 1) {
-      cca_result
-    } else {
-      optimize_bilinear_n(
-        X_list = PCmats_local,
-        flat_kernels = object@kernelMatrices,
-        sigma = sigmaValueChoice,
-        w_list = cca_result,
-        cellTypesOfInterest = cts,
-        nCC = nCC,
-        max_iter = maxIter,
-        tol = tol,
-        sdev2_list = sdev2_list
-      )
-    }
-  }
-
-  copro_library <- NULL
-  if (n_cores > 1) {
-    # Parallel execution using a PSOCK cluster.
-    # Requires CoPro to be INSTALLED (not just devtools::load_all()'ed): fresh
-    # PSOCK workers must library(CoPro), and under load_all() find.package()
-    # resolves to the source tree (no Meta/package.rds), which cannot be loaded
-    # in a worker. Fork-based parallelism (mclapply) segfaults with BLAS/irlba
-    # on macOS, so it is not used.
-    copro_library <- .installedCoProLibrary()
-    if (is.null(copro_library)) {
-      warning("Parallel execution requires an installed CoPro package ",
-              "(devtools::load_all() is not sufficient).\n",
-              "Falling back to sequential execution. ",
-              "Run devtools::install() first to enable parallelism.")
-      n_cores <- 1
-    }
-  }
-
-  if (n_cores > 1) {
-    if (verbose) {
-      cat("  Setting up parallel cluster with", n_cores, "workers...\n")
-    }
-
-    cl <- parallel::makeCluster(n_cores)
-    on.exit(parallel::stopCluster(cl), add = TRUE)
-
-    # Load the exact CoPro installation used by the parent session. This
-    # matters when multiple library trees contain different package versions.
-    parallel::clusterCall(cl, function(lib) {
-      .libPaths(c(lib, .libPaths()))
-      suppressPackageStartupMessages(library(CoPro))
-      NULL
-    }, copro_library)
-
-    # Export required objects to workers
-    flat_kernels_local <- object@kernelMatrices
-    parallel::clusterExport(cl, c("PCmats", "cell_permu", "cts", "nCC",
-                                  "sigmaValueChoice", "maxIter", "tol",
-                                  "flat_kernels_local", "sdev2_list"),
-                            envir = environment())
-
-    # Helper function for PC-space permutation (for parallel workers)
-    permute_pc_matrix_parallel <- function(pc_mat, seed = NULL) {
-      if (!is.null(seed)) {
-        set.seed(seed)
-      }
-      permuted <- apply(pc_mat, 2, function(x) sample(x, length(x)))
-      rownames(permuted) <- rownames(pc_mat)
-      return(permuted)
-    }
-
-    # Export the helper function
-    parallel::clusterExport(cl, "permute_pc_matrix_parallel", envir = environment())
-
-    # Worker function
-    worker_fn <- function(tt) {
-      PCmats_local <- PCmats
-
-      for (i in names(PCmats_local)) {
-        if (is.list(cell_permu[[i]]) && !is.null(cell_permu[[i]]$type) && 
-            cell_permu[[i]]$type == "pc_permute") {
-          # PC-space permutation: shuffle within each PC column using stored seed
-          seed <- cell_permu[[i]]$seeds[tt]
-          PCmats_local[[i]] <- permute_pc_matrix_parallel(PCmats[[i]], seed = seed)
-        } else {
-          # Standard index-based permutation (global or bin)
-          PCmats_local[[i]] <- PCmats[[i]][cell_permu[[i]][, tt], ]
-        }
-      }
-
-      if (length(cts) <= 2L) {
-        compute_Y <- utils::getFromNamespace("compute_Y_resi", "CoPro")
-        Y_resi <- compute_Y(
-          X_list = PCmats_local,
-          flat_kernels = flat_kernels_local,
-          sigma = sigmaValueChoice,
-          cell_types = cts
-        )
-        solver_name <- if (length(cts) == 1L) {
-          "solve_one_type_eigen"
-        } else {
-          "solve_two_type_svd"
-        }
-        solver <- utils::getFromNamespace(solver_name, "CoPro")
-        return(solver(Y_resi, cts, nCC, sdev2_list))
-      }
-
-      cca_result <- CoPro::optimize_bilinear(
-        X_list = PCmats_local,
-        flat_kernels = flat_kernels_local,
-        sigma = sigmaValueChoice,
-        max_iter = maxIter,
-        tol = tol,
-        sdev2_list = sdev2_list
-      )
-      names(cca_result) <- cts
-
-      if (nCC == 1) {
-        cca_result
-      } else {
-        CoPro::optimize_bilinear_n(
-          X_list = PCmats_local,
-          flat_kernels = flat_kernels_local,
-          sigma = sigmaValueChoice,
-          w_list = cca_result,
-          cellTypesOfInterest = cts,
-          nCC = nCC,
-          max_iter = maxIter,
-          tol = tol,
-          sdev2_list = sdev2_list
-        )
-      }
-    }
-
-    cca_results_list <- parallel::parLapply(cl, seq_len(nPermu), worker_fn)
-
-    # Convert list to named list
-    names(cca_results_list) <- permu_names
-    cca_permu_out <- cca_results_list
-
-    if (verbose) {
-      cat("  Parallel computation complete.\n")
-    }
-
-  } else {
-    # Sequential execution (original behavior)
-    for (tt in seq_len(nPermu)) {
-      t <- permu_names[tt]
-      cca_permu_out[[t]] <- run_single_permu(tt)
-
-      # Progress indicator
-      if (verbose && (tt %% 10 == 0 || tt == nPermu)) {
-        cat(paste("  Completed", tt, "of", nPermu, "permutations\n"))
-      }
-    }
-  }
+  cca_permu_out <- .runPermutationDraws(
+    cell_permu = cell_permu, cts = cts, nPermu = nPermu, worker = worker,
+    n_cores = n_cores, verbose = verbose, progress_every = 10L
+  )
+  names(cca_permu_out) <- permu_names
 
   object@skrCCAPermuOut <- cca_permu_out
   attr(object, "permutationProvenance") <- list(
@@ -886,7 +669,6 @@ computeNormalizedCorrelationPermu <- function(object, tol = 1e-4) {
   cat("Calculating whitened-Frobenius normalizers...\n")
   norm_K12 <- setNames(vector(mode = "list", length = 1), s_name)
   norm_K12[[s_name]] <- setNames(vector(mode = "list", length = length(cts)), cts)
-  kernels <- vector("list", ncol(pair_cell_types))
   normalizer_cache <- attr(object, "kernelNormalizerCache", exact = TRUE)
 
   for (i in cts) {
@@ -900,7 +682,6 @@ computeNormalizedCorrelationPermu <- function(object, tol = 1e-4) {
     K <- getKernelMatrix(object, sigma = sigmaValueChoice,
                          cellType1 = cellType1, cellType2 = cellType2,
                          verbose = FALSE, materialize = FALSE)
-    kernels[[pp]] <- K
     ## matched-sigma within-type kernels as whitening operators
     Rx <- tryCatch(getKernelMatrix(object, sigma = sigmaValueChoice,
                      cellType1 = cellType1, cellType2 = cellType1,
@@ -924,28 +705,18 @@ computeNormalizedCorrelationPermu <- function(object, tol = 1e-4) {
   }
   cat("Whitened-Frobenius normalizers calculated.\n\n")
 
-  ## Helper function for PC-space permutation (recreate using stored seed)
-  permute_pc_matrix_ncorr <- function(pc_mat, seed) {
-    set.seed(seed)
-    permuted <- apply(pc_mat, 2, function(x) sample(x, length(x)))
-    rownames(permuted) <- rownames(pc_mat)
-    return(permuted)
-  }
-
-  ## Helper to get permuted PC matrix for a cell type
-  get_permuted_pcmat <- function(ct, tt) {
-    cell_permu_ct <- object@cellPermu[[ct]]
-
-    if (is.list(cell_permu_ct) && !is.null(cell_permu_ct$type) &&
-        cell_permu_ct$type == "pc_permute") {
-      # PC-space permutation: recreate using stored seed
-      seed <- cell_permu_ct$seeds[tt]
-      return(permute_pc_matrix_ncorr(PCmats[[ct]], seed))
-    } else {
-      # Standard index-based permutation (global or bin)
-      return(PCmats[[ct]][cell_permu_ct[, tt], ])
-    }
-  }
+  ## The null scores use the same permutations and the same kernel as the fits
+  ## that produced them, so the same factorization applies: everything below is
+  ## evaluated from the small PC-space operator Y and the per-type Gram
+  ## matrices. See R/D0_permutation_plan.R.
+  plan <- .buildYPlan(
+    PCmats = PCmats,
+    flat_kernels = object@kernelMatrices,
+    sigma = sigmaValueChoice,
+    cts = cts,
+    fixed = .fixedPermutationTypes(object@cellPermu, cts)
+  )
+  grams <- .permutationGrams(PCmats, object@cellPermu, cts)
 
   ## Calculate normalized correlation for each permutation
   cat("Computing normalized correlations for permutations...\n")
@@ -961,27 +732,36 @@ computeNormalizedCorrelationPermu <- function(object, tol = 1e-4) {
       stringsAsFactors = FALSE
     )
 
-    # Each permuted PC matrix is invariant across cell-type pairs and canonical
-    # components. Multiplying by all component weights at once also lets sparse
-    # kernels process an nCC-column score matrix in one call.
-    PCmats_permuted <- stats::setNames(
-      lapply(cts, get_permuted_pcmat, tt = tt), cts
+    PCmats_permuted <- .applyPermutationSpec(
+      PCmats, .permutationDrawSpec(object@cellPermu, cts, tt)
     )
-    scores <- stats::setNames(lapply(cts, function(ct) {
-      W <- object@skrCCAPermuOut[[t]][[ct]][, seq_len(nCC), drop = FALSE]
-      PCmats_permuted[[ct]] %*% W
+    Y_resi <- .yResiFromPlan(plan, PCmats_permuted)
+
+    W_permu <- stats::setNames(lapply(cts, function(ct) {
+      object@skrCCAPermuOut[[t]][[ct]][, seq_len(nCC), drop = FALSE]
     }), cts)
-    score_norms <- lapply(scores, function(x) sqrt(colSums(x^2)))
+
+    ## ||X w||^2 = w' (X' X) w, and a row permutation leaves X' X unchanged.
+    ## A "pc" permutation does not, so those types keep the direct product.
+    score_norms <- stats::setNames(lapply(cts, function(ct) {
+      W <- W_permu[[ct]]
+      G <- grams[[ct]]
+      if (is.null(G)) {
+        sqrt(colSums((PCmats_permuted[[ct]] %*% W)^2))
+      } else {
+        sqrt(colSums(W * (G %*% W)))
+      }
+    }), cts)
 
     for (pp in seq_len(ncol(pair_cell_types))) {
       cellType1 <- pair_cell_types[1, pp]
       cellType2 <- pair_cell_types[2, pp]
-      K <- kernels[[pp]]
       norm_K12_sel <- norm_K12[[s_name]][[cellType1]][[cellType2]]
 
+      ## s_1' K s_2 for every component at once = diag(W_1' Y W_2).
       numerators <- colSums(
-        scores[[cellType1]] *
-          .float32KernelMatMult(K, scores[[cellType2]])
+        W_permu[[cellType1]] *
+          (Y_resi[[cellType1]][[cellType2]] %*% W_permu[[cellType2]])
       )
       denominators <- score_norms[[cellType1]] * score_norms[[cellType2]] *
         norm_K12_sel
@@ -1278,12 +1058,15 @@ calculate_pvalue <- function(object, cc_index = 1, alternative = "greater") {
 #' @param Y_resi Optional precomputed PC-space operator from
 #'   `compute_Y_resi()`. When supplied, it is used for the numerator so the
 #'   kernel-vector product is not repeated.
+#' @param grams Optional named list of per-cell-type Gram matrices
+#'   `crossprod(X)` used for the score norms in the denominator. Valid whenever
+#'   the permutation is a bijection on cells; see `.permutationGrams()`.
 #'
 #' @return Numeric value of normalized correlation
 #' @keywords internal
 .compute_ncorr_quick <- function(PCmats, w_list, flat_kernels, sigma, cts,
                                  tol = 1e-4, kernel_info = NULL,
-                                 Y_resi = NULL) {
+                                 Y_resi = NULL, grams = NULL) {
   if (length(cts) > 2L) {
     stop("Quick permutation scoring supports one predeclared cell-type pair; ",
          "subset the CoPro object to one pair or use a symmetric multi-pair path.")
@@ -1300,9 +1083,6 @@ calculate_pvalue <- function(object, cc_index = 1, alternative = "greater") {
   w1 <- w_list[[ct1]][, 1, drop = FALSE]
   w2 <- w_list[[ct2]][, 1, drop = FALSE]
 
-  A_w1 <- A %*% w1
-  B_w2 <- B %*% w2
-
   if (is.null(kernel_info)) {
     kernel_info <- .get_ncorr_kernel_info(flat_kernels, sigma, cts)
   }
@@ -1318,9 +1098,18 @@ calculate_pvalue <- function(object, cc_index = 1, alternative = "greater") {
   numerator <- if (!is.null(Y12)) {
     as.numeric(crossprod(w1, Y12 %*% w2))
   } else {
-    .kernelXKY(A_w1, K, B_w2)[1, 1]
+    .kernelXKY(A %*% w1, K, B %*% w2)[1, 1]
   }
-  denominator <- sqrt(sum(A_w1^2)) * sqrt(sum(B_w2^2)) * norm_K12
+
+  # ||X w||^2 = w' (X' X) w. A row permutation leaves X' X unchanged, so the
+  # caller can supply the Gram matrices once and skip an n-by-nPC product per
+  # draw. Types with no Gram (or no cache at all) use the direct form.
+  score_norm <- function(ct, X, w) {
+    G <- if (is.null(grams)) NULL else grams[[ct]]
+    if (is.null(G)) return(sqrt(sum((X %*% w)^2)))
+    sqrt(as.numeric(crossprod(w, G %*% w)))
+  }
+  denominator <- score_norm(ct1, A, w1) * score_norm(ct2, B, w2) * norm_K12
 
   return(numerator / denominator)
 }
@@ -1550,72 +1339,28 @@ runSkrCCAPermu_FairSigma <- function(object,
     )
   )
 
-  # Helper function for PC-space permutation
-  permute_pc_matrix <- function(pc_mat, seed) {
-    set.seed(seed)
-    permuted <- apply(pc_mat, 2, function(x) sample(x, length(x)))
-    rownames(permuted) <- rownames(pc_mat)
-    return(permuted)
-  }
+  # Fixed cell types let the kernel be applied to their PC matrix once per
+  # sigma rather than once per draw. See R/D0_permutation_plan.R.
+  fixed <- .fixedPermutationTypes(cell_permu, cts)
+  plans <- lapply(sigma_values, function(sigma) .buildYPlan(
+    PCmats = PCmats, flat_kernels = object@kernelMatrices, sigma = sigma,
+    cts = cts, fixed = fixed
+  ))
+  grams <- .permutationGrams(PCmats, cell_permu, cts)
 
   if (verbose) {
     cat("Running permutations...\n")
   }
 
-  run_one_permutation <- function(tt) {
-    # Apply permutation to get permuted PC matrices
-    PCmats_local <- PCmats
+  worker <- .makeFairSigmaWorker(
+    PCmats = PCmats, plans = plans, cts = cts, sigma_values = sigma_values,
+    sdev2_list = sdev2_list, kernel_info = lapply(kernel_info, .slimKernelInfo),
+    grams = grams, maxIter = maxIter, tol = tol
+  )
 
-    for (i in names(PCmats_local)) {
-      if (is.list(cell_permu[[i]]) && !is.null(cell_permu[[i]]$type) &&
-          cell_permu[[i]]$type == "pc_permute") {
-        # PC-space permutation
-        seed <- cell_permu[[i]]$seeds[tt]
-        PCmats_local[[i]] <- permute_pc_matrix(PCmats[[i]], seed)
-      } else {
-        # Standard index-based permutation (global, bin, or toroidal)
-        PCmats_local[[i]] <- PCmats[[i]][cell_permu[[i]][, tt], ]
-      }
-    }
-
-    # Test ALL sigma values and pick the best
-    best_ncorr <- -Inf
-    best_sigma <- sigma_values[1]
-    best_weights <- NULL
-
-    for (si in seq_along(sigma_values)) {
-      sigma <- sigma_values[si]
-      # Compute the PC-space operator once, then reuse it for fitting and
-      # normalized-correlation scoring.
-      Y0 <- compute_Y_resi(
-        PCmats_local, object@kernelMatrices, sigma, cts, slide = NULL
-      )
-      fit <- .fitConditionalAxis(
-        PCmats = PCmats_local, flat_kernels = object@kernelMatrices,
-        sigma = sigma, cts = cts, k_minus_1 = 0, Y_resi = Y0,
-        kernel_info = kernel_info[[si]], sdev2_list = sdev2_list,
-        maxIter = maxIter, tol = tol
-      )
-      cca_result <- fit$w
-      ncorr <- fit$ncorr
-
-      if (ncorr > best_ncorr) {
-        best_ncorr <- ncorr
-        best_sigma <- sigma
-        best_weights <- cca_result
-      }
-    }
-
-    list(
-      weights = best_weights,
-      sigma = best_sigma,
-      ncorr = best_ncorr
-    )
-  }
-
-  permu_results <- .parallelPermutationLapply(
-    seq_len(nPermu), run_one_permutation, n_cores = n_cores,
-    verbose = verbose
+  permu_results <- .runPermutationDraws(
+    cell_permu = cell_permu, cts = cts, nPermu = nPermu, worker = worker,
+    n_cores = n_cores, verbose = verbose
   )
   permu_ncorrs <- vapply(permu_results, `[[`, numeric(1), "ncorr")
   permu_sigmas <- vapply(permu_results, `[[`, numeric(1), "sigma")
@@ -1744,6 +1489,8 @@ runSkrCCAPermu_FairSigma <- function(object,
 #' @param kernel_info Optional precomputed kernel and normalizer information
 #'   from `.get_ncorr_kernel_info()`.
 #' @param sdev2_list Optional diagonal CCA metric used when `scalePCs = FALSE`.
+#' @param grams Optional per-cell-type Gram matrices forwarded to
+#'   `.compute_ncorr_quick()`.
 #' @param maxIter,tol Optimization controls.
 #'
 #' @return List with `w` (named list of 1-column weight matrices for axis k) and
@@ -1753,7 +1500,7 @@ runSkrCCAPermu_FairSigma <- function(object,
 .fitConditionalAxis <- function(PCmats, flat_kernels, sigma, cts,
                                 W_lower = NULL, k_minus_1 = 0,
                                 Y_resi = NULL, kernel_info = NULL,
-                                sdev2_list = NULL,
+                                sdev2_list = NULL, grams = NULL,
                                 maxIter = 200, tol = 1e-5) {
   if (k_minus_1 <= 0) {
     # First axis: identical to optimize_bilinear(). When Y_resi was already
@@ -1806,6 +1553,15 @@ runSkrCCAPermu_FairSigma <- function(object,
       w_k <- solve_one_type_eigen(
         Yk, cts, nCC = 1L, sdev2_list = sdev2_list
       )
+    } else if (length(cts) == 2L) {
+      # Deflation leaves an ordinary singular-vector problem, so the residual
+      # axis has the same exact solution the k = 1 branch above uses. Solving
+      # it directly also keeps the null statistic on the same solver as the
+      # observed statistic, which comes from solve_two_type_svd() inside
+      # runSkrCCA(); block relaxation only approached that answer to `tol`.
+      w_k <- solve_two_type_svd(
+        Yk, cts, nCC = 1L, sdev2_list = sdev2_list
+      )
     } else {
       w_new <- initialize_next_component(Yk, cts)
       invisible(utils::capture.output(
@@ -1825,7 +1581,7 @@ runSkrCCAPermu_FairSigma <- function(object,
 
   ncorr <- .compute_ncorr_quick(
     PCmats, w_k, flat_kernels, sigma, cts,
-    kernel_info = kernel_info, Y_resi = Y_resi
+    kernel_info = kernel_info, Y_resi = Y_resi, grams = grams
   )
   list(w = w_k, ncorr = ncorr)
 }
@@ -2051,13 +1807,6 @@ runSkrCCAPermu_Conditional <- function(object,
                               num_bins_x = num_bins_x, num_bins_y = num_bins_y,
                               match_quantile = match_quantile)
 
-  permute_pc_matrix <- function(pc_mat, seed) {
-    set.seed(seed)
-    permuted <- apply(pc_mat, 2, function(x) sample(x, length(x)))
-    rownames(permuted) <- rownames(pc_mat)
-    permuted
-  }
-
   perm_stat <- matrix(NA_real_, nrow = nPermu, ncol = nCC)
   perm_sigma <- matrix(sigma_values[1], nrow = nPermu, ncol = nCC)
   n_failed <- 0L
@@ -2074,50 +1823,25 @@ runSkrCCAPermu_Conditional <- function(object,
 
   if (verbose) cat("Running permutations...\n")
 
-  run_one_permutation <- function(tt) {
-    ## build permuted PC matrices
-    PCmats_local <- PCmats
-    for (ct in names(PCmats_local)) {
-      cp <- cell_permu[[ct]]
-      if (is.list(cp) && !is.null(cp$type) && cp$type == "pc_permute") {
-        PCmats_local[[ct]] <- permute_pc_matrix(PCmats[[ct]], cp$seeds[tt])
-      } else {
-        PCmats_local[[ct]] <- PCmats[[ct]][cp[, tt], ]
-      }
-    }
+  # Fixed cell types let the kernel be applied to their PC matrix once per
+  # sigma rather than once per (draw, sigma). See R/D0_permutation_plan.R.
+  fixed <- .fixedPermutationTypes(cell_permu, cts)
+  plans <- lapply(sigma_values, function(sigma) .buildYPlan(
+    PCmats = PCmats, flat_kernels = object@kernelMatrices, sigma = sigma,
+    cts = cts, fixed = fixed
+  ))
+  grams <- .permutationGrams(PCmats, cell_permu, cts)
 
-    res <- tryCatch({
-      stat_k <- rep(-Inf, nCC)
-      sig_k <- rep(sigma_values[1], nCC)
-      for (si in seq_along(sigma_values)) {
-        s <- sigma_values[si]
-        sname <- sigma_names[si]
-        ## compute Y once per (permutation, sigma); reuse across all axes
-        Y0 <- compute_Y_resi(PCmats_local, object@kernelMatrices, s, cts,
-                             slide = NULL)
-        for (k in seq_len(nCC)) {
-          fit <- .fitConditionalAxis(
-            PCmats = PCmats_local, flat_kernels = object@kernelMatrices,
-            sigma = s, cts = cts, W_lower = obs_W[[sname]], k_minus_1 = k - 1,
-            Y_resi = Y0, kernel_info = kernel_info[[si]],
-            sdev2_list = sdev2_list,
-            maxIter = maxIter, tol = tol
-          )
-          if (is.finite(fit$ncorr) && fit$ncorr > stat_k[k]) {
-            stat_k[k] <- fit$ncorr
-            sig_k[k] <- s
-          }
-        }
-      }
-      list(stat = stat_k, sigma = sig_k)
-    }, error = function(e) NULL)
+  worker <- .makeConditionalWorker(
+    PCmats = PCmats, plans = plans, cts = cts, nCC = nCC,
+    sigma_values = sigma_values, sigma_names = sigma_names, obs_W = obs_W,
+    sdev2_list = sdev2_list, kernel_info = lapply(kernel_info, .slimKernelInfo),
+    grams = grams, maxIter = maxIter, tol = tol
+  )
 
-    res
-  }
-
-  permutation_results <- .parallelPermutationLapply(
-    seq_len(nPermu), run_one_permutation, n_cores = n_cores,
-    verbose = verbose
+  permutation_results <- .runPermutationDraws(
+    cell_permu = cell_permu, cts = cts, nPermu = nPermu, worker = worker,
+    n_cores = n_cores, verbose = verbose
   )
   for (tt in seq_len(nPermu)) {
     res <- permutation_results[[tt]]

@@ -5,7 +5,6 @@
 #' @param ct_j Name of the second cell type
 #' @param slide Slide ID (NULL for single slide)
 #' @return The K_ij matrix
-#' @importFrom irlba irlba
 #' @noRd
 get_kernel_matrix_flat <- function(flat_kernels, sigma, ct_i, ct_j, slide = NULL) {
   # Create the expected flat name using the same logic as .createKernelMatrixName
@@ -39,27 +38,49 @@ get_kernel_matrix_flat <- function(flat_kernels, sigma, ct_i, ct_j, slide = NULL
 
 
 
+#' Leading right singular vector of a tall cell-by-PC matrix
+#'
+#' The leading right singular vector of `X` is the leading eigenvector of
+#' `X' X`, which is only `nPC x nPC` (nPCA is 10-40 in practice). Forming that
+#' Gram matrix and taking an exact symmetric eigendecomposition is both cheaper
+#' than a Krylov method on the tall matrix and, unlike `irlba()`, deterministic:
+#' `irlba()` consumes the RNG stream even when handed a starting vector, so the
+#' initial direction -- and with it the sign and the tolerance-level value of
+#' the converged axis -- varied between runs, sessions and parallel workers.
+#'
+#' @param X A cell-by-PC matrix.
+#' @param label Cell-type name used in error messages.
+#' @return A one-column orthonormal matrix.
+#' @noRd
+.leadingRightSingularVector <- function(X, label) {
+  gram <- crossprod(X)
+  decomp <- tryCatch(
+    eigen((gram + t(gram)) / 2, symmetric = TRUE),
+    error = function(e) {
+      stop(paste("SVD failed for cell type:", label, "Error:", e$message))
+    }
+  )
+  if (ncol(decomp$vectors) < 1) {
+    stop(paste("SVD resulted in zero singular vectors for cell type:", label))
+  }
+  decomp$vectors[, 1, drop = FALSE]
+}
+
 #' Initialize weight vectors using SVD
 #' @param X_list Named list of data matrices
 #' @param cell_types Vector of cell type names
 #' @return Named list of initial weight vectors
-#' @importFrom irlba irlba
 #' @noRd
 initialize_weights_svd <- function(X_list, cell_types) {
   w_list <- setNames(vector("list", length = length(cell_types)), cell_types)
-  
+
   for (ct in cell_types) {
     if(is.null(X_list[[ct]]) || !is.matrix(X_list[[ct]])) {
       stop(paste("Invalid or missing matrix in X_list for cell type:", ct))
     }
-    init_v <- rep(1 / ncol(X_list[[ct]]), ncol(X_list[[ct]]))
-    svd_result <- tryCatch(irlba(X_list[[ct]], nv = 1, right_only = TRUE, v = init_v),
-                          error = function(e) {
-      stop(paste("SVD failed for cell type:", ct, "Error:", e$message))})
-    if(ncol(svd_result$v) < 1) stop(paste("SVD resulted in zero singular vectors for cell type:", ct))
-    w_list[[ct]] <- svd_result$v[, 1, drop = FALSE] ## orthonormal
+    w_list[[ct]] <- .leadingRightSingularVector(X_list[[ct]], ct) ## orthonormal
   }
-  
+
   return(w_list)
 }
 
@@ -102,12 +123,17 @@ check_convergence <- function(w_list_new, w_list_old, cell_types) {
 #' @param sdev2_list Optional named list of squared standard deviations per
 #'   cell type, used for weighted normalization when \code{scalePCs = FALSE}.
 #'   Default \code{NULL} (unweighted).
+#' @param Y_resi Optional precomputed PC-space operators for this data set,
+#'   in the structure returned by \code{compute_Y_resi()}. Supplying them
+#'   skips the sparse kernel products, which is what lets a permutation test
+#'   reuse a factorized operator across draws. Default \code{NULL} (computed
+#'   here).
 #'
 #' @return Named list `w_list` containing the first weight vector component.
 #' @export
 optimize_bilinear <- function(X_list, flat_kernels, sigma, max_iter = 1000,
                               tol = 1e-5, step_size = 1,
-                              sdev2_list = NULL) {
+                              sdev2_list = NULL, Y_resi = NULL) {
 
   # Validate step_size
   if (!is.numeric(step_size) || length(step_size) != 1 || step_size <= 0 || step_size > 1) {
@@ -122,7 +148,10 @@ optimize_bilinear <- function(X_list, flat_kernels, sigma, max_iter = 1000,
 
   # Precompute small PC-space operator matrices once, then run power iteration
   # using Y_ij %*% w_j. This avoids repeated X' K X products per iteration.
-  Y_resi <- compute_Y_resi(X_list, flat_kernels, sigma, cell_types, slide = NULL)
+  if (is.null(Y_resi)) {
+    Y_resi <- compute_Y_resi(X_list, flat_kernels, sigma, cell_types,
+                             slide = NULL)
+  }
 
   # The one-type problem is a symmetric Rayleigh-quotient problem, while the
   # two-type problem is an ordinary singular-vector variational problem. Both
@@ -479,6 +508,15 @@ apply_deflation <- function(Y_resi, w_list, qq, cell_types, sdev2_list = NULL,
 }
 
 #' Initialize weights for next component using SVD
+#'
+#' Every `Y_ij` here is an `nPC x nPC` matrix (nPCA is 10-40 in practice), so
+#' the leading singular vectors are taken with an exact LAPACK factorization.
+#' This used to call `irlba()` without a starting vector, which drew one at
+#' random: the initial direction, and therefore the sign of every higher axis
+#' and its value at the power-iteration tolerance, depended on the RNG state.
+#' With near-tied leading singular values the random starts land on entirely
+#' different directions. An exact factorization is also cheaper at this size.
+#'
 #' @param Y_resi Deflated Y matrices
 #' @param cell_types Cell type names
 #' @return Initial weight list for next component
@@ -507,19 +545,33 @@ initialize_next_component <- function(Y_resi, cell_types) {
     }
     w_list_new[[ct]] <- eigen_result$vectors[, 1, drop = FALSE]
   } else {
-    # Use SVD on cross-cell-type Y matrices with error handling
-    w_list_new[[cell_types[1]]] <- tryCatch(
-      irlba(t(Y_resi[[cell_types[1]]][[cell_types[2]]]), nv = 1, right_only = TRUE)$v[, 1, drop = FALSE],
-      error = function(e) {
-        stop(paste("SVD failed for cell type pair initialization. Error:", e$message))
+    # Exact SVD on the small cross-cell-type Y matrices. The first cell type
+    # takes the leading LEFT singular vector of Y_12 (what the previous
+    # irlba(t(Y_12), right_only = TRUE)$v computed); every other type takes the
+    # leading RIGHT singular vector of its Y_1i.
+    leading_singular_vector <- function(Y, side, label) {
+      decomp <- tryCatch(
+        svd(as.matrix(Y),
+            nu = if (side == "left") 1L else 0L,
+            nv = if (side == "left") 0L else 1L),
+        error = function(e) {
+          stop(paste("SVD failed for", label, "Error:", e$message))
+        }
+      )
+      vectors <- if (side == "left") decomp$u else decomp$v
+      if (is.null(vectors) || ncol(vectors) < 1L) {
+        stop(paste("SVD resulted in zero singular vectors for", label))
       }
+      vectors[, 1, drop = FALSE]
+    }
+
+    w_list_new[[cell_types[1]]] <- leading_singular_vector(
+      Y_resi[[cell_types[1]]][[cell_types[2]]], "left",
+      "cell type pair initialization."
     )
     for (i in cell_types[2:n_mat]) {
-      w_list_new[[i]] <- tryCatch(
-        irlba(Y_resi[[cell_types[1]]][[i]], nv = 1, right_only = TRUE)$v[, 1, drop = FALSE],
-        error = function(e) {
-          stop(paste("SVD failed for cell type:", i, "Error:", e$message))
-        }
+      w_list_new[[i]] <- leading_singular_vector(
+        Y_resi[[cell_types[1]]][[i]], "right", paste0("cell type: ", i)
       )
     }
   }
@@ -625,6 +677,9 @@ bilinear_w_from_Y_resi <- function(w_list_new, Y_resi,
 #' @param step_size Step size for damped power iteration (default 1)
 #' @param sdev2_list Optional named list of squared standard deviations per
 #'   cell type for weighted normalization. Default \code{NULL}.
+#' @param Y_resi Optional precomputed PC-space operators for this data set,
+#'   in the structure returned by \code{compute_Y_resi()}. Supplying them
+#'   skips the sparse kernel products. Default \code{NULL} (computed here).
 #'
 #' @return A named list of weights (matrices with components 1 to nCC as columns)
 #' @export
@@ -634,7 +689,8 @@ optimize_bilinear_n <- function(X_list, flat_kernels, sigma, w_list,
                                       max_iter = 1000,
                                       tol = 1e-5,
                                       step_size = 1,
-                                      sdev2_list = NULL) {
+                                      sdev2_list = NULL,
+                                      Y_resi = NULL) {
 
   # Validate inputs based on assumption they are already subsetted
   cts <- cellTypesOfInterest
@@ -663,7 +719,9 @@ optimize_bilinear_n <- function(X_list, flat_kernels, sigma, w_list,
   }
 
   # Initialize Y_resi structure using original data
-  Y_resi <- compute_Y_resi(X_list, flat_kernels, sigma, cts, slide = NULL)
+  if (is.null(Y_resi)) {
+    Y_resi <- compute_Y_resi(X_list, flat_kernels, sigma, cts, slide = NULL)
+  }
 
   # In an ordinary one-type run, one symmetric eigendecomposition returns all
   # axes. Preserve the conditional route when the caller supplied a different
@@ -739,7 +797,6 @@ optimize_bilinear_n <- function(X_list, flat_kernels, sigma, w_list,
 }
 
 #' @importFrom parallel mclapply
-#' @importFrom irlba irlba
 #' @importFrom stats setNames
 NULL
 
@@ -849,20 +906,9 @@ initialize_weights_multi_slide <- function(X_list_all, cell_types, use_aggregati
       X_stacked <- X_list_all[[1]][[ct]]
     }
     
-    svd_result <- tryCatch(
-      irlba(X_stacked, nv = 1, right_only = TRUE),
-      error = function(e) {
-        stop(paste("SVD failed for cell type:", ct, "Error:", e$message))
-      }
-    )
-    
-    if (ncol(svd_result$v) < 1) {
-      stop(paste("SVD resulted in zero singular vectors for cell type:", ct))
-    }
-    
-    w_list[[ct]] <- svd_result$v[, 1, drop = FALSE]
+    w_list[[ct]] <- .leadingRightSingularVector(X_stacked, ct)
   }
-  
+
   return(w_list)
 }
 

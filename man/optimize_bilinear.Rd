@@ -12,7 +12,8 @@ optimize_bilinear(
   max_iter = 1000,
   tol = 1e-05,
   step_size = 1,
-  sdev2_list = NULL
+  sdev2_list = NULL,
+  Y_resi = NULL
 )
 }
 \arguments{
@@ -33,6 +34,12 @@ convergence, which can help with many cells or many CCs.}
 \item{sdev2_list}{Optional named list of squared standard deviations per
 cell type, used for weighted normalization when \code{scalePCs = FALSE}.
 Default \code{NULL} (unweighted).}
+
+\item{Y_resi}{Optional precomputed PC-space operators for this data set,
+in the structure returned by \code{compute_Y_resi()}. Supplying them
+skips the sparse kernel products, which is what lets a permutation test
+reuse a factorized operator across draws. Default \code{NULL} (computed
+here).}
 }
 \value{
 Named list \code{w_list} containing the first weight vector component.

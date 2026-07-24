@@ -2,6 +2,29 @@
 
 ## Inference
 
+* skrCCA no longer depends on the RNG state. The block-relaxation path (three
+  or more cell types, and every conditional higher axis) initialized its weight
+  vectors with `irlba()`, which draws a random starting vector and consumes the
+  RNG stream even when handed one explicitly. The starting direction therefore
+  varied between runs, between sessions, and between a sequential run and a
+  PSOCK worker. Because a power iteration converges to whichever sign its start
+  points at, this flipped the **sign** of CC2+ weight vectors at random and
+  moved converged values at the iteration tolerance (observed: sign flips plus
+  2.6e-5 weight differences across seeds on a three-type run). Gene weights are
+  read directionally, so a random sign is not cosmetic. Every operator involved
+  is `nPC x nPC` or a Gram matrix of that size, so exact LAPACK factorizations
+  are now used instead -- deterministic, and cheaper here than a Krylov method.
+  This affects `runSkrCCA()` and `optimize_bilinear()`/`optimize_bilinear_n()`
+  with three or more cell types, the multi-slide initializer, and conditional
+  higher axes; one- and two-cell-type runs already used exact decompositions.
+* Two-cell-type conditional higher axes are solved by the same exact SVD that
+  produced the observed axis. Deflation leaves an ordinary singular-vector
+  problem, so block relaxation was only approaching to `tol` an answer that has
+  a closed form, and the null statistic was computed by a different solver than
+  the observed statistic it is compared against. On colon D3 the two agree to
+  1e-17, so this changes no published number there; it removes the last
+  iterative step from the conditional permutation inner loop and makes
+  sequential and parallel runs bitwise identical.
 * Conditional CC2+ permutation tests now use full projection of the fixed
   observed lower axes on every permuted operator. The weighted oblique form is
   used with `scalePCs = FALSE`, and the PC-variance metric is now propagated
@@ -25,6 +48,34 @@
 
 ## Performance
 
+* Permutation tests no longer rebuild the sparse product `X_i' K_ij X_j` for
+  every draw. Under `permu_which = "second_only"` (the default) and
+  `"first_only"` one cell type is held fixed across all draws, so the kernel is
+  applied to that side once and each draw becomes a small dense product in PC
+  space; the per-draw cost falls from `O(nnz(K) * nPCA)` to `O(n * nPCA^2)`.
+  The identity is exact, so the null distribution and its p-values are
+  unchanged. Pairs with both sides permuted (`permu_which = "both"`, and the
+  two-permuted-type pairs of a three-type run) keep the original product. The
+  same factorization now serves `runSkrCCAPermu()`,
+  `computeNormalizedCorrelationPermu()`, `runSkrCCAPermu_FairSigma()`, and
+  `runSkrCCAPermu_Conditional()`. Score norms in the normalized-correlation
+  denominator are read from precomputed Gram matrices where the null is a
+  genuine bijection on cells; the `"bin"` null draws a spatially matched
+  resample and the `"pc"` null shuffles each PC column independently, so both
+  keep the direct calculation. On the 11,286-cell colon D3 pair with 99
+  permutations, `runSkrCCAPermu()` plus `computeNormalizedCorrelationPermu()`
+  ran 13.9x faster and `runSkrCCAPermu_Conditional()` over three sigmas and two
+  axes 10.8x faster, with null statistics agreeing to 3.5e-17.
+  `options(CoPro.factorizePermutation = FALSE)` restores the unfactorized path
+  for direct comparison.
+* Parallel permutation workers no longer receive the whole kernel list, and no
+  longer capture the enclosing `CoPro` object through their closure. Each PSOCK
+  worker now gets the precomputed operators, the PC matrices, and only its own
+  columns of the permutation index matrix, so peak memory no longer scales with
+  `n_cores`. A pair with both sides permuted still needs its kernel, but only
+  for the sigma values under test rather than the whole stored list.
+  `optimize_bilinear()` and `optimize_bilinear_n()` gained an optional
+  `Y_resi` argument for supplying those precomputed operators.
 * Added `computeSparseKernelFloat32()` for large single- and multi-slide
   analyses with any number of cell types. It streams one neighbor block at a
   time, retains temporary distances as float32, writes kernels directly into a
@@ -93,6 +144,15 @@
   now point to `computePCA` / `subsetData`.
 * Consolidated the `computePCA` documentation topic, which was previously split
   under a stale `computePCAMulti` help page with a bogus method alias.
+* The permutation entry points share one draw-evaluation path in
+  `R/D0_permutation_plan.R` instead of each carrying a sequential worker plus a
+  near-identical parallel copy. `runSkrCCAPermu()` no longer maintains its own
+  PSOCK cluster block, and three copies of the `"pc"` column-shuffling helper
+  and the now-unused `.parallelPermutationLapply()` were removed.
+* `irlba::irlba()` is no longer used anywhere in the package; the five
+  `@importFrom` directives naming it (three of which were already stale) were
+  dropped. `irlba::prcomp_irlba()` in `computePCA()` is unaffected, and remains
+  the one place where a seed still changes results.
 
 # CoPro 1.1.1
 

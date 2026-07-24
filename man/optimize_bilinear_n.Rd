@@ -15,7 +15,8 @@ optimize_bilinear_n(
   max_iter = 1000,
   tol = 1e-05,
   step_size = 1,
-  sdev2_list = NULL
+  sdev2_list = NULL,
+  Y_resi = NULL
 )
 }
 \arguments{
@@ -39,6 +40,10 @@ optimize_bilinear_n(
 
 \item{sdev2_list}{Optional named list of squared standard deviations per
 cell type for weighted normalization. Default \code{NULL}.}
+
+\item{Y_resi}{Optional precomputed PC-space operators for this data set,
+in the structure returned by \code{compute_Y_resi()}. Supplying them
+skips the sparse kernel products. Default \code{NULL} (computed here).}
 }
 \value{
 A named list of weights (matrices with components 1 to nCC as columns)
