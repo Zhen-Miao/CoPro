@@ -72,18 +72,69 @@ dimnames.CoProFloat32SparseMatrix <- function(x) {
   length(x$j)
 }
 
+#' CPU cores actually available to this process
+#'
+#' `parallel::detectCores()` reports the whole machine, which on a shared HPC
+#' node is not what this job was granted -- spawning that many threads
+#' oversubscribes cores allocated to other jobs. This honors the common
+#' scheduler allocations first (SLURM, SGE/Grid Engine, PBS/Torque, LSF) and
+#' only falls back to the machine core count on an unmanaged workstation.
+#' @noRd
+.detectAllocatedCores <- function() {
+  env_cores <- function(name) {
+    value <- suppressWarnings(as.integer(Sys.getenv(name, "")))
+    if (length(value) == 1L && !is.na(value) && value >= 1L) value else NA_integer_
+  }
+  ## Scheduler allocations, most job-specific first.
+  for (name in c("SLURM_CPUS_PER_TASK", "NSLOTS", "PBS_NUM_PPN",
+                 "LSB_DJOB_NUMPROC", "PBS_NP")) {
+    cores <- env_cores(name)
+    if (!is.na(cores)) return(cores)
+  }
+  cores <- suppressWarnings(parallel::detectCores(logical = FALSE))
+  if (is.na(cores) || cores < 1L) {
+    cores <- suppressWarnings(parallel::detectCores())
+  }
+  if (is.na(cores) || cores < 1L) 1L else as.integer(cores)
+}
+
 #' Number of worker threads for float32 sparse operators
+#'
+#' Resolution order: an explicit `options(CoPro.float32Threads=)` always wins;
+#' otherwise the count is derived automatically from the cores actually
+#' allocated to this process (see [.detectAllocatedCores]), then capped by
+#' `OMP_NUM_THREADS` when a cluster sets it, by CRAN's core limit during
+#' `R CMD check`, and by a default ceiling of eight beyond which the
+#' memory-bandwidth-bound operators stop scaling. Raise the ceiling for very
+#' large jobs with `options(CoPro.float32Threads = <n>)`.
 #' @noRd
 .float32KernelThreads <- function() {
-  requested <- getOption(
-    "CoPro.float32Threads",
-    min(8L, parallel::detectCores(logical = FALSE))
-  )
-  requested <- as.integer(requested)
-  if (length(requested) != 1L || is.na(requested) || requested < 1L) {
-    stop("options(CoPro.float32Threads=) must be a positive integer.")
+  option <- getOption("CoPro.float32Threads", NULL)
+  if (!is.null(option)) {
+    option <- suppressWarnings(as.integer(option))
+    if (length(option) != 1L || is.na(option) || option < 1L) {
+      stop("options(CoPro.float32Threads=) must be a positive integer.")
+    }
+    return(option)
   }
-  requested
+
+  cores <- .detectAllocatedCores()
+
+  ## A cluster that limits OpenMP threads (often to the SLURM allocation) should
+  ## limit ours too.
+  omp <- suppressWarnings(as.integer(Sys.getenv("OMP_NUM_THREADS", "")))
+  if (length(omp) == 1L && !is.na(omp) && omp >= 1L) {
+    cores <- min(cores, omp)
+  }
+
+  ## Respect CRAN's check-time core limit.
+  ceiling_threads <- 8L
+  check_limit <- Sys.getenv("_R_CHECK_LIMIT_CORES_", "")
+  if (nzchar(check_limit) && !identical(tolower(check_limit), "false")) {
+    ceiling_threads <- 2L
+  }
+
+  max(1L, min(ceiling_threads, cores))
 }
 
 #' Apply an encoded float32 sparse kernel to a dense matrix

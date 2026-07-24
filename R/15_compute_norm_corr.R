@@ -117,6 +117,16 @@ setGeneric(
     return(sqrt(max(as.numeric(norm2), 0)))
   }
 
+  ## K is double here, but a within-type whitening operator may still be an
+  ## encoded float32 kernel -- e.g. a cross kernel built in double while the
+  ## self-kernels supplied as Rx/Ry were built with computeSparseKernelFloat32,
+  ## or vice versa on the same object. Decode any float32 operator to double so
+  ## the formulas below apply; whitening needs only the values, so the temporary
+  ## double copy is exact. (.isFloat32SparseKernel(NULL) is FALSE, so NULL Rx/Ry
+  ## pass through untouched.)
+  if (.isFloat32SparseKernel(Rx)) Rx <- asDoubleSparseMatrix(Rx)
+  if (.isFloat32SparseKernel(Ry)) Ry <- asDoubleSparseMatrix(Ry)
+
   ## Sparse fixed-radius kernels can be very large. Double-centering a sparse
   ## matrix explicitly makes it dense, and coercing the matched within-type
   ## kernels to base matrices compounds that memory cost. Use the equivalent

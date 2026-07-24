@@ -77,7 +77,23 @@ bool inside_f32(std::int64_t value, std::int64_t size) {
   return value >= 0 && value < size;
 }
 
-void write_float(Rbyte* destination, R_xlen_t index, float value) {
+// The packed payload is stored little-endian. On the little-endian platforms R
+// targets (x86-64, ARM64, Windows) that is native byte order, so a single
+// aligned load/store is both correct and reads/writes the value in one machine
+// instruction -- the same contiguous-typed-array access that makes Matrix's
+// double path fast, instead of assembling each value from four separate bytes.
+// R allocates vector data on at least an 8-byte boundary, so the 4-byte access
+// is always aligned. The explicit byte path is retained for a big-endian build
+// so the on-buffer format stays little-endian and remains portable.
+#if defined(_WIN32) || defined(__LITTLE_ENDIAN__) || \
+    (defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__)
+#  define COPRO_F32_NATIVE_LE 1
+#endif
+
+inline void write_float(Rbyte* destination, R_xlen_t index, float value) {
+#ifdef COPRO_F32_NATIVE_LE
+  std::memcpy(destination + index * 4, &value, sizeof(value));
+#else
   std::uint32_t bits;
   std::memcpy(&bits, &value, sizeof(bits));
   const R_xlen_t offset = index * 4;
@@ -85,9 +101,15 @@ void write_float(Rbyte* destination, R_xlen_t index, float value) {
   destination[offset + 1] = (bits >> 8) & 0xffu;
   destination[offset + 2] = (bits >> 16) & 0xffu;
   destination[offset + 3] = (bits >> 24) & 0xffu;
+#endif
 }
 
-float read_float(const Rbyte* source, R_xlen_t index) {
+inline float read_float(const Rbyte* source, R_xlen_t index) {
+#ifdef COPRO_F32_NATIVE_LE
+  float value;
+  std::memcpy(&value, source + index * 4, sizeof(value));
+  return value;
+#else
   const R_xlen_t offset = index * 4;
   const std::uint32_t bits =
     static_cast<std::uint32_t>(source[offset]) |
@@ -97,6 +119,7 @@ float read_float(const Rbyte* source, R_xlen_t index) {
   float value;
   std::memcpy(&value, &bits, sizeof(value));
   return value;
+#endif
 }
 
 float type7_quantile(
@@ -842,21 +865,28 @@ NumericMatrix float32_csr_matmul_cpp(
       static_cast<std::int64_t>(n_rows) * (thread_index + 1) / threads
     );
     workers.emplace_back([=]() {
+      // Sweep each row's nonzeros once, reading the float32 value and column
+      // index a single time and fanning the product across all right-hand
+      // sides, instead of re-reading them once per column. The per-right-hand
+      // accumulation order is unchanged, so the result is bit-identical.
+      std::vector<float> row_output(n_rhs, 0.0f);
       for (int row = row_begin; row < row_end; ++row) {
-        for (int rhs = 0; rhs < n_rhs; ++rhs) {
-          float value = 0.0f;
-          for (int position = row_pointer[row];
-               position < row_pointer[row + 1]; ++position) {
-            value += read_float(values, position) * static_cast<float>(
-              input_pointer[
-                column_index[position] +
-                  static_cast<std::size_t>(n_columns) * rhs
-              ]
+        std::fill(row_output.begin(), row_output.end(), 0.0f);
+        for (int position = row_pointer[row];
+             position < row_pointer[row + 1]; ++position) {
+          const float weight = read_float(values, position);
+          const double* input_column =
+            input_pointer + column_index[position];
+          for (int rhs = 0; rhs < n_rhs; ++rhs) {
+            row_output[rhs] += weight * static_cast<float>(
+              input_column[static_cast<std::size_t>(n_columns) * rhs]
             );
           }
+        }
+        for (int rhs = 0; rhs < n_rhs; ++rhs) {
           output_pointer[
             row + static_cast<std::size_t>(n_rows) * rhs
-          ] = static_cast<double>(value);
+          ] = static_cast<double>(row_output[rhs]);
         }
       }
     });

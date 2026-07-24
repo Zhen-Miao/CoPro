@@ -42,7 +42,12 @@
   including asymmetric normalized self-kernels. The ordinary centered
   Frobenius objective norm is computed directly from encoded value sums;
   exact whitened Frobenius normalization retains a temporary double-sparse
-  compatibility fallback.
+  compatibility fallback. The operator thread count is now determined
+  automatically from the cores actually allocated to the process, honoring
+  common HPC scheduler variables (`SLURM_CPUS_PER_TASK`, `NSLOTS`,
+  `PBS_NUM_PPN`, `LSB_DJOB_NUMPROC`) and `OMP_NUM_THREADS` so a single-core
+  allocation no longer oversubscribes a shared node; set
+  `options(CoPro.float32Threads=)` to override.
 * One-cell-type skrCCA now solves the symmetric quadratic problem directly
   with an exact symmetric eigendecomposition, selecting the largest algebraic
   eigenvalues and obtaining all requested axes from one factorization.
