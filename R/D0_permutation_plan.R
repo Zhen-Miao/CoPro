@@ -103,10 +103,10 @@
 #' @param flat_kernels Flat kernel list.
 #' @param sigma Kernel bandwidth.
 #' @param cts Cell types of interest.
-#' @param fixed Named logical vector from [.fixedPermutationTypes()].
+#' @param fixed Named logical vector from `.fixedPermutationTypes()`.
 #' @param slide Slide ID, or `NULL` for a single slide.
 #' @return A list with `ops` (nested by cell-type pair), `pairs`, `cts` and
-#'   `fixed`, consumable by [.yResiFromPlan()].
+#'   `fixed`, consumable by `.yResiFromPlan()`.
 #' @noRd
 .buildYPlan <- function(PCmats, flat_kernels, sigma, cts, fixed,
                         slide = NULL) {
@@ -155,9 +155,9 @@
 
 #' Evaluate the PC-space operators for one permutation draw
 #'
-#' Produces exactly the structure [compute_Y_resi()] returns, so every
+#' Produces exactly the structure `compute_Y_resi()` returns, so every
 #' downstream solver is unchanged.
-#' @param plan A plan from [.buildYPlan()].
+#' @param plan A plan from `.buildYPlan()`.
 #' @param PCmats_local Permuted cell-by-PC matrices for this draw.
 #' @return Nested `Y_resi` list.
 #' @noRd
@@ -223,6 +223,17 @@
   list(K = NULL, norm_K12 = kernel_info$norm_K12)
 }
 
+#' Is this `cellPermu` entry a `"pc"` null rather than an index matrix?
+#'
+#' The two permutation representations are discriminated in three places
+#' (draw-spec extraction, worker chunking, and the plan itself). Keeping the
+#' test in one function means a future third representation cannot satisfy one
+#' copy of the predicate and silently miss another.
+#' @noRd
+.isPcPermuteEntry <- function(entry) {
+  is.list(entry) && identical(entry$type, "pc_permute")
+}
+
 #' Shuffle values within each PC column (the DIALOGUE-style "pc" null)
 #' @noRd
 .permutePCMatrix <- function(pc_mat, seed) {
@@ -240,7 +251,7 @@
 .permutationDrawSpec <- function(cell_permu, cts, tt) {
   stats::setNames(lapply(cts, function(ct) {
     entry <- cell_permu[[ct]]
-    if (is.list(entry) && identical(entry$type, "pc_permute")) {
+    if (.isPcPermuteEntry(entry)) {
       list(pc_seed = entry$seeds[[tt]])
     } else {
       entry[, tt]
@@ -253,7 +264,10 @@
 .applyPermutationSpec <- function(PCmats, spec) {
   for (ct in names(spec)) {
     entry <- spec[[ct]]
-    PCmats[[ct]] <- if (is.list(entry)) {
+    # A draw spec carries either an integer index vector or the one-element
+    # list `.permutationDrawSpec()` builds for a "pc" null. Test for that
+    # field explicitly rather than for "is a list".
+    PCmats[[ct]] <- if (is.list(entry) && !is.null(entry$pc_seed)) {
       .permutePCMatrix(PCmats[[ct]], entry$pc_seed)
     } else {
       PCmats[[ct]][entry, , drop = FALSE]
@@ -468,7 +482,7 @@
       worker = worker,
       permu = stats::setNames(lapply(cts, function(ct) {
         entry <- cell_permu[[ct]]
-        if (is.list(entry) && identical(entry$type, "pc_permute")) {
+        if (.isPcPermuteEntry(entry)) {
           list(type = "pc_permute", seeds = entry$seeds[chunk])
         } else {
           entry[, chunk, drop = FALSE]

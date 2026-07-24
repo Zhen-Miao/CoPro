@@ -42,11 +42,15 @@ get_kernel_matrix_flat <- function(flat_kernels, sigma, ct_i, ct_j, slide = NULL
 #'
 #' The leading right singular vector of `X` is the leading eigenvector of
 #' `X' X`, which is only `nPC x nPC` (nPCA is 10-40 in practice). Forming that
-#' Gram matrix and taking an exact symmetric eigendecomposition is both cheaper
-#' than a Krylov method on the tall matrix and, unlike `irlba()`, deterministic:
-#' `irlba()` consumes the RNG stream even when handed a starting vector, so the
-#' initial direction -- and with it the sign and the tolerance-level value of
-#' the converged axis -- varied between runs, sessions and parallel workers.
+#' Gram matrix and taking an exact symmetric eigendecomposition is cheaper than
+#' a Krylov method on the tall matrix, and returns the answer directly rather
+#' than iterating to a tolerance.
+#'
+#' The previous `irlba()` call here passed a fixed starting vector, so it was
+#' already deterministic -- `irlba()` only draws from (and advances) the RNG
+#' stream when no starting vector is supplied. This site was therefore not
+#' affected by the RNG dependence that motivated the other two initializers;
+#' see `initialize_next_component()`, which had no starting vector.
 #'
 #' @param X A cell-by-PC matrix.
 #' @param label Cell-type name used in error messages.
@@ -64,6 +68,51 @@ get_kernel_matrix_flat <- function(flat_kernels, sigma, ct_i, ct_j, slide = NULL
     stop(paste("SVD resulted in zero singular vectors for cell type:", label))
   }
   decomp$vectors[, 1, drop = FALSE]
+}
+
+#' Validate a caller-supplied `Y_resi` against the data it must match
+#'
+#' `optimize_bilinear()` and `optimize_bilinear_n()` are exported, so a caller
+#' can hand in operators built for a different sigma, a different cell-type
+#' subset, or a different `nPCA`. The one- and two-type fast paths index into
+#' `Y_resi` directly, where a missing entry degrades to a 0 x 0 matrix and
+#' surfaces much later as a confusing "nCC cannot exceed the dimension" error.
+#' Check names and dimensions up front instead.
+#'
+#' @param Y_resi The supplied operator list.
+#' @param cell_types Cell types being optimized over.
+#' @param feature_counts Named integer vector of PC counts per cell type.
+#' @return `TRUE`, invisibly; called for the side effect of erroring.
+#' @noRd
+.validateYResi <- function(Y_resi, cell_types, feature_counts) {
+  if (!is.list(Y_resi) || !all(cell_types %in% names(Y_resi))) {
+    stop("Y_resi must be a named list with an entry for every cell type in ",
+         "X_list. Missing: ",
+         paste(setdiff(cell_types, names(Y_resi)), collapse = ", "))
+  }
+  pairs <- if (length(cell_types) == 1L) {
+    matrix(rep(cell_types, 2L), nrow = 2L)
+  } else {
+    utils::combn(cell_types, 2L)
+  }
+  for (pp in seq_len(ncol(pairs))) {
+    ct_i <- pairs[1L, pp]
+    ct_j <- pairs[2L, pp]
+    Y_ij <- Y_resi[[ct_i]][[ct_j]]
+    if (is.null(Y_ij)) {
+      stop("Y_resi is missing the operator for cell-type pair (",
+           ct_i, ", ", ct_j, ").")
+    }
+    expected <- as.integer(c(feature_counts[[ct_i]], feature_counts[[ct_j]]))
+    if (!identical(as.integer(dim(Y_ij)), expected)) {
+      stop("Y_resi[[\"", ct_i, "\"]][[\"", ct_j, "\"]] is ",
+           paste(dim(Y_ij), collapse = " x "), " but X_list implies ",
+           paste(expected, collapse = " x "),
+           ". These operators were probably built for a different nPCA or a ",
+           "different cell-type subset.")
+    }
+  }
+  invisible(TRUE)
 }
 
 #' Initialize weight vectors using SVD
@@ -151,6 +200,8 @@ optimize_bilinear <- function(X_list, flat_kernels, sigma, max_iter = 1000,
   if (is.null(Y_resi)) {
     Y_resi <- compute_Y_resi(X_list, flat_kernels, sigma, cell_types,
                              slide = NULL)
+  } else {
+    .validateYResi(Y_resi, cell_types, feature_counts)
   }
 
   # The one-type problem is a symmetric Rayleigh-quotient problem, while the
@@ -721,6 +772,8 @@ optimize_bilinear_n <- function(X_list, flat_kernels, sigma, w_list,
   # Initialize Y_resi structure using original data
   if (is.null(Y_resi)) {
     Y_resi <- compute_Y_resi(X_list, flat_kernels, sigma, cts, slide = NULL)
+  } else {
+    .validateYResi(Y_resi, cts, feature_counts)
   }
 
   # In an ordinary one-type run, one symmetric eigendecomposition returns all

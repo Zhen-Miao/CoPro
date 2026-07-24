@@ -40,8 +40,10 @@ test_that("initialize_weights_svd is exact and RNG-independent", {
 
   runs <- lapply(c(1, 2, 99), function(s)
     .from_seed(s, initialize_weights_svd(X_list, "A")[["A"]]))
-  expect_equal(runs[[2]], runs[[1]])
-  expect_equal(runs[[3]], runs[[1]])
+  # Bit-identical, not merely close: an exact factorization of a fixed matrix
+  # must not depend on the RNG state at all.
+  expect_identical(runs[[2]], runs[[1]])
+  expect_identical(runs[[3]], runs[[1]])
 
   # ...and it really is the leading right singular vector
   expect_equal(abs(as.numeric(runs[[1]])),
@@ -56,8 +58,8 @@ test_that("initialize_next_component is exact and RNG-independent", {
 
   runs <- lapply(c(1, 2, 99), function(s)
     .from_seed(s, initialize_next_component(Y_resi, c("A", "B"))))
-  expect_equal(runs[[2]], runs[[1]])
-  expect_equal(runs[[3]], runs[[1]])
+  expect_identical(runs[[2]], runs[[1]])
+  expect_identical(runs[[3]], runs[[1]])
 
   # first type takes the leading LEFT singular vector, the second the RIGHT one
   decomp <- svd(Y)

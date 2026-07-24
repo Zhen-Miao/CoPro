@@ -4,19 +4,24 @@
 
 * skrCCA no longer depends on the RNG state. The block-relaxation path (three
   or more cell types, and every conditional higher axis) initialized its weight
-  vectors with `irlba()`, which draws a random starting vector and consumes the
-  RNG stream even when handed one explicitly. The starting direction therefore
-  varied between runs, between sessions, and between a sequential run and a
-  PSOCK worker. Because a power iteration converges to whichever sign its start
-  points at, this flipped the **sign** of CC2+ weight vectors at random and
-  moved converged values at the iteration tolerance (observed: sign flips plus
-  2.6e-5 weight differences across seeds on a three-type run). Gene weights are
-  read directionally, so a random sign is not cosmetic. Every operator involved
-  is `nPC x nPC` or a Gram matrix of that size, so exact LAPACK factorizations
-  are now used instead -- deterministic, and cheaper here than a Krylov method.
-  This affects `runSkrCCA()` and `optimize_bilinear()`/`optimize_bilinear_n()`
-  with three or more cell types, the multi-slide initializer, and conditional
-  higher axes; one- and two-cell-type runs already used exact decompositions.
+  vectors with `irlba()`. When no starting vector is supplied, `irlba()` draws
+  one at random and advances the RNG stream, so the starting direction varied
+  between runs, between sessions, and between a sequential run and a PSOCK
+  worker. Two of the three initializers were affected on that basis:
+  `initialize_next_component()` and `initialize_weights_multi_slide()`, neither
+  of which passed a starting vector. (`initialize_weights_svd()` passed a fixed
+  one and was already deterministic; it was converted for consistency and
+  speed, not to fix a defect.) Because a power iteration converges to whichever
+  sign its start points at, this flipped the **sign** of CC2+ weight vectors at
+  random and moved converged values at the iteration tolerance (observed: sign
+  flips plus 2.6e-5 weight differences across seeds on a three-type run). Gene
+  weights are read directionally, so a random sign is not cosmetic. Every
+  operator involved is `nPC x nPC` or a Gram matrix of that size, so exact
+  LAPACK factorizations are now used instead -- deterministic, and cheaper here
+  than a Krylov method. This affects `runSkrCCA()` and
+  `optimize_bilinear()`/`optimize_bilinear_n()` with three or more cell types,
+  the multi-slide initializer, and conditional higher axes; one- and
+  two-cell-type runs already used exact decompositions.
 * Two-cell-type conditional higher axes are solved by the same exact SVD that
   produced the observed axis. Deflation leaves an ordinary singular-vector
   problem, so block relaxation was only approaching to `tol` an answer that has
@@ -62,12 +67,25 @@
   denominator are read from precomputed Gram matrices where the null is a
   genuine bijection on cells; the `"bin"` null draws a spatially matched
   resample and the `"pc"` null shuffles each PC column independently, so both
-  keep the direct calculation. On the 11,286-cell colon D3 pair with 99
-  permutations, `runSkrCCAPermu()` plus `computeNormalizedCorrelationPermu()`
-  ran 13.9x faster and `runSkrCCAPermu_Conditional()` over three sigmas and two
-  axes 10.8x faster, with null statistics agreeing to 3.5e-17.
-  `options(CoPro.factorizePermutation = FALSE)` restores the unfactorized path
-  for direct comparison.
+  keep the direct calculation. Measured against the previous release on a
+  5,000-cell pair with ~6M kernel nonzeros and 99 permutations:
+  `runSkrCCAPermu()` plus `computeNormalizedCorrelationPermu()` ran 5.0x faster
+  (1.23 s to 0.25 s), and `runSkrCCAPermu_Conditional()` over three sigmas and
+  two axes 4.5x faster (2.14 s to 0.48 s). The realized factor grows with
+  kernel density and draw count, since fixed costs (normalizers, permutation
+  generation) do not shrink.
+  `options(CoPro.factorizePermutation = FALSE)` restores the unfactorized
+  operator for direct comparison. Note that this option isolates the
+  factorization only -- it does not restore the previous release's
+  normalized-correlation code path, so it is a control for the algebra rather
+  than a stand-in for the old timing.
+* The factorization is an exact rearrangement of the same triple product in
+  real arithmetic, so the null distribution and its p-values are unchanged.
+  In floating point the two orderings agree to ~1e-15 relative on double
+  kernels. Kernels built by `computeSparseKernelFloat32()` accumulate in single
+  precision, where the two paths agree to ~1e-6 relative instead -- far below
+  the granularity of a rank-based permutation p-value, but not the ~1e-15 of
+  the double path.
 * Parallel permutation workers no longer receive the whole kernel list, and no
   longer capture the enclosing `CoPro` object through their closure. Each PSOCK
   worker now gets the precomputed operators, the PC matrices, and only its own

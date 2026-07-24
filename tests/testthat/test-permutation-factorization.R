@@ -126,6 +126,50 @@ test_that("planned Y equals compute_Y_resi with three cell types", {
   }
 })
 
+test_that("planned Y matches the sparse product on float32 kernels", {
+  skip_on_cran()
+  # float32_csr_xky_cpp accumulates in single precision, so the factorized and
+  # unfactorized orderings agree only to ~1e-6 relative here, not to the ~1e-15
+  # of the double path. Large analyses use computeSparseKernelFloat32(), so
+  # that path needs its own tolerance rather than inheriting the double one.
+  obj <- create_test_copro_single(n_cells = 400, n_cell_types = 2, seed = 42)
+  cts <- c("CellTypeA", "CellTypeB")
+  obj <- subsetData(obj, cellTypesOfInterest = cts)
+  obj <- computeDistance(obj, distType = "Euclidean2D",
+                         normalizeDistance = TRUE, verbose = FALSE)
+  sigma <- 0.1
+  f32 <- computeSparseKernelFloat32(obj, sigmaValues = sigma, verbose = FALSE)
+  suppressWarnings(
+    f32 <- computePCA(f32, nPCA = 8, center = TRUE, scale. = TRUE,
+                      scalePCs = TRUE)
+  )
+  expect_true(.isFloat32SparseKernel(
+    get_kernel_matrix_flat(f32@kernelMatrices, sigma, cts[1], cts[2])
+  ))
+
+  PCmats <- .getAllPCMats(f32@pcaGlobal, f32@scalePCs)
+  set.seed(3)
+  cell_permu <- .getCellPermu(f32, "global", 2, cts)
+  plan <- .buildYPlan(PCmats, f32@kernelMatrices, sigma, cts,
+                      .fixedPermutationTypes(cell_permu, cts))
+  expect_identical(plan$ops[[cts[1]]][[cts[2]]]$mode, "left")
+
+  local_pc <- .applyPermutationSpec(
+    PCmats, .permutationDrawSpec(cell_permu, cts, 1L)
+  )
+  expected <- compute_Y_resi(local_pc, f32@kernelMatrices, sigma, cts)
+  planned <- .yResiFromPlan(plan, local_pc)
+  for (i in cts) for (j in cts) {
+    if (is.null(expected[[i]][[j]])) {
+      expect_null(planned[[i]][[j]])
+      next
+    }
+    rel <- max(abs(planned[[i]][[j]] - expected[[i]][[j]])) /
+      max(abs(expected[[i]][[j]]))
+    expect_lt(rel, 1e-4)
+  }
+})
+
 test_that("a fully fixed plan is constant and matches the unpermuted operator", {
   skip_on_cran()
   obj <- .fact_pipeline()
@@ -225,9 +269,13 @@ test_that("runSkrCCAPermu null is identical with and without factorization", {
     slow <- .unfactorized(.permu_null(obj, 101, permu_method = method))
     expect_equal(fast$ncorr, slow$ncorr, tolerance = 1e-10, info = method)
     expect_equal(fast$p, slow$p, info = method)
+    # Two cell types are closed-form on both paths, so the only difference is
+    # floating-point reassociation (measured ~1e-15). Keep the tolerance close
+    # to that: this is the quantity the RNG-driven sign-flip bug showed up in,
+    # so it should not pass at the testthat default.
     expect_equal(lapply(fast$weights, function(w) lapply(w, abs)),
                  lapply(slow$weights, function(w) lapply(w, abs)),
-                 tolerance = 1e-8, info = method)
+                 tolerance = 1e-12, info = method)
   }
 })
 
@@ -246,15 +294,20 @@ test_that("permu_which = 'both' and 'first_only' are also unchanged", {
 
 test_that("three-type and unscaled-PC runs are unchanged", {
   skip_on_cran()
+  # Three or more types still route through iterative block relaxation
+  # (optimize_bilinear, tol = 1e-5) even though Y is now identical between the
+  # two paths, so the converged weights can differ by more than reassociation
+  # noise. Hence a looser tolerance here than in the closed-form two-type case.
   obj3 <- .fact_pipeline(n_cell_types = 3, nCC = 1)
   fast <- .permu_null(obj3, 77, permu_method = "global")
   slow <- .unfactorized(.permu_null(obj3, 77, permu_method = "global"))
   expect_equal(fast$ncorr, slow$ncorr, tolerance = 1e-8)
 
+  # Two types with scalePCs = FALSE is closed-form on both paths.
   obj_uns <- .fact_pipeline(nCC = 2, scalePCs = FALSE)
   fast_u <- .permu_null(obj_uns, 78, permu_method = "global")
   slow_u <- .unfactorized(.permu_null(obj_uns, 78, permu_method = "global"))
-  expect_equal(fast_u$ncorr, slow_u$ncorr, tolerance = 1e-8)
+  expect_equal(fast_u$ncorr, slow_u$ncorr, tolerance = 1e-12)
   expect_equal(fast_u$p, slow_u$p)
 })
 
@@ -340,37 +393,54 @@ test_that("the permutation worker does not capture the kernels", {
   expect_lt(captured_bytes, as.numeric(utils::object.size(cell_permu)))
 })
 
-test_that("failed draws keep their slot when results are reassembled", {
-  skip_on_cran()
-  # The conditional test records a failed draw as NULL and counts it. If
-  # reassembly dropped or shifted those slots, every later draw's statistic
-  # would be filed against the wrong permutation.
+# Shared fixture for the two reassembly tests. The worker fails on roughly half
+# the draws, chosen from the draw's own content so it stays a pure function of
+# its spec and gives the same failures sequentially and in parallel.
+.flakyReassemblyCase <- function() {
   obj <- .fact_pipeline()
   cts <- obj@cellTypesOfInterest
   set.seed(2)
   cell_permu <- .getCellPermu(obj, "global", 8, cts)
   first_index <- cell_permu[[cts[2]]][1, ]
-  # Fail on roughly half the draws, chosen from the draw's own content so the
-  # worker stays a pure function of its spec.
   flaky <- function(spec) {
     idx <- spec[[2]][1]
     if (idx %% 2L == 0L) NULL else idx
   }
-  expected_null <- (first_index %% 2L) == 0L
-  expect_true(any(expected_null) && !all(expected_null))
+  list(cts = cts, cell_permu = cell_permu, flaky = flaky,
+       expected_null = (first_index %% 2L) == 0L)
+}
 
-  out <- .runPermutationDraws(cell_permu, cts, 8, flaky, n_cores = 1,
-                              verbose = FALSE)
+test_that("failed draws keep their slot when results are reassembled", {
+  skip_on_cran()
+  # The conditional test records a failed draw as NULL and counts it. If
+  # reassembly dropped or shifted those slots, every later draw's statistic
+  # would be filed against the wrong permutation.
+  case <- .flakyReassemblyCase()
+  expect_true(any(case$expected_null) && !all(case$expected_null))
+
+  out <- .runPermutationDraws(case$cell_permu, case$cts, 8, case$flaky,
+                              n_cores = 1, verbose = FALSE)
   expect_length(out, 8L)
-  expect_equal(vapply(out, is.null, logical(1)), expected_null)
+  expect_equal(vapply(out, is.null, logical(1)), case$expected_null)
+})
 
-  if (!is.null(.installedCoProLibrary())) {
-    par_out <- suppressMessages(
-      .runPermutationDraws(cell_permu, cts, 8, flaky, n_cores = 3,
-                           verbose = FALSE)
-    )
-    expect_equal(par_out, out)
+test_that("parallel reassembly of failed draws matches sequential", {
+  skip_on_cran()
+  # Gated with skip() rather than a silent `if`: under devtools::load_all()
+  # .installedCoProLibrary() is NULL and .runPermutationDraws() falls back to
+  # sequential, so an `if` would make this a no-op that still reported as a
+  # passing test. The skip keeps the gap visible in the test summary.
+  if (is.null(.installedCoProLibrary())) {
+    skip("CoPro is not installed; the PSOCK path falls back to sequential.")
   }
+  case <- .flakyReassemblyCase()
+  out <- .runPermutationDraws(case$cell_permu, case$cts, 8, case$flaky,
+                              n_cores = 1, verbose = FALSE)
+  par_out <- suppressMessages(
+    .runPermutationDraws(case$cell_permu, case$cts, 8, case$flaky,
+                         n_cores = 3, verbose = FALSE)
+  )
+  expect_equal(par_out, out)
 })
 
 test_that("parallel and sequential draws agree", {
