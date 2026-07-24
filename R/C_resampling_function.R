@@ -534,6 +534,25 @@ resample_spatial <- function(location_data,
 }
 
 
+#' Period of the torus a coordinate is wrapped on
+#'
+#' The observed span omits exactly one gap -- the one that would separate the
+#' last point from the first once the two edges are glued. The median gap
+#' between adjacent distinct coordinates estimates it, and is exact on a
+#' regular lattice, where every gap equals the spacing.
+#'
+#' @param values Numeric coordinate vector.
+#' @return The torus period, or `NA_real_` when fewer than two distinct
+#'   coordinates are present.
+#' @noRd
+.torusPeriod <- function(values) {
+  distinct <- sort(unique(values[is.finite(values)]))
+  if (length(distinct) < 2L) return(NA_real_)
+  span <- distinct[length(distinct)] - distinct[1L]
+  span + stats::median(diff(distinct))
+}
+
+
 #' Generate Toroidal Shift Permutation Indices
 #'
 #' Shifts spatial coordinates in a toroidal (wrap-around) manner to break
@@ -544,18 +563,34 @@ resample_spatial <- function(location_data,
 #'
 #' @details
 #' The toroidal shift works by:
-#' 1. Applying a random shift to all coordinates (wrapping at boundaries)
+#' 1. Applying a random shift to all coordinates (wrapping at the torus period)
 #' 2. Re-ranking cells by their shifted positions and matching back to the
 #'    original ordering.
+#'
+#' The wrap uses the torus *period*, not the coordinate extent. A lattice with
+#' `n` columns at spacing `s` spans `(n - 1) * s`, so wrapping on the span would
+#' identify the last column with the first: two distinct columns land on the
+#' same shifted coordinate and are interleaved by the rank match rather than
+#' translated. The period is the span plus the one gap the span omits, estimated
+#' by the median gap between adjacent distinct coordinates -- exactly `s` on a
+#' regular lattice.
+#'
+#' Shifts are drawn uniformly on the whole torus. Restricting them away from
+#' zero would drop the group elements whose configurations sit closest to the
+#' observed one, leaving a reference set that is not a group; because the
+#' statistic varies smoothly with the shift, dropping them pushes null p-values
+#' toward both extremes and inflates the rejection rate.
 #'
 #' Important caveats (the docstring previously over-claimed "perfect"
 #' preservation):
 #' \itemize{
-#'   \item The position matching is by coordinate *rank*, which equals a rigid
-#'     torus translation only on a regular lattice. On an irregular point cloud
-#'     it is a monotone rearrangement that preserves pairwise distances only
-#'     approximately, so within-type autocorrelation is approximately (not
-#'     exactly) preserved.
+#'   \item The position matching is by coordinate *rank*. On a regular lattice
+#'     that is exactly a rigid torus translation: the shifted point set is the
+#'     original point set, so matching sorted positions recovers the
+#'     translation and every pairwise torus distance is preserved. On an
+#'     irregular point cloud it is a monotone rearrangement that preserves
+#'     pairwise distances only approximately, so within-type autocorrelation is
+#'     approximately (not exactly) preserved.
 #'   \item The torus-translation test (Harms et al. 2001) assumes spatial
 #'     stationarity and periodic wrap-around. Gluing opposite tissue edges
 #'     creates artificial neighbours at the seam and is biologically false for
@@ -588,7 +623,7 @@ resample_spatial <- function(location_data,
 #' permuted_cells <- loc_data$cell_ID[perm_matrix[, 1]]
 #' }
 #'
-#' @importFrom stats runif
+#' @importFrom stats runif median
 #' @export
 generate_toroidal_permutations <- function(location_data, n_permu = 100,
                                            seed = NULL) {
@@ -612,15 +647,17 @@ generate_toroidal_permutations <- function(location_data, n_permu = 100,
 
   n_cells <- nrow(location_data)
 
-  # Get spatial extent
-  x_range <- range(location_data$x)
-  y_range <- range(location_data$y)
-  x_width <- diff(x_range)
-  y_width <- diff(y_range)
+  # Wrap on the torus period, not the extent: the extent omits the gap that
+  # glues the far edge back onto the near one, and wrapping on it makes the
+  # first and last coordinate collide.
+  x_origin <- min(location_data$x)
+  y_origin <- min(location_data$y)
+  x_period <- .torusPeriod(location_data$x)
+  y_period <- .torusPeriod(location_data$y)
 
   # Handle edge case of zero width
-
-if (x_width < 1e-10 || y_width < 1e-10) {
+  if (!is.finite(x_period) || !is.finite(y_period) ||
+      x_period < 1e-10 || y_period < 1e-10) {
     warning("Spatial extent is very small. Toroidal shift may not work well.")
     # Return identity permutations
     return(replicate(n_permu, seq_len(n_cells)))
@@ -632,13 +669,15 @@ if (x_width < 1e-10 || y_width < 1e-10) {
   perm_matrix <- matrix(NA_integer_, nrow = n_cells, ncol = n_permu)
 
   for (tt in seq_len(n_permu)) {
-    # Random shifts (ensure non-trivial shift)
-    shift_x <- runif(1, x_width * 0.1, x_width * 0.9)
-    shift_y <- runif(1, y_width * 0.1, y_width * 0.9)
+    # Uniform over the whole torus, identity-inducing shifts included. On a
+    # lattice the rank match quantizes the shift to the nearest lattice
+    # translation, so this draws uniformly from the translation group.
+    shift_x <- runif(1, 0, x_period)
+    shift_y <- runif(1, 0, y_period)
 
     # Apply toroidal shift (wrap-around)
-    new_x <- ((location_data$x - x_range[1] + shift_x) %% x_width) + x_range[1]
-    new_y <- ((location_data$y - y_range[1] + shift_y) %% y_width) + y_range[1]
+    new_x <- ((location_data$x - x_origin + shift_x) %% x_period) + x_origin
+    new_y <- ((location_data$y - y_origin + shift_y) %% y_period) + y_origin
 
     # Create permutation by matching positions
     # Sort both original and shifted by coordinates
