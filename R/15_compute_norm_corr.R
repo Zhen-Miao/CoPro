@@ -413,7 +413,6 @@ setGeneric(
 #' @rdname computeNormalizedCorrelation
 #' @aliases computeNormalizedCorrelation,CoPro-method
 #' @importFrom utils combn
-#' @importFrom irlba irlba
 #' @export
 setMethod(
   "computeNormalizedCorrelation", "CoPro",
@@ -774,7 +773,6 @@ setMethod(
 #' @rdname computeNormalizedCorrelation
 #' @aliases computeNormalizedCorrelation,CoProMulti-method
 #' @importFrom utils combn
-#' @importFrom irlba irlba
 #' @export
 setMethod("computeNormalizedCorrelation", "CoProMulti", function(
     object, tol = 1e-4, calculationMode = "perSlide") {

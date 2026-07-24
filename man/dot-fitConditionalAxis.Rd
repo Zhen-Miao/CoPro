@@ -14,6 +14,7 @@
   Y_resi = NULL,
   kernel_info = NULL,
   sdev2_list = NULL,
+  grams = NULL,
   maxIter = 200,
   tol = 1e-05
 )
@@ -40,6 +41,9 @@
 from \code{.get_ncorr_kernel_info()}.}
 
 \item{sdev2_list}{Optional diagonal CCA metric used when \code{scalePCs = FALSE}.}
+
+\item{grams}{Optional per-cell-type Gram matrices forwarded to
+\code{.compute_ncorr_quick()}.}
 
 \item{maxIter, tol}{Optimization controls.}
 }

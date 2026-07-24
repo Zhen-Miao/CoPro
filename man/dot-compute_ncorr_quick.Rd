@@ -12,7 +12,8 @@
   cts,
   tol = 1e-04,
   kernel_info = NULL,
-  Y_resi = NULL
+  Y_resi = NULL,
+  grams = NULL
 )
 }
 \arguments{
@@ -34,6 +35,10 @@ for this sigma.}
 \item{Y_resi}{Optional precomputed PC-space operator from
 \code{compute_Y_resi()}. When supplied, it is used for the numerator so the
 kernel-vector product is not repeated.}
+
+\item{grams}{Optional named list of per-cell-type Gram matrices
+\code{crossprod(X)} used for the score norms in the denominator. Valid whenever
+the permutation is a bijection on cells; see \code{.permutationGrams()}.}
 }
 \value{
 Numeric value of normalized correlation
