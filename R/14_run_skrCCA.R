@@ -1,16 +1,3 @@
-#' Prepare PC matrices with optional scaling
-#' @note The structure of pc_data and pca_global has been messy,
-#'  but for now, let us make them consistent. pca_global is the direct output 
-#'  of irlba::prcomp_irlba, and pcaResults is only used for multi-slide, where
-#'  the pca matrix in each slide is saved here for convenience.
-#' @param pc_data only used for mulit-slide, which is saved in pcaResults
-#' @param pca_global Global PCA objects for scaling, which is the direct output 
-#' of irlba::prcomp_irlba, saved in pcaGlobal slot.
-#' @param scalePCs Whether to scale PCs
-#' @param slides Slide names (NULL for single slide)
-#' @param cts Cell type names
-#' @return Prepared PC matrices
-#' @noRd
 #' Record a per-slide view of the global PC scores
 #'
 #' `pcaResults[[slide]][[ct]]` is, except when `center_per_slide = TRUE`,
@@ -48,6 +35,19 @@
   scores[entry$rows, , drop = FALSE]
 }
 
+#' Prepare PC matrices with optional scaling
+#' @note The structure of pc_data and pca_global has been messy,
+#'  but for now, let us make them consistent. pca_global is the direct output
+#'  of irlba::prcomp_irlba, and pcaResults is only used for multi-slide, where
+#'  the pca matrix in each slide is saved here for convenience.
+#' @param pc_data only used for mulit-slide, which is saved in pcaResults
+#' @param pca_global Global PCA objects for scaling, which is the direct output
+#' of irlba::prcomp_irlba, saved in pcaGlobal slot.
+#' @param scalePCs Whether to scale PCs
+#' @param slides Slide names (NULL for single slide)
+#' @param cts Cell type names
+#' @return Prepared PC matrices
+#' @noRd
 .preparePCMatrices <- function(pc_data = NULL, pca_global, scalePCs = TRUE,
                               slides = NULL, cts) {
   
