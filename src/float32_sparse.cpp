@@ -534,30 +534,54 @@ List float32_csr_gaussian_kernels_cpp(
   std::size_t zero_distance_count = 0U;
   float minimum_nonzero = std::numeric_limits<float>::infinity();
   std::size_t total_edges = 0U;
+  std::size_t private_capacity_bytes = 0U;
   for (int index = 0; index < enumeration_threads; ++index) {
     zero_distance_count += thread_zero_counts[index];
     minimum_nonzero = std::min(minimum_nonzero, thread_minimum[index]);
     total_edges += thread_edges[index].size();
+    private_capacity_bytes +=
+      thread_edges[index].capacity() * sizeof(FloatEdge);
   }
   if (total_edges > static_cast<std::size_t>(std::numeric_limits<int>::max())) {
     stop("A single float32 sparse kernel block exceeds the 32-bit ",
          "compressed-index limit.");
   }
 
+  // Concatenating k private buffers into one contiguous array costs a transient
+  // second copy: `edges` is reserved at full size while the buffers that feed
+  // it are still live. Buffers are released as they are consumed, so the excess
+  // decays over the loop, but the peak is reached at the first insert and is
+  // real -- roughly 8 bytes per edge on top of the array itself. With one
+  // thread there is nothing to concatenate, so move the single buffer instead
+  // and pay nothing; that keeps the memory-tightest configuration at the same
+  // peak as the serial code this replaced. See RESULTS.md for the measured
+  // multi-thread figure.
   std::vector<FloatEdge> edges;
-  edges.reserve(total_edges);
-  std::size_t offset = 0U;
-  for (int index = 0; index < enumeration_threads; ++index) {
-    std::vector<FloatEdge>& local = thread_edges[index];
-    edges.insert(edges.end(), local.begin(), local.end());
-    // Each worker recorded counts relative to its own buffer; shift them onto
-    // the concatenated one.
-    for (int row = range_begin[index]; row < range_begin[index + 1]; ++row) {
-      edge_pointer[static_cast<std::size_t>(row) + 1U] +=
-        static_cast<int>(offset);
+  std::size_t peak_edge_bytes = private_capacity_bytes;
+  if (enumeration_threads == 1) {
+    edges = std::move(thread_edges[0]);
+    // A single range already carries offsets relative to the whole array.
+  } else {
+    edges.reserve(total_edges);
+    // The private buffers and the array they feed are all live at the first
+    // insert. That instant is the high-water mark of the whole build, and it
+    // is what `temporary_bytes` reports -- the capacity retained afterwards is
+    // strictly smaller and would understate the parallel path's cost.
+    peak_edge_bytes =
+      private_capacity_bytes + total_edges * sizeof(FloatEdge);
+    std::size_t offset = 0U;
+    for (int index = 0; index < enumeration_threads; ++index) {
+      std::vector<FloatEdge>& local = thread_edges[index];
+      edges.insert(edges.end(), local.begin(), local.end());
+      // Each worker recorded counts relative to its own buffer; shift them onto
+      // the concatenated one.
+      for (int row = range_begin[index]; row < range_begin[index + 1]; ++row) {
+        edge_pointer[static_cast<std::size_t>(row) + 1U] +=
+          static_cast<int>(offset);
+      }
+      offset += local.size();
+      std::vector<FloatEdge>().swap(local);  // release as we go
     }
-    offset += local.size();
-    std::vector<FloatEdge>().swap(local);  // release as we go
   }
 
   if (zero_distance_count > 0U &&
@@ -793,8 +817,14 @@ List float32_csr_gaussian_kernels_cpp(
     _["nonzeros"] = nonzeros,
     _["stored_nonzeros"] = stored_nonzeros,
     _["candidate_pairs"] = static_cast<double>(edges.size()),
+    // Worst-case bound on edge storage allocated at one time, not the capacity
+    // still held at return: with more than one enumeration thread the private
+    // buffers and the concatenated array are briefly allocated together. It is
+    // a bound rather than a measurement -- reserved pages are only made
+    // resident as they are written, and the buffers are freed as they are
+    // consumed, so measured RSS stays far below it (see RESULTS.md).
     _["temporary_bytes"] =
-      static_cast<double>(edges.capacity() * sizeof(FloatEdge)) +
+      static_cast<double>(peak_edge_bytes) +
       static_cast<double>(edge_pointer.capacity() * sizeof(int)),
     _["zero_distances_replaced"] =
       static_cast<double>(zero_distance_count)
@@ -976,6 +1006,11 @@ NumericMatrix float32_csr_matmul_cpp(
     double* output_pointer = REAL(result);
     std::vector<std::thread> workers;
     workers.reserve(threads);
+    // Each worker allocates its own scratch row, so each can throw bad_alloc.
+    // An exception that escapes a std::thread calls std::terminate() and takes
+    // the R session with it; catch it and re-raise on the main thread after the
+    // join, where stop() is legal.
+    std::atomic<bool> worker_failed(false);
     for (int thread_index = 0; thread_index < threads; ++thread_index) {
       const int rhs_begin = static_cast<int>(
         static_cast<std::int64_t>(n_rhs) * thread_index / threads
@@ -983,7 +1018,8 @@ NumericMatrix float32_csr_matmul_cpp(
       const int rhs_end = static_cast<int>(
         static_cast<std::int64_t>(n_rhs) * (thread_index + 1) / threads
       );
-      workers.emplace_back([=]() {
+      workers.emplace_back([=, &worker_failed]() {
+       try {
         std::vector<float> scratch(result_rows, 0.0f);
         for (int rhs = rhs_begin; rhs < rhs_end; ++rhs) {
           std::fill(scratch.begin(), scratch.end(), 0.0f);
@@ -1013,9 +1049,15 @@ NumericMatrix float32_csr_matmul_cpp(
             ] = static_cast<double>(scratch[column]);
           }
         }
+       } catch (...) {
+        worker_failed.store(true);
+       }
       });
     }
     for (std::thread& worker : workers) worker.join();
+    if (worker_failed.load()) {
+      stop("A float32 sparse matrix-multiply worker failed.");
+    }
     return result;
   }
 
@@ -1024,6 +1066,7 @@ NumericMatrix float32_csr_matmul_cpp(
   double* output_pointer = REAL(result);
   std::vector<std::thread> workers;
   workers.reserve(threads);
+  std::atomic<bool> worker_failed(false);
 
   // The transposed/symmetric branch above splits over right-hand sides, so each
   // worker reads one contiguous column of the input and needs no repacking.
@@ -1040,7 +1083,8 @@ NumericMatrix float32_csr_matmul_cpp(
     const int row_end = static_cast<int>(
       static_cast<std::int64_t>(n_rows) * (thread_index + 1) / threads
     );
-    workers.emplace_back([=]() {
+    workers.emplace_back([=, &worker_failed]() {
+     try {
       // Sweep each row's nonzeros once, reading the float32 value and column
       // index a single time and fanning the product across all right-hand
       // sides, instead of re-reading them once per column. The per-right-hand
@@ -1064,9 +1108,15 @@ NumericMatrix float32_csr_matmul_cpp(
           ] = static_cast<double>(row_output[rhs]);
         }
       }
+     } catch (...) {
+      worker_failed.store(true);
+     }
     });
   }
   for (std::thread& worker : workers) worker.join();
+  if (worker_failed.load()) {
+    stop("A float32 sparse matrix-multiply worker failed.");
+  }
   return result;
 }
 

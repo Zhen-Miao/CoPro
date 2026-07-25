@@ -710,23 +710,39 @@ test_that("parallel neighbour enumeration reproduces the serial CSR exactly", {
       truncate_low_distance = TRUE, symmetric = symmetric,
       normalization = normalization, n_threads = threads)
 
+  # `temporary_bytes` reports the capacity actually allocated for the edge
+  # array, which is a memory diagnostic rather than a result: with one thread
+  # the single private buffer is moved into place and keeps its own capacity,
+  # while two or more are concatenated into an array reserved at exactly the
+  # total. Holding it to bit-identity across thread counts would assert the
+  # wrong thing and would forbid making the serial path cheaper. Compare the
+  # CSR content exactly, and the diagnostic by its intended direction.
+  results <- function(x) x[setdiff(names(x), "temporary_bytes")]
+
   for (normalization in 0:3) {
     reference <- build(coords, coords, TRUE, normalization, 1L)
     for (threads in c(2L, 3L, 8L)) {
       expect_identical(
-        build(coords, coords, TRUE, normalization, threads), reference,
+        results(build(coords, coords, TRUE, normalization, threads)),
+        results(reference),
         info = paste("symmetric, normalization", normalization,
                      "threads", threads))
     }
     cross_reference <- build(coords, other, FALSE, normalization, 1L)
-    expect_identical(build(coords, other, FALSE, normalization, 4L),
-                     cross_reference,
+    expect_identical(results(build(coords, other, FALSE, normalization, 4L)),
+                     results(cross_reference),
                      info = paste("cross-type, normalization", normalization))
   }
 
+  # Enumerating in parallel needs private buffers plus the array they are
+  # concatenated into, so it costs more than the serial build -- never less.
+  serial <- build(coords, coords, TRUE, 0L, 1L)
+  parallel4 <- build(coords, coords, TRUE, 0L, 4L)
+  expect_gte(parallel4$temporary_bytes, serial$temporary_bytes)
+
   # More threads than rows must not break the range split.
   tiny <- cbind(runif(3) * 5, runif(3) * 5)
-  expect_identical(build(tiny, tiny, TRUE, 0L, 16L),
-                   build(tiny, tiny, TRUE, 0L, 1L))
+  expect_identical(results(build(tiny, tiny, TRUE, 0L, 16L)),
+                   results(build(tiny, tiny, TRUE, 0L, 1L)))
   expect_error(build(coords, coords, TRUE, 0L, 0L), "at least one")
 })
