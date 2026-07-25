@@ -469,7 +469,8 @@ setGeneric(
       percentiles[index], scaling_factor,
       lowerLimit, upperQuantile, truncateLowDist,
       symmetric = block$symmetric,
-      normalization = normalization
+      normalization = normalization,
+      n_threads = .float32KernelThreads()
     )
 
     for (sigma_index in seq_along(sigmaValues)) {

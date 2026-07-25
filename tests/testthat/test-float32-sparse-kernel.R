@@ -694,3 +694,39 @@ test_that("the kernel content signature is cached but still content-sensitive", 
   expect_identical(.readKernelNormalizer(cache, "key", K, self, NULL), 12.5)
   expect_null(.readKernelNormalizer(cache, "key", other, self, NULL))
 })
+
+test_that("parallel neighbour enumeration reproduces the serial CSR exactly", {
+  # Enumeration runs over disjoint, ascending row ranges and the per-thread
+  # buffers are concatenated in thread order, so the edge order -- and with it
+  # the CSR layout, the upper-quantile clip and every stored value -- must be
+  # bit-identical to the serial build regardless of thread count.
+  set.seed(707)
+  coords <- cbind(runif(1500) * 60, runif(1500) * 60)
+  other <- cbind(runif(1100) * 60, runif(1100) * 60)
+  build <- function(A, B, symmetric, normalization, threads)
+    float32_csr_gaussian_kernels_cpp(
+      A, B, sigmas = c(2, 4), percentile = 0.3, scaling_factor = 1,
+      lower_limit = 1e-7, upper_quantile = 0.85,
+      truncate_low_distance = TRUE, symmetric = symmetric,
+      normalization = normalization, n_threads = threads)
+
+  for (normalization in 0:3) {
+    reference <- build(coords, coords, TRUE, normalization, 1L)
+    for (threads in c(2L, 3L, 8L)) {
+      expect_identical(
+        build(coords, coords, TRUE, normalization, threads), reference,
+        info = paste("symmetric, normalization", normalization,
+                     "threads", threads))
+    }
+    cross_reference <- build(coords, other, FALSE, normalization, 1L)
+    expect_identical(build(coords, other, FALSE, normalization, 4L),
+                     cross_reference,
+                     info = paste("cross-type, normalization", normalization))
+  }
+
+  # More threads than rows must not break the range split.
+  tiny <- cbind(runif(3) * 5, runif(3) * 5)
+  expect_identical(build(tiny, tiny, TRUE, 0L, 16L),
+                   build(tiny, tiny, TRUE, 0L, 1L))
+  expect_error(build(coords, coords, TRUE, 0L, 0L), "at least one")
+})

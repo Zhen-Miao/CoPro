@@ -11,8 +11,8 @@ Rcpp::Rostream<false>& Rcpp::Rcerr = Rcpp::Rcpp_cerr_get();
 #endif
 
 // float32_csr_gaussian_kernels_cpp
-List float32_csr_gaussian_kernels_cpp(NumericMatrix A, NumericMatrix B, NumericVector sigmas, double percentile, double scaling_factor, double lower_limit, double upper_quantile, bool truncate_low_distance, bool symmetric, int normalization);
-RcppExport SEXP _CoPro_float32_csr_gaussian_kernels_cpp(SEXP ASEXP, SEXP BSEXP, SEXP sigmasSEXP, SEXP percentileSEXP, SEXP scaling_factorSEXP, SEXP lower_limitSEXP, SEXP upper_quantileSEXP, SEXP truncate_low_distanceSEXP, SEXP symmetricSEXP, SEXP normalizationSEXP) {
+List float32_csr_gaussian_kernels_cpp(NumericMatrix A, NumericMatrix B, NumericVector sigmas, double percentile, double scaling_factor, double lower_limit, double upper_quantile, bool truncate_low_distance, bool symmetric, int normalization, int n_threads);
+RcppExport SEXP _CoPro_float32_csr_gaussian_kernels_cpp(SEXP ASEXP, SEXP BSEXP, SEXP sigmasSEXP, SEXP percentileSEXP, SEXP scaling_factorSEXP, SEXP lower_limitSEXP, SEXP upper_quantileSEXP, SEXP truncate_low_distanceSEXP, SEXP symmetricSEXP, SEXP normalizationSEXP, SEXP n_threadsSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::traits::input_parameter< NumericMatrix >::type A(ASEXP);
@@ -25,7 +25,8 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< bool >::type truncate_low_distance(truncate_low_distanceSEXP);
     Rcpp::traits::input_parameter< bool >::type symmetric(symmetricSEXP);
     Rcpp::traits::input_parameter< int >::type normalization(normalizationSEXP);
-    rcpp_result_gen = Rcpp::wrap(float32_csr_gaussian_kernels_cpp(A, B, sigmas, percentile, scaling_factor, lower_limit, upper_quantile, truncate_low_distance, symmetric, normalization));
+    Rcpp::traits::input_parameter< int >::type n_threads(n_threadsSEXP);
+    rcpp_result_gen = Rcpp::wrap(float32_csr_gaussian_kernels_cpp(A, B, sigmas, percentile, scaling_factor, lower_limit, upper_quantile, truncate_low_distance, symmetric, normalization, n_threads));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -101,7 +102,7 @@ END_RCPP
 }
 
 static const R_CallMethodDef CallEntries[] = {
-    {"_CoPro_float32_csr_gaussian_kernels_cpp", (DL_FUNC) &_CoPro_float32_csr_gaussian_kernels_cpp, 10},
+    {"_CoPro_float32_csr_gaussian_kernels_cpp", (DL_FUNC) &_CoPro_float32_csr_gaussian_kernels_cpp, 11},
     {"_CoPro_float32_csr_xky_cpp", (DL_FUNC) &_CoPro_float32_csr_xky_cpp, 8},
     {"_CoPro_float32_csr_matmul_cpp", (DL_FUNC) &_CoPro_float32_csr_matmul_cpp, 8},
     {"_CoPro_float32_csr_sums_cpp", (DL_FUNC) &_CoPro_float32_csr_sums_cpp, 5},

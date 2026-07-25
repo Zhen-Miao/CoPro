@@ -162,6 +162,65 @@ float type7_quantile(
   );
 }
 
+// Grid buckets in compressed form.
+//
+// The obvious structure is unordered_map<CellKeyF32, vector<int>>, but that is
+// one heap-allocated vector per occupied grid cell -- on the order of one per
+// point at the radii CoPro uses -- each carrying 24 bytes of book-keeping plus
+// its own allocation, and scattering the point lists all over the heap. Here
+// the map holds a single int per cell and the membership lists live in one
+// contiguous counting-sorted array, so iterating a bucket is a linear walk.
+//
+// Members stay in increasing point order, matching the push_back order of the
+// structure this replaces, so enumeration order (and therefore output) is
+// unchanged.
+struct FlatGridBuckets {
+  std::unordered_map<CellKeyF32, int, CellKeyF32Hash> slot;
+  std::vector<int> start;
+  std::vector<int> items;
+
+  bool empty_cell(const CellKeyF32& key, int* begin, int* end) const {
+    const auto found = slot.find(key);
+    if (found == slot.end()) return true;
+    *begin = start[found->second];
+    *end = start[found->second + 1];
+    return false;
+  }
+};
+
+FlatGridBuckets build_flat_buckets(
+    const NumericMatrix& B,
+    int n_b,
+    const std::vector<double>& origin,
+    const std::vector<std::int64_t>& grid_size,
+    double radius) {
+  FlatGridBuckets grid;
+  grid.slot.reserve(static_cast<std::size_t>(n_b * 1.3) + 1U);
+  std::vector<int> cell_of(static_cast<std::size_t>(n_b));
+  std::vector<int> counts;
+
+  for (int row = 0; row < n_b; ++row) {
+    const CellKeyF32 key = point_cell_f32(B, row, origin, grid_size, radius);
+    const auto inserted =
+      grid.slot.insert(std::make_pair(key, static_cast<int>(counts.size())));
+    if (inserted.second) counts.push_back(0);
+    const int id = inserted.first->second;
+    cell_of[row] = id;
+    ++counts[id];
+  }
+
+  grid.start.assign(counts.size() + 1U, 0);
+  for (std::size_t id = 0; id < counts.size(); ++id) {
+    grid.start[id + 1] = grid.start[id] + counts[id];
+  }
+  grid.items.resize(static_cast<std::size_t>(n_b));
+  std::vector<int> cursor(grid.start.begin(), grid.start.end() - 1);
+  for (int row = 0; row < n_b; ++row) {
+    grid.items[cursor[cell_of[row]]++] = row;
+  }
+  return grid;
+}
+
 template <typename Callback>
 std::size_t visit_neighbors(
     int row_begin,
@@ -169,9 +228,7 @@ std::size_t visit_neighbors(
     const NumericMatrix& A,
     const NumericMatrix& B,
     const std::vector<CellKeyF32>& cells_a,
-    const std::unordered_map<
-      CellKeyF32, std::vector<int>, CellKeyF32Hash
-    >& buckets,
+    const FlatGridBuckets& buckets,
     const std::vector<std::int64_t>& grid_size,
     double radius_squared,
     double percentile,
@@ -193,9 +250,14 @@ std::size_t visit_neighbors(
         for (int dx = -1; dx <= 1; ++dx) {
           const std::int64_t x = base.x + dx;
           if (!inside_f32(x, grid_size[0])) continue;
-          const auto bucket = buckets.find(CellKeyF32{x, y, z});
-          if (bucket == buckets.end()) continue;
-          for (const int b : bucket->second) {
+          int bucket_begin = 0;
+          int bucket_end = 0;
+          if (buckets.empty_cell(CellKeyF32{x, y, z},
+                                 &bucket_begin, &bucket_end)) {
+            continue;
+          }
+          for (int slot = bucket_begin; slot < bucket_end; ++slot) {
+            const int b = buckets.items[slot];
             // A symmetric within-type kernel stores its strict upper
             // triangle. Self-pairs are excluded, matching .frnnGrid(A, NULL).
             if (symmetric && b <= a) continue;
@@ -302,7 +364,8 @@ List float32_csr_gaussian_kernels_cpp(
     double upper_quantile,
     bool truncate_low_distance = true,
     bool symmetric = false,
-    int normalization = 0) {
+    int normalization = 0,
+    int n_threads = 1) {
   const int n_a = A.nrow();
   const int n_b = B.nrow();
   const int dimensions = A.ncol();
@@ -373,15 +436,8 @@ List float32_csr_gaussian_kernels_cpp(
       point_cell_f32(A, row, origin, grid_size, radius)
     );
   }
-  std::unordered_map<
-    CellKeyF32, std::vector<int>, CellKeyF32Hash
-  > buckets;
-  buckets.reserve(static_cast<std::size_t>(n_b * 1.3) + 1U);
-  for (int row = 0; row < n_b; ++row) {
-    buckets[
-      point_cell_f32(B, row, origin, grid_size, radius)
-    ].push_back(row);
-  }
+  const FlatGridBuckets buckets =
+    build_flat_buckets(B, n_b, origin, grid_size, radius);
 
   // Estimate the edge count from a row sample to avoid vector-capacity
   // doubling at large n while retaining a single enumeration pass.
@@ -405,35 +461,105 @@ List float32_csr_gaussian_kernels_cpp(
          "compressed-index limit.");
   }
 
-  std::vector<FloatEdge> edges;
-  edges.reserve(static_cast<std::size_t>(reserve_double));
+  // Enumerate neighbours in parallel over disjoint row ranges. Each worker
+  // fills its own edge buffer and its own slice of the row pointer; the buffers
+  // are then concatenated in thread order. Because the ranges are contiguous
+  // and ascending, and each worker walks its rows in order, the concatenation
+  // reproduces exactly the row-major edge order the serial loop produced --
+  // the CSR output is unchanged, not merely equivalent.
+  //
+  // No R API call may occur off the main thread, so checkUserInterrupt() cannot
+  // run inside the workers. It is checked before and after instead; the phase
+  // is correspondingly shorter, and the per-sigma loop below still polls.
+  const int enumeration_threads =
+    normalized_thread_count(n_threads, std::max(1, n_a));
+  std::vector<std::vector<FloatEdge> > thread_edges(enumeration_threads);
   std::vector<int> edge_pointer(static_cast<std::size_t>(n_a) + 1U, 0);
+  std::vector<std::size_t> thread_zero_counts(enumeration_threads, 0U);
+  std::vector<float> thread_minimum(
+    enumeration_threads, std::numeric_limits<float>::infinity());
+  std::vector<int> range_begin(enumeration_threads + 1);
+  for (int index = 0; index <= enumeration_threads; ++index) {
+    range_begin[index] = static_cast<int>(
+      static_cast<std::int64_t>(n_a) * index / enumeration_threads);
+  }
+
+  checkUserInterrupt();
+  {
+    std::vector<std::thread> workers;
+    workers.reserve(enumeration_threads);
+    std::atomic<bool> enumeration_failed(false);
+    for (int index = 0; index < enumeration_threads; ++index) {
+      workers.emplace_back([&, index]() {
+        try {
+          const int row_begin = range_begin[index];
+          const int row_end = range_begin[index + 1];
+          std::vector<FloatEdge>& local = thread_edges[index];
+          local.reserve(static_cast<std::size_t>(
+            reserve_double * (row_end - row_begin) / std::max(1, n_a)) + 16U);
+          std::size_t zeros = 0U;
+          float minimum = std::numeric_limits<float>::infinity();
+          for (int row = row_begin; row < row_end; ++row) {
+            visit_neighbors(
+              row, row + 1, A, B, cells_a, buckets, grid_size,
+              radius_squared, percentile, scaling_factor,
+              truncate_low_distance, symmetric,
+              [&](int, int column, float distance) {
+                if (distance == 0.0f) {
+                  ++zeros;
+                } else {
+                  minimum = std::min(minimum, distance);
+                }
+                local.push_back(FloatEdge{column, distance});
+              }
+            );
+            // Per-row counts now; turned into global offsets after the join.
+            edge_pointer[static_cast<std::size_t>(row) + 1U] =
+              static_cast<int>(local.size());
+          }
+          thread_zero_counts[index] = zeros;
+          thread_minimum[index] = minimum;
+        } catch (...) {
+          enumeration_failed.store(true);
+        }
+      });
+    }
+    for (std::thread& worker : workers) worker.join();
+    if (enumeration_failed.load()) {
+      stop("A float32 neighbour-enumeration worker failed.");
+    }
+  }
+  checkUserInterrupt();
+
   std::size_t zero_distance_count = 0U;
   float minimum_nonzero = std::numeric_limits<float>::infinity();
-
-  for (int row = 0; row < n_a; ++row) {
-    if ((row & 16383) == 0) checkUserInterrupt();
-    visit_neighbors(
-      row, row + 1, A, B, cells_a, buckets, grid_size,
-      radius_squared, percentile, scaling_factor,
-      truncate_low_distance, symmetric,
-      [&](int, int column, float distance) {
-        if (distance == 0.0f) {
-          ++zero_distance_count;
-        } else {
-          minimum_nonzero = std::min(minimum_nonzero, distance);
-        }
-        edges.push_back(FloatEdge{column, distance});
-      }
-    );
-    if (edges.size() >
-        static_cast<std::size_t>(std::numeric_limits<int>::max())) {
-      stop("A single float32 sparse kernel block exceeds the 32-bit ",
-           "compressed-index limit.");
-    }
-    edge_pointer[static_cast<std::size_t>(row) + 1U] =
-      static_cast<int>(edges.size());
+  std::size_t total_edges = 0U;
+  for (int index = 0; index < enumeration_threads; ++index) {
+    zero_distance_count += thread_zero_counts[index];
+    minimum_nonzero = std::min(minimum_nonzero, thread_minimum[index]);
+    total_edges += thread_edges[index].size();
   }
+  if (total_edges > static_cast<std::size_t>(std::numeric_limits<int>::max())) {
+    stop("A single float32 sparse kernel block exceeds the 32-bit ",
+         "compressed-index limit.");
+  }
+
+  std::vector<FloatEdge> edges;
+  edges.reserve(total_edges);
+  std::size_t offset = 0U;
+  for (int index = 0; index < enumeration_threads; ++index) {
+    std::vector<FloatEdge>& local = thread_edges[index];
+    edges.insert(edges.end(), local.begin(), local.end());
+    // Each worker recorded counts relative to its own buffer; shift them onto
+    // the concatenated one.
+    for (int row = range_begin[index]; row < range_begin[index + 1]; ++row) {
+      edge_pointer[static_cast<std::size_t>(row) + 1U] +=
+        static_cast<int>(offset);
+    }
+    offset += local.size();
+    std::vector<FloatEdge>().swap(local);  // release as we go
+  }
+
   if (zero_distance_count > 0U &&
       std::isfinite(static_cast<double>(minimum_nonzero))) {
     for (FloatEdge& edge : edges) {
