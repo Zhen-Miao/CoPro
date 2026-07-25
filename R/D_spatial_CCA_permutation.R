@@ -28,7 +28,7 @@
 #' @return List of permutation matrices (for "global"/"bin"/"toroidal") or
 #'   list of permuted PC matrices (for "pc"), one per cell type. Held-fixed
 #'   cell types are stored as the compact identity marker built by
-#'   [.identityPermutation()] rather than as an explicit index matrix.
+#'   `.identityPermutation()` rather than as an explicit index matrix.
 #' @keywords internal
 .getCellPermu <- function(object, permu_method, nPermu, cts,
                           permu_which = "second_only",

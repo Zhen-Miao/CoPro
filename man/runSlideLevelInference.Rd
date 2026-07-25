@@ -64,7 +64,7 @@ Phipson--Smyth correction. The confidence interval is a percentile bootstrap
 over replicates. Both summaries target the equal-replicate mean.
 }
 \seealso{
-Other spatial-pipeline:
+Other spatial-pipeline: 
 \code{\link{computeDistance}()},
 \code{\link{computeKernelMatrix}()},
 \code{\link{computePCA}()},

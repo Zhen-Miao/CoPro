@@ -36,7 +36,9 @@ within-tile spatial structure. Default: FALSE.}
 }
 \value{
 List of permutation matrices (for "global"/"bin"/"toroidal") or
-list of permuted PC matrices (for "pc"), one per cell type
+list of permuted PC matrices (for "pc"), one per cell type. Held-fixed
+cell types are stored as the compact identity marker built by
+\code{.identityPermutation()} rather than as an explicit index matrix.
 }
 \description{
 Internal function to generate permutation indices for each cell type.
