@@ -18,3 +18,4 @@ src/*.so
 Rplots.pdf
 embedding.tsv
 vignettes/*.html
+reports/perf_pass_baseline/current/
