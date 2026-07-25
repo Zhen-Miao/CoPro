@@ -21,7 +21,6 @@ Imports:
     parallel,
     irlba,
     fields,
-    matrixStats,
     Rcpp,
     dplyr,
     ggplot2

@@ -181,3 +181,45 @@ test_that("plotG12Functions returns stable list shape for all plot_type values",
   expect_s3_class(r_both$plot$combined, "ggplot")
   expect_s3_class(r_both$plot$individual, "ggplot")
 })
+test_that("getCorrTwoTypes keeps float32 kernels encoded and agrees with the decoded product", {
+  # The helper used to take getKernelMatrix()'s materialize = TRUE default,
+  # decoding an encoded float32 kernel to a double dgCMatrix (4 -> 12 bytes per
+  # nonzero) just to call %*% on it. It now applies the compiled operator to
+  # the still-encoded kernel.
+  q <- function(e) suppressWarnings(suppressMessages(e))
+  obj <- q(create_test_copro_single(n_cells = 300, n_genes = 40,
+                                    n_cell_types = 2, seed = 64))
+  obj <- q(subsetData(obj, cellTypesOfInterest = c("CellTypeA", "CellTypeB")))
+  obj <- q(computePCA(obj, nPCA = 6))
+  obj <- q(computeSparseKernelFloat32(obj, sigmaValues = c(0.05, 0.1),
+                                      verbose = FALSE))
+  obj <- q(runSkrCCA(obj, scalePCs = TRUE, nCC = 1))
+  obj <- q(computeNormalizedCorrelation(obj))
+  obj <- q(computeGeneAndCellScores(obj))
+
+  sigma <- obj@sigmaValueChoice
+  K <- getKernelMatrix(obj, sigma, "CellTypeA", "CellTypeB",
+                       verbose = FALSE, materialize = FALSE)
+  expect_true(CoPro:::.isFloat32SparseKernel(K))
+
+  df <- q(getCorrTwoTypes(obj, "CellTypeA", "CellTypeB", ccIndex = 1))
+  expect_s3_class(df, "data.frame")
+  expect_identical(nrow(df), ncol(K))
+  expect_true(all(is.finite(df$AK)))
+
+  # Against the decoded double product the old code performed. float32
+  # accumulation makes this ~1e-6 relative, not exact -- and the analysis path
+  # (.kernelXKY) already accumulates in float32, so the plot now matches the
+  # numbers it is plotting rather than a higher-precision recomputation.
+  scores_a <- as.matrix(getCellScores(obj, sigma = sigma,
+                                      cellType = "CellTypeA", ccIndex = 1,
+                                      verbose = FALSE))
+  reference <- as.numeric(t(scores_a) %*% asDoubleSparseMatrix(K))
+  expect_lt(max(abs(df$AK - reference)) / max(abs(reference)), 1e-5)
+
+  # On a double kernel the helper must be exact.
+  expect_identical(
+    CoPro:::.leftMultiplyKernel(scores_a, asDoubleSparseMatrix(K)),
+    reference
+  )
+})

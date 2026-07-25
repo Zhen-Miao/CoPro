@@ -28,9 +28,23 @@
 }
 
 
+#' Fraction of nonzero entries per column
+#'
+#' `colSums(x != 0)` builds a full logical copy of the matrix -- 100 MB for a
+#' 50k x 500 dense matrix, and an entire second sparse matrix for a
+#' `dgCMatrix`. A compressed-column matrix already stores the count: the gaps
+#' in its column pointer. `drop0()` first, because an explicitly stored zero
+#' would otherwise be counted as a nonzero.
+#' @noRd
+.columnNonzeroFraction <- function(x) {
+  if (inherits(x, "CsparseMatrix")) {
+    return(diff(Matrix::drop0(x)@p) / nrow(x))
+  }
+  colSums(x != 0) / nrow(x)
+}
+
 #' centering and scaling the matrix
 #' @importFrom stats sd
-#' @importFrom matrixStats colSds
 #' @param matrix Input matrix to be column-centered
 #'
 #' @return centered and scaled matrix
@@ -42,8 +56,16 @@ center_scale_matrix_opt <- function(input_matrix,
   if (!.is_bpcells(input_matrix)) {
     # Original behavior for base matrix / Matrix::dgCMatrix
     col_means <- colMeans(input_matrix)
-    col_sds   <- apply(input_matrix, 2, sd)
-    col_nz    <- colSums(input_matrix != 0) / nrow(input_matrix)
+    # Deliberately NOT matrixStats::colSds(), despite it being ~2.5x faster
+    # here. It uses a different variance algorithm and disagrees with
+    # stats::sd() by 1 ulp on some columns (observed: 1.11e-16 on 1 of 60 genes
+    # in the test fixture). That perturbation reaches prcomp_irlba, which flips
+    # the sign of the affected PCs, which flips the sign of the gene weights
+    # read off them. Gene weights are interpreted directionally, and 1.1.2 went
+    # out of its way to make those signs deterministic; a micro-optimization on
+    # a step irlba dominates anyway is not worth reintroducing that.
+    col_sds <- apply(input_matrix, 2, sd)
+    col_nz <- .columnNonzeroFraction(input_matrix)
 
     zero_sd_cols <- which(col_sds < zero_sd_threshold | col_nz < nz_propion_threshold)
     col_sds_safe <- col_sds

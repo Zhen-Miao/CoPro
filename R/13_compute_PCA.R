@@ -63,7 +63,10 @@ setGeneric("computePCA",
   if (center && scale.) {
     return(center_scale_matrix_opt(mat))
   } else if (center) {
-    return(t(t(mat) - colMeans(mat)))
+    # sweep() subtracts in place over one pass. The previous
+    # t(t(mat) - colMeans(mat)) spelling made two full transposed copies of a
+    # cells-by-genes matrix to achieve the same thing.
+    return(sweep(mat, 2L, colMeans(mat), "-"))
   } else if (!scale.) {
     warning(paste(
       "It is not recommended to skip both centering and scaling of the data,",

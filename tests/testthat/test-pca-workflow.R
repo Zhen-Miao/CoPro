@@ -410,3 +410,48 @@ test_that("computeNormalizedCorrelation works for CoProMulti aggregate mode", {
   expect_true("aggregateCorrelation" %in% colnames(agg_df))
   expect_true(is.numeric(agg_df$sigmaValue))
 })
+
+test_that("column statistics and centering helpers match what they replaced", {
+  set.seed(88)
+  m <- matrix(rnorm(600 * 25), 600, 25)
+  m[sample(length(m), 2000)] <- 0
+
+  # .columnNonzeroFraction() reads a CsparseMatrix's column pointer instead of
+  # building a full logical copy of the matrix.
+  expect_identical(CoPro:::.columnNonzeroFraction(m),
+                   colSums(m != 0) / nrow(m))
+  sp <- as(as(as(Matrix::Matrix(m, sparse = TRUE), "generalMatrix"),
+              "CsparseMatrix"), "dMatrix")
+  expect_identical(as.numeric(CoPro:::.columnNonzeroFraction(sp)),
+                   as.numeric(colSums(sp != 0) / nrow(sp)))
+  # An explicitly stored zero is not a nonzero, so drop0() has to come first.
+  explicit <- sp
+  explicit@x[seq_len(15)] <- 0
+  expect_identical(as.numeric(CoPro:::.columnNonzeroFraction(explicit)),
+                   as.numeric(colSums(explicit != 0) / nrow(explicit)))
+
+  # Centering by sweep() must equal the double-transpose form it replaced.
+  expect_identical(CoPro:::.apply_centering_scaling(m, TRUE, FALSE),
+                   t(t(m) - colMeans(m)))
+})
+
+test_that("column SDs stay on stats::sd, whose signs the pipeline depends on", {
+  # Regression guard. matrixStats::colSds() is ~2.5x faster but uses a
+  # different variance algorithm, and on some columns the two disagree by 1
+  # ulp. That is enough to flip the sign of a PC coming out of prcomp_irlba,
+  # and therefore the sign of the gene weights read off it -- exactly the
+  # non-determinism 1.1.2 removed. Assert the discrepancy is real so nobody
+  # "optimizes" this back without seeing why it was rejected.
+  obj <- create_test_copro_single(n_cells = 320, n_genes = 60,
+                                  n_cell_types = 2, seed = 11)
+  obj <- subsetData(obj, cellTypesOfInterest = c("CellTypeA", "CellTypeB"))
+  m <- obj@normalizedDataSub[obj@cellTypesSub == "CellTypeB", , drop = FALSE]
+
+  skip_if_not_installed("matrixStats")
+  expect_false(identical(apply(m, 2, stats::sd), matrixStats::colSds(m)))
+
+  # And the scaling actually used is the stats::sd one.
+  scaled <- CoPro:::center_scale_matrix_opt(m)
+  expect_identical(as.numeric(attr(scaled, "scaled:scale")),
+                   as.numeric(apply(m, 2, stats::sd)))
+})

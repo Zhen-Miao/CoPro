@@ -193,6 +193,28 @@ setGeneric("getCorrTwoTypes",
 }
 
 
+#' Left-multiply a kernel by a cell-score vector: `x' K`
+#'
+#' `getKernelMatrix()` defaults to `materialize = TRUE`, which decodes an
+#' encoded float32 kernel into a double `dgCMatrix` -- 4 bytes per nonzero
+#' becomes 12, a ~3x spike reaching gigabytes on a large panel -- purely so
+#' `%*%` can be called on it. Keep the kernel encoded and apply the compiled
+#' operator instead. For a double kernel, `crossprod()` computes `x' K` without
+#' transposing `K` first, which the old `t(x) %*% K` spelling also avoided.
+#'
+#' @param x A one-column matrix of cell scores, one row per kernel row.
+#' @param K A kernel, encoded or not.
+#' @return A plain numeric vector with one entry per kernel column.
+#' @noRd
+.leftMultiplyKernel <- function(x, K) {
+  if (.isFloat32SparseKernel(K)) {
+    # t() on an encoded kernel flips an orientation flag rather than moving
+    # data, so this stays allocation-free.
+    return(as.numeric(.float32KernelMatMult(t(K), x)))
+  }
+  as.numeric(crossprod(x, K))
+}
+
 .getCorrTwoTypesCoreSingle <- function(object, cellTypeA, cellTypeB, ccIndex = 1,
                             sigmaValueChoice) {
 
@@ -209,15 +231,14 @@ setGeneric("getCorrTwoTypes",
     cell_score_data_a <- as.matrix(cell_score_data_a)
   }
   
-  x1 <- t(cell_score_data_a)
-  x2 <- getCellScores(object, sigma = sigmaValueChoice, 
-                      cellType = cellTypeB, ccIndex = ccIndex, 
+  x2 <- getCellScores(object, sigma = sigmaValueChoice,
+                      cellType = cellTypeB, ccIndex = ccIndex,
                       verbose = FALSE)
-  k <- getKernelMatrix(object, sigma = sigmaValueChoice, 
-                       cellType1 = cellTypeA, cellType2 = cellTypeB, 
-                       verbose = FALSE)
+  k <- getKernelMatrix(object, sigma = sigmaValueChoice,
+                       cellType1 = cellTypeA, cellType2 = cellTypeB,
+                       verbose = FALSE, materialize = FALSE)
 
-  df <- data.frame(AK = (x1 %*% k)[1, , drop = TRUE], B = x2)
+  df <- data.frame(AK = .leftMultiplyKernel(cell_score_data_a, k), B = x2)
   return(df)
 }
 
@@ -249,12 +270,14 @@ setGeneric("getCorrTwoTypes",
         cell_score_data_a_slide <- as.matrix(cell_score_data_a_slide)
       }
       
-      x1 <- t(cell_score_data_a_slide)
       x2 <- cell_score_data_b_slide
-      k <- getKernelMatrix(object, sigma = sigmaValueChoice, 
-                           cellType1 = cellTypeA, cellType2 = cellTypeB, 
-                           slide = q, verbose = FALSE)
-      df_q[[q]] <- data.frame(AK = (x1 %*% k)[1, , drop = TRUE], B = x2, slideID = q)
+      k <- getKernelMatrix(object, sigma = sigmaValueChoice,
+                           cellType1 = cellTypeA, cellType2 = cellTypeB,
+                           slide = q, verbose = FALSE, materialize = FALSE)
+      df_q[[q]] <- data.frame(
+        AK = .leftMultiplyKernel(cell_score_data_a_slide, k),
+        B = x2, slideID = q
+      )
     } else {
       # Create empty data frame if no cells in this slide
       df_q[[q]] <- data.frame(AK = numeric(0), B = numeric(0), slideID = character(0))
