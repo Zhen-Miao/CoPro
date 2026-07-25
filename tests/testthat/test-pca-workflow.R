@@ -433,6 +433,52 @@ test_that("column statistics and centering helpers match what they replaced", {
   # Centering by sweep() must equal the double-transpose form it replaced.
   expect_identical(CoPro:::.apply_centering_scaling(m, TRUE, FALSE),
                    t(t(m) - colMeans(m)))
+
+  # .columnSds() falls back to apply() for anything that is not a dense
+  # numeric matrix, because matrixStats::colSds() does not accept one.
+  expect_identical(CoPro:::.columnSds(sp), apply(sp, 2, stats::sd))
+  # Both paths name their result from colnames(), or leave it unnamed.
+  named <- m
+  colnames(named) <- paste0("g", seq_len(ncol(named)))
+  expect_identical(names(CoPro:::.columnSds(named)), colnames(named))
+  expect_null(names(CoPro:::.columnSds(m)))
+})
+
+test_that("center_scale_matrix_opt() ships .columnSds(), i.e. matrixStats", {
+  # This pins *which* SD implementation is in the shipped code path, which the
+  # equivalence test below deliberately does not: that one shows the two agree
+  # on everything a reader sees, and would pass under either. The two assert
+  # different things and both are wanted.
+  skip_on_cran()
+  skip_if_not_installed("matrixStats")
+  q <- function(e) suppressWarnings(suppressMessages(e))
+
+  obj <- q(create_test_copro_single(n_cells = 320, n_genes = 60,
+                                    n_cell_types = 2, seed = 11))
+  obj <- q(subsetData(obj, cellTypesOfInterest = c("CellTypeA", "CellTypeB")))
+  m <- obj@normalizedDataSub[obj@cellTypesSub == "CellTypeB", , drop = FALSE]
+
+  by_matrix_stats <- matrixStats::colSds(m)
+  by_apply <- apply(m, 2, stats::sd)
+
+  # The assertions below can only tell the two implementations apart on input
+  # where they actually disagree -- here, 1 ulp on Gene56. Whether they do is a
+  # property of the installed matrixStats and BLAS, so establish it rather than
+  # assume it, and skip instead of passing vacuously if it ever stops holding.
+  skip_if(identical(unname(by_matrix_stats), unname(by_apply)),
+          "the two SD implementations agree bit-for-bit on this fixture")
+
+  expect_identical(unname(CoPro:::.columnSds(m)), unname(by_matrix_stats))
+
+  # No column of this fixture is zero-SD or near-empty, so the scale attribute
+  # is the raw SD vector with nothing substituted. Assert that, so a change to
+  # the substitution rule shows up here rather than being absorbed.
+  nz <- colSums(m != 0) / nrow(m)
+  expect_length(which(by_matrix_stats < 1e-3 | nz < 0.01), 0L)
+
+  scaled <- CoPro:::center_scale_matrix_opt(m)
+  expect_identical(unname(attr(scaled, "scaled:scale")),
+                   unname(by_matrix_stats))
 })
 
 test_that("the two column-SD implementations give the same science", {

@@ -20,14 +20,21 @@
   matrix back to itself. Every drawn permutation and every p-value is
   unchanged.
 * Per-column standard deviations in `center_scale_matrix_opt()` use
-  `matrixStats::colSds()` (~2.5x faster than `apply(x, 2, sd)`), and the
-  nonzero-fraction check reads a sparse matrix's column pointer instead of
+  `matrixStats::colSds()` (~2.5x faster than `apply(x, 2, sd)`) via the new
+  `.columnSds()` helper, which falls back to `apply()` for sparse input, and
+  the nonzero-fraction check reads a sparse matrix's column pointer instead of
   building a full logical copy. `colSds()` and `sd()` use different variance
   algorithms and can disagree by 1 ulp, which is enough to flip the sign of a
-  principal component; the CCA weight's coordinate on that PC flips with it, so
-  cell scores, gene weights and normalized correlations are unaffected.
-  `test-pca-workflow.R` runs the pipeline under both implementations and
-  asserts that invariance.
+  principal component; the CCA weight's coordinate on that PC flips with it and
+  the two cancel. **This is the one change in this release that is not
+  bit-identical.** Across the 14-scenario baseline it moves the raw weight
+  vectors in `@skrCCAOut` (a per-PC sign convention) in 3 scenarios, while every
+  reported quantity -- cell scores, gene scores, regression gene weights,
+  normalized correlations, null correlations and p-values -- agrees to
+  **5.4e-11 relative with no sign changes**, and the selected sigma is identical
+  everywhere. Results remain exactly reproducible run to run.
+  `test-pca-workflow.R` asserts both that invariance and that this is the
+  implementation actually shipped.
 * Multi-slide `@pcaResults` stores per-slide *views* of the global PC scores
   (row indices) rather than a second copy of the values, halving what PC scores
   occupy: 72x smaller for the slot itself, and total PC-score memory drops from
@@ -44,7 +51,9 @@
   `sum((Rx K) * (K Ry))` over column blocks, and the low-rank cross term
   applies the operators to its two-column factor instead of to `K`. Blocking
   turned out to be *faster* as well as smaller, because the intermediates stay
-  in cache: on a 150k-cell kernel, 4.09 s / 466 MB against 5.97 s / 1996 MB.
+  in cache: on a 150k-cell kernel, `.whitenedFrobNorm()` itself goes from
+  6.16 s / 2231 MB to 4.35 s / 609 MB (1.42x, 3.7x less peak; minimum of 5
+  repetitions in each of two checkouts).
   `sum(K * K)` likewise no longer allocates a second sparse matrix. The
   normalizer is unchanged to ~4e-15 relative (floating-point reassociation);
   weights, cell scores, gene scores and the selected sigma are bit-identical.

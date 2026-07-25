@@ -35,12 +35,49 @@
 #' `dgCMatrix`. A compressed-column matrix already stores the count: the gaps
 #' in its column pointer. `drop0()` first, because an explicitly stored zero
 #' would otherwise be counted as a nonzero.
+#'
+#' A symmetric compressed-column matrix stores only one triangle, so its column
+#' pointer counts roughly half the nonzeros. No caller passes one today; the
+#' guard is here so that a future one falls back to the slow-but-correct path
+#' instead of silently undercounting.
 #' @noRd
 .columnNonzeroFraction <- function(x) {
-  if (inherits(x, "CsparseMatrix")) {
+  if (inherits(x, "CsparseMatrix") && !inherits(x, "symmetricMatrix")) {
     return(diff(Matrix::drop0(x)@p) / nrow(x))
   }
   colSums(x != 0) / nrow(x)
+}
+
+#' Per-column standard deviations
+#'
+#' `apply(x, 2, sd)` pays an R-level closure call per column;
+#' `matrixStats::colSds()` is ~2.5x faster on a dense numeric matrix. It only
+#' accepts a base matrix, so `dgCMatrix` and anything else keeps the `apply()`
+#' path.
+#'
+#' The two use different variance algorithms and can disagree by 1 ulp
+#' (observed: 1.11e-16 on 1 of 60 genes in the test fixture). That is enough to
+#' flip the sign of a principal component coming out of `prcomp_irlba()`, which
+#' sounds worse than it is: the CCA weight's coordinate on that PC flips with
+#' it and the two cancel. Cell scores, gene scores, regression gene weights,
+#' normalized correlations and the selected sigma are all invariant to it. A PC
+#' or CCA axis sign is knife-edge under any implementation -- a different BLAS
+#' or R build moves it too -- so the guarantee worth holding is the invariance,
+#' not bit-identity. `test-pca-workflow.R` asserts both that invariance and
+#' that this function is what actually ships.
+#'
+#' Names are set from `colnames()` rather than taken from `colSds()`, whose
+#' `useNames` default has changed across matrixStats releases; `apply()` always
+#' names its result, and the two paths must not differ in that.
+#' @importFrom matrixStats colSds
+#' @noRd
+.columnSds <- function(x) {
+  if (is.matrix(x) && is.numeric(x)) {
+    sds <- matrixStats::colSds(x)
+    names(sds) <- colnames(x)
+    return(sds)
+  }
+  apply(x, 2, sd)
 }
 
 #' centering and scaling the matrix
@@ -56,15 +93,7 @@ center_scale_matrix_opt <- function(input_matrix,
   if (!.is_bpcells(input_matrix)) {
     # Original behavior for base matrix / Matrix::dgCMatrix
     col_means <- colMeans(input_matrix)
-    # Deliberately NOT matrixStats::colSds(), despite it being ~2.5x faster
-    # here. It uses a different variance algorithm and disagrees with
-    # stats::sd() by 1 ulp on some columns (observed: 1.11e-16 on 1 of 60 genes
-    # in the test fixture). That perturbation reaches prcomp_irlba, which flips
-    # the sign of the affected PCs, which flips the sign of the gene weights
-    # read off them. Gene weights are interpreted directionally, and 1.1.2 went
-    # out of its way to make those signs deterministic; a micro-optimization on
-    # a step irlba dominates anyway is not worth reintroducing that.
-    col_sds <- apply(input_matrix, 2, sd)
+    col_sds <- .columnSds(input_matrix)
     col_nz <- .columnNonzeroFraction(input_matrix)
 
     zero_sd_cols <- which(col_sds < zero_sd_threshold | col_nz < nz_propion_threshold)
