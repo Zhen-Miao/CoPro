@@ -26,7 +26,9 @@
 #'   within-tile spatial structure. Default: FALSE.
 #'
 #' @return List of permutation matrices (for "global"/"bin"/"toroidal") or
-#'   list of permuted PC matrices (for "pc"), one per cell type
+#'   list of permuted PC matrices (for "pc"), one per cell type. Held-fixed
+#'   cell types are stored as the compact identity marker built by
+#'   [.identityPermutation()] rather than as an explicit index matrix.
 #' @keywords internal
 .getCellPermu <- function(object, permu_method, nPermu, cts,
                           permu_which = "second_only",
@@ -34,6 +36,7 @@
                           match_quantile = FALSE) {
 
   cell_permu <- setNames(vector("list", length = length(cts)), cts)
+  compact <- .useCompactPermutation()
 
   # Determine which cell types should be permuted
   should_permute <- function(ct_name, ct_index) {
@@ -57,11 +60,15 @@
 
       if (should_permute(ct, idx)) {
         # Permute this cell type
-        cell_permu[[ct]] <- replicate(nPermu,
-                                      sample.int(n = n_cell, replace = FALSE))
+        cell_permu[[ct]] <- if (compact) {
+          list(type = "global_seed", n_cell = n_cell,
+               seeds = sample.int(.Machine$integer.max, nPermu))
+        } else {
+          replicate(nPermu, sample.int(n = n_cell, replace = FALSE))
+        }
       } else {
         # Keep this cell type fixed (identity permutation)
-        cell_permu[[ct]] <- replicate(nPermu, 1:n_cell)
+        cell_permu[[ct]] <- .identityPermutation(n_cell)
       }
     }
   } else if (permu_method == "bin") {
@@ -89,7 +96,6 @@
       if (should_permute(ct, idx)) {
         # Permute this cell type bin-wise
         cell_loc <- location_full[object@cellTypesSub == ct, ]
-        cell_permu[[ct]] <- matrix(ncol = nPermu, nrow = nrow(cell_loc))
 
         # Bins, memberships, and neighboring-bin lookups are invariant across
         # permutations. Preparing them once avoids repeatedly scanning the full
@@ -100,14 +106,25 @@
           num_bins_y = num_bins_y
         )
 
-        for (j in seq_len(nPermu)) {
-          cell_permu[[ct]][, j] <- .drawSpatialPermutation(
-            prepared, match_quantile = match_quantile
+        if (compact) {
+          # `prepared` is O(n); the draws it generates are O(n * nPermu). Keep
+          # the former and regenerate the latter from a per-draw seed.
+          cell_permu[[ct]] <- list(
+            type = "bin_seed", n_cell = n_cell,
+            seeds = sample.int(.Machine$integer.max, nPermu),
+            prepared = prepared, match_quantile = match_quantile
           )
+        } else {
+          cell_permu[[ct]] <- matrix(ncol = nPermu, nrow = nrow(cell_loc))
+          for (j in seq_len(nPermu)) {
+            cell_permu[[ct]][, j] <- .drawSpatialPermutation(
+              prepared, match_quantile = match_quantile
+            )
+          }
         }
       } else {
         # Keep this cell type fixed (identity permutation)
-        cell_permu[[ct]] <- replicate(nPermu, 1:n_cell)
+        cell_permu[[ct]] <- .identityPermutation(n_cell)
       }
     }
   } else if (permu_method == "toroidal") {
@@ -126,7 +143,7 @@
         cell_permu[[ct]] <- generate_toroidal_permutations(cell_loc, nPermu)
       } else {
         # Keep this cell type fixed (identity permutation)
-        cell_permu[[ct]] <- replicate(nPermu, 1:n_cell)
+        cell_permu[[ct]] <- .identityPermutation(n_cell)
       }
     }
   } else if (permu_method == "pc") {
@@ -149,7 +166,7 @@
         )
       } else {
         # Keep this cell type fixed (identity permutation)
-        cell_permu[[ct]] <- replicate(nPermu, 1:n_cell)
+        cell_permu[[ct]] <- .identityPermutation(n_cell)
       }
     }
   } else {

@@ -1,5 +1,31 @@
 # CoPro 1.1.2
 
+## Performance
+
+* The float32 sparse operators pack their dense operand row-major before
+  threading. `float32_csr_xky_cpp()` previously read `X` in R's column-major
+  layout, so every kernel nonzero touched one cache line per PC; it now reads
+  one contiguous run. Measured 3.0-3.5x on the cross-type operators at
+  `nPCA = 30`, tapering to ~1.3-1.6x at `nPCA = 10` or on within-type
+  (symmetric) kernels. Run-to-run variance also collapses (28.5-54.8 s becomes
+  16.6-17.0 s on one within-type case), which matters on a shared node. The
+  conversion is the same one the strided loop performed on each access and the
+  accumulation order is unchanged, so results are bit-identical.
+* Permutation draws for a **held-fixed** cell type are stored as a compact
+  marker instead of `replicate(nPermu, 1:n)`. That matrix held the integers
+  `1..n` repeated `nPermu` times and carried no information: 799 MB at 200,000
+  cells and 999 draws, persisted into the object and into every `saveRDS()`.
+  Detecting it no longer allocates a same-sized logical either, and each draw
+  now skips the row subset that used to copy the fixed type's whole `n x nPCA`
+  matrix back to itself. Every drawn permutation and every p-value is
+  unchanged.
+* `options(CoPro.compactPermutation = TRUE)` additionally stores the
+  *permuted* side as one seed per draw and regenerates it on demand, removing
+  the remaining `n * nPermu * 4` bytes for the `"global"` and `"bin"` nulls.
+  **Off by default, because it changes which permutations are drawn** -- a
+  re-run of a saved analysis will move its p-values within Monte Carlo error.
+  Leave it off to reproduce existing results.
+
 ## Inference
 
 * skrCCA no longer depends on the RNG state. The block-relaxation path (three
