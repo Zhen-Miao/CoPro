@@ -644,3 +644,53 @@ test_that("row-major packing leaves the float32 operators bit-identical", {
     tolerance = 1e-5
   )
 })
+
+test_that("the kernel content signature is cached but still content-sensitive", {
+  # .readKernelNormalizer()/.cacheKernelNormalizer() signature K, Rx and Ry on
+  # every probe, so the scan used to run six times per (sigma, pair). Values
+  # are immutable after construction, so the signature is computed once there.
+  set.seed(515)
+  coords_a <- cbind(runif(300) * 40, runif(300) * 40)
+  coords_b <- cbind(runif(220) * 40, runif(220) * 40)
+  build <- function(A, B, symmetric) .newFloat32SparseKernel(
+    float32_csr_gaussian_kernels_cpp(
+      A, B, sigmas = 3, percentile = 0.4, scaling_factor = 1,
+      lower_limit = 1e-7, upper_quantile = 0.85,
+      truncate_low_distance = TRUE, symmetric = symmetric,
+      normalization = 0L)$kernels[[1L]])
+
+  K <- build(coords_a, coords_b, FALSE)
+  expect_false(is.null(K$signature))
+  expect_identical(K$signature, .computeFloat32KernelSignature(K))
+  expect_identical(.kernelMatrixSignature(K), K$signature)
+
+  # A transposed view represents a different matrix and must not reuse the
+  # forward orientation's cache entry.
+  expect_false(identical(.kernelMatrixSignature(t(K)),
+                         .kernelMatrixSignature(K)))
+  expect_identical(.kernelMatrixSignature(t(t(K))), .kernelMatrixSignature(K))
+
+  # Objects saved before the field existed have no stored signature and must
+  # fall back to the full scan, giving the same answer.
+  legacy <- K
+  legacy$signature <- NULL
+  expect_identical(.kernelMatrixSignature(legacy), K$signature)
+
+  # Different values must produce a different signature, or the cache would
+  # hand back a stale normalizer.
+  other <- build(coords_a[rev(seq_len(nrow(coords_a))), , drop = FALSE],
+                 coords_b, FALSE)
+  expect_false(identical(other$signature, K$signature))
+
+  # A symmetric kernel signs itself too, and round-trips through the cache.
+  self <- build(coords_a, coords_a, TRUE)
+  expect_false(is.null(self$signature))
+  expect_identical(.kernelMatrixSignature(self), self$signature)
+  # t() on a symmetric kernel is the identity, so the signature must not move.
+  expect_identical(.kernelMatrixSignature(t(self)),
+                   .kernelMatrixSignature(self))
+
+  cache <- .cacheKernelNormalizer(list(), "key", K, self, NULL, 12.5)
+  expect_identical(.readKernelNormalizer(cache, "key", K, self, NULL), 12.5)
+  expect_null(.readKernelNormalizer(cache, "key", other, self, NULL))
+})

@@ -38,6 +38,12 @@
   }
   x$Dimnames <- dimnames
   class(x) <- c("CoProFloat32SparseMatrix", "list")
+  # The normalizer cache validates entries by a content signature, and
+  # computing one walks every nonzero. Kernel values never change after
+  # construction -- t() only flips an orientation flag -- so pay for it once
+  # here instead of on every cache probe. Requires the class to be set first,
+  # because the signature reads nrow()/ncol().
+  x$signature <- .computeFloat32KernelSignature(x)
   x
 }
 

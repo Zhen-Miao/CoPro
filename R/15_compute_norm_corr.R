@@ -258,6 +258,21 @@ setGeneric(
   sqrt(max(sum(M * Kc), 0))
 }
 
+#' Compute an encoded float32 kernel's content signature from its values
+#'
+#' Walks every nonzero, so callers should prefer the copy
+#' `.newFloat32SparseKernel()` stores at construction.
+#' @noRd
+.computeFloat32KernelSignature <- function(x) {
+  sums <- .float32KernelSums(x)
+  paste(
+    nrow(x), ncol(x), .float32KernelNnz(x),
+    format(sum(sums$rowSums), digits = 16),
+    format(sums$sumSquares, digits = 16),
+    sep = ":"
+  )
+}
+
 .kernelNormalizerKey <- function(sigma, cellType1, cellType2, slide = NULL) {
   paste(
     format(sigma, scientific = FALSE, trim = TRUE),
@@ -266,16 +281,28 @@ setGeneric(
   )
 }
 
+#' Content signature used to invalidate a cached normalizer
+#'
+#' `.readKernelNormalizer()` and `.cacheKernelNormalizer()` each signature `K`,
+#' `Rx` and `Ry`, so validating one cache entry used to walk every nonzero six
+#' times over. For an encoded float32 kernel the signature is a pure function
+#' of the stored values, and those are immutable once built, so
+#' `.newFloat32SparseKernel()` computes it once at construction and this reads
+#' it back. The full scan remains for kernels without a stored signature:
+#' double `sparseMatrix` kernels, and float32 kernels inside objects saved
+#' before the field existed.
+#' @noRd
 .kernelMatrixSignature <- function(x) {
   if (is.null(x)) return("NULL")
   if (.isFloat32SparseKernel(x)) {
-    sums <- .float32KernelSums(x)
-    return(paste(
-      nrow(x), ncol(x), .float32KernelNnz(x),
-      format(sum(sums$rowSums), digits = 16),
-      format(sums$sumSquares, digits = 16),
-      sep = ":"
-    ))
+    stored <- x$signature
+    if (!is.null(stored)) {
+      # A transposed view represents a different matrix, and t() only flips the
+      # flag, so distinguish the two orientations. Values, and therefore every
+      # summary in the signature, are identical either way.
+      return(if (isTRUE(x$transposed)) paste0(stored, ":t") else stored)
+    }
+    return(.computeFloat32KernelSignature(x))
   }
   values <- if (inherits(x, "sparseMatrix")) x@x else as.numeric(x)
   paste(
