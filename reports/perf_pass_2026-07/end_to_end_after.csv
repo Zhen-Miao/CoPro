@@ -1,0 +1,9 @@
+"label","stage","seconds","peak_mb"
+"after","computePCA",0.953,270.520696
+"after","computeSparseKernelFloat32",33.205,1576.351744
+"after","runSkrCCA",3.037,31.106488
+"after","computeNormalizedCorrelation",3.618,38.039448
+"after","computeGeneAndCellScores",0.0419999999999945,77.35512
+"after","runSkrCCAPermu (99 draws)",3.878,785.211008
+"after","computeNormalizedCorrelationPermu",3.809,824.396768
+"after","@cellPermu stored size",NA,11.881112
