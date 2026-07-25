@@ -20,3 +20,6 @@
 ^\.claude$
 vignettes/.*\.Rmd\.orig$
 vignettes/precompute\.R$
+^reports$
+^AGENTS\.md$
+^poster$

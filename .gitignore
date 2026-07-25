@@ -24,3 +24,4 @@ reports/perf_pass_baseline/current/
 # also hold multi-hundred-MB .rds objects that must not reach the remote.
 reports/skrcca_y_precompute_speed/
 tests/testthat/testthat-problems.rds
+tests/testthat/_problems/
