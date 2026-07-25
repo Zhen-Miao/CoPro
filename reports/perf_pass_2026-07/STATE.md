@@ -60,10 +60,6 @@ cd /tmp/copro_base && Rscript reports/perf_pass_2026-07/benchmark_end_to_end.R b
 
 ## Deliberately not done
 
-- `matrixStats::colSds()` in place of `apply(x, 2, sd)` — 2.5x faster but
-  disagrees by 1 ulp on some columns, which flips PC signs and therefore gene
-  weight signs. Rejected; see the comment in `R/02_helper_functions.R` and the
-  regression test in `test-pca-workflow.R`.
 - Computing the Gaussian weight once per edge in the kernel builder — the
   default `normalization = 0` path already makes only two passes, and
   collapsing to one costs a permanent ~50% increase in the largest temporary.

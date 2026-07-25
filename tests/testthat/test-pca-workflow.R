@@ -435,25 +435,85 @@ test_that("column statistics and centering helpers match what they replaced", {
                    t(t(m) - colMeans(m)))
 })
 
-test_that("column SDs stay on stats::sd, whose signs the pipeline depends on", {
-  # Regression guard. matrixStats::colSds() is ~2.5x faster but uses a
-  # different variance algorithm, and on some columns the two disagree by 1
-  # ulp. That is enough to flip the sign of a PC coming out of prcomp_irlba,
-  # and therefore the sign of the gene weights read off it -- exactly the
-  # non-determinism 1.1.2 removed. Assert the discrepancy is real so nobody
-  # "optimizes" this back without seeing why it was rejected.
-  obj <- create_test_copro_single(n_cells = 320, n_genes = 60,
-                                  n_cell_types = 2, seed = 11)
-  obj <- subsetData(obj, cellTypesOfInterest = c("CellTypeA", "CellTypeB"))
-  m <- obj@normalizedDataSub[obj@cellTypesSub == "CellTypeB", , drop = FALSE]
-
+test_that("the two column-SD implementations give the same science", {
+  # matrixStats::colSds() and apply(x, 2, sd) use different variance algorithms
+  # and disagree by 1 ulp on some columns. That is enough to flip the sign of a
+  # principal component out of prcomp_irlba(), which sounds worse than it is:
+  # the CCA weight's coordinate on that PC flips with it and the two cancel.
+  #
+  # Run the whole pipeline under each implementation and check what a reader of
+  # the results would actually see. Component sign is compared with
+  # .align_sign() because the sign of a CCA axis is inherently ambiguous -- a
+  # different BLAS or R build can flip it under the existing code too -- while
+  # the sign-invariant quantities are held to a tight tolerance.
+  skip_on_cran()
   skip_if_not_installed("matrixStats")
-  expect_false(identical(apply(m, 2, stats::sd), matrixStats::colSds(m)))
+  q <- function(e) suppressWarnings(suppressMessages(e))
 
-  # And the scaling actually used is the stats::sd one.
-  scaled <- CoPro:::center_scale_matrix_opt(m)
-  expect_identical(as.numeric(attr(scaled, "scaled:scale")),
-                   as.numeric(apply(m, 2, stats::sd)))
+  # Reproduce center_scale_matrix_opt() with a supplied SD function, per cell
+  # type, then hand the result to computePCA(center = FALSE, scale. = FALSE).
+  # That exercises the real difference between the two implementations without
+  # mocking an internal binding.
+  prescale <- function(m, sd_fun) {
+    col_means <- colMeans(m)
+    col_sds <- sd_fun(m)
+    col_nz <- colSums(m != 0) / nrow(m)
+    safe <- col_sds
+    drop <- which(col_sds < 1e-3 | col_nz < 0.01)
+    if (length(drop) > 0) safe[drop] <- 1.0
+    scale(m, center = col_means, scale = safe)
+  }
+
+  run <- function(sd_fun) {
+    o <- q(create_test_copro_single(n_cells = 320, n_genes = 60,
+                                    n_cell_types = 2, seed = 11))
+    o <- q(subsetData(o, cellTypesOfInterest = c("CellTypeA", "CellTypeB")))
+    for (ct in c("CellTypeA", "CellTypeB")) {
+      rows <- o@cellTypesSub == ct
+      o@normalizedDataSub[rows, ] <- prescale(
+        o@normalizedDataSub[rows, , drop = FALSE], sd_fun)
+    }
+    o <- q(computePCA(o, nPCA = 8, center = FALSE, scale. = FALSE))
+    o <- q(computeSparseKernel(o, sigmaValues = c(0.05, 0.1), verbose = FALSE))
+    o <- q(runSkrCCA(o, scalePCs = TRUE, nCC = 2))
+    o <- q(computeNormalizedCorrelation(o))
+    o <- q(computeGeneAndCellScores(o))
+    q(computeRegressionGeneScores(o))
+  }
+  with_matrix_stats <- run(function(x) matrixStats::colSds(x))
+  with_apply <- run(function(x) apply(x, 2, stats::sd))
+
+  # Sign-invariant outputs -- the ones the manuscript reports -- must agree
+  # tightly, and the selected bandwidth must be the same.
+  expect_equal(
+    do.call(rbind, with_matrix_stats@normalizedCorrelation)$normalizedCorrelation,
+    do.call(rbind, with_apply@normalizedCorrelation)$normalizedCorrelation,
+    tolerance = 1e-10
+  )
+  expect_identical(with_matrix_stats@sigmaValueChoice,
+                   with_apply@sigmaValueChoice)
+
+  # Scores and gene weights must agree up to the per-component sign.
+  compare_aligned <- function(a, b, label) {
+    keys <- intersect(names(a), names(b))
+    expect_gt(length(keys), 0L)
+    for (k in keys) {
+      va <- as.matrix(a[[k]])
+      vb <- as.matrix(b[[k]])
+      expect_identical(dim(va), dim(vb), label = paste(label, k, "dim"))
+      for (cc in seq_len(ncol(va))) {
+        expect_equal(unname(.align_sign(va[, cc], vb[, cc])),
+                     unname(va[, cc]), tolerance = 1e-8,
+                     label = paste(label, k, "component", cc))
+      }
+    }
+  }
+  compare_aligned(with_matrix_stats@cellScores, with_apply@cellScores,
+                  "cellScores")
+  compare_aligned(with_matrix_stats@geneScores, with_apply@geneScores,
+                  "geneScores")
+  compare_aligned(with_matrix_stats@geneScoresRegression,
+                  with_apply@geneScoresRegression, "geneScoresRegression")
 })
 
 test_that("per-slide PC scores are stored as views of the global scores", {

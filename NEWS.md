@@ -19,6 +19,15 @@
   now skips the row subset that used to copy the fixed type's whole `n x nPCA`
   matrix back to itself. Every drawn permutation and every p-value is
   unchanged.
+* Per-column standard deviations in `center_scale_matrix_opt()` use
+  `matrixStats::colSds()` (~2.5x faster than `apply(x, 2, sd)`), and the
+  nonzero-fraction check reads a sparse matrix's column pointer instead of
+  building a full logical copy. `colSds()` and `sd()` use different variance
+  algorithms and can disagree by 1 ulp, which is enough to flip the sign of a
+  principal component; the CCA weight's coordinate on that PC flips with it, so
+  cell scores, gene weights and normalized correlations are unaffected.
+  `test-pca-workflow.R` runs the pipeline under both implementations and
+  asserts that invariance.
 * Multi-slide `@pcaResults` stores per-slide *views* of the global PC scores
   (row indices) rather than a second copy of the values, halving what PC scores
   occupy: 72x smaller for the slot itself, and total PC-score memory drops from

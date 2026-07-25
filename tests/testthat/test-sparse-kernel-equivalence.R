@@ -3,11 +3,7 @@
 # dense result numerically while returning sparse dgCMatrix cross-kernels and
 # triangularly stored dsCMatrix within-type kernels.
 
-# Flip the sign of `x` (per column vector) to best match a reference, so weight
-# vectors that are equal up to sign compare as equal.
-.align_sign <- function(ref, x) {
-  if (sum((x - ref)^2) <= sum((x + ref)^2)) x else -x
-}
+# .align_sign() now lives in helper-test-data.R, shared across test files.
 
 # Compare a sparse kernel against the dense kernel for one (sigma, pair).
 .expect_kernel_equal <- function(dense_obj, sparse_obj, sigma, ct1, ct2,

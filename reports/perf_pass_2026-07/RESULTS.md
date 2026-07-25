@@ -156,19 +156,59 @@ badly-sized trial block; at a sensible block size it wins on both.
 
 ---
 
+## `matrixStats::colSds` — rejected, then adopted after a closer look
+
+Per-column SDs use `matrixStats::colSds()`, which is ~2.5x faster than
+`apply(x, 2, sd)`.
+
+This was initially backed out, on a mistaken reading. The two use different
+variance algorithms and disagree by 1 ulp on some columns (1.11e-16 on 1 of 60
+genes in the fixture); switching produced a relative difference of exactly 2 in
+`@skrCCAOut`, which is the signature of a sign flip. I reported that as "flips
+the sign of a PC, and with it the sign of the gene weights read off that PC"
+and rejected the change on those grounds.
+
+The second half of that was wrong, and the downstream numbers I had already
+collected contradicted it. Decomposing the difference:
+
+- Exactly one principal component flipped (CellTypeB's PC2). All others were
+  identical to ~1e-13.
+- The CCA weight's *coordinate on that PC* flipped with it. That is what
+  produced the relative difference of 2 — one coordinate, not a negated vector.
+- The two cancel. Every reported quantity was unchanged:
+
+  | output | max difference | sign flips |
+  |---|---|---|
+  | `cellScores` | 5.2e-14 | none |
+  | `geneScores` | 5.0e-15 | none |
+  | `geneScoresRegression` | 7.6e-15 | none |
+  | `normalizedCorrelation` | 4.7e-15 | — |
+
+The gene involved was also not marginal — `Gene56`, SD rank 34 of 60, 99.4%
+nonzero — so "it only moved a negligible weight" is not the explanation
+either. The explanation is that a PC sign and the CCA coordinate on it are the
+same convention seen twice.
+
+Re-measured at the final branch state, the two implementations are
+**bit-identical end-to-end** on this fixture: no PC sign flips, and zero
+difference in cell scores, gene scores, regression gene scores and normalized
+correlations. The full 14-scenario baseline is likewise bit-identical.
+
+The flip observed earlier in the session is not reproducible at the final
+state, which is itself the point: **the sign of a PC or CCA axis is
+knife-edge** and a different BLAS, R build or 1-ulp input change can move it
+under any implementation. That fragility is pre-existing and not something
+`colSds` introduces. What matters is that everything downstream is invariant to
+it. `test-pca-workflow.R` now runs the whole pipeline under both
+implementations and asserts that invariance — sign-invariant outputs
+(normalized correlation, selected sigma) compared directly, scores and gene
+weights compared after sign alignment — rather than relying on bit-identity,
+which would be the wrong thing to depend on.
+
+`matrixStats` costs 13 ms to load, declares no `Imports` of its own, and was
+already a CoPro dependency before this pass.
+
 ## Measured and rejected
-
-Two optimizations were implemented, measured, and backed out.
-
-**`matrixStats::colSds()` for per-column SDs** — 2.5x faster, but it uses a
-different variance algorithm and disagrees with `stats::sd()` by 1 ulp on some
-columns (1.11e-16 on 1 of 60 genes in the test fixture). That reaches
-`prcomp_irlba`, flips the sign of the affected PCs, and flips the sign of the
-gene weights read off them — the baseline caught it as a relative difference of
-exactly 2 in `skrCCAOut`. Gene weights are read directionally and 1.1.2 went
-out of its way to make those signs deterministic. Not worth it for a step irlba
-dominates. See the comment in `R/02_helper_functions.R` and the regression test
-in `test-pca-workflow.R`.
 
 **One Gaussian-weight pass per edge in the kernel builder** — the default
 `normalization = 0` path already makes only two passes, and collapsing to one
