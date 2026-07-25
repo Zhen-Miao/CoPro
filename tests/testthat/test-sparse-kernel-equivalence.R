@@ -214,6 +214,54 @@ test_that(".exactLowQuantile reproduces R type-7 quantile from the smallest valu
   }
 })
 
+test_that(".type7QuantileRepeated matches quantile() on the repeated vector", {
+  # A symmetric kernel stores one triangle but its quantile is defined on the
+  # represented full matrix, so the helper must reproduce exactly what
+  # rep(x, each = repetitions) would have given -- without building it.
+  # expect_identical, not expect_equal: the helper mirrors quantile()'s type-7
+  # arithmetic statement for statement so the clip threshold cannot drift, and
+  # a tolerance would hide a rearrangement that reintroduces last-bit error.
+  set.seed(29)
+  for (n in c(1L, 2L, 3L, 4L, 5L, 17L, 100L, 1001L)) {
+    x <- runif(n)
+    for (repetitions in c(1L, 2L, 3L, 4L)) {
+      for (p in c(0, 1e-3, 0.1, 0.25, 1 / 3, 0.5, 0.66, 0.85, 1 - 1e-4, 1)) {
+        expect_identical(
+          CoPro:::.type7QuantileRepeated(x, p, repetitions),
+          as.numeric(stats::quantile(rep(x, each = repetitions), p,
+                                     names = FALSE)),
+          info = paste("n", n, "reps", repetitions, "p", p)
+        )
+      }
+    }
+  }
+
+  # Heavy ties: the rank arithmetic must not assume distinct values, and the
+  # equal-order-statistic branch must be taken rather than interpolated.
+  tied <- c(rep(0.5, 40), runif(20))
+  for (repetitions in c(1L, 2L)) {
+    for (p in c(0.1, 0.5, 0.85)) {
+      expect_identical(
+        CoPro:::.type7QuantileRepeated(tied, p, repetitions),
+        as.numeric(stats::quantile(rep(tied, each = repetitions), p,
+                                   names = FALSE))
+      )
+    }
+  }
+
+  # repetitions = 1 must reduce to the ordinary quantile, and NAs are dropped
+  # the way the old na.rm = TRUE call dropped them.
+  plain <- runif(500)
+  expect_identical(CoPro:::.type7QuantileRepeated(plain, 0.85, 1L),
+                   as.numeric(stats::quantile(plain, 0.85, names = FALSE)))
+  expect_identical(CoPro:::.type7QuantileRepeated(c(plain, NA), 0.85, 1L),
+                   as.numeric(stats::quantile(plain, 0.85, names = FALSE)))
+  expect_error(CoPro:::.type7QuantileRepeated(numeric(0), 0.5, 1L),
+               "no values")
+  expect_error(CoPro:::.type7QuantileRepeated(plain, 0.5, 0L),
+               "positive integer")
+})
+
 test_that("sparse-safe kernel normalizations match the dense formulas", {
   set.seed(17)
   Kfull <- matrix(0, nrow = 40, ncol = 35)

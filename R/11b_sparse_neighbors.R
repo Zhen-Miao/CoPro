@@ -220,6 +220,69 @@
   sorted_small[lo] + frac * (sorted_small[lo + 1L] - sorted_small[lo])
 }
 
+#' Exact R type-7 quantile of a vector in which every value repeats `repetitions` times
+#'
+#' A symmetric sparse kernel stores one triangle, but its quantile is defined on
+#' the represented full matrix, where every off-diagonal value appears twice.
+#' Materializing `rep(x, each = 2L)` to recover that costs a second copy of a
+#' vector that can hold hundreds of millions of entries -- +3.2 GB at 200M
+#' nonzeros -- and then sorts twice as much data.
+#'
+#' The repeated vector is fully determined by the stored one: its k-th smallest
+#' element is the `ceiling(k / repetitions)`-th smallest stored value. So the
+#' two order statistics R's type-7 rule interpolates between can be read
+#' directly, and `sort(partial=)` finds them by selection rather than a full
+#' sort. This is the R counterpart of `type7_quantile()` in
+#' `src/float32_sparse.cpp`, which does the same index arithmetic for the
+#' float32 path.
+#'
+#' @param x numeric vector of stored values, in any order.
+#' @param p numeric probability in \[0, 1\].
+#' @param repetitions positive integer; how many times each stored value is
+#'   represented. `1` reduces to `stats::quantile(x, p)`.
+#' @return numeric quantile of the represented vector.
+#' @noRd
+.type7QuantileRepeated <- function(x, p, repetitions = 1L) {
+  repetitions <- as.integer(repetitions)
+  if (length(repetitions) != 1L || is.na(repetitions) || repetitions < 1L) {
+    stop("repetitions must be a positive integer")
+  }
+  x <- x[!is.na(x)]
+  n <- length(x)
+  if (n == 0L) stop("Cannot compute a quantile of no values")
+  if (n == 1L) return(x[[1L]])
+
+  # Mirror stats::quantile(type = 7) statement for statement, including how it
+  # forms `index` and `h`, so this is a bit-for-bit drop-in for the call it
+  # replaces. Algebraically equivalent rearrangements -- (n-1)*p instead of
+  # 1 + (n-1)*p, or lo + h*(hi-lo) instead of (1-h)*lo + h*hi -- disagree in the
+  # last bit, which would show up as a changed clip threshold.
+  #
+  # as.numeric() keeps the represented size exact past the 2^31 boundary, which
+  # a symmetric kernel with more than ~1.07e9 stored values would cross.
+  represented <- as.numeric(n) * repetitions
+  index <- 1 + max(represented - 1, 0) * p
+  lower <- floor(index)
+  upper <- ceiling(index)
+
+  # One-based rank k in the represented vector is the ceiling(k / repetitions)-th
+  # smallest stored value. Done in integer arithmetic so it cannot round.
+  source_rank <- function(rank) as.integer((rank - 1) %/% repetitions + 1)
+  lower_source <- source_rank(lower)
+  upper_source <- source_rank(upper)
+
+  sorted <- sort(x, partial = unique(c(lower_source, upper_source)))
+  quantile_value <- sorted[lower_source]
+  upper_value <- sorted[upper_source]
+  # quantile() skips the interpolation when the two order statistics coincide,
+  # which also avoids (1-h)*a + h*a drifting off a.
+  if (index > lower && upper_value != quantile_value) {
+    h <- index - lower
+    quantile_value <- (1 - h) * quantile_value + h * upper_value
+  }
+  quantile_value
+}
+
 #' Compute the low distance percentile for one cell-type block, exactly,
 #' without forming the dense distance matrix.
 #'

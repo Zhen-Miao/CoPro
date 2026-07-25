@@ -19,6 +19,14 @@
   now skips the row subset that used to copy the fixed type's whole `n x nPCA`
   matrix back to itself. Every drawn permutation and every p-value is
   unchanged.
+* The sparse-kernel upper-quantile clip no longer materializes
+  `rep(values, each = 2L)` for symmetric kernels. `.type7QuantileRepeated()`
+  reads the two order statistics R's type-7 rule needs directly from the stored
+  triangle, by selection rather than a full sort. Measured 2.1x faster and
+  600 MB less peak at 30M stored values, scaling to several GB at the
+  hundreds-of-millions of nonzeros large panels reach. It mirrors
+  `stats::quantile()`'s arithmetic statement for statement, so the clip
+  threshold is bit-identical.
 * `options(CoPro.compactPermutation = TRUE)` additionally stores the
   *permuted* side as one seed per draw and regenerates it on demand, removing
   the remaining `n * nPermu * 4` bytes for the `"global"` and `"bin"` nulls.
