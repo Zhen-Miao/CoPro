@@ -58,6 +58,11 @@ run_within_type <- function() {
                                           verbose = FALSE))
   obj <- quiet(runSkrCCA(obj, scalePCs = TRUE, nCC = 2))
   obj <- quiet(computeNormalizedCorrelation(obj))
+  # The whitened-Frobenius reassociation this pass introduces perturbs exactly
+  # this scenario's normalizer, so it is the one that most needs the scores
+  # compared rather than left empty.
+  obj <- quiet(computeGeneAndCellScores(obj))
+  obj <- quiet(computeRegressionGeneScores(obj))
   obj
 }
 
@@ -74,6 +79,7 @@ run_multi <- function(center_per_slide, scalePCs) {
   obj <- quiet(runSkrCCA(obj, scalePCs = scalePCs, nCC = 2))
   obj <- quiet(computeNormalizedCorrelation(obj))
   obj <- quiet(computeGeneAndCellScores(obj))
+  obj <- quiet(computeRegressionGeneScores(obj))
   obj
 }
 
@@ -87,6 +93,8 @@ run_permutation <- function(permu_method, permu_which = "second_only") {
   obj <- quiet(computeSparseKernel(obj, sigmaValues = SIGMAS, verbose = FALSE))
   obj <- quiet(runSkrCCA(obj, scalePCs = TRUE, nCC = 1))
   obj <- quiet(computeNormalizedCorrelation(obj))
+  obj <- quiet(computeGeneAndCellScores(obj))
+  obj <- quiet(computeRegressionGeneScores(obj))
   set.seed(101)
   obj <- quiet(runSkrCCAPermu(obj, nPermu = 20, permu_method = permu_method,
                               permu_which = permu_which, verbose = FALSE))
@@ -98,8 +106,12 @@ run_permutation <- function(permu_method, permu_which = "second_only") {
 
 has <- function(obj, name) name %in% methods::slotNames(obj)
 
+# An empty slot compares equal to an empty slot, so a scenario that never
+# computed its scores would report OK while proving nothing about them. That is
+# how within_type_float32 and the permutation scenarios came to claim
+# bit-identical scores they had never computed. Fail the capture instead.
 capture <- function(obj) {
-  list(
+  out <- list(
     skrCCAOut             = obj@skrCCAOut,
     normalizedCorrelation = obj@normalizedCorrelation,
     sigmaValueChoice      = obj@sigmaValueChoice,
@@ -108,6 +120,12 @@ capture <- function(obj) {
     geneScoresRegression  = if (has(obj, "geneScoresRegression"))
       obj@geneScoresRegression
   )
+  empty <- names(out)[vapply(out, function(v) length(v) == 0L, logical(1))]
+  if (length(empty) > 0L) {
+    stop("scenario produced empty slot(s): ", paste(empty, collapse = ", "),
+         " -- an empty-to-empty comparison is vacuous")
+  }
+  out
 }
 
 results <- list()
