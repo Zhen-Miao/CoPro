@@ -438,6 +438,16 @@ test_that("failed draws keep their slot when results are reassembled", {
   expect_equal(vapply(out, is.null, logical(1)), case$expected_null)
 })
 
+# R CMD check sets _R_CHECK_LIMIT_CORES_, under which parallel::makeCluster()
+# refuses to spawn more than two workers and errors out. The package already
+# honours this variable when sizing the C++ thread pool
+# (R/12c_float32_sparse_kernel.R); these tests must too. Two workers still
+# exercise the split-and-reassemble path, which is what is under test.
+.test_worker_count <- function(preferred = 3L) {
+  limit <- Sys.getenv("_R_CHECK_LIMIT_CORES_", "")
+  if (nzchar(limit) && !identical(limit, "false")) 2L else preferred
+}
+
 test_that("parallel reassembly of failed draws matches sequential", {
   skip_on_cran()
   # Gated with skip() rather than a silent `if`: under devtools::load_all()
@@ -452,7 +462,7 @@ test_that("parallel reassembly of failed draws matches sequential", {
                               n_cores = 1, verbose = FALSE)
   par_out <- suppressMessages(
     .runPermutationDraws(case$cell_permu, case$cts, 8, case$flaky,
-                         n_cores = 3, verbose = FALSE)
+                         n_cores = .test_worker_count(), verbose = FALSE)
   )
   expect_equal(par_out, out)
 })
@@ -476,7 +486,7 @@ test_that("parallel and sequential draws agree", {
   seq_out <- .runPermutationDraws(cell_permu, cts, 7, worker, n_cores = 1,
                                   verbose = FALSE)
   par_out <- suppressMessages(
-    .runPermutationDraws(cell_permu, cts, 7, worker, n_cores = 3,
+    .runPermutationDraws(cell_permu, cts, 7, worker, n_cores = .test_worker_count(),
                          verbose = FALSE)
   )
   expect_length(par_out, 7L)
