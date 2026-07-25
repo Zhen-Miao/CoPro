@@ -11,7 +11,44 @@
 #' @param cts Cell type names
 #' @return Prepared PC matrices
 #' @noRd
-.preparePCMatrices <- function(pc_data = NULL, pca_global, scalePCs = TRUE, 
+#' Record a per-slide view of the global PC scores
+#'
+#' `pcaResults[[slide]][[ct]]` is, except when `center_per_slide = TRUE`,
+#' exactly a set of rows of `pcaGlobal[[ct]]$x`. Storing the values again
+#' doubles the memory the PC scores occupy for no new information. Store the
+#' row indices and rebuild the slice on demand in `.resolvePCSlice()`.
+#' @noRd
+.newPCSlice <- function(rows) {
+  list(type = "pcaSlice", rows = as.integer(rows))
+}
+
+#' Is this `pcaResults` entry a stored view rather than a materialized matrix?
+#' @noRd
+.isPCSlice <- function(entry) {
+  is.list(entry) && identical(entry$type, "pcaSlice")
+}
+
+#' Materialize one `pcaResults` entry
+#'
+#' Accepts either representation. A matrix is returned untouched, which covers
+#' both the `center_per_slide = TRUE` case -- where the slice is re-centered
+#' and so is genuinely different data -- and objects saved before slices became
+#' views.
+#' @param entry One `pcaResults[[slide]][[ct]]` element.
+#' @param scores The cell-by-PC matrix the indices refer to, normally
+#'   `pca_global[[ct]]$x` or a scaled copy of it.
+#' @return A cell-by-PC matrix.
+#' @noRd
+.resolvePCSlice <- function(entry, scores) {
+  if (is.null(entry)) return(NULL)
+  if (!is.list(entry) || !identical(entry$type, "pcaSlice")) return(entry)
+  if (is.null(scores)) {
+    stop("Cannot resolve per-slide PC scores: the global PCA is missing.")
+  }
+  scores[entry$rows, , drop = FALSE]
+}
+
+.preparePCMatrices <- function(pc_data = NULL, pca_global, scalePCs = TRUE,
                               slides = NULL, cts) {
   
   if (is.null(slides)) {
@@ -70,20 +107,30 @@
         if (is.null(pca_ct_obj) || !"sdev" %in% names(pca_ct_obj)) {
           stop(paste("Invalid PCA object for cell type:", ct))
         }
-        
+
         pca_A_sd <- pca_ct_obj$sdev
         if (is.null(pca_A_sd) || length(pca_A_sd) == 0) {
           stop(paste("Invalid sdev for cell type:", ct))
         }
-        
+
+        # Scale the global scores once per cell type, then take slide views of
+        # the result, instead of calling scale() once per (slide, cell type).
+        # Slices that are stored as matrices -- center_per_slide, or a legacy
+        # object -- are scaled individually as before.
+        scaled_global <- scale(pca_ct_obj$x, center = FALSE, scale = pca_A_sd)
+
         for (sID in slides) {
-          if (!sID %in% names(pc_data) || !ct %in% names(pc_data[[sID]]) || 
+          if (!sID %in% names(pc_data) || !ct %in% names(pc_data[[sID]]) ||
               is.null(pc_data[[sID]][[ct]])) {
             stop(paste("Missing data for slide:", sID, "cell type:", ct))
           }
-          
-          X_list_scaled[[sID]][[ct]] <- scale(pc_data[[sID]][[ct]], 
-                                             center = FALSE, scale = pca_A_sd)
+
+          entry <- pc_data[[sID]][[ct]]
+          X_list_scaled[[sID]][[ct]] <- if (.isPCSlice(entry)) {
+            .resolvePCSlice(entry, scaled_global)
+          } else {
+            scale(entry, center = FALSE, scale = pca_A_sd)
+          }
         }
       }
       return(X_list_scaled)
@@ -97,7 +144,15 @@
           stop(paste("Cell type mismatch in pcaResults for slide", sID))
         }
       }
-      return(pc_data)
+      resolved <- pc_data
+      for (sID in slides) {
+        for (ct in cts) {
+          resolved[[sID]][[ct]] <- .resolvePCSlice(
+            pc_data[[sID]][[ct]], pca_global[[ct]]$x
+          )
+        }
+      }
+      return(resolved)
     }
   }
 }

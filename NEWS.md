@@ -19,6 +19,15 @@
   now skips the row subset that used to copy the fixed type's whole `n x nPCA`
   matrix back to itself. Every drawn permutation and every p-value is
   unchanged.
+* Multi-slide `@pcaResults` stores per-slide *views* of the global PC scores
+  (row indices) rather than a second copy of the values, halving what PC scores
+  occupy: 72x smaller for the slot itself, and total PC-score memory drops from
+  ~128 MB to ~64 MB at 200,000 cells and 40 PCs. `.preparePCMatrices()` also
+  whitens the global score matrix once per cell type instead of once per
+  (slide, cell type). Slices are still materialized when
+  `center_per_slide = TRUE`, where re-centering makes them genuinely different
+  data, and objects saved with materialized slices continue to work. The slot's
+  shape -- one entry per slide, keyed by slide name -- is unchanged.
 * The whitened-Frobenius normalizer no longer materializes `(Rx %*% K) %*% Ry`.
   Those two chained sparse products fill in heavily -- 7x then 11x on a
   40k-cell kernel, extrapolating to roughly 1.5 GB at 200k cells -- to produce

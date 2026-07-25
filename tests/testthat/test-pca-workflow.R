@@ -455,3 +455,89 @@ test_that("column SDs stay on stats::sd, whose signs the pipeline depends on", {
   expect_identical(as.numeric(attr(scaled, "scaled:scale")),
                    as.numeric(apply(m, 2, stats::sd)))
 })
+
+test_that("per-slide PC scores are stored as views of the global scores", {
+  obj <- create_test_copro_multi(n_cells_per_slide = 120, n_slides = 2,
+                                 n_cell_types = 2, seed = 91)
+  obj <- subsetData(obj, cellTypesOfInterest = c("CellTypeA", "CellTypeB"))
+  obj <- suppressMessages(computePCA(obj, nPCA = 6))
+
+  # Slot shape is unchanged: one entry per slide, keyed by slide name.
+  expect_length(obj@pcaResults, 2L)
+  expect_setequal(names(obj@pcaResults), c("Slide1", "Slide2"))
+
+  for (sID in c("Slide1", "Slide2")) {
+    for (ct in c("CellTypeA", "CellTypeB")) {
+      entry <- obj@pcaResults[[sID]][[ct]]
+      expect_true(CoPro:::.isPCSlice(entry))
+      expect_type(entry$rows, "integer")
+
+      # Resolving it must give exactly what the old code materialized: the
+      # rows of the global scores for this slide, labelled with cell IDs.
+      resolved <- CoPro:::.resolvePCSlice(entry, obj@pcaGlobal[[ct]]$x)
+      keep <- getSlideID(obj)[obj@cellTypesSub == ct] == sID
+      expected <- obj@pcaGlobal[[ct]]$x[keep, , drop = FALSE]
+      expect_identical(resolved, expected)
+      expect_identical(
+        rownames(resolved),
+        rownames(obj@metaDataSub)[obj@cellTypesSub == ct][keep]
+      )
+    }
+  }
+
+  # The rows partition the cell type exactly once.
+  for (ct in c("CellTypeA", "CellTypeB")) {
+    all_rows <- sort(unname(unlist(
+      lapply(obj@pcaResults, function(s) s[[ct]]$rows))))
+    expect_identical(all_rows, seq_len(nrow(obj@pcaGlobal[[ct]]$x)))
+  }
+})
+
+test_that("center_per_slide keeps materialized slices, and legacy slices still resolve", {
+  make <- function(center_per_slide) {
+    obj <- create_test_copro_multi(n_cells_per_slide = 120, n_slides = 2,
+                                   n_cell_types = 2, seed = 91)
+    obj <- subsetData(obj, cellTypesOfInterest = c("CellTypeA", "CellTypeB"))
+    suppressMessages(computePCA(obj, nPCA = 6,
+                                center_per_slide = center_per_slide))
+  }
+
+  # Re-centering makes the slice something other than a view, so it must stay
+  # a matrix -- otherwise the centering would be silently discarded.
+  centered <- make(TRUE)
+  entry <- centered@pcaResults[["Slide1"]][["CellTypeA"]]
+  expect_false(CoPro:::.isPCSlice(entry))
+  expect_true(is.matrix(entry))
+  expect_equal(colMeans(entry), rep(0, ncol(entry)), tolerance = 1e-12,
+               ignore_attr = TRUE)
+
+  # An object saved before slices became views holds matrices. Both
+  # representations must prepare to the same thing, for both scalePCs settings.
+  lazy <- make(FALSE)
+  legacy <- lazy
+  for (sID in names(legacy@pcaResults)) {
+    for (ct in names(legacy@pcaResults[[sID]])) {
+      legacy@pcaResults[[sID]][[ct]] <- CoPro:::.resolvePCSlice(
+        legacy@pcaResults[[sID]][[ct]], legacy@pcaGlobal[[ct]]$x)
+    }
+  }
+  expect_true(is.matrix(legacy@pcaResults[["Slide1"]][["CellTypeA"]]))
+
+  for (scale_pcs in c(TRUE, FALSE)) {
+    from_view <- CoPro:::.preparePCMatrices(
+      pc_data = lazy@pcaResults, pca_global = lazy@pcaGlobal,
+      scalePCs = scale_pcs, slides = getSlideList(lazy),
+      cts = c("CellTypeA", "CellTypeB"))
+    from_matrix <- CoPro:::.preparePCMatrices(
+      pc_data = legacy@pcaResults, pca_global = legacy@pcaGlobal,
+      scalePCs = scale_pcs, slides = getSlideList(legacy),
+      cts = c("CellTypeA", "CellTypeB"))
+    for (sID in names(from_view)) {
+      for (ct in names(from_view[[sID]])) {
+        expect_equal(from_view[[sID]][[ct]], from_matrix[[sID]][[ct]],
+                     ignore_attr = TRUE,
+                     info = paste(sID, ct, "scalePCs", scale_pcs))
+      }
+    }
+  }
+})
