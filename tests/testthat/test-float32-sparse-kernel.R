@@ -588,3 +588,59 @@ test_that("float32 supports multi-slide pairwise and one-type kernels", {
   })
   expect_length(one_type_fit@cellScores, 1L)
 })
+
+test_that("row-major packing leaves the float32 operators bit-identical", {
+  # The operators pack X row-major in float32 before threading so each nonzero
+  # reads one contiguous run instead of one cache line per PC. The conversion
+  # is the same static_cast the strided loop applied on every access, just
+  # hoisted, and the accumulation order is untouched -- so the packing is a
+  # pure layout change and must not move a single bit. Snapshot the values so a
+  # future rewrite that reorders accumulation is caught rather than absorbed.
+  set.seed(4242)
+  n_left <- 260L
+  n_right <- 190L
+  coords_left <- cbind(runif(n_left) * 40, runif(n_left) * 40)
+  coords_right <- cbind(runif(n_right) * 40, runif(n_right) * 40)
+
+  cross <- .newFloat32SparseKernel(
+    float32_csr_gaussian_kernels_cpp(
+      coords_left, coords_right, sigmas = 3, percentile = 0.4,
+      scaling_factor = 1, lower_limit = 1e-7, upper_quantile = 0.85,
+      truncate_low_distance = TRUE, symmetric = FALSE, normalization = 0L
+    )$kernels[[1L]]
+  )
+  self <- .newFloat32SparseKernel(
+    float32_csr_gaussian_kernels_cpp(
+      coords_left, coords_left, sigmas = 3, percentile = 0.4,
+      scaling_factor = 1, lower_limit = 1e-7, upper_quantile = 0.85,
+      truncate_low_distance = TRUE, symmetric = TRUE, normalization = 0L
+    )$kernels[[1L]]
+  )
+
+  X_left <- matrix(rnorm(n_left * 6L), n_left, 6L)
+  X_right <- matrix(rnorm(n_right * 4L), n_right, 4L)
+
+  # Single-threaded so the value is independent of how rows split across
+  # workers, which is what makes an exact snapshot meaningful.
+  expect_snapshot_value(
+    list(
+      cross     = .kernelXKY(X_left, cross, X_right, n_threads = 1L),
+      transpose = .kernelXKY(X_right, t(cross), X_left, n_threads = 1L),
+      symmetric = .kernelXKY(X_left, self, X_left, n_threads = 1L),
+      matmul    = .float32KernelMatMult(cross, X_right, n_threads = 1L)
+    ),
+    style = "serialize"
+  )
+
+  # Transposing the kernel must agree with transposing the result, and the
+  # packed and threaded paths must agree with each other.
+  expect_equal(
+    .kernelXKY(X_right, t(cross), X_left, n_threads = 1L),
+    t(.kernelXKY(X_left, cross, X_right, n_threads = 1L))
+  )
+  expect_equal(
+    .kernelXKY(X_left, cross, X_right, n_threads = 3L),
+    .kernelXKY(X_left, cross, X_right, n_threads = 1L),
+    tolerance = 1e-5
+  )
+})

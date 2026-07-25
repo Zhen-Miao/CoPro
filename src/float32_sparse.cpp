@@ -228,6 +228,39 @@ int normalized_thread_count(int requested, int tasks) {
   return std::max(1, std::min(requested, tasks));
 }
 
+// Repack an R column-major double matrix as row-major float32.
+//
+// The sparse operators walk a kernel row's nonzeros and, for each one, read all
+// n_columns_out values of one row of X. In R's column-major layout those values
+// sit n_rows doubles apart, so a single nonzero touches one cache line per
+// column -- for the nPCA = 10-40 matrices CoPro uses, that is 10-40 lines (and
+// often as many pages) per nonzero. Paying one O(n * ncol) pass up front to
+// make each X row contiguous turns the inner loop into a unit-stride sweep.
+//
+// The float32 conversion is the same static_cast the inner loop performed on
+// each access, just hoisted, so every product is formed from an identical
+// value and the accumulation order is untouched: results are bit-identical.
+// The buffer costs n * ncol * 4 bytes (24 MB at 200k x 30) and is shared
+// read-only across workers.
+std::vector<float> pack_row_major_f32(
+    const double* source, int n_rows_in, int n_columns_in) {
+  std::vector<float> packed(
+    static_cast<std::size_t>(n_rows_in) *
+      static_cast<std::size_t>(n_columns_in)
+  );
+  for (int column = 0; column < n_columns_in; ++column) {
+    const double* input_column =
+      source + static_cast<std::size_t>(n_rows_in) * column;
+    for (int row = 0; row < n_rows_in; ++row) {
+      packed[
+        static_cast<std::size_t>(row) *
+          static_cast<std::size_t>(n_columns_in) + column
+      ] = static_cast<float>(input_column[row]);
+    }
+  }
+  return packed;
+}
+
 void validate_csr(
     const IntegerVector& p,
     const IntegerVector& j,
@@ -673,8 +706,16 @@ NumericMatrix float32_csr_xky_cpp(
   const int* row_pointer = INTEGER(p);
   const int* column_index = INTEGER(j);
   const Rbyte* values = RAW(x);
-  const double* left = REAL(x_left);
-  const double* right = REAL(x_right);
+
+  // Row-major float32 copies so each nonzero reads one contiguous run per
+  // operand instead of p_left/p_right separate cache lines. See
+  // pack_row_major_f32().
+  const std::vector<float> left_packed =
+    pack_row_major_f32(REAL(x_left), n_rows, p_left);
+  const std::vector<float> right_packed =
+    pack_row_major_f32(REAL(x_right), n_columns, p_right);
+  const float* left_data = left_packed.data();
+  const float* right_data = right_packed.data();
 
   std::vector<std::vector<float> > partial(
     threads,
@@ -715,35 +756,36 @@ NumericMatrix float32_csr_xky_cpp(
                position < row_pointer[row + 1]; ++position) {
             const int column = column_index[position];
             const float weight = read_float(values, position);
+            const float* right_row = right_data +
+              static_cast<std::size_t>(column) *
+              static_cast<std::size_t>(p_right);
             for (int b = 0; b < p_right; ++b) {
-              kernel_row_right[b] += weight * static_cast<float>(
-                right[column + static_cast<std::size_t>(n_columns) * b]
-              );
+              kernel_row_right[b] += weight * right_row[b];
             }
             if (symmetric) {
+              const float* left_row = left_data +
+                static_cast<std::size_t>(column) *
+                static_cast<std::size_t>(p_left);
               for (int a = 0; a < p_left; ++a) {
-                kernel_row_left[a] += weight * static_cast<float>(
-                  left[column + static_cast<std::size_t>(n_rows) * a]
-                );
+                kernel_row_left[a] += weight * left_row[a];
               }
             }
           }
+          const float* left_out = left_data +
+            static_cast<std::size_t>(row) *
+            static_cast<std::size_t>(p_left);
+          const float* right_out = symmetric ?
+            right_data + static_cast<std::size_t>(row) *
+              static_cast<std::size_t>(p_right) :
+            NULL;
           for (int b = 0; b < p_right; ++b) {
             const float z = kernel_row_right[b];
+            float* output_column =
+              output.data() + static_cast<std::size_t>(p_left) * b;
             for (int a = 0; a < p_left; ++a) {
-              output[
-                a + static_cast<std::size_t>(p_left) * b
-              ] += static_cast<float>(
-                left[row + static_cast<std::size_t>(n_rows) * a]
-              ) * z;
+              output_column[a] += left_out[a] * z;
               if (symmetric) {
-                output[
-                  a + static_cast<std::size_t>(p_left) * b
-                ] += kernel_row_left[a] * static_cast<float>(
-                  right[
-                    row + static_cast<std::size_t>(n_columns) * b
-                  ]
-                );
+                output_column[a] += kernel_row_left[a] * right_out[b];
               }
             }
           }
@@ -857,6 +899,14 @@ NumericMatrix float32_csr_matmul_cpp(
   std::vector<std::thread> workers;
   workers.reserve(threads);
 
+  // The transposed/symmetric branch above splits over right-hand sides, so each
+  // worker reads one contiguous column of the input and needs no repacking.
+  // This branch fans a single nonzero across every right-hand side, which in
+  // column-major order means one cache line per side; pack it row-major first.
+  const std::vector<float> input_packed =
+    pack_row_major_f32(input_pointer, n_columns, n_rhs);
+  const float* input_data = input_packed.data();
+
   for (int thread_index = 0; thread_index < threads; ++thread_index) {
     const int row_begin = static_cast<int>(
       static_cast<std::int64_t>(n_rows) * thread_index / threads
@@ -875,12 +925,11 @@ NumericMatrix float32_csr_matmul_cpp(
         for (int position = row_pointer[row];
              position < row_pointer[row + 1]; ++position) {
           const float weight = read_float(values, position);
-          const double* input_column =
-            input_pointer + column_index[position];
+          const float* input_row = input_data +
+            static_cast<std::size_t>(column_index[position]) *
+            static_cast<std::size_t>(n_rhs);
           for (int rhs = 0; rhs < n_rhs; ++rhs) {
-            row_output[rhs] += weight * static_cast<float>(
-              input_column[static_cast<std::size_t>(n_columns) * rhs]
-            );
+            row_output[rhs] += weight * input_row[rhs];
           }
         }
         for (int rhs = 0; rhs < n_rhs; ++rhs) {
