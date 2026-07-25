@@ -1,0 +1,25 @@
+"label","stage","seconds","peak_mb","rep"
+"before","computePCA",0.914,272.865224,1
+"before","computeSparseKernelFloat32",42.248,1575.360744,1
+"before","runSkrCCA",4.417,31.134224,1
+"before","computeNormalizedCorrelation",6.707,39.294304,1
+"before","computeGeneAndCellScores",0.0470000000000041,77.355136,1
+"before","runSkrCCAPermu (99 draws)",4.163,785.920592,1
+"before","computeNormalizedCorrelationPermu",6.05200000000001,1271.120552,1
+"before","@cellPermu stored size",NA,23.7608,1
+"before","computePCA",0.727000000000004,798.2936,2
+"before","computeSparseKernelFloat32",42.416,1575.110432,2
+"before","runSkrCCA",3.72099999999999,31.511128,2
+"before","computeNormalizedCorrelation",6.438,38.728592,2
+"before","computeGeneAndCellScores",0.061000000000007,78.85408,2
+"before","runSkrCCAPermu (99 draws)",4.14999999999999,787.2028,2
+"before","computeNormalizedCorrelationPermu",7.368,1272.218536,2
+"before","@cellPermu stored size",NA,23.7608,2
+"before","computePCA",0.725999999999999,797.422816,3
+"before","computeSparseKernelFloat32",43.944,1575.032968,3
+"before","runSkrCCA",3.49600000000001,28.9734,3
+"before","computeNormalizedCorrelation",6.46199999999999,36.539592,3
+"before","computeGeneAndCellScores",0.0360000000000014,77.144752,3
+"before","runSkrCCAPermu (99 draws)",4.005,785.89836,3
+"before","computeNormalizedCorrelationPermu",6.36099999999999,1270.392,3
+"before","@cellPermu stored size",NA,23.7608,3

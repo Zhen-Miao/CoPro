@@ -4,32 +4,43 @@ Measured by A/B-ing two checkouts of this repository — the pre-pass commit
 `e5ddaa4` and the branch head — driven by the scripts in this folder. Session
 machine: Darwin 25.1.0, Apple silicon, R 4.5.2, clang `-O2`.
 
+Every timed arm is repeated and reported as the minimum, which is the standard
+defence against a co-tenant process inflating one sample. Where a single-shot
+figure is quoted it is called out as such.
+
 Numeric equivalence is verified separately by
 `reports/perf_pass_baseline/compare_baseline.R`, which re-runs 14 pipeline
-scenarios and diffs every downstream result. Thirteen are bit-identical; the
-fourteenth differs only by the 3.9e-15 normalizer reassociation documented in
-section 3.
+scenarios and diffs every downstream result. See section 5 — there are two
+distinct claims there, and merging them would misrepresent both.
 
 ---
 
 ## Headline: end-to-end pipeline
 
 `benchmark_end_to_end.R` → `end_to_end_before.csv`, `end_to_end_after.csv`
+(per-repetition detail in the `*_runs.csv` files)
 
 60,000 cells, 2 cell types, 120 genes, `nPCA = 30`, 2 sigmas, 99 permutation
-draws. `peak MB` is Vcells allocated above the resting set during that stage.
+draws. The pipeline is stateful, so it is the *whole* pipeline that is repeated,
+3 times per arm; seconds are the per-stage minimum and `peak MB` the per-stage
+maximum of Vcells allocated above the resting set.
 
 | stage | before | after | speedup | peak before | peak after |
 |---|---|---|---|---|---|
-| `computePCA` | 0.95 s | 0.95 s | 1.00x | 273 MB | 271 MB |
-| `computeSparseKernelFloat32` | 43.47 s | 33.20 s | **1.31x** | 1575 MB | 1576 MB |
-| `runSkrCCA` | 4.16 s | 3.04 s | **1.37x** | 31 MB | 31 MB |
-| `computeNormalizedCorrelation` | 6.63 s | 3.62 s | **1.83x** | 39 MB | 38 MB |
-| `computeGeneAndCellScores` | 0.04 s | 0.04 s | 1.02x | 77 MB | 77 MB |
-| `runSkrCCAPermu` (99 draws) | 3.98 s | 3.88 s | 1.03x | 786 MB | 785 MB |
-| `computeNormalizedCorrelationPermu` | 6.43 s | 3.81 s | **1.69x** | 1271 MB | **824 MB** |
+| `computePCA` | 0.73 s | 0.63 s | 1.15x | 798 MB | **597 MB** |
+| `computeSparseKernelFloat32` | 42.25 s | 31.61 s | **1.34x** | 1575 MB | 1576 MB |
+| `runSkrCCA` | 3.50 s | 2.74 s | **1.28x** | 32 MB | 32 MB |
+| `computeNormalizedCorrelation` | 6.44 s | 3.46 s | **1.86x** | 39 MB | 38 MB |
+| `computeGeneAndCellScores` | 0.04 s | 0.04 s | 0.92x | 79 MB | 79 MB |
+| `runSkrCCAPermu` (99 draws) | 4.00 s | 3.53 s | 1.13x | 787 MB | 788 MB |
+| `computeNormalizedCorrelationPermu` | 6.05 s | 3.49 s | **1.73x** | 1272 MB | **825 MB** |
 | `@cellPermu` stored size | — | — | — | 24 MB | **12 MB** |
-| **total** | **65.7 s** | **48.5 s** | **1.35x** | | |
+| **total** | **63.0 s** | **45.5 s** | **1.38x** | | |
+
+`computeGeneAndCellScores` at 0.92x is 4 ms against 4 ms on untouched code — it
+is a null control, not a regression. `computePCA` and `runSkrCCAPermu` are
+nearly-null controls that moved slightly because they *are* touched (per-column
+SDs and permutation storage respectively).
 
 The `@cellPermu` halving is at 99 draws and 30k cells per type. It scales with
 `n * nPermu`: at 200,000 cells and 999 draws the held-fixed type alone goes
@@ -85,7 +96,8 @@ The spread is itself a result. The strided build ranges 28.5-54.8 s on the same
 input while the packed build holds 16.6-17.0 s. A loop touching nPC cache lines
 per nonzero is memory-bandwidth-bound and hostage to whatever else is running;
 the packed loop fetches roughly nPC times less and stays predictable. On a
-shared HPC node that matters as much as the mean.
+shared HPC node that matters as much as the mean. It is also why every arm in
+this document is repeated.
 
 **Correction to the pre-implementation estimate.** A standalone microbenchmark
 written before the change predicted 4.0-6.6x. It used 40 nonzeros per row; real
@@ -109,37 +121,90 @@ Enumeration was ~3.7 s of the 12.3 s single-sigma build; parallelizing it is
 worth proportionally less as sigmas are added, because the per-sigma passes are
 serial and dominate.
 
+### What parallel enumeration costs in memory
+
+`benchmark_enumeration_memory.R` → `enumeration_memory.csv`
+
+Enumerating in parallel means k private edge buffers that are then concatenated
+into one contiguous array. Both are allocated at the moment of the first
+insert, so the *bound* on simultaneously-allocated edge storage rises. R's
+`gc()` cannot see any of this — it counts Vcells only — so peak RSS is sampled
+from `ps` alongside the builder's own `temporary_bytes` figure, which reports
+that bound.
+
+120,000 cells, 264M candidate edges:
+
+| threads | seconds | bound (`temporary_bytes`) | peak RSS |
+|---|---|---|---|
+| 1 | 61.0 s | 4594 MB | 4271 MB |
+| 4 | 43.5 s | 6609 MB | 4277 MB |
+| 8 | 37.6 s | 6609 MB | 4280 MB |
+
+**The bound rises 44%; measured resident memory rises 0.1%.** Two reasons: a
+reserved allocation is only made resident as it is written, and each private
+buffer is released as it is consumed, so the copy that the bound assumes is
+live all at once never is. With one thread there is nothing to concatenate and
+the single buffer is moved into place, so the serial path allocates strictly
+less than before this pass.
+
+This deserved checking rather than assuming, because the pass rejected the
+Gaussian-weight optimization below for a ~50% increase in the largest
+temporary. That one would have been a *permanent* increase held across the
+whole build; this is a transient during one concatenation, and it does not show
+up in RSS. Eliminating it entirely would need enumeration and concatenation to
+be pipelined — a real concurrency rewrite, not justified by a 0.1% measurement.
+
 ---
 
 ## 3. Whitened-Frobenius normalizer
 
-`benchmark_whitened_frobenius.R`
+`benchmark_whitened_frobenius.R` → `frobenius_before.csv`, `frobenius_after.csv`,
+`frobenius_block_sweep.csv`
 
 `(Rx %*% K) %*% Ry` fills in 11x, and only to produce a scalar. Streaming
 `sum((Rx K) * (K Ry))` over column blocks is both faster and smaller — the
 intermediates stay in cache instead of streaming a hundreds-of-MB product
 through memory.
 
-| n = 150k, nnz(K) 3.91M | seconds | peak |
-|---|---|---|
-| unblocked | 5.97 | 1996 MB |
-| `block_nnz = 2e6` (2 blocks) | 5.11 | 1525 MB |
-| `block_nnz = 1e6` (4 blocks) | 4.81 | 871 MB |
-| **`block_nnz = 2e5` (20 blocks)** | **4.09** | **466 MB** |
-| `block_nnz = 5e4` (79 blocks) | 4.27 | 467 MB |
-| `block_nnz = 2e4` (196 blocks) | 5.64 | 467 MB |
+True A/B on the shipped `.whitenedFrobNorm()` in both checkouts, 150k cells,
+nnz(K) 3.91M, minimum of 5 repetitions:
 
-1.46x faster, 4.3x less peak. A budget large enough to yield a single block is
-worse than not blocking (both one-sided products live at once); very small
-blocks lose to per-block overhead. The default sits at the knee.
+| arm | min | median | peak |
+|---|---|---|---|
+| before (`e5ddaa4`) | 6.16 s | 6.21 s | 2231 MB |
+| after | **4.35 s** | **4.43 s** | **609 MB** |
 
-This is the one change that moves a number: floating-point reassociation shifts
-the normalizer by 3.9e-15 relative. Weights, cell scores, gene scores and the
-selected sigma stay bit-identical.
+**1.42x faster and 3.7x less peak.** The two arms agree to 1.1e-15 relative
+(7108.1463071682192 against 7108.146307168211).
 
-**This corrects the plan's estimate**, which predicted blocking would be
+**This corrects an earlier version of this document**, which claimed 1.46x
+against a *benchmark-local reimplementation* of the old path rather than the old
+path itself. That stand-in omitted the low-rank cross terms of the
+double-centering expansion, which the real function computes and which this
+change did not speed up — so it credited the change with work it never did. The
+in-package figure is 1.42x. The memory claim was, if anything, understated.
+
+The block budget is a genuine parameter, swept on the new helper alone:
+
+| block budget | blocks | min | peak |
+|---|---|---|---|
+| unblocked | 1 | 5.48 s | 2026 MB |
+| `2e6` | 2 | 4.77 s | 1525 MB |
+| `1e6` | 4 | 4.65 s | 970 MB |
+| **`2e5`** (default) | **20** | **3.73 s** | **528 MB** |
+| `5e4` | 79 | 4.16 s | 529 MB |
+| `2e4` | 196 | 5.59 s | 529 MB |
+
+A budget large enough to yield a single block is worse than not blocking (both
+one-sided products live at once); very small blocks lose to per-block overhead.
+The default sits at the knee.
+
+**This also corrects the plan's estimate**, which predicted blocking would be
 *slightly slower* and worth taking for memory alone. That was based on a
 badly-sized trial block; at a sensible block size it wins on both.
+
+Floating-point reassociation shifts the normalizer by ~3.7e-15 relative.
+Weights, cell scores, gene scores and the selected sigma stay bit-identical.
 
 ---
 
@@ -153,60 +218,100 @@ badly-sized trial block; at a sensible block size it wins on both.
   removes six per (sigma, pair).
 - **PC score storage**, 12k cells x 30 PCs, 4 slides: `@pcaResults` 3.89 MB →
   0.054 MB; total PC-score memory 7.77 MB → 3.93 MB.
+- **Per-column SDs**, `apply(x, 2, sd)` → `matrixStats::colSds()`, minimum of 5:
+
+  | matrix | apply | colSds | speedup |
+  |---|---|---|---|
+  | 30,000 x 120 | 0.030 s / 47 MB | 0.013 s / 0.5 MB | 2.31x |
+  | 50,000 x 500 | 0.207 s / 332 MB | 0.088 s / 0.4 MB | 2.35x |
+  | 5,000 x 2,000 | 0.095 s / 190 MB | 0.035 s / 0.1 MB | 2.71x |
+
+  The memory column is the larger result and was not part of the original
+  rationale: `apply()` transposes the whole matrix and allocates a list of
+  column vectors, so it costs a full copy of the input per call. That is most of
+  why `computePCA`'s peak drops 798 → 597 MB in the headline table.
 
 ---
 
-## `matrixStats::colSds` — rejected, then adopted after a closer look
+## 5. Numeric equivalence: two claims, kept apart
 
-Per-column SDs use `matrixStats::colSds()`, which is ~2.5x faster than
-`apply(x, 2, sd)`.
+`reports/perf_pass_baseline/` runs 14 scenarios — three kernel backends,
+within-type, multi-slide at both `center_per_slide` and both `scalePCs`
+settings, and **6 permutation combinations** (the `"global"` null at all three
+`permu_which` values, plus `"bin"`, `"toroidal"` and `"pc"` at
+`second_only`) — and diffs every downstream result.
 
-This was initially backed out, on a mistaken reading. The two use different
-variance algorithms and disagree by 1 ulp on some columns (1.11e-16 on 1 of 60
-genes in the fixture); switching produced a relative difference of exactly 2 in
-`@skrCCAOut`, which is the signature of a sign flip. I reported that as "flips
-the sign of a PC, and with it the sign of the gene weights read off that PC"
-and rejected the change on those grounds.
+Each scenario now computes cell scores, gene scores and regression gene weights.
+Earlier it did not: `run_within_type()` and `run_permutation()` never called
+`computeGeneAndCellScores()`, so their score slots were empty and compared
+equal to each other while proving nothing — and `within_type_float32` is exactly
+the scenario the Frobenius reassociation perturbs. `capture_baseline.R` now
+refuses to record an empty slot, so that cannot recur silently.
 
-The second half of that was wrong, and the downstream numbers I had already
-collected contradicted it. Decomposing the difference:
+**Claim one — the eight performance items** (`e5bc8c3` … `50e9095`), against a
+pre-pass capture at `e5ddaa4` with the current harness:
 
-- Exactly one principal component flipped (CellTypeB's PC2). All others were
-  identical to ~1e-13.
-- The CCA weight's *coordinate on that PC* flipped with it. That is what
-  produced the relative difference of 2 — one coordinate, not a negated vector.
-- The two cancel. Every reported quantity was unchanged:
+> **13 of 14 scenarios bit-identical.** `within_type_float32` differs only in
+> `normalizedCorrelation`, by ~3.7e-15 — the reassociation in section 3. Its
+> cell scores, gene scores and regression gene weights are bit-identical, which
+> is now actually tested rather than vacuously true.
 
-  | output | max difference | sign flips |
-  |---|---|---|
-  | `cellScores` | 5.2e-14 | none |
-  | `geneScores` | 5.0e-15 | none |
-  | `geneScoresRegression` | 7.6e-15 | none |
-  | `normalizedCorrelation` | 4.7e-15 | — |
+**Claim two — adopting `matrixStats::colSds()`** is *not* bit-identical, and an
+earlier commit message that said it was was wrong. `colSds()` and `sd()` use
+different variance algorithms and disagree by 1 ulp on some columns (1.11e-16 on
+Gene56 of 60 in the fixture). That is enough to flip the sign of a principal
+component, and the CCA weight's coordinate on that PC flips with it.
+
+> `@skrCCAOut` — the raw weight vectors, whose per-PC sign is a free convention
+> — differs in 3 of 14 scenarios. **Every reported quantity agrees to 5.4e-11
+> relative with zero sign changes**, and the selected sigma is identical in all
+> 14.
+
+Worst case over all 14 scenarios, for the branch head against the pre-pass
+capture (so these include the section-3 reassociation as well):
+
+| quantity | max relative difference | sign flips |
+|---|---|---|
+| `cellScores` | 1.0e-11 | 0 |
+| `geneScores` | 5.4e-11 | 0 |
+| `geneScoresRegression` | 1.5e-11 | 0 |
+| `normalizedCorrelation` | 5.2e-15 | 0 |
+| null correlations / p-values | 3.7e-14 | 0 |
+| `sigmaValueChoice` | identical | — |
+| `@skrCCAOut` (not reported to users) | 2.0 — 4 coordinates of 64, in 3 scenarios | 4 |
+
+`compare_baseline.R` now reports sign flips in reported quantities as a separate
+line and fails on any, at any tolerance. A tolerance alone cannot express this
+property: a lone flip shows up as a relative difference of 2, which no sensible
+tolerance passes, but a *cancelling pair* of flips leaves the tolerance clean
+while an intermediate looks catastrophically different. Both are worth knowing
+about, so both are reported.
+
+### What this does and does not say about sign determinism
+
+1.1.2 made skrCCA independent of the RNG state: the same input must give the
+same answer, run to run, session to session, sequential or PSOCK. That guarantee
+is intact — two consecutive captures at branch HEAD are bit-identical across all
+14 scenarios.
+
+It never was, and could not be, a guarantee that a PC sign survives a 1-ulp
+change in the *input data*. A different BLAS or R build moves it under the old
+code too. `test-pca-workflow.R` therefore compares the two implementations
+after per-component sign alignment for scores and gene weights, and directly for
+the sign-invariant quantities. That is a deliberate choice, not an oversight:
+holding the pipeline to bit-identity under a 1-ulp input perturbation would be
+asserting something that was never true and that nothing downstream needs.
+`test-cca-determinism.R` continues to hold the guarantee that does matter.
 
 The gene involved was also not marginal — `Gene56`, SD rank 34 of 60, 99.4%
-nonzero — so "it only moved a negligible weight" is not the explanation
-either. The explanation is that a PC sign and the CCA coordinate on it are the
-same convention seen twice.
-
-Re-measured at the final branch state, the two implementations are
-**bit-identical end-to-end** on this fixture: no PC sign flips, and zero
-difference in cell scores, gene scores, regression gene scores and normalized
-correlations. The full 14-scenario baseline is likewise bit-identical.
-
-The flip observed earlier in the session is not reproducible at the final
-state, which is itself the point: **the sign of a PC or CCA axis is
-knife-edge** and a different BLAS, R build or 1-ulp input change can move it
-under any implementation. That fragility is pre-existing and not something
-`colSds` introduces. What matters is that everything downstream is invariant to
-it. `test-pca-workflow.R` now runs the whole pipeline under both
-implementations and asserts that invariance — sign-invariant outputs
-(normalized correlation, selected sigma) compared directly, scores and gene
-weights compared after sign alignment — rather than relying on bit-identity,
-which would be the wrong thing to depend on.
+nonzero — so "it only moved a negligible weight" is not the explanation. The
+explanation is that a PC sign and the CCA coordinate on it are the same
+convention seen twice.
 
 `matrixStats` costs 13 ms to load, declares no `Imports` of its own, and was
 already a CoPro dependency before this pass.
+
+---
 
 ## Measured and rejected
 
@@ -216,3 +321,6 @@ requires retaining the weights (4 bytes/edge) alongside the edge array
 (8 bytes/edge), a permanent 50% increase in the largest temporary. The
 four-pass case is `normalization != 0` only, which is not the default. Wrong
 trade for a pass whose purpose is bounding memory.
+
+**Pipelining enumeration against concatenation** — see section 2. The bound it
+would remove does not appear in measured RSS.
