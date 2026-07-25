@@ -82,6 +82,73 @@ setGeneric(
 #'   whitening.
 #' @return Scalar whitened-Frobenius norm.
 #' @keywords internal
+#' Sum of squares of a sparse matrix's represented entries
+#'
+#' `sum(K * K)` allocates a whole second sparse matrix -- 12 bytes per nonzero,
+#' several GB on a large kernel -- to produce one scalar. Read the value slot
+#' instead. A `dsCMatrix` stores one triangle, so each stored off-diagonal
+#' entry represents two.
+#' @noRd
+.sparseSumSquares <- function(K) {
+  squares <- sum(K@x^2)
+  if (!inherits(K, "symmetricMatrix")) return(squares)
+  diagonal <- Matrix::diag(K)
+  2 * squares - sum(diagonal^2)
+}
+
+#' `<Rx K Ry, K>` without materializing `Rx K Ry`
+#'
+#' Both sparse products fill in heavily: on a 40k-cell kernel with ~30
+#' neighbours per cell, `Rx %*% K` grows nnz 7x and `(Rx K) %*% Ry` 11x, which
+#' at 200k cells and ~40 neighbours extrapolates to roughly 1.5 GB for a
+#' quantity that reduces to a scalar.
+#'
+#' With `Rx` and `Ry` symmetric (the caller symmetrizes them),
+#' `sum((Rx K Ry) * K) = tr(K' Rx K Ry) = sum((Rx K) * (K Ry))`, and that form
+#' splits over column blocks of `K`: block `J` needs only `Rx K[, J]` and
+#' `K Ry[, J]`. Peak memory becomes proportional to the block rather than to
+#' the whole filled-in product.
+#'
+#' Blocking turns out to be faster as well as smaller, because the intermediates
+#' stay in cache instead of streaming a multi-hundred-MB product through memory.
+#' Measured on a 60k-cell kernel (nnz 1.56M, 11x fill unblocked):
+#'
+#' ```
+#'   unblocked            2.43 s   821 MB
+#'   block_nnz = 2e5      1.72 s   296 MB      8 blocks
+#'   block_nnz = 5e4      1.58 s   299 MB     32 blocks
+#' ```
+#'
+#' `block_nnz` is a budget on nonzeros of `K` per block, not on the product, so
+#' with the ~7x fill of one operator it caps each intermediate near 1.4M
+#' nonzeros (~17 MB) regardless of how large `K` is. Setting it high enough to
+#' yield a single block is worse than not blocking at all -- both one-sided
+#' products are then live at once -- so the default stays at the measured knee.
+#'
+#' @param K Cross-cell-type kernel.
+#' @param Rx,Ry Symmetric within-type whitening operators.
+#' @param block_nnz Target nonzeros of `K` per block.
+#' @return Scalar `<Rx K Ry, K>`.
+#' @noRd
+.sparseWhitenedInner <- function(K, Rx, Ry, block_nnz = 2e5) {
+  n_columns <- ncol(K)
+  if (n_columns == 0L) return(0)
+  per_column <- max(1, length(K@x) / n_columns)
+  block <- max(1L, min(n_columns, as.integer(block_nnz / per_column)))
+
+  total <- 0
+  start <- 1L
+  while (start <= n_columns) {
+    columns <- seq.int(start, min(n_columns, start + block - 1L))
+    total <- total + sum(
+      (Rx %*% K[, columns, drop = FALSE]) *
+        (K %*% Ry[, columns, drop = FALSE])
+    )
+    start <- start + block
+  }
+  as.numeric(total)
+}
+
 .whitenedFrobNorm <- function(K, Rx = NULL, Ry = NULL) {
   if (.isFloat32SparseKernel(K)) {
     if (!is.null(Rx) || !is.null(Ry)) {
@@ -154,19 +221,22 @@ setGeneric(
 
     if (is.null(Rx) || is.null(Ry)) {
       ## ||H_r K H_c||_F^2 without forming the dense centered matrix.
-      norm2 <- sum(K * K) - nc * sum(rmean^2) - nr * sum(cmean^2) +
+      norm2 <- .sparseSumSquares(K) - nc * sum(rmean^2) - nr * sum(cmean^2) +
         nr * nc * grand_mean^2
       return(sqrt(max(as.numeric(norm2), 0)))
     }
 
     Rx <- (Rx + t(Rx)) / 2
     Ry <- (Ry + t(Ry)) / 2
-    M <- (Rx %*% K) %*% Ry
 
     U <- cbind(-rmean, rep.int(1, nr))
     V <- cbind(rep.int(1, nc), grand_mean - cmean)
-    base_term <- as.numeric(sum(M * K))
-    cross_term <- as.numeric(sum(U * (M %*% V)))
+    ## <Rx K Ry, K>, streamed over column blocks; see .sparseWhitenedInner().
+    base_term <- .sparseWhitenedInner(K, Rx, Ry)
+    ## <Rx K Ry, U V'> = <U, (Rx K Ry) V>. V has two columns, so applying the
+    ## three operators to it right-to-left never widens past an n x 2 dense
+    ## block -- M itself is not needed here.
+    cross_term <- as.numeric(sum(U * (Rx %*% (K %*% (Ry %*% V)))))
     rank_term <- as.numeric(sum(crossprod(U, Rx %*% U) *
                                   crossprod(V, Ry %*% V)))
     return(sqrt(max(base_term + 2 * cross_term + rank_term, 0)))

@@ -19,6 +19,17 @@
   now skips the row subset that used to copy the fixed type's whole `n x nPCA`
   matrix back to itself. Every drawn permutation and every p-value is
   unchanged.
+* The whitened-Frobenius normalizer no longer materializes `(Rx %*% K) %*% Ry`.
+  Those two chained sparse products fill in heavily -- 7x then 11x on a
+  40k-cell kernel, extrapolating to roughly 1.5 GB at 200k cells -- to produce
+  a single scalar. `<Rx K Ry, K>` is now accumulated as
+  `sum((Rx K) * (K Ry))` over column blocks, and the low-rank cross term
+  applies the operators to its two-column factor instead of to `K`. Blocking
+  turned out to be *faster* as well as smaller, because the intermediates stay
+  in cache: on a 150k-cell kernel, 4.09 s / 466 MB against 5.97 s / 1996 MB.
+  `sum(K * K)` likewise no longer allocates a second sparse matrix. The
+  normalizer is unchanged to ~4e-15 relative (floating-point reassociation);
+  weights, cell scores, gene scores and the selected sigma are bit-identical.
 * The sparse-kernel upper-quantile clip no longer materializes
   `rep(values, each = 2L)` for symmetric kernels. `.type7QuantileRepeated()`
   reads the two order statistics R's type-7 rule needs directly from the stored

@@ -392,3 +392,50 @@ test_that("sparse whitened-Frobenius normalizer matches dense calculation", {
   dense_unwhitened <- .whitenedFrobNorm(as.matrix(K))
   expect_equal(sparse_unwhitened, dense_unwhitened, tolerance = 1e-10)
 })
+
+test_that("the blocked whitened-Frobenius inner product matches the direct one", {
+  # <Rx K Ry, K> is evaluated as sum((Rx K) * (K Ry)) over column blocks so the
+  # heavily filled-in triple product is never materialized. The identity needs
+  # Rx and Ry symmetric, which .whitenedFrobNorm() guarantees, and the block
+  # boundaries must not change the answer.
+  set.seed(31)
+  mk <- function(nr, nc, k) Matrix::sparseMatrix(
+    i = rep(seq_len(nr), each = k),
+    j = pmax(1L, pmin(nc, rep(seq_len(nr), each = k) +
+                        sample(-8:8, nr * k, TRUE))),
+    x = runif(nr * k), dims = c(nr, nc))
+
+  for (dims in list(c(120, 120), c(90, 140), c(140, 90))) {
+    nr <- dims[1]; nc <- dims[2]
+    K <- mk(nr, nc, 5)
+    Rx <- local({ R <- mk(nr, nr, 5); (R + Matrix::t(R)) / 2 })
+    Ry <- local({ R <- mk(nc, nc, 5); (R + Matrix::t(R)) / 2 })
+    direct <- as.numeric(sum(((Rx %*% K) %*% Ry) * K))
+
+    # Several block sizes, including one column at a time and one single block.
+    for (budget in c(1, 50, 500, 1e9)) {
+      expect_equal(
+        CoPro:::.sparseWhitenedInner(K, Rx, Ry, block_nnz = budget),
+        direct, tolerance = 1e-10,
+        info = paste(nr, "x", nc, "block_nnz", budget)
+      )
+    }
+  }
+})
+
+test_that(".sparseSumSquares counts represented entries for both storage forms", {
+  set.seed(37)
+  general <- Matrix::sparseMatrix(
+    i = sample(60, 200, TRUE), j = sample(45, 200, TRUE),
+    x = runif(200), dims = c(60, 45))
+  expect_equal(CoPro:::.sparseSumSquares(general), sum(general * general))
+  expect_identical(CoPro:::.sparseSumSquares(general), sum(general@x^2))
+
+  # A dsCMatrix stores one triangle; every stored off-diagonal entry stands for
+  # two represented entries, so reading @x alone would undercount.
+  symmetric <- Matrix::forceSymmetric(Matrix::crossprod(general))
+  expect_s4_class(symmetric, "symmetricMatrix")
+  expect_equal(CoPro:::.sparseSumSquares(symmetric),
+               sum(symmetric * symmetric))
+  expect_gt(CoPro:::.sparseSumSquares(symmetric), sum(symmetric@x^2))
+})
