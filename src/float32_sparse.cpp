@@ -162,6 +162,65 @@ float type7_quantile(
   );
 }
 
+// Grid buckets in compressed form.
+//
+// The obvious structure is unordered_map<CellKeyF32, vector<int>>, but that is
+// one heap-allocated vector per occupied grid cell -- on the order of one per
+// point at the radii CoPro uses -- each carrying 24 bytes of book-keeping plus
+// its own allocation, and scattering the point lists all over the heap. Here
+// the map holds a single int per cell and the membership lists live in one
+// contiguous counting-sorted array, so iterating a bucket is a linear walk.
+//
+// Members stay in increasing point order, matching the push_back order of the
+// structure this replaces, so enumeration order (and therefore output) is
+// unchanged.
+struct FlatGridBuckets {
+  std::unordered_map<CellKeyF32, int, CellKeyF32Hash> slot;
+  std::vector<int> start;
+  std::vector<int> items;
+
+  bool empty_cell(const CellKeyF32& key, int* begin, int* end) const {
+    const auto found = slot.find(key);
+    if (found == slot.end()) return true;
+    *begin = start[found->second];
+    *end = start[found->second + 1];
+    return false;
+  }
+};
+
+FlatGridBuckets build_flat_buckets(
+    const NumericMatrix& B,
+    int n_b,
+    const std::vector<double>& origin,
+    const std::vector<std::int64_t>& grid_size,
+    double radius) {
+  FlatGridBuckets grid;
+  grid.slot.reserve(static_cast<std::size_t>(n_b * 1.3) + 1U);
+  std::vector<int> cell_of(static_cast<std::size_t>(n_b));
+  std::vector<int> counts;
+
+  for (int row = 0; row < n_b; ++row) {
+    const CellKeyF32 key = point_cell_f32(B, row, origin, grid_size, radius);
+    const auto inserted =
+      grid.slot.insert(std::make_pair(key, static_cast<int>(counts.size())));
+    if (inserted.second) counts.push_back(0);
+    const int id = inserted.first->second;
+    cell_of[row] = id;
+    ++counts[id];
+  }
+
+  grid.start.assign(counts.size() + 1U, 0);
+  for (std::size_t id = 0; id < counts.size(); ++id) {
+    grid.start[id + 1] = grid.start[id] + counts[id];
+  }
+  grid.items.resize(static_cast<std::size_t>(n_b));
+  std::vector<int> cursor(grid.start.begin(), grid.start.end() - 1);
+  for (int row = 0; row < n_b; ++row) {
+    grid.items[cursor[cell_of[row]]++] = row;
+  }
+  return grid;
+}
+
 template <typename Callback>
 std::size_t visit_neighbors(
     int row_begin,
@@ -169,9 +228,7 @@ std::size_t visit_neighbors(
     const NumericMatrix& A,
     const NumericMatrix& B,
     const std::vector<CellKeyF32>& cells_a,
-    const std::unordered_map<
-      CellKeyF32, std::vector<int>, CellKeyF32Hash
-    >& buckets,
+    const FlatGridBuckets& buckets,
     const std::vector<std::int64_t>& grid_size,
     double radius_squared,
     double percentile,
@@ -193,9 +250,14 @@ std::size_t visit_neighbors(
         for (int dx = -1; dx <= 1; ++dx) {
           const std::int64_t x = base.x + dx;
           if (!inside_f32(x, grid_size[0])) continue;
-          const auto bucket = buckets.find(CellKeyF32{x, y, z});
-          if (bucket == buckets.end()) continue;
-          for (const int b : bucket->second) {
+          int bucket_begin = 0;
+          int bucket_end = 0;
+          if (buckets.empty_cell(CellKeyF32{x, y, z},
+                                 &bucket_begin, &bucket_end)) {
+            continue;
+          }
+          for (int slot = bucket_begin; slot < bucket_end; ++slot) {
+            const int b = buckets.items[slot];
             // A symmetric within-type kernel stores its strict upper
             // triangle. Self-pairs are excluded, matching .frnnGrid(A, NULL).
             if (symmetric && b <= a) continue;
@@ -226,6 +288,39 @@ std::size_t visit_neighbors(
 int normalized_thread_count(int requested, int tasks) {
   if (requested < 1) stop("n_threads must be at least one.");
   return std::max(1, std::min(requested, tasks));
+}
+
+// Repack an R column-major double matrix as row-major float32.
+//
+// The sparse operators walk a kernel row's nonzeros and, for each one, read all
+// n_columns_out values of one row of X. In R's column-major layout those values
+// sit n_rows doubles apart, so a single nonzero touches one cache line per
+// column -- for the nPCA = 10-40 matrices CoPro uses, that is 10-40 lines (and
+// often as many pages) per nonzero. Paying one O(n * ncol) pass up front to
+// make each X row contiguous turns the inner loop into a unit-stride sweep.
+//
+// The float32 conversion is the same static_cast the inner loop performed on
+// each access, just hoisted, so every product is formed from an identical
+// value and the accumulation order is untouched: results are bit-identical.
+// The buffer costs n * ncol * 4 bytes (24 MB at 200k x 30) and is shared
+// read-only across workers.
+std::vector<float> pack_row_major_f32(
+    const double* source, int n_rows_in, int n_columns_in) {
+  std::vector<float> packed(
+    static_cast<std::size_t>(n_rows_in) *
+      static_cast<std::size_t>(n_columns_in)
+  );
+  for (int column = 0; column < n_columns_in; ++column) {
+    const double* input_column =
+      source + static_cast<std::size_t>(n_rows_in) * column;
+    for (int row = 0; row < n_rows_in; ++row) {
+      packed[
+        static_cast<std::size_t>(row) *
+          static_cast<std::size_t>(n_columns_in) + column
+      ] = static_cast<float>(input_column[row]);
+    }
+  }
+  return packed;
 }
 
 void validate_csr(
@@ -269,7 +364,8 @@ List float32_csr_gaussian_kernels_cpp(
     double upper_quantile,
     bool truncate_low_distance = true,
     bool symmetric = false,
-    int normalization = 0) {
+    int normalization = 0,
+    int n_threads = 1) {
   const int n_a = A.nrow();
   const int n_b = B.nrow();
   const int dimensions = A.ncol();
@@ -340,15 +436,8 @@ List float32_csr_gaussian_kernels_cpp(
       point_cell_f32(A, row, origin, grid_size, radius)
     );
   }
-  std::unordered_map<
-    CellKeyF32, std::vector<int>, CellKeyF32Hash
-  > buckets;
-  buckets.reserve(static_cast<std::size_t>(n_b * 1.3) + 1U);
-  for (int row = 0; row < n_b; ++row) {
-    buckets[
-      point_cell_f32(B, row, origin, grid_size, radius)
-    ].push_back(row);
-  }
+  const FlatGridBuckets buckets =
+    build_flat_buckets(B, n_b, origin, grid_size, radius);
 
   // Estimate the edge count from a row sample to avoid vector-capacity
   // doubling at large n while retaining a single enumeration pass.
@@ -372,35 +461,129 @@ List float32_csr_gaussian_kernels_cpp(
          "compressed-index limit.");
   }
 
-  std::vector<FloatEdge> edges;
-  edges.reserve(static_cast<std::size_t>(reserve_double));
+  // Enumerate neighbours in parallel over disjoint row ranges. Each worker
+  // fills its own edge buffer and its own slice of the row pointer; the buffers
+  // are then concatenated in thread order. Because the ranges are contiguous
+  // and ascending, and each worker walks its rows in order, the concatenation
+  // reproduces exactly the row-major edge order the serial loop produced --
+  // the CSR output is unchanged, not merely equivalent.
+  //
+  // No R API call may occur off the main thread, so checkUserInterrupt() cannot
+  // run inside the workers. It is checked before and after instead; the phase
+  // is correspondingly shorter, and the per-sigma loop below still polls.
+  const int enumeration_threads =
+    normalized_thread_count(n_threads, std::max(1, n_a));
+  std::vector<std::vector<FloatEdge> > thread_edges(enumeration_threads);
   std::vector<int> edge_pointer(static_cast<std::size_t>(n_a) + 1U, 0);
+  std::vector<std::size_t> thread_zero_counts(enumeration_threads, 0U);
+  std::vector<float> thread_minimum(
+    enumeration_threads, std::numeric_limits<float>::infinity());
+  std::vector<int> range_begin(enumeration_threads + 1);
+  for (int index = 0; index <= enumeration_threads; ++index) {
+    range_begin[index] = static_cast<int>(
+      static_cast<std::int64_t>(n_a) * index / enumeration_threads);
+  }
+
+  checkUserInterrupt();
+  {
+    std::vector<std::thread> workers;
+    workers.reserve(enumeration_threads);
+    std::atomic<bool> enumeration_failed(false);
+    for (int index = 0; index < enumeration_threads; ++index) {
+      workers.emplace_back([&, index]() {
+        try {
+          const int row_begin = range_begin[index];
+          const int row_end = range_begin[index + 1];
+          std::vector<FloatEdge>& local = thread_edges[index];
+          local.reserve(static_cast<std::size_t>(
+            reserve_double * (row_end - row_begin) / std::max(1, n_a)) + 16U);
+          std::size_t zeros = 0U;
+          float minimum = std::numeric_limits<float>::infinity();
+          for (int row = row_begin; row < row_end; ++row) {
+            visit_neighbors(
+              row, row + 1, A, B, cells_a, buckets, grid_size,
+              radius_squared, percentile, scaling_factor,
+              truncate_low_distance, symmetric,
+              [&](int, int column, float distance) {
+                if (distance == 0.0f) {
+                  ++zeros;
+                } else {
+                  minimum = std::min(minimum, distance);
+                }
+                local.push_back(FloatEdge{column, distance});
+              }
+            );
+            // Per-row counts now; turned into global offsets after the join.
+            edge_pointer[static_cast<std::size_t>(row) + 1U] =
+              static_cast<int>(local.size());
+          }
+          thread_zero_counts[index] = zeros;
+          thread_minimum[index] = minimum;
+        } catch (...) {
+          enumeration_failed.store(true);
+        }
+      });
+    }
+    for (std::thread& worker : workers) worker.join();
+    if (enumeration_failed.load()) {
+      stop("A float32 neighbour-enumeration worker failed.");
+    }
+  }
+  checkUserInterrupt();
+
   std::size_t zero_distance_count = 0U;
   float minimum_nonzero = std::numeric_limits<float>::infinity();
-
-  for (int row = 0; row < n_a; ++row) {
-    if ((row & 16383) == 0) checkUserInterrupt();
-    visit_neighbors(
-      row, row + 1, A, B, cells_a, buckets, grid_size,
-      radius_squared, percentile, scaling_factor,
-      truncate_low_distance, symmetric,
-      [&](int, int column, float distance) {
-        if (distance == 0.0f) {
-          ++zero_distance_count;
-        } else {
-          minimum_nonzero = std::min(minimum_nonzero, distance);
-        }
-        edges.push_back(FloatEdge{column, distance});
-      }
-    );
-    if (edges.size() >
-        static_cast<std::size_t>(std::numeric_limits<int>::max())) {
-      stop("A single float32 sparse kernel block exceeds the 32-bit ",
-           "compressed-index limit.");
-    }
-    edge_pointer[static_cast<std::size_t>(row) + 1U] =
-      static_cast<int>(edges.size());
+  std::size_t total_edges = 0U;
+  std::size_t private_capacity_bytes = 0U;
+  for (int index = 0; index < enumeration_threads; ++index) {
+    zero_distance_count += thread_zero_counts[index];
+    minimum_nonzero = std::min(minimum_nonzero, thread_minimum[index]);
+    total_edges += thread_edges[index].size();
+    private_capacity_bytes +=
+      thread_edges[index].capacity() * sizeof(FloatEdge);
   }
+  if (total_edges > static_cast<std::size_t>(std::numeric_limits<int>::max())) {
+    stop("A single float32 sparse kernel block exceeds the 32-bit ",
+         "compressed-index limit.");
+  }
+
+  // Concatenating k private buffers into one contiguous array costs a transient
+  // second copy: `edges` is reserved at full size while the buffers that feed
+  // it are still live. Buffers are released as they are consumed, so the excess
+  // decays over the loop, but the peak is reached at the first insert and is
+  // real -- roughly 8 bytes per edge on top of the array itself. With one
+  // thread there is nothing to concatenate, so move the single buffer instead
+  // and pay nothing; that keeps the memory-tightest configuration at the same
+  // peak as the serial code this replaced. See RESULTS.md for the measured
+  // multi-thread figure.
+  std::vector<FloatEdge> edges;
+  std::size_t peak_edge_bytes = private_capacity_bytes;
+  if (enumeration_threads == 1) {
+    edges = std::move(thread_edges[0]);
+    // A single range already carries offsets relative to the whole array.
+  } else {
+    edges.reserve(total_edges);
+    // The private buffers and the array they feed are all live at the first
+    // insert. That instant is the high-water mark of the whole build, and it
+    // is what `temporary_bytes` reports -- the capacity retained afterwards is
+    // strictly smaller and would understate the parallel path's cost.
+    peak_edge_bytes =
+      private_capacity_bytes + total_edges * sizeof(FloatEdge);
+    std::size_t offset = 0U;
+    for (int index = 0; index < enumeration_threads; ++index) {
+      std::vector<FloatEdge>& local = thread_edges[index];
+      edges.insert(edges.end(), local.begin(), local.end());
+      // Each worker recorded counts relative to its own buffer; shift them onto
+      // the concatenated one.
+      for (int row = range_begin[index]; row < range_begin[index + 1]; ++row) {
+        edge_pointer[static_cast<std::size_t>(row) + 1U] +=
+          static_cast<int>(offset);
+      }
+      offset += local.size();
+      std::vector<FloatEdge>().swap(local);  // release as we go
+    }
+  }
+
   if (zero_distance_count > 0U &&
       std::isfinite(static_cast<double>(minimum_nonzero))) {
     for (FloatEdge& edge : edges) {
@@ -634,8 +817,14 @@ List float32_csr_gaussian_kernels_cpp(
     _["nonzeros"] = nonzeros,
     _["stored_nonzeros"] = stored_nonzeros,
     _["candidate_pairs"] = static_cast<double>(edges.size()),
+    // Worst-case bound on edge storage allocated at one time, not the capacity
+    // still held at return: with more than one enumeration thread the private
+    // buffers and the concatenated array are briefly allocated together. It is
+    // a bound rather than a measurement -- reserved pages are only made
+    // resident as they are written, and the buffers are freed as they are
+    // consumed, so measured RSS stays far below it (see RESULTS.md).
     _["temporary_bytes"] =
-      static_cast<double>(edges.capacity() * sizeof(FloatEdge)) +
+      static_cast<double>(peak_edge_bytes) +
       static_cast<double>(edge_pointer.capacity() * sizeof(int)),
     _["zero_distances_replaced"] =
       static_cast<double>(zero_distance_count)
@@ -673,8 +862,16 @@ NumericMatrix float32_csr_xky_cpp(
   const int* row_pointer = INTEGER(p);
   const int* column_index = INTEGER(j);
   const Rbyte* values = RAW(x);
-  const double* left = REAL(x_left);
-  const double* right = REAL(x_right);
+
+  // Row-major float32 copies so each nonzero reads one contiguous run per
+  // operand instead of p_left/p_right separate cache lines. See
+  // pack_row_major_f32().
+  const std::vector<float> left_packed =
+    pack_row_major_f32(REAL(x_left), n_rows, p_left);
+  const std::vector<float> right_packed =
+    pack_row_major_f32(REAL(x_right), n_columns, p_right);
+  const float* left_data = left_packed.data();
+  const float* right_data = right_packed.data();
 
   std::vector<std::vector<float> > partial(
     threads,
@@ -715,35 +912,36 @@ NumericMatrix float32_csr_xky_cpp(
                position < row_pointer[row + 1]; ++position) {
             const int column = column_index[position];
             const float weight = read_float(values, position);
+            const float* right_row = right_data +
+              static_cast<std::size_t>(column) *
+              static_cast<std::size_t>(p_right);
             for (int b = 0; b < p_right; ++b) {
-              kernel_row_right[b] += weight * static_cast<float>(
-                right[column + static_cast<std::size_t>(n_columns) * b]
-              );
+              kernel_row_right[b] += weight * right_row[b];
             }
             if (symmetric) {
+              const float* left_row = left_data +
+                static_cast<std::size_t>(column) *
+                static_cast<std::size_t>(p_left);
               for (int a = 0; a < p_left; ++a) {
-                kernel_row_left[a] += weight * static_cast<float>(
-                  left[column + static_cast<std::size_t>(n_rows) * a]
-                );
+                kernel_row_left[a] += weight * left_row[a];
               }
             }
           }
+          const float* left_out = left_data +
+            static_cast<std::size_t>(row) *
+            static_cast<std::size_t>(p_left);
+          const float* right_out = symmetric ?
+            right_data + static_cast<std::size_t>(row) *
+              static_cast<std::size_t>(p_right) :
+            NULL;
           for (int b = 0; b < p_right; ++b) {
             const float z = kernel_row_right[b];
+            float* output_column =
+              output.data() + static_cast<std::size_t>(p_left) * b;
             for (int a = 0; a < p_left; ++a) {
-              output[
-                a + static_cast<std::size_t>(p_left) * b
-              ] += static_cast<float>(
-                left[row + static_cast<std::size_t>(n_rows) * a]
-              ) * z;
+              output_column[a] += left_out[a] * z;
               if (symmetric) {
-                output[
-                  a + static_cast<std::size_t>(p_left) * b
-                ] += kernel_row_left[a] * static_cast<float>(
-                  right[
-                    row + static_cast<std::size_t>(n_columns) * b
-                  ]
-                );
+                output_column[a] += kernel_row_left[a] * right_out[b];
               }
             }
           }
@@ -808,6 +1006,11 @@ NumericMatrix float32_csr_matmul_cpp(
     double* output_pointer = REAL(result);
     std::vector<std::thread> workers;
     workers.reserve(threads);
+    // Each worker allocates its own scratch row, so each can throw bad_alloc.
+    // An exception that escapes a std::thread calls std::terminate() and takes
+    // the R session with it; catch it and re-raise on the main thread after the
+    // join, where stop() is legal.
+    std::atomic<bool> worker_failed(false);
     for (int thread_index = 0; thread_index < threads; ++thread_index) {
       const int rhs_begin = static_cast<int>(
         static_cast<std::int64_t>(n_rhs) * thread_index / threads
@@ -815,7 +1018,8 @@ NumericMatrix float32_csr_matmul_cpp(
       const int rhs_end = static_cast<int>(
         static_cast<std::int64_t>(n_rhs) * (thread_index + 1) / threads
       );
-      workers.emplace_back([=]() {
+      workers.emplace_back([=, &worker_failed]() {
+       try {
         std::vector<float> scratch(result_rows, 0.0f);
         for (int rhs = rhs_begin; rhs < rhs_end; ++rhs) {
           std::fill(scratch.begin(), scratch.end(), 0.0f);
@@ -845,9 +1049,15 @@ NumericMatrix float32_csr_matmul_cpp(
             ] = static_cast<double>(scratch[column]);
           }
         }
+       } catch (...) {
+        worker_failed.store(true);
+       }
       });
     }
     for (std::thread& worker : workers) worker.join();
+    if (worker_failed.load()) {
+      stop("A float32 sparse matrix-multiply worker failed.");
+    }
     return result;
   }
 
@@ -856,6 +1066,15 @@ NumericMatrix float32_csr_matmul_cpp(
   double* output_pointer = REAL(result);
   std::vector<std::thread> workers;
   workers.reserve(threads);
+  std::atomic<bool> worker_failed(false);
+
+  // The transposed/symmetric branch above splits over right-hand sides, so each
+  // worker reads one contiguous column of the input and needs no repacking.
+  // This branch fans a single nonzero across every right-hand side, which in
+  // column-major order means one cache line per side; pack it row-major first.
+  const std::vector<float> input_packed =
+    pack_row_major_f32(input_pointer, n_columns, n_rhs);
+  const float* input_data = input_packed.data();
 
   for (int thread_index = 0; thread_index < threads; ++thread_index) {
     const int row_begin = static_cast<int>(
@@ -864,7 +1083,8 @@ NumericMatrix float32_csr_matmul_cpp(
     const int row_end = static_cast<int>(
       static_cast<std::int64_t>(n_rows) * (thread_index + 1) / threads
     );
-    workers.emplace_back([=]() {
+    workers.emplace_back([=, &worker_failed]() {
+     try {
       // Sweep each row's nonzeros once, reading the float32 value and column
       // index a single time and fanning the product across all right-hand
       // sides, instead of re-reading them once per column. The per-right-hand
@@ -875,12 +1095,11 @@ NumericMatrix float32_csr_matmul_cpp(
         for (int position = row_pointer[row];
              position < row_pointer[row + 1]; ++position) {
           const float weight = read_float(values, position);
-          const double* input_column =
-            input_pointer + column_index[position];
+          const float* input_row = input_data +
+            static_cast<std::size_t>(column_index[position]) *
+            static_cast<std::size_t>(n_rhs);
           for (int rhs = 0; rhs < n_rhs; ++rhs) {
-            row_output[rhs] += weight * static_cast<float>(
-              input_column[static_cast<std::size_t>(n_columns) * rhs]
-            );
+            row_output[rhs] += weight * input_row[rhs];
           }
         }
         for (int rhs = 0; rhs < n_rhs; ++rhs) {
@@ -889,9 +1108,15 @@ NumericMatrix float32_csr_matmul_cpp(
           ] = static_cast<double>(row_output[rhs]);
         }
       }
+     } catch (...) {
+      worker_failed.store(true);
+     }
     });
   }
   for (std::thread& worker : workers) worker.join();
+  if (worker_failed.load()) {
+    stop("A float32 sparse matrix-multiply worker failed.");
+  }
   return result;
 }
 

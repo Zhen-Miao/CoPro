@@ -588,3 +588,189 @@ test_that("float32 supports multi-slide pairwise and one-type kernels", {
   })
   expect_length(one_type_fit@cellScores, 1L)
 })
+
+test_that("row-major packing leaves the float32 operators exact to float32", {
+  # The operators pack X row-major in float32 before threading so each nonzero
+  # reads one contiguous run instead of one cache line per PC. The conversion
+  # is the same static_cast the strided loop applied on every access, just
+  # hoisted, and the accumulation order is untouched -- so the packing is a
+  # pure layout change.
+  #
+  # This was originally pinned with expect_snapshot_value(style = "serialize"),
+  # on the theory that a pure layout change must not move a single bit. It
+  # must not, on one machine -- but a float32 value is not reproducible across
+  # toolchains, so the snapshot pinned the toolchain rather than the layout.
+  # The kernel weights come out of expf(), which differs by an ulp between
+  # glibc and Apple's libm, and the compilers disagree about FMA contraction.
+  # The recorded snapshot passed on macOS/arm64 and failed on the Linux CI by
+  # ~1e-6 relative on every component, with no code difference between them.
+  # So pin the layout against the decoded double reference at float32
+  # precision, plus the two structural identities that a mis-packed operand or
+  # a bad row split would break outright: transposition and thread invariance.
+  set.seed(4242)
+  n_left <- 260L
+  n_right <- 190L
+  coords_left <- cbind(runif(n_left) * 40, runif(n_left) * 40)
+  coords_right <- cbind(runif(n_right) * 40, runif(n_right) * 40)
+
+  cross <- .newFloat32SparseKernel(
+    float32_csr_gaussian_kernels_cpp(
+      coords_left, coords_right, sigmas = 3, percentile = 0.4,
+      scaling_factor = 1, lower_limit = 1e-7, upper_quantile = 0.85,
+      truncate_low_distance = TRUE, symmetric = FALSE, normalization = 0L
+    )$kernels[[1L]]
+  )
+  self <- .newFloat32SparseKernel(
+    float32_csr_gaussian_kernels_cpp(
+      coords_left, coords_left, sigmas = 3, percentile = 0.4,
+      scaling_factor = 1, lower_limit = 1e-7, upper_quantile = 0.85,
+      truncate_low_distance = TRUE, symmetric = TRUE, normalization = 0L
+    )$kernels[[1L]]
+  )
+
+  X_left <- matrix(rnorm(n_left * 6L), n_left, 6L)
+  X_right <- matrix(rnorm(n_right * 4L), n_right, 4L)
+
+  # Single-threaded so the value is independent of how rows split across
+  # workers. The reference decodes the very kernel that was built, so the
+  # libm difference above cancels and only the float32 accumulation remains.
+  decoded_cross <- asDoubleSparseMatrix(cross)
+  decoded_self <- asDoubleSparseMatrix(self)
+  reference_cross <- as.matrix(crossprod(X_left, decoded_cross %*% X_right))
+  reference_self <- as.matrix(crossprod(X_left, decoded_self %*% X_left))
+
+  expect_equal(
+    .kernelXKY(X_left, cross, X_right, n_threads = 1L),
+    reference_cross,
+    tolerance = 2e-5, ignore_attr = TRUE
+  )
+  expect_equal(
+    .kernelXKY(X_right, t(cross), X_left, n_threads = 1L),
+    t(reference_cross),
+    tolerance = 2e-5, ignore_attr = TRUE
+  )
+  expect_equal(
+    .kernelXKY(X_left, self, X_left, n_threads = 1L),
+    reference_self,
+    tolerance = 2e-5, ignore_attr = TRUE
+  )
+  expect_equal(
+    .float32KernelMatMult(cross, X_right, n_threads = 1L),
+    as.matrix(decoded_cross %*% X_right),
+    tolerance = 2e-5, ignore_attr = TRUE
+  )
+
+  # Transposing the kernel must agree with transposing the result, and the
+  # packed and threaded paths must agree with each other.
+  expect_equal(
+    .kernelXKY(X_right, t(cross), X_left, n_threads = 1L),
+    t(.kernelXKY(X_left, cross, X_right, n_threads = 1L))
+  )
+  expect_equal(
+    .kernelXKY(X_left, cross, X_right, n_threads = 3L),
+    .kernelXKY(X_left, cross, X_right, n_threads = 1L),
+    tolerance = 1e-5
+  )
+})
+
+test_that("the kernel content signature is cached but still content-sensitive", {
+  # .readKernelNormalizer()/.cacheKernelNormalizer() signature K, Rx and Ry on
+  # every probe, so the scan used to run six times per (sigma, pair). Values
+  # are immutable after construction, so the signature is computed once there.
+  set.seed(515)
+  coords_a <- cbind(runif(300) * 40, runif(300) * 40)
+  coords_b <- cbind(runif(220) * 40, runif(220) * 40)
+  build <- function(A, B, symmetric) .newFloat32SparseKernel(
+    float32_csr_gaussian_kernels_cpp(
+      A, B, sigmas = 3, percentile = 0.4, scaling_factor = 1,
+      lower_limit = 1e-7, upper_quantile = 0.85,
+      truncate_low_distance = TRUE, symmetric = symmetric,
+      normalization = 0L)$kernels[[1L]])
+
+  K <- build(coords_a, coords_b, FALSE)
+  expect_false(is.null(K$signature))
+  expect_identical(K$signature, .computeFloat32KernelSignature(K))
+  expect_identical(.kernelMatrixSignature(K), K$signature)
+
+  # A transposed view represents a different matrix and must not reuse the
+  # forward orientation's cache entry.
+  expect_false(identical(.kernelMatrixSignature(t(K)),
+                         .kernelMatrixSignature(K)))
+  expect_identical(.kernelMatrixSignature(t(t(K))), .kernelMatrixSignature(K))
+
+  # Objects saved before the field existed have no stored signature and must
+  # fall back to the full scan, giving the same answer.
+  legacy <- K
+  legacy$signature <- NULL
+  expect_identical(.kernelMatrixSignature(legacy), K$signature)
+
+  # Different values must produce a different signature, or the cache would
+  # hand back a stale normalizer.
+  other <- build(coords_a[rev(seq_len(nrow(coords_a))), , drop = FALSE],
+                 coords_b, FALSE)
+  expect_false(identical(other$signature, K$signature))
+
+  # A symmetric kernel signs itself too, and round-trips through the cache.
+  self <- build(coords_a, coords_a, TRUE)
+  expect_false(is.null(self$signature))
+  expect_identical(.kernelMatrixSignature(self), self$signature)
+  # t() on a symmetric kernel is the identity, so the signature must not move.
+  expect_identical(.kernelMatrixSignature(t(self)),
+                   .kernelMatrixSignature(self))
+
+  cache <- .cacheKernelNormalizer(list(), "key", K, self, NULL, 12.5)
+  expect_identical(.readKernelNormalizer(cache, "key", K, self, NULL), 12.5)
+  expect_null(.readKernelNormalizer(cache, "key", other, self, NULL))
+})
+
+test_that("parallel neighbour enumeration reproduces the serial CSR exactly", {
+  # Enumeration runs over disjoint, ascending row ranges and the per-thread
+  # buffers are concatenated in thread order, so the edge order -- and with it
+  # the CSR layout, the upper-quantile clip and every stored value -- must be
+  # bit-identical to the serial build regardless of thread count.
+  set.seed(707)
+  coords <- cbind(runif(1500) * 60, runif(1500) * 60)
+  other <- cbind(runif(1100) * 60, runif(1100) * 60)
+  build <- function(A, B, symmetric, normalization, threads)
+    float32_csr_gaussian_kernels_cpp(
+      A, B, sigmas = c(2, 4), percentile = 0.3, scaling_factor = 1,
+      lower_limit = 1e-7, upper_quantile = 0.85,
+      truncate_low_distance = TRUE, symmetric = symmetric,
+      normalization = normalization, n_threads = threads)
+
+  # `temporary_bytes` reports the capacity actually allocated for the edge
+  # array, which is a memory diagnostic rather than a result: with one thread
+  # the single private buffer is moved into place and keeps its own capacity,
+  # while two or more are concatenated into an array reserved at exactly the
+  # total. Holding it to bit-identity across thread counts would assert the
+  # wrong thing and would forbid making the serial path cheaper. Compare the
+  # CSR content exactly, and the diagnostic by its intended direction.
+  results <- function(x) x[setdiff(names(x), "temporary_bytes")]
+
+  for (normalization in 0:3) {
+    reference <- build(coords, coords, TRUE, normalization, 1L)
+    for (threads in c(2L, 3L, 8L)) {
+      expect_identical(
+        results(build(coords, coords, TRUE, normalization, threads)),
+        results(reference),
+        info = paste("symmetric, normalization", normalization,
+                     "threads", threads))
+    }
+    cross_reference <- build(coords, other, FALSE, normalization, 1L)
+    expect_identical(results(build(coords, other, FALSE, normalization, 4L)),
+                     results(cross_reference),
+                     info = paste("cross-type, normalization", normalization))
+  }
+
+  # Enumerating in parallel needs private buffers plus the array they are
+  # concatenated into, so it costs more than the serial build -- never less.
+  serial <- build(coords, coords, TRUE, 0L, 1L)
+  parallel4 <- build(coords, coords, TRUE, 0L, 4L)
+  expect_gte(parallel4$temporary_bytes, serial$temporary_bytes)
+
+  # More threads than rows must not break the range split.
+  tiny <- cbind(runif(3) * 5, runif(3) * 5)
+  expect_identical(results(build(tiny, tiny, TRUE, 0L, 16L)),
+                   results(build(tiny, tiny, TRUE, 0L, 1L)))
+  expect_error(build(coords, coords, TRUE, 0L, 0L), "at least one")
+})

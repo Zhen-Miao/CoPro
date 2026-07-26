@@ -410,3 +410,240 @@ test_that("computeNormalizedCorrelation works for CoProMulti aggregate mode", {
   expect_true("aggregateCorrelation" %in% colnames(agg_df))
   expect_true(is.numeric(agg_df$sigmaValue))
 })
+
+test_that("column statistics and centering helpers match what they replaced", {
+  set.seed(88)
+  m <- matrix(rnorm(600 * 25), 600, 25)
+  m[sample(length(m), 2000)] <- 0
+
+  # .columnNonzeroFraction() reads a CsparseMatrix's column pointer instead of
+  # building a full logical copy of the matrix.
+  expect_identical(CoPro:::.columnNonzeroFraction(m),
+                   colSums(m != 0) / nrow(m))
+  sp <- as(as(as(Matrix::Matrix(m, sparse = TRUE), "generalMatrix"),
+              "CsparseMatrix"), "dMatrix")
+  expect_identical(as.numeric(CoPro:::.columnNonzeroFraction(sp)),
+                   as.numeric(colSums(sp != 0) / nrow(sp)))
+  # An explicitly stored zero is not a nonzero, so drop0() has to come first.
+  explicit <- sp
+  explicit@x[seq_len(15)] <- 0
+  expect_identical(as.numeric(CoPro:::.columnNonzeroFraction(explicit)),
+                   as.numeric(colSums(explicit != 0) / nrow(explicit)))
+
+  # Centering by sweep() must equal the double-transpose form it replaced.
+  expect_identical(CoPro:::.apply_centering_scaling(m, TRUE, FALSE),
+                   t(t(m) - colMeans(m)))
+
+  # .columnSds() falls back to apply() for anything that is not a dense
+  # numeric matrix, because matrixStats::colSds() does not accept one.
+  expect_identical(CoPro:::.columnSds(sp), apply(sp, 2, stats::sd))
+  # Both paths name their result from colnames(), or leave it unnamed.
+  named <- m
+  colnames(named) <- paste0("g", seq_len(ncol(named)))
+  expect_identical(names(CoPro:::.columnSds(named)), colnames(named))
+  expect_null(names(CoPro:::.columnSds(m)))
+})
+
+test_that("center_scale_matrix_opt() ships .columnSds(), i.e. matrixStats", {
+  # This pins *which* SD implementation is in the shipped code path, which the
+  # equivalence test below deliberately does not: that one shows the two agree
+  # on everything a reader sees, and would pass under either. The two assert
+  # different things and both are wanted.
+  skip_on_cran()
+  skip_if_not_installed("matrixStats")
+  q <- function(e) suppressWarnings(suppressMessages(e))
+
+  obj <- q(create_test_copro_single(n_cells = 320, n_genes = 60,
+                                    n_cell_types = 2, seed = 11))
+  obj <- q(subsetData(obj, cellTypesOfInterest = c("CellTypeA", "CellTypeB")))
+  m <- obj@normalizedDataSub[obj@cellTypesSub == "CellTypeB", , drop = FALSE]
+
+  by_matrix_stats <- matrixStats::colSds(m)
+  by_apply <- apply(m, 2, stats::sd)
+
+  # The assertions below can only tell the two implementations apart on input
+  # where they actually disagree -- here, 1 ulp on Gene56. Whether they do is a
+  # property of the installed matrixStats and BLAS, so establish it rather than
+  # assume it, and skip instead of passing vacuously if it ever stops holding.
+  skip_if(identical(unname(by_matrix_stats), unname(by_apply)),
+          "the two SD implementations agree bit-for-bit on this fixture")
+
+  expect_identical(unname(CoPro:::.columnSds(m)), unname(by_matrix_stats))
+
+  # No column of this fixture is zero-SD or near-empty, so the scale attribute
+  # is the raw SD vector with nothing substituted. Assert that, so a change to
+  # the substitution rule shows up here rather than being absorbed.
+  nz <- colSums(m != 0) / nrow(m)
+  expect_length(which(by_matrix_stats < 1e-3 | nz < 0.01), 0L)
+
+  scaled <- CoPro:::center_scale_matrix_opt(m)
+  expect_identical(unname(attr(scaled, "scaled:scale")),
+                   unname(by_matrix_stats))
+})
+
+test_that("the two column-SD implementations give the same science", {
+  # matrixStats::colSds() and apply(x, 2, sd) use different variance algorithms
+  # and disagree by 1 ulp on some columns. That is enough to flip the sign of a
+  # principal component out of prcomp_irlba(), which sounds worse than it is:
+  # the CCA weight's coordinate on that PC flips with it and the two cancel.
+  #
+  # Run the whole pipeline under each implementation and check what a reader of
+  # the results would actually see. Component sign is compared with
+  # .align_sign() because the sign of a CCA axis is inherently ambiguous -- a
+  # different BLAS or R build can flip it under the existing code too -- while
+  # the sign-invariant quantities are held to a tight tolerance.
+  skip_on_cran()
+  skip_if_not_installed("matrixStats")
+  q <- function(e) suppressWarnings(suppressMessages(e))
+
+  # Reproduce center_scale_matrix_opt() with a supplied SD function, per cell
+  # type, then hand the result to computePCA(center = FALSE, scale. = FALSE).
+  # That exercises the real difference between the two implementations without
+  # mocking an internal binding.
+  prescale <- function(m, sd_fun) {
+    col_means <- colMeans(m)
+    col_sds <- sd_fun(m)
+    col_nz <- colSums(m != 0) / nrow(m)
+    safe <- col_sds
+    drop <- which(col_sds < 1e-3 | col_nz < 0.01)
+    if (length(drop) > 0) safe[drop] <- 1.0
+    scale(m, center = col_means, scale = safe)
+  }
+
+  run <- function(sd_fun) {
+    o <- q(create_test_copro_single(n_cells = 320, n_genes = 60,
+                                    n_cell_types = 2, seed = 11))
+    o <- q(subsetData(o, cellTypesOfInterest = c("CellTypeA", "CellTypeB")))
+    for (ct in c("CellTypeA", "CellTypeB")) {
+      rows <- o@cellTypesSub == ct
+      o@normalizedDataSub[rows, ] <- prescale(
+        o@normalizedDataSub[rows, , drop = FALSE], sd_fun)
+    }
+    o <- q(computePCA(o, nPCA = 8, center = FALSE, scale. = FALSE))
+    o <- q(computeSparseKernel(o, sigmaValues = c(0.05, 0.1), verbose = FALSE))
+    o <- q(runSkrCCA(o, scalePCs = TRUE, nCC = 2))
+    o <- q(computeNormalizedCorrelation(o))
+    o <- q(computeGeneAndCellScores(o))
+    q(computeRegressionGeneScores(o))
+  }
+  with_matrix_stats <- run(function(x) matrixStats::colSds(x))
+  with_apply <- run(function(x) apply(x, 2, stats::sd))
+
+  # Sign-invariant outputs -- the ones the manuscript reports -- must agree
+  # tightly, and the selected bandwidth must be the same.
+  expect_equal(
+    do.call(rbind, with_matrix_stats@normalizedCorrelation)$normalizedCorrelation,
+    do.call(rbind, with_apply@normalizedCorrelation)$normalizedCorrelation,
+    tolerance = 1e-10
+  )
+  expect_identical(with_matrix_stats@sigmaValueChoice,
+                   with_apply@sigmaValueChoice)
+
+  # Scores and gene weights must agree up to the per-component sign.
+  compare_aligned <- function(a, b, label) {
+    keys <- intersect(names(a), names(b))
+    expect_gt(length(keys), 0L)
+    for (k in keys) {
+      va <- as.matrix(a[[k]])
+      vb <- as.matrix(b[[k]])
+      expect_identical(dim(va), dim(vb), label = paste(label, k, "dim"))
+      for (cc in seq_len(ncol(va))) {
+        expect_equal(unname(.align_sign(va[, cc], vb[, cc])),
+                     unname(va[, cc]), tolerance = 1e-8,
+                     label = paste(label, k, "component", cc))
+      }
+    }
+  }
+  compare_aligned(with_matrix_stats@cellScores, with_apply@cellScores,
+                  "cellScores")
+  compare_aligned(with_matrix_stats@geneScores, with_apply@geneScores,
+                  "geneScores")
+  compare_aligned(with_matrix_stats@geneScoresRegression,
+                  with_apply@geneScoresRegression, "geneScoresRegression")
+})
+
+test_that("per-slide PC scores are stored as views of the global scores", {
+  obj <- create_test_copro_multi(n_cells_per_slide = 120, n_slides = 2,
+                                 n_cell_types = 2, seed = 91)
+  obj <- subsetData(obj, cellTypesOfInterest = c("CellTypeA", "CellTypeB"))
+  obj <- suppressMessages(computePCA(obj, nPCA = 6))
+
+  # Slot shape is unchanged: one entry per slide, keyed by slide name.
+  expect_length(obj@pcaResults, 2L)
+  expect_setequal(names(obj@pcaResults), c("Slide1", "Slide2"))
+
+  for (sID in c("Slide1", "Slide2")) {
+    for (ct in c("CellTypeA", "CellTypeB")) {
+      entry <- obj@pcaResults[[sID]][[ct]]
+      expect_true(CoPro:::.isPCSlice(entry))
+      expect_type(entry$rows, "integer")
+
+      # Resolving it must give exactly what the old code materialized: the
+      # rows of the global scores for this slide, labelled with cell IDs.
+      resolved <- CoPro:::.resolvePCSlice(entry, obj@pcaGlobal[[ct]]$x)
+      keep <- getSlideID(obj)[obj@cellTypesSub == ct] == sID
+      expected <- obj@pcaGlobal[[ct]]$x[keep, , drop = FALSE]
+      expect_identical(resolved, expected)
+      expect_identical(
+        rownames(resolved),
+        rownames(obj@metaDataSub)[obj@cellTypesSub == ct][keep]
+      )
+    }
+  }
+
+  # The rows partition the cell type exactly once.
+  for (ct in c("CellTypeA", "CellTypeB")) {
+    all_rows <- sort(unname(unlist(
+      lapply(obj@pcaResults, function(s) s[[ct]]$rows))))
+    expect_identical(all_rows, seq_len(nrow(obj@pcaGlobal[[ct]]$x)))
+  }
+})
+
+test_that("center_per_slide keeps materialized slices, and legacy slices still resolve", {
+  make <- function(center_per_slide) {
+    obj <- create_test_copro_multi(n_cells_per_slide = 120, n_slides = 2,
+                                   n_cell_types = 2, seed = 91)
+    obj <- subsetData(obj, cellTypesOfInterest = c("CellTypeA", "CellTypeB"))
+    suppressMessages(computePCA(obj, nPCA = 6,
+                                center_per_slide = center_per_slide))
+  }
+
+  # Re-centering makes the slice something other than a view, so it must stay
+  # a matrix -- otherwise the centering would be silently discarded.
+  centered <- make(TRUE)
+  entry <- centered@pcaResults[["Slide1"]][["CellTypeA"]]
+  expect_false(CoPro:::.isPCSlice(entry))
+  expect_true(is.matrix(entry))
+  expect_equal(colMeans(entry), rep(0, ncol(entry)), tolerance = 1e-12,
+               ignore_attr = TRUE)
+
+  # An object saved before slices became views holds matrices. Both
+  # representations must prepare to the same thing, for both scalePCs settings.
+  lazy <- make(FALSE)
+  legacy <- lazy
+  for (sID in names(legacy@pcaResults)) {
+    for (ct in names(legacy@pcaResults[[sID]])) {
+      legacy@pcaResults[[sID]][[ct]] <- CoPro:::.resolvePCSlice(
+        legacy@pcaResults[[sID]][[ct]], legacy@pcaGlobal[[ct]]$x)
+    }
+  }
+  expect_true(is.matrix(legacy@pcaResults[["Slide1"]][["CellTypeA"]]))
+
+  for (scale_pcs in c(TRUE, FALSE)) {
+    from_view <- CoPro:::.preparePCMatrices(
+      pc_data = lazy@pcaResults, pca_global = lazy@pcaGlobal,
+      scalePCs = scale_pcs, slides = getSlideList(lazy),
+      cts = c("CellTypeA", "CellTypeB"))
+    from_matrix <- CoPro:::.preparePCMatrices(
+      pc_data = legacy@pcaResults, pca_global = legacy@pcaGlobal,
+      scalePCs = scale_pcs, slides = getSlideList(legacy),
+      cts = c("CellTypeA", "CellTypeB"))
+    for (sID in names(from_view)) {
+      for (ct in names(from_view[[sID]])) {
+        expect_equal(from_view[[sID]][[ct]], from_matrix[[sID]][[ct]],
+                     ignore_attr = TRUE,
+                     info = paste(sID, ct, "scalePCs", scale_pcs))
+      }
+    }
+  }
+})

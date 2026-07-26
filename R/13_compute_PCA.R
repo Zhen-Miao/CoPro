@@ -63,7 +63,10 @@ setGeneric("computePCA",
   if (center && scale.) {
     return(center_scale_matrix_opt(mat))
   } else if (center) {
-    return(t(t(mat) - colMeans(mat)))
+    # sweep() subtracts in place over one pass. The previous
+    # t(t(mat) - colMeans(mat)) spelling made two full transposed copies of a
+    # cells-by-genes matrix to achieve the same thing.
+    return(sweep(mat, 2L, colMeans(mat), "-"))
   } else if (!scale.) {
     warning(paste(
       "It is not recommended to skip both centering and scaling of the data,",
@@ -326,22 +329,34 @@ setGeneric("computePCA",
       pca_ct <- .run_pca_irlba(mat_ct, nPCA_use, center, scale.)
     }
     message("PCA computed for cell type: ", ct)
-    pca_global[[ct]] <- pca_ct
 
     # Project each slide's data onto the shared PCs
     slide_id_ct <- getSlideID(object)[object@cellTypesSub == ct]
     row_names_ct <- rownames(object@metaDataSub)[object@cellTypesSub == ct]
 
+    # Label the global scores once, so the per-slide views inherit the cell IDs
+    # instead of each slice having to be relabelled. prcomp_irlba() does not
+    # carry rownames through, which is why the per-slice assignment below used
+    # to be necessary.
+    rownames(pca_ct$x) <- row_names_ct
+    pca_global[[ct]] <- pca_ct
+
     for (slide_id in slides) {
-      pca_sub <- pca_ct$x[slide_id_ct == slide_id, , drop = FALSE]
-      rownames(pca_sub) <- row_names_ct[slide_id_ct == slide_id]
+      rows <- which(slide_id_ct == slide_id)
 
-      if (center_per_slide && nrow(pca_sub) > 0) {
+      if (center_per_slide && length(rows) > 0) {
+        # Re-centering makes the slice something other than a view of the
+        # global scores, so it has to be materialized.
         message("Centering per slide for slide: ", slide_id)
-        pca_sub <- scale(pca_sub, center = TRUE, scale = FALSE)
+        pca_results_all[[slide_id]][[ct]] <- scale(
+          pca_ct$x[rows, , drop = FALSE], center = TRUE, scale = FALSE
+        )
+      } else {
+        # Otherwise the slice is exactly rows of pcaGlobal[[ct]]$x, so store
+        # which rows rather than a second copy of the values. See
+        # .resolvePCSlice().
+        pca_results_all[[slide_id]][[ct]] <- .newPCSlice(rows)
       }
-
-      pca_results_all[[slide_id]][[ct]] <- pca_sub
     }
   } # End loop over cell types
 

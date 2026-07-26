@@ -1,0 +1,13 @@
+"label","case","n","nnz_per_row","nPC","threads","op","seconds"
+"strided","symmetric_1type",120000,374,10,1,"kernelXKY",4.46333333333333
+"strided","symmetric_1type",120000,374,10,4,"kernelXKY",2.032
+"strided","symmetric_1type",120000,374,10,4,"matMult",1.03333333333333
+"strided","symmetric_1type",120000,374,30,1,"kernelXKY",20.7046666666667
+"strided","symmetric_1type",120000,374,30,4,"kernelXKY",10.4846666666667
+"strided","symmetric_1type",120000,374,30,4,"matMult",2.75699999999999
+"strided","crosstype_2type",1e+05,354,10,1,"kernelXKY",2.27966666666667
+"strided","crosstype_2type",1e+05,354,10,4,"kernelXKY",0.50266666666666
+"strided","crosstype_2type",1e+05,354,10,4,"matMult",0.414999999999983
+"strided","crosstype_2type",1e+05,354,30,1,"kernelXKY",16.512
+"strided","crosstype_2type",1e+05,354,30,4,"kernelXKY",3.97833333333332
+"strided","crosstype_2type",1e+05,354,30,4,"matMult",3.27033333333331

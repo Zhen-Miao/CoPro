@@ -1,5 +1,77 @@
 # CoPro 1.1.2
 
+## Performance
+
+* The float32 sparse operators pack their dense operand row-major before
+  threading. `float32_csr_xky_cpp()` previously read `X` in R's column-major
+  layout, so every kernel nonzero touched one cache line per PC; it now reads
+  one contiguous run. Measured 3.0-3.5x on the cross-type operators at
+  `nPCA = 30`, tapering to ~1.3-1.6x at `nPCA = 10` or on within-type
+  (symmetric) kernels. Run-to-run variance also collapses (28.5-54.8 s becomes
+  16.6-17.0 s on one within-type case), which matters on a shared node. The
+  conversion is the same one the strided loop performed on each access and the
+  accumulation order is unchanged, so results are bit-identical.
+* Permutation draws for a **held-fixed** cell type are stored as a compact
+  marker instead of `replicate(nPermu, 1:n)`. That matrix held the integers
+  `1..n` repeated `nPermu` times and carried no information: 799 MB at 200,000
+  cells and 999 draws, persisted into the object and into every `saveRDS()`.
+  Detecting it no longer allocates a same-sized logical either, and each draw
+  now skips the row subset that used to copy the fixed type's whole `n x nPCA`
+  matrix back to itself. Every drawn permutation and every p-value is
+  unchanged.
+* Per-column standard deviations in `center_scale_matrix_opt()` use
+  `matrixStats::colSds()` (~2.5x faster than `apply(x, 2, sd)`) via the new
+  `.columnSds()` helper, which falls back to `apply()` for sparse input, and
+  the nonzero-fraction check reads a sparse matrix's column pointer instead of
+  building a full logical copy. `colSds()` and `sd()` use different variance
+  algorithms and can disagree by 1 ulp, which is enough to flip the sign of a
+  principal component; the CCA weight's coordinate on that PC flips with it and
+  the two cancel. **This is the one change in this release that is not
+  bit-identical.** Across the 14-scenario baseline it moves the raw weight
+  vectors in `@skrCCAOut` (a per-PC sign convention) in 3 scenarios, while every
+  reported quantity -- cell scores, gene scores, regression gene weights,
+  normalized correlations, null correlations and p-values -- agrees to
+  **5.4e-11 relative with no sign changes**, and the selected sigma is identical
+  everywhere. Results remain exactly reproducible run to run.
+  `test-pca-workflow.R` asserts both that invariance and that this is the
+  implementation actually shipped.
+* Multi-slide `@pcaResults` stores per-slide *views* of the global PC scores
+  (row indices) rather than a second copy of the values, halving what PC scores
+  occupy: 72x smaller for the slot itself, and total PC-score memory drops from
+  ~128 MB to ~64 MB at 200,000 cells and 40 PCs. `.preparePCMatrices()` also
+  whitens the global score matrix once per cell type instead of once per
+  (slide, cell type). Slices are still materialized when
+  `center_per_slide = TRUE`, where re-centering makes them genuinely different
+  data, and objects saved with materialized slices continue to work. The slot's
+  shape -- one entry per slide, keyed by slide name -- is unchanged.
+* The whitened-Frobenius normalizer no longer materializes `(Rx %*% K) %*% Ry`.
+  Those two chained sparse products fill in heavily -- 7x then 11x on a
+  40k-cell kernel, extrapolating to roughly 1.5 GB at 200k cells -- to produce
+  a single scalar. `<Rx K Ry, K>` is now accumulated as
+  `sum((Rx K) * (K Ry))` over column blocks, and the low-rank cross term
+  applies the operators to its two-column factor instead of to `K`. Blocking
+  turned out to be *faster* as well as smaller, because the intermediates stay
+  in cache: on a 150k-cell kernel, `.whitenedFrobNorm()` itself goes from
+  6.16 s / 2231 MB to 4.35 s / 609 MB (1.42x, 3.7x less peak; minimum of 5
+  repetitions in each of two checkouts).
+  `sum(K * K)` likewise no longer allocates a second sparse matrix. The
+  normalizer is unchanged to ~4e-15 relative (floating-point reassociation);
+  weights, cell scores, gene scores and the selected sigma are bit-identical.
+* The sparse-kernel upper-quantile clip no longer materializes
+  `rep(values, each = 2L)` for symmetric kernels. `.type7QuantileRepeated()`
+  reads the two order statistics R's type-7 rule needs directly from the stored
+  triangle, by selection rather than a full sort. Measured 2.1x faster and
+  600 MB less peak at 30M stored values, scaling to several GB at the
+  hundreds-of-millions of nonzeros large panels reach. It mirrors
+  `stats::quantile()`'s arithmetic statement for statement, so the clip
+  threshold is bit-identical.
+* `options(CoPro.compactPermutation = TRUE)` additionally stores the
+  *permuted* side as one seed per draw and regenerates it on demand, removing
+  the remaining `n * nPermu * 4` bytes for the `"global"` and `"bin"` nulls.
+  **Off by default, because it changes which permutations are drawn** -- a
+  re-run of a saved analysis will move its p-values within Monte Carlo error.
+  Leave it off to reproduce existing results.
+
 ## Inference
 
 * skrCCA no longer depends on the RNG state. The block-relaxation path (three

@@ -397,19 +397,21 @@
   }
   K <- as(K, "CsparseMatrix")
   valid <- K@x  # all stored values are >= lowerLimit, no NA
-  if (inherits(K, "symmetricMatrix")) {
-    # The dense/full sparse path contains both copies of every off-diagonal
-    # value. Preserve its exact type-7 quantile behavior while retaining only
-    # one copy in persistent storage.
-    valid <- rep(valid, each = 2L)
-  }
+  # The dense/full sparse path contains both copies of every off-diagonal value,
+  # so a symmetric kernel's quantile is defined on twice what it stores.
+  # .type7QuantileRepeated() reproduces that exactly from the stored triangle
+  # rather than materializing rep(valid, each = 2L), which would double a vector
+  # that reaches hundreds of millions of entries on large data.
+  repetitions <- if (inherits(K, "symmetricMatrix")) 2L else 1L
   if (length(valid) == 0) {
     warning("No valid kernel values found above lowerLimit")
     return(K)
   }
 
   # Clip large values (matches dense: clip computed from valid values)
-  upper_clip <- as.numeric(stats::quantile(valid, upperQuantile, na.rm = TRUE))
+  upper_clip <- as.numeric(
+    .type7QuantileRepeated(valid, upperQuantile, repetitions)
+  )
   K@x[K@x >= upper_clip] <- upper_clip
 
   if (normalizeKernel && !rowNormalizeKernel && !colNormalizeKernel) {

@@ -746,10 +746,15 @@ test_that("streaming = FALSE warns when distanceArgs / kernelArgs are passed", {
   obj <- computeDistance(obj, distType = "Euclidean2D", verbose = FALSE)
   obj <- computeKernelMatrix(obj, sigmaValues = 0.1, verbose = FALSE)
 
+  # max_iter caps the run so the test stays cheap, but it has to clear the
+  # optimizer's own convergence bar or the "did not converge" warning escapes
+  # alongside the one under test. This fixture needs ~62 iterations to reach
+  # tol = 1e-6; 200 keeps the margin wide and still finishes in well under a
+  # second.
   expect_warning(
     runGeneSpaceCCA(obj, sigma = 0.1, streaming = FALSE,
                     distanceArgs = list(distType = "Euclidean2D"),
-                    max_iter = 50, verbose = FALSE),
+                    max_iter = 200, verbose = FALSE),
     "ignored when streaming = FALSE"
   )
 })

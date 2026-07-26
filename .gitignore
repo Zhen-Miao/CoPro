@@ -18,3 +18,10 @@ src/*.so
 Rplots.pdf
 embedding.tsv
 vignettes/*.html
+reports/perf_pass_baseline/current/
+
+# Benchmark output folders: scripts and small CSVs are worth keeping, but these
+# also hold multi-hundred-MB .rds objects that must not reach the remote.
+reports/skrcca_y_precompute_speed/
+tests/testthat/testthat-problems.rds
+tests/testthat/_problems/

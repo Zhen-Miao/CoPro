@@ -94,6 +94,12 @@ test_that("prepared spatial resampling preserves historical draws", {
   out <- vector("list", object@nPermu)
 
   for (tt in seq_len(object@nPermu)) {
+    # @cellPermu entries are not all index matrices -- a held-fixed cell type
+    # is stored as a compact identity marker and the "pc" null as seeds -- so
+    # resolve the draw through the accessor rather than indexing columns.
+    permuted <- CoPro:::.applyPermutationSpec(
+      PCmats, CoPro:::.permutationDrawSpec(object@cellPermu, cts, tt)
+    )
     values <- numeric(ncol(pairs) * nCC)
     for (pp in seq_len(ncol(pairs))) {
       ct1 <- pairs[1, pp]
@@ -104,8 +110,8 @@ test_that("prepared spatial resampling preserves historical draws", {
       Ry <- tryCatch(getKernelMatrix(object, sigma, ct2, ct2, verbose = FALSE),
                      error = function(e) NULL)
       kernel_norm <- CoPro:::.whitenedFrobNorm(K, Rx, Ry)
-      A <- PCmats[[ct1]][object@cellPermu[[ct1]][, tt], , drop = FALSE]
-      B <- PCmats[[ct2]][object@cellPermu[[ct2]][, tt], , drop = FALSE]
+      A <- permuted[[ct1]]
+      B <- permuted[[ct2]]
 
       for (cc in seq_len(nCC)) {
         w1 <- object@skrCCAPermuOut[[tt]][[ct1]][, cc, drop = FALSE]

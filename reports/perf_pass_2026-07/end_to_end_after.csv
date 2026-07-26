@@ -1,0 +1,9 @@
+"label","stage","seconds","seconds_median","seconds_max","peak_mb","reps"
+"after","computePCA",0.634,0.683999999999997,0.867,597.091936,3
+"after","computeSparseKernelFloat32",31.615,31.707,31.974,1576.35052,3
+"after","runSkrCCA",2.73699999999999,2.845,2.905,31.66808,3
+"after","computeNormalizedCorrelation",3.46299999999999,3.489,3.55800000000001,38.040344,3
+"after","computeGeneAndCellScores",0.0390000000000157,0.0399999999999991,0.0669999999999931,78.85408,3
+"after","runSkrCCAPermu (99 draws)",3.534,3.67500000000001,3.896,787.932648,3
+"after","computeNormalizedCorrelationPermu",3.492,3.49799999999999,3.52200000000001,825.426096,3
+"after","@cellPermu stored size",NA,NA,NA,11.881112,3

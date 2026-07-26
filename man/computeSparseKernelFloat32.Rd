@@ -130,7 +130,7 @@ double-precision sparse matrices when within-type operators are supplied.
 \seealso{
 \code{\link[=computeSparseKernel]{computeSparseKernel()}}, \code{\link[=runSkrCCA]{runSkrCCA()}}, \code{\link[=asDoubleSparseMatrix]{asDoubleSparseMatrix()}}
 
-Other spatial-pipeline:
+Other spatial-pipeline: 
 \code{\link{computeDistance}()},
 \code{\link{computeKernelMatrix}()},
 \code{\link{computePCA}()},

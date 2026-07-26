@@ -3,11 +3,7 @@
 # dense result numerically while returning sparse dgCMatrix cross-kernels and
 # triangularly stored dsCMatrix within-type kernels.
 
-# Flip the sign of `x` (per column vector) to best match a reference, so weight
-# vectors that are equal up to sign compare as equal.
-.align_sign <- function(ref, x) {
-  if (sum((x - ref)^2) <= sum((x + ref)^2)) x else -x
-}
+# .align_sign() now lives in helper-test-data.R, shared across test files.
 
 # Compare a sparse kernel against the dense kernel for one (sigma, pair).
 .expect_kernel_equal <- function(dense_obj, sparse_obj, sigma, ct1, ct2,
@@ -214,6 +210,54 @@ test_that(".exactLowQuantile reproduces R type-7 quantile from the smallest valu
   }
 })
 
+test_that(".type7QuantileRepeated matches quantile() on the repeated vector", {
+  # A symmetric kernel stores one triangle but its quantile is defined on the
+  # represented full matrix, so the helper must reproduce exactly what
+  # rep(x, each = repetitions) would have given -- without building it.
+  # expect_identical, not expect_equal: the helper mirrors quantile()'s type-7
+  # arithmetic statement for statement so the clip threshold cannot drift, and
+  # a tolerance would hide a rearrangement that reintroduces last-bit error.
+  set.seed(29)
+  for (n in c(1L, 2L, 3L, 4L, 5L, 17L, 100L, 1001L)) {
+    x <- runif(n)
+    for (repetitions in c(1L, 2L, 3L, 4L)) {
+      for (p in c(0, 1e-3, 0.1, 0.25, 1 / 3, 0.5, 0.66, 0.85, 1 - 1e-4, 1)) {
+        expect_identical(
+          CoPro:::.type7QuantileRepeated(x, p, repetitions),
+          as.numeric(stats::quantile(rep(x, each = repetitions), p,
+                                     names = FALSE)),
+          info = paste("n", n, "reps", repetitions, "p", p)
+        )
+      }
+    }
+  }
+
+  # Heavy ties: the rank arithmetic must not assume distinct values, and the
+  # equal-order-statistic branch must be taken rather than interpolated.
+  tied <- c(rep(0.5, 40), runif(20))
+  for (repetitions in c(1L, 2L)) {
+    for (p in c(0.1, 0.5, 0.85)) {
+      expect_identical(
+        CoPro:::.type7QuantileRepeated(tied, p, repetitions),
+        as.numeric(stats::quantile(rep(tied, each = repetitions), p,
+                                   names = FALSE))
+      )
+    }
+  }
+
+  # repetitions = 1 must reduce to the ordinary quantile, and NAs are dropped
+  # the way the old na.rm = TRUE call dropped them.
+  plain <- runif(500)
+  expect_identical(CoPro:::.type7QuantileRepeated(plain, 0.85, 1L),
+                   as.numeric(stats::quantile(plain, 0.85, names = FALSE)))
+  expect_identical(CoPro:::.type7QuantileRepeated(c(plain, NA), 0.85, 1L),
+                   as.numeric(stats::quantile(plain, 0.85, names = FALSE)))
+  expect_error(CoPro:::.type7QuantileRepeated(numeric(0), 0.5, 1L),
+               "no values")
+  expect_error(CoPro:::.type7QuantileRepeated(plain, 0.5, 0L),
+               "positive integer")
+})
+
 test_that("sparse-safe kernel normalizations match the dense formulas", {
   set.seed(17)
   Kfull <- matrix(0, nrow = 40, ncol = 35)
@@ -343,4 +387,51 @@ test_that("sparse whitened-Frobenius normalizer matches dense calculation", {
   sparse_unwhitened <- .whitenedFrobNorm(K)
   dense_unwhitened <- .whitenedFrobNorm(as.matrix(K))
   expect_equal(sparse_unwhitened, dense_unwhitened, tolerance = 1e-10)
+})
+
+test_that("the blocked whitened-Frobenius inner product matches the direct one", {
+  # <Rx K Ry, K> is evaluated as sum((Rx K) * (K Ry)) over column blocks so the
+  # heavily filled-in triple product is never materialized. The identity needs
+  # Rx and Ry symmetric, which .whitenedFrobNorm() guarantees, and the block
+  # boundaries must not change the answer.
+  set.seed(31)
+  mk <- function(nr, nc, k) Matrix::sparseMatrix(
+    i = rep(seq_len(nr), each = k),
+    j = pmax(1L, pmin(nc, rep(seq_len(nr), each = k) +
+                        sample(-8:8, nr * k, TRUE))),
+    x = runif(nr * k), dims = c(nr, nc))
+
+  for (dims in list(c(120, 120), c(90, 140), c(140, 90))) {
+    nr <- dims[1]; nc <- dims[2]
+    K <- mk(nr, nc, 5)
+    Rx <- local({ R <- mk(nr, nr, 5); (R + Matrix::t(R)) / 2 })
+    Ry <- local({ R <- mk(nc, nc, 5); (R + Matrix::t(R)) / 2 })
+    direct <- as.numeric(sum(((Rx %*% K) %*% Ry) * K))
+
+    # Several block sizes, including one column at a time and one single block.
+    for (budget in c(1, 50, 500, 1e9)) {
+      expect_equal(
+        CoPro:::.sparseWhitenedInner(K, Rx, Ry, block_nnz = budget),
+        direct, tolerance = 1e-10,
+        info = paste(nr, "x", nc, "block_nnz", budget)
+      )
+    }
+  }
+})
+
+test_that(".sparseSumSquares counts represented entries for both storage forms", {
+  set.seed(37)
+  general <- Matrix::sparseMatrix(
+    i = sample(60, 200, TRUE), j = sample(45, 200, TRUE),
+    x = runif(200), dims = c(60, 45))
+  expect_equal(CoPro:::.sparseSumSquares(general), sum(general * general))
+  expect_identical(CoPro:::.sparseSumSquares(general), sum(general@x^2))
+
+  # A dsCMatrix stores one triangle; every stored off-diagonal entry stands for
+  # two represented entries, so reading @x alone would undercount.
+  symmetric <- Matrix::forceSymmetric(Matrix::crossprod(general))
+  expect_s4_class(symmetric, "symmetricMatrix")
+  expect_equal(CoPro:::.sparseSumSquares(symmetric),
+               sum(symmetric * symmetric))
+  expect_gt(CoPro:::.sparseSumSquares(symmetric), sum(symmetric@x^2))
 })

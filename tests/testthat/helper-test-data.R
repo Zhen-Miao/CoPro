@@ -252,3 +252,13 @@ create_test_copro_multi <- function(n_cells_per_slide = 50,
   return(obj)
 }
 
+
+# Flip the sign of `x` (per column vector) to best match a reference, so weight
+# vectors that are equal up to sign compare as equal. The sign of a CCA axis or
+# a principal component is inherently ambiguous -- a different BLAS, R build or
+# 1-ulp input change can flip it -- so comparisons of weights and scores across
+# implementations must be sign-aligned first. Sign-invariant quantities such as
+# the normalized correlation are compared directly.
+.align_sign <- function(ref, x) {
+  if (sum((x - ref)^2) <= sum((x + ref)^2)) x else -x
+}
