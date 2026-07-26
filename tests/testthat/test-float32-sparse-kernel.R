@@ -589,13 +589,24 @@ test_that("float32 supports multi-slide pairwise and one-type kernels", {
   expect_length(one_type_fit@cellScores, 1L)
 })
 
-test_that("row-major packing leaves the float32 operators bit-identical", {
+test_that("row-major packing leaves the float32 operators exact to float32", {
   # The operators pack X row-major in float32 before threading so each nonzero
   # reads one contiguous run instead of one cache line per PC. The conversion
   # is the same static_cast the strided loop applied on every access, just
   # hoisted, and the accumulation order is untouched -- so the packing is a
-  # pure layout change and must not move a single bit. Snapshot the values so a
-  # future rewrite that reorders accumulation is caught rather than absorbed.
+  # pure layout change.
+  #
+  # This was originally pinned with expect_snapshot_value(style = "serialize"),
+  # on the theory that a pure layout change must not move a single bit. It
+  # must not, on one machine -- but a float32 value is not reproducible across
+  # toolchains, so the snapshot pinned the toolchain rather than the layout.
+  # The kernel weights come out of expf(), which differs by an ulp between
+  # glibc and Apple's libm, and the compilers disagree about FMA contraction.
+  # The recorded snapshot passed on macOS/arm64 and failed on the Linux CI by
+  # ~1e-6 relative on every component, with no code difference between them.
+  # So pin the layout against the decoded double reference at float32
+  # precision, plus the two structural identities that a mis-packed operand or
+  # a bad row split would break outright: transposition and thread invariance.
   set.seed(4242)
   n_left <- 260L
   n_right <- 190L
@@ -621,15 +632,32 @@ test_that("row-major packing leaves the float32 operators bit-identical", {
   X_right <- matrix(rnorm(n_right * 4L), n_right, 4L)
 
   # Single-threaded so the value is independent of how rows split across
-  # workers, which is what makes an exact snapshot meaningful.
-  expect_snapshot_value(
-    list(
-      cross     = .kernelXKY(X_left, cross, X_right, n_threads = 1L),
-      transpose = .kernelXKY(X_right, t(cross), X_left, n_threads = 1L),
-      symmetric = .kernelXKY(X_left, self, X_left, n_threads = 1L),
-      matmul    = .float32KernelMatMult(cross, X_right, n_threads = 1L)
-    ),
-    style = "serialize"
+  # workers. The reference decodes the very kernel that was built, so the
+  # libm difference above cancels and only the float32 accumulation remains.
+  decoded_cross <- asDoubleSparseMatrix(cross)
+  decoded_self <- asDoubleSparseMatrix(self)
+  reference_cross <- as.matrix(crossprod(X_left, decoded_cross %*% X_right))
+  reference_self <- as.matrix(crossprod(X_left, decoded_self %*% X_left))
+
+  expect_equal(
+    .kernelXKY(X_left, cross, X_right, n_threads = 1L),
+    reference_cross,
+    tolerance = 2e-5, ignore_attr = TRUE
+  )
+  expect_equal(
+    .kernelXKY(X_right, t(cross), X_left, n_threads = 1L),
+    t(reference_cross),
+    tolerance = 2e-5, ignore_attr = TRUE
+  )
+  expect_equal(
+    .kernelXKY(X_left, self, X_left, n_threads = 1L),
+    reference_self,
+    tolerance = 2e-5, ignore_attr = TRUE
+  )
+  expect_equal(
+    .float32KernelMatMult(cross, X_right, n_threads = 1L),
+    as.matrix(decoded_cross %*% X_right),
+    tolerance = 2e-5, ignore_attr = TRUE
   )
 
   # Transposing the kernel must agree with transposing the result, and the
