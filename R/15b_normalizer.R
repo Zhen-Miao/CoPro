@@ -20,6 +20,17 @@
 ## be estimated from all PC score columns rather than from a fitted canonical
 ## score: the canonical direction is chosen to maximize the very association
 ## under test, so using it would leak signal into the denominator.
+##
+## Known limitation, measured rather than assumed. Fitting one range to the
+## feature-averaged autocorrelation presumes the PCs share a correlation
+## length. In simulation, where they do, this flattens the null path (drift
+## 1.21x against 1.19x for the true operator and 3.30x un-whitened). On a real
+## targeted panel they do not: per-PC ranges spanned 0.3-4.1 cell-spacings on
+## colon MERFISH, the flat average over 40 PCs returned a sub-spacing range,
+## and the selected bandwidth moved an order of magnitude across a plausible
+## range of l. A variance-weighted or mixture aggregation over per-PC ranges
+## would be the principled fix; until then treat the variogram normalizer as a
+## diagnostic and use a permutation null when the selected bandwidth matters.
 
 .NORMALIZER_MODES <- c("legacy", "unwhitened", "kernel", "variogram")
 
