@@ -56,7 +56,9 @@ Internal function to generate permutation indices for each cell type.
 ## Value
 
 List of permutation matrices (for "global"/"bin"/"toroidal") or list of
-permuted PC matrices (for "pc"), one per cell type
+permuted PC matrices (for "pc"), one per cell type. Held-fixed cell
+types are stored as the compact identity marker built by
+`.identityPermutation()` rather than as an explicit index matrix.
 
 ## Details
 
