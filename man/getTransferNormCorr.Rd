@@ -11,6 +11,8 @@ getTransferNormCorr(
   tol = 1e-04,
   calculationMode = NULL,
   sigma_choice_tar = NULL,
+  normalizer = c("legacy", "unwhitened", "kernel", "variogram"),
+  normalizerControl = list(),
   verbose = TRUE
 )
 }
@@ -34,6 +36,13 @@ estimation (default 1e-4).}
 is multi-slide.}
 
 \item{sigma_choice_tar}{Numeric; sigma value for target object kernel matrices. If NULL (default), uses sigma_choice. Not recommended for general use.}
+
+\item{normalizer, normalizerControl}{Which whitening operators to use in the
+denominator, and their tuning; see \code{\link[=computeNormalizedCorrelation]{computeNormalizedCorrelation()}}. Match
+whatever was used on the reference object, or the transferred correlations
+will not be on the same scale. The autocorrelation range for \code{"variogram"}
+is fitted from the target object's PC scores, never from the transferred
+canonical scores, which would leak signal into the denominator.}
 
 \item{verbose}{Logical; whether to print progress messages.}
 }

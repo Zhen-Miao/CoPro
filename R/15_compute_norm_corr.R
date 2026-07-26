@@ -1,25 +1,71 @@
 #' Compute Normalized Correlation (approximation)
 #'
 #' This method calculates the normalized correlation between pairs of cell types
-#' based on CCA weights and the respective kernel matrix. It uses the
-#' whitened-Frobenius norm ||R_x^(1/2) K_c R_y^(1/2)||_F of the kernel for
-#' normalization (R_x, R_y = matched-sigma within-type kernels).
+#' based on CCA weights and the respective kernel matrix. It divides the
+#' bilinear statistic \eqn{T = a' K b} by the whitened-Frobenius norm
+#' \eqn{\|R_x^{1/2} K_c R_y^{1/2}\|_F}, which is the null standard deviation of
+#' \eqn{T} when the score vectors carry within-type covariance proportional to
+#' \eqn{R_x} and \eqn{R_y}.
+#'
+#' @section Choosing the normalizer:
+#' The whitening operators decide how the criterion behaves across the sigma
+#' grid, and therefore which bandwidth `sigmaValueChoice` ends up at.
+#'
+#' \describe{
+#'   \item{`"legacy"` (default)}{The historical behaviour, kept so that stored
+#'     results reproduce: use the matched-sigma within-type kernels when the
+#'     object happens to contain them, and \eqn{R = I} otherwise. Because
+#'     `computeKernelMatrix()` builds only cross-type kernels, this is normally
+#'     \eqn{\|K_c\|_F}; but it silently becomes the whitened norm on an object
+#'     that has been through `computeSelfKernel()`. Which one applied is now
+#'     reported, and recorded by [getNormalizerInfo()].}
+#'   \item{`"unwhitened"`}{Force \eqn{R_x = R_y = I}, i.e. \eqn{\|K_c\|_F}. This
+#'     assumes spatially independent scores, so it under-counts noise at large
+#'     sigma and biases the selected bandwidth upward.}
+#'   \item{`"kernel"`}{Force \eqn{R = K(\sigma)}, the matched-sigma self-kernel,
+#'     with the unit diagonal restored. Errors if the self-kernels are absent
+#'     rather than falling back. This over-counts noise at large sigma and
+#'     biases the selected bandwidth downward, and it carries a second problem:
+#'     [computeSelfDistance()] normalizes self-distances by its own scaling
+#'     factor rather than the one [computeDistance()] recorded, so a self-kernel
+#'     "at the same sigma" is generally at a different physical bandwidth from
+#'     the cross-kernel. Provided as a diagnostic, not for analysis.}
+#'   \item{`"variogram"` (recommended)}{Estimate one within-type autocorrelation
+#'     range per cell type from the feature-averaged spatial autocorrelation of
+#'     the PC scores, and use \eqn{R = \exp(-d^2/2\ell^2)}. The range is a
+#'     property of the score field rather than of the bandwidth, so it is fitted
+#'     once and reused across the grid. It is fitted from all PC columns, never
+#'     from a fitted canonical score, which would leak the association under
+#'     test into the denominator.}
+#' }
 #'
 #' @param object A `CoPro` or `CoProMulti` object containing CCA results and kernel matrices.
 #' @param tol tolerance for approximate SVD calculation
 #' @param calculationMode (for CoProMulti only) either "perSlide" or "aggregate",
 #'   for single slide analysis, it is ignored, with default value "perSlide".
+#' @param normalizer Which whitening operators to use in the denominator; one of
+#'   `"legacy"`, `"unwhitened"`, `"kernel"`, `"variogram"`. See details.
+#' @param normalizerControl A named list tuning the `"variogram"` normalizer.
+#'   `distType`, `xDistScale`, `yDistScale`, `zDistScale` must match what was
+#'   passed to [computeDistance()] (they are not stored on the object).
+#'   `range` accepts a named numeric vector of per-cell-type ranges, in
+#'   normalized distance units, to skip estimation. Remaining entries
+#'   (`maxCells`, `nBins`, `maxLagQuantile`, `minCorrelation`, `minBins`,
+#'   `lowerLimit`) tune the fit and the operator's truncation.
 #' @return The object with the normalized correlation value
 #' between any pair of cell types
-#' added as a new slot, `normalizedCorrelation`.
+#' added as a new slot, `normalizedCorrelation`. The resolved normalizer is
+#' attached as an attribute and can be read back with [getNormalizerInfo()].
 #' @family scores-and-correlation
 #' @seealso [runSkrCCA()], [computeBidirCorrelation()],
-#'   [computeGeneAndCellScores()]
+#'   [computeGeneAndCellScores()], [getNormalizerInfo()]
 #' @export
 #'
 setGeneric(
   "computeNormalizedCorrelation",
-  function(object, tol = 1e-4, calculationMode = "perSlide") standardGeneric("computeNormalizedCorrelation")
+  function(object, tol = 1e-4, calculationMode = "perSlide",
+           normalizer = c("legacy", "unwhitened", "kernel", "variogram"),
+           normalizerControl = list()) standardGeneric("computeNormalizedCorrelation")
 )
 
 
@@ -340,11 +386,14 @@ setGeneric(
 }
 
 .computeCrossKernelNorm <- function(object, tol = 1e-4, cts, scalePCs,
- sigmaValues, nCC, pair_cell_types) {
+ sigmaValues, nCC, pair_cell_types, resolver) {
   ## Whitened-Frobenius normalizer ||R_x^{1/2} K_c R_y^{1/2}||_F per (sigma,
-  ## pair), with R_x, R_y the matched-sigma within-type kernels. Replaces the
-  ## old spectral norm ||K||_2.
+  ## pair). `resolver` supplies R_x and R_y; see .makeWhiteningResolver().
   message("Calculating whitened-Frobenius normalizers, this may take a while.")
+  whitened_pairs <- 0L
+  whitened_cross_pairs <- 0L
+  total_pairs <- 0L
+  example_R <- NULL
 
   sigma_names <- paste("sigma", sigmaValues, sep = "_")
   norm_K12 <- setNames(vector(mode = "list", length = length(sigma_names)),
@@ -369,16 +418,16 @@ setGeneric(
       K <- getKernelMatrix(object, sigma = sigma_val,
                            cellType1 = cellType1, cellType2 = cellType2,
                            verbose = FALSE, materialize = FALSE)
-      ## matched-sigma within-type kernels serve as the whitening operators;
-      ## if unavailable, .whitenedFrobNorm falls back to ||K_c||_F
-      Rx <- tryCatch(getKernelMatrix(object, sigma = sigma_val,
-                       cellType1 = cellType1, cellType2 = cellType1,
-                       verbose = FALSE, materialize = FALSE),
-                     error = function(e) NULL)
-      Ry <- tryCatch(getKernelMatrix(object, sigma = sigma_val,
-                       cellType1 = cellType2, cellType2 = cellType2,
-                       verbose = FALSE, materialize = FALSE),
-                     error = function(e) NULL)
+      Rx <- resolver$get(sigma_val, cellType1)
+      Ry <- resolver$get(sigma_val, cellType2)
+      total_pairs <- total_pairs + 1L
+      if (!is.null(Rx) && !is.null(Ry)) {
+        whitened_pairs <- whitened_pairs + 1L
+        if (cellType1 != cellType2) {
+          whitened_cross_pairs <- whitened_cross_pairs + 1L
+        }
+        if (is.null(example_R)) example_R <- Rx
+      }
       cache_key <- .kernelNormalizerKey(
         sigma_val, cellType1, cellType2, slide = NULL
       )
@@ -397,15 +446,30 @@ setGeneric(
     }
   }
 
+  description <- .describeNormalizer(resolver, whitened_pairs, total_pairs)
+  message("Normalizer: ", description)
+  .warnSelfKernelUnits(resolver, whitened_cross_pairs)
+  .warnZeroDiagonalWhitening(resolver, example_R)
+  if (resolver$mode == "variogram" && length(resolver$ranges) > 0) {
+    message("  fitted autocorrelation ranges: ",
+            paste(names(resolver$ranges),
+                  format(resolver$ranges, digits = 3),
+                  sep = " = ", collapse = ", "))
+  }
   message("Finished calculating whitened-Frobenius normalizers.")
 
   attr(norm_K12, "kernelNormalizerCache") <- normalizer_cache
+  attr(norm_K12, "normalizerInfo") <- list(
+    mode = resolver$mode, description = description, ranges = resolver$ranges
+  )
 
   return(norm_K12)
 }
 
-.computeNormCorrCore <- function(object, tol = 1e-4, cts, scalePCs, sigmaValues, nCC) {
-  
+.computeNormCorrCore <- function(object, tol = 1e-4, cts, scalePCs, sigmaValues,
+                                 nCC, normalizer = "legacy",
+                                 normalizerControl = list()) {
+
   PCmats <- .getAllPCMats(allPCs = object@pcaGlobal, scalePCs = scalePCs)
 
   # Check if there are at least 2 cell types for pairwise analysis
@@ -420,11 +484,15 @@ setGeneric(
   sigma_names <- paste("sigma", sigmaValues, sep = "_")
   names(correlation_value) <- sigma_names
 
+  resolver <- .makeWhiteningResolver(
+    object, normalizer, normalizerControl, scoreMats = PCmats, cts = cts
+  )
   norm_K12 <- .computeCrossKernelNorm(object, tol = tol, cts = cts,
    scalePCs = scalePCs, sigmaValues = sigmaValues, nCC = nCC,
-   pair_cell_types = pair_cell_types)
+   pair_cell_types = pair_cell_types, resolver = resolver)
   attr(object, "kernelNormalizerCache") <-
     attr(norm_K12, "kernelNormalizerCache", exact = TRUE)
+  normalizer_info <- attr(norm_K12, "normalizerInfo", exact = TRUE)
 
   for (tt in seq_along(sigmaValues)) {
     t <- sigma_names[tt]
@@ -479,7 +547,9 @@ setGeneric(
     }
   }
 
-  ## Store the result in the object
+  ## Store the result in the object, tagged with the denominator that produced
+  ## it -- the numbers are not comparable across normalizers.
+  attr(correlation_value, "normalizer") <- normalizer_info
   object@normalizedCorrelation <- correlation_value
 
   ## obtain the sigma value with the highest
@@ -513,15 +583,20 @@ setGeneric(
 #' @export
 setMethod(
   "computeNormalizedCorrelation", "CoPro",
-  function(object, tol = 1e-4) {
+  function(object, tol = 1e-4, calculationMode = "perSlide",
+           normalizer = c("legacy", "unwhitened", "kernel", "variogram"),
+           normalizerControl = list()) {
+    normalizer <- match.arg(normalizer)
     input_check <- .checkInputNormCorr(object)
     cts <- input_check$cts
     scalePCs <- input_check$scalePCs
     sigmaValues <- input_check$sigmaValues
     nCC <- input_check$nCC
 
-    object <- .computeNormCorrCore(object, tol = tol, cts = cts, 
-                                   scalePCs = scalePCs, sigmaValues = sigmaValues, nCC = nCC)
+    object <- .computeNormCorrCore(object, tol = tol, cts = cts,
+                                   scalePCs = scalePCs, sigmaValues = sigmaValues, nCC = nCC,
+                                   normalizer = normalizer,
+                                   normalizerControl = normalizerControl)
     return(object)
   }
 )
@@ -556,10 +631,14 @@ setMethod(
   return(list(cts = cts, slides = slides, sigmas_run = sigmas_run, nCC = nCC, scalePCs = scalePCs))
 }
 
-.computeCrossKernelNormMulti <- function(object, tol = 1e-4, cts, slides, sigmas_run, nCC, pair_cell_types) {
+.computeCrossKernelNormMulti <- function(object, tol = 1e-4, cts, slides, sigmas_run, nCC, pair_cell_types, resolver) {
 
   # --- Precompute whitened-Frobenius normalizers (Per Slide, Per Sigma) ---
   message("Calculating whitened-Frobenius normalizers (can take time)...")
+  whitened_pairs <- 0L
+  whitened_cross_pairs <- 0L
+  total_pairs <- 0L
+  example_R <- NULL
   norm_K_all <- setNames(vector("list", length = length(sigmas_run)), sigmas_run)
   normalizer_cache <- attr(object, "kernelNormalizerCache", exact = TRUE)
   if (is.null(normalizer_cache)) normalizer_cache <- list()
@@ -587,16 +666,13 @@ setMethod(
         }, error = function(e) NULL)
 
         if (!is.null(K) && nrow(K) > 0 && ncol(K) > 0) {
-          # matched-sigma within-type kernels for this slide are the whitening
-          # operators; fall back to ||K_c||_F if either is unavailable
-          Rx <- tryCatch(getKernelMatrix(object, sigma = sigma_val, cellType1 = ct_i,
-                          cellType2 = ct_i, slide = sID, verbose = FALSE,
-                          materialize = FALSE),
-                         error = function(e) NULL)
-          Ry <- tryCatch(getKernelMatrix(object, sigma = sigma_val, cellType1 = ct_j,
-                          cellType2 = ct_j, slide = sID, verbose = FALSE,
-                          materialize = FALSE),
-                         error = function(e) NULL)
+          Rx <- resolver$get(sigma_val, ct_i, slide = sID)
+          Ry <- resolver$get(sigma_val, ct_j, slide = sID)
+          total_pairs <- total_pairs + 1L
+          if (!is.null(Rx) && !is.null(Ry)) {
+            whitened_pairs <- whitened_pairs + 1L
+            if (ct_i != ct_j) whitened_cross_pairs <- whitened_cross_pairs + 1L
+          }
           cache_key <- .kernelNormalizerKey(
             sigma_val, ct_i, ct_j, slide = sID
           )
@@ -624,12 +700,21 @@ setMethod(
     norm_K_all[[sig_name]] <- norm_K_sigma
   }
 
+  description <- .describeNormalizer(resolver, whitened_pairs, total_pairs)
+  message("Normalizer: ", description)
+  .warnSelfKernelUnits(resolver, whitened_cross_pairs)
+  .warnZeroDiagonalWhitening(resolver, example_R)
   message("Finished calculating whitened-Frobenius normalizers.")
   attr(norm_K_all, "kernelNormalizerCache") <- normalizer_cache
+  attr(norm_K_all, "normalizerInfo") <- list(
+    mode = resolver$mode, description = description, ranges = resolver$ranges
+  )
   return(norm_K_all)
 }
 
-.computeNormCorrCoreMulti <- function(object, tol = 1e-4, cts, slides, sigmas_run, nCC, scalePCs, calculationMode = "perSlide") {
+.computeNormCorrCoreMulti <- function(object, tol = 1e-4, cts, slides, sigmas_run, nCC, scalePCs, calculationMode = "perSlide",
+                                      normalizer = "legacy",
+                                      normalizerControl = list()) {
 
   if (length(cts) == 1) {
     pair_cell_types <- matrix(c(cts, cts), nrow = 2, ncol = 1)
@@ -646,11 +731,17 @@ setMethod(
     cts = cts
   )
 
+  resolver <- .makeWhiteningResolver(
+    object, normalizer, normalizerControl, scoreMats = X_scaled, cts = cts,
+    slides = slides
+  )
   norm_K_all <- .computeCrossKernelNormMulti(object, tol = tol, cts = cts,
-   slides = slides, sigmas_run = sigmas_run, nCC = nCC, pair_cell_types = pair_cell_types)
+   slides = slides, sigmas_run = sigmas_run, nCC = nCC, pair_cell_types = pair_cell_types,
+   resolver = resolver)
   attr(object, "kernelNormalizerCache") <-
     attr(norm_K_all, "kernelNormalizerCache", exact = TRUE)
-  
+  normalizer_info <- attr(norm_K_all, "normalizerInfo", exact = TRUE)
+
   # --- Calculate Correlation ---
   correlation_results <- setNames(vector("list", length = length(sigmas_run)), sigmas_run)
 
@@ -832,6 +923,7 @@ setMethod(
     }
   } # End sigma loop
 
+  attr(correlation_results, "normalizer") <- normalizer_info
   object@normalizedCorrelation <- correlation_results
 
   # --- Choose Optimal Sigma (based on aggregate or mean per-slide CC1 correlation) ---
@@ -872,7 +964,11 @@ setMethod(
 #' @importFrom utils combn
 #' @export
 setMethod("computeNormalizedCorrelation", "CoProMulti", function(
-    object, tol = 1e-4, calculationMode = "perSlide") {
+    object, tol = 1e-4, calculationMode = "perSlide",
+    normalizer = c("legacy", "unwhitened", "kernel", "variogram"),
+    normalizerControl = list()) {
+
+  normalizer <- match.arg(normalizer)
 
   # Validate calculationMode
   if (!calculationMode %in% c("perSlide", "aggregate")) {
@@ -888,6 +984,8 @@ setMethod("computeNormalizedCorrelation", "CoProMulti", function(
 
   object <- .computeNormCorrCoreMulti(object, tol = tol, cts = cts, slides = slides,
                                       sigmas_run = sigmas_run, nCC = nCC, scalePCs = scalePCs,
-                                      calculationMode = calculationMode)
+                                      calculationMode = calculationMode,
+                                      normalizer = normalizer,
+                                      normalizerControl = normalizerControl)
   return(object)
 })

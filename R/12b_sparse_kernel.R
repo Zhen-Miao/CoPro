@@ -810,13 +810,25 @@
     }
   }
   global_min_pct <- if (need_pct) min(pctls, na.rm = TRUE) else NA_real_
-  scaling_factor <- if (normalizeDistance) normalizeTarget / global_min_pct else 1
-  if (normalizeDistance && (!is.finite(scaling_factor) || scaling_factor <= 0)) {
+  scaling_mode <- .normalizeDistanceMode(normalizeDistance)
+  scaling_factor <- .resolveSelfDistanceScaling(
+    normalizeDistance, global_min_pct, object@distanceScaleFactor,
+    target = normalizeTarget
+  )
+  if (!identical(scaling_mode, "none") &&
+      (!is.finite(scaling_factor) || scaling_factor <= 0)) {
     stop("Cannot normalize self-kernel distances: no valid low-distance ",
          "percentile was found.")
   }
-  if (normalizeDistance) {
-    object@distanceScaleFactor <- scaling_factor
+  if (!identical(scaling_mode, "none")) {
+    ## Only record a factor when there is not already one. Overwriting the
+    ## value computeDistance() derived from the cross-type distances would
+    ## leave the object claiming a scale its cross-kernels were not built at,
+    ## and everything downstream that reads the slot -- the variogram
+    ## normalizer in particular -- would build operators in the wrong units.
+    if (length(object@distanceScaleFactor) == 0L) {
+      object@distanceScaleFactor <- scaling_factor
+    }
     if (verbose) message(sprintf("Self-distance scaling factor: %g", scaling_factor))
   }
 

@@ -27,6 +27,7 @@ computeGeneAndCellScores
 \code{\link[=getCellScores]{getCellScores()}}, \code{\link[=getCellScoresInSitu]{getCellScoresInSitu()}}
 
 Other scores-and-correlation: 
-\code{\link{computeNormalizedCorrelation}()}
+\code{\link{computeNormalizedCorrelation}()},
+\code{\link{getNormalizerInfo}()}
 }
 \concept{scores-and-correlation}

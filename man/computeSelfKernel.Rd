@@ -103,7 +103,11 @@ Sparse construction is selected when a self-kernel dimension reaches this
 value, aggregate dense self-kernel entries reach its square, or required
 self-distance matrices are absent. Default 5000.}
 
-\item{distType, xDistScale, yDistScale, zDistScale, normalizeDistance, normalizeTarget, truncateLowDist}{Distance options for the sparse path, matching \code{\link[=computeKernelMatrix]{computeKernelMatrix()}}.}
+\item{distType, xDistScale, yDistScale, zDistScale, normalizeDistance, normalizeTarget, truncateLowDist}{Distance options for the sparse path, matching \code{\link[=computeKernelMatrix]{computeKernelMatrix()}}.
+\code{normalizeDistance} additionally accepts \code{"inherit"}, which reuses the
+scaling factor \code{\link[=computeDistance]{computeDistance()}} recorded rather than deriving one from
+the self-distances; see \code{\link[=computeSelfDistance]{computeSelfDistance()}}. Building self-kernels never
+overwrites a factor already recorded on the object.}
 }
 \value{
 \code{CoPro} object with self-kernel matrices added to the kernelMatrices slot
