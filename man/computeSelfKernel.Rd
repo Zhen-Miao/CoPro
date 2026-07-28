@@ -20,12 +20,12 @@ computeSelfKernel(
   method = c("auto", "dense", "sparse"),
   autoThreshold = 5000L,
   distType = NULL,
-  xDistScale = 1,
-  yDistScale = 1,
-  zDistScale = 1,
-  normalizeDistance = TRUE,
-  normalizeTarget = 0.01,
-  truncateLowDist = TRUE
+  xDistScale = NULL,
+  yDistScale = NULL,
+  zDistScale = NULL,
+  normalizeDistance = NULL,
+  normalizeTarget = NULL,
+  truncateLowDist = NULL
 )
 
 \S4method{computeSelfKernel}{CoProSingle}(
@@ -42,12 +42,12 @@ computeSelfKernel(
   method = c("auto", "dense", "sparse"),
   autoThreshold = 5000L,
   distType = NULL,
-  xDistScale = 1,
-  yDistScale = 1,
-  zDistScale = 1,
-  normalizeDistance = TRUE,
-  normalizeTarget = 0.01,
-  truncateLowDist = TRUE
+  xDistScale = NULL,
+  yDistScale = NULL,
+  zDistScale = NULL,
+  normalizeDistance = NULL,
+  normalizeTarget = NULL,
+  truncateLowDist = NULL
 )
 
 \S4method{computeSelfKernel}{CoProMulti}(
@@ -64,12 +64,12 @@ computeSelfKernel(
   method = c("auto", "dense", "sparse"),
   autoThreshold = 5000L,
   distType = NULL,
-  xDistScale = 1,
-  yDistScale = 1,
-  zDistScale = 1,
-  normalizeDistance = TRUE,
-  normalizeTarget = 0.01,
-  truncateLowDist = TRUE
+  xDistScale = NULL,
+  yDistScale = NULL,
+  zDistScale = NULL,
+  normalizeDistance = NULL,
+  normalizeTarget = NULL,
+  truncateLowDist = NULL
 )
 }
 \arguments{
@@ -103,7 +103,10 @@ Sparse construction is selected when a self-kernel dimension reaches this
 value, aggregate dense self-kernel entries reach its square, or required
 self-distance matrices are absent. Default 5000.}
 
-\item{distType, xDistScale, yDistScale, zDistScale, normalizeDistance, normalizeTarget, truncateLowDist}{Distance options for the sparse path, matching \code{\link[=computeKernelMatrix]{computeKernelMatrix()}}.}
+\item{distType, xDistScale, yDistScale, zDistScale, normalizeDistance, normalizeTarget, truncateLowDist}{Distance options for the sparse path, matching \code{\link[=computeKernelMatrix]{computeKernelMatrix()}}:
+\code{NULL} inherits the geometry recorded by \code{\link[=computeDistance]{computeDistance()}} /
+\code{\link[=computeSelfDistance]{computeSelfDistance()}}, and a value that contradicts that record is an
+error.}
 }
 \value{
 \code{CoPro} object with self-kernel matrices added to the kernelMatrices slot

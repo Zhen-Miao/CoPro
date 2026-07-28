@@ -167,7 +167,39 @@ setMethod("computeSelfDistance", "CoProMulti",
   }
   
   object@distances <- distances
+  object <- .recordSelfDistanceGeometry(object, distType, xDistScale, yDistScale,
+                                        zDistScale, normalizeDistance,
+                                        truncateLowDist)
   return(object)
+}
+
+#' Record (or check) the geometry a self-distance step used
+#'
+#' `computeSelfDistance()` is additive: it can run on top of cross-type
+#' distances built by `computeDistance()`. Overwriting their geometry record
+#' would misdescribe those blocks, so only fill an empty record here and warn
+#' when the caller asks for coordinates the existing blocks do not use.
+#' `normalizeTarget` is not a parameter of `computeSelfDistance()` (it floors
+#' at 0.01), so it takes no part in the mismatch check.
+#' @noRd
+.recordSelfDistanceGeometry <- function(object, distType, xDistScale, yDistScale,
+                                        zDistScale, normalizeDistance,
+                                        truncateLowDist) {
+  requested <- list(
+    distType = distType, xDistScale = xDistScale, yDistScale = yDistScale,
+    zDistScale = zDistScale, normalizeDistance = normalizeDistance,
+    truncateLowDist = truncateLowDist
+  )
+  .warnDistanceGeometryMismatch(object, requested, "computeSelfDistance")
+  if (length(.getDistanceGeometry(object)) == 0) {
+    object@distanceGeometry <- .makeDistanceGeometry(
+      distType, xDistScale, yDistScale, zDistScale,
+      normalizeDistance, normalizeTarget = 0.01,
+      truncateLowDist = truncateLowDist,
+      source = "computeSelfDistance"
+    )
+  }
+  object
 }
 
 #' Core function for computing self-distances (multi-slide)
@@ -261,6 +293,9 @@ setMethod("computeSelfDistance", "CoProMulti",
   }
   
   object@distances <- distances_all
+  object <- .recordSelfDistanceGeometry(object, distType, xDistScale, yDistScale,
+                                        zDistScale, normalizeDistance,
+                                        truncateLowDist)
   return(object)
 }
 
@@ -291,7 +326,10 @@ setMethod("computeSelfDistance", "CoProMulti",
 #'  value, aggregate dense self-kernel entries reach its square, or required
 #'  self-distance matrices are absent. Default 5000.
 #' @param distType,xDistScale,yDistScale,zDistScale,normalizeDistance,normalizeTarget,truncateLowDist
-#'  Distance options for the sparse path, matching [computeKernelMatrix()].
+#'  Distance options for the sparse path, matching [computeKernelMatrix()]:
+#'  `NULL` inherits the geometry recorded by [computeDistance()] /
+#'  [computeSelfDistance()], and a value that contradicts that record is an
+#'  error.
 #'
 #' @return `CoPro` object with self-kernel matrices added to the kernelMatrices slot
 #' @export
@@ -319,9 +357,9 @@ setGeneric(
            rowNormalizeKernel = FALSE, colNormalizeKernel = FALSE,
            verbose = TRUE, overwrite = FALSE,
            method = c("auto", "dense", "sparse"), autoThreshold = 5000L,
-           distType = NULL, xDistScale = 1, yDistScale = 1, zDistScale = 1,
-           normalizeDistance = TRUE, normalizeTarget = 0.01,
-           truncateLowDist = TRUE) standardGeneric("computeSelfKernel")
+           distType = NULL, xDistScale = NULL, yDistScale = NULL, zDistScale = NULL,
+           normalizeDistance = NULL, normalizeTarget = NULL,
+           truncateLowDist = NULL) standardGeneric("computeSelfKernel")
 )
 
 #' @rdname computeSelfKernel
@@ -332,9 +370,9 @@ setMethod("computeSelfKernel", "CoProSingle",
                    rowNormalizeKernel = FALSE, colNormalizeKernel = FALSE,
                    verbose = TRUE, overwrite = FALSE,
                    method = c("auto", "dense", "sparse"), autoThreshold = 5000L,
-                   distType = NULL, xDistScale = 1, yDistScale = 1, zDistScale = 1,
-                   normalizeDistance = TRUE, normalizeTarget = 0.01,
-                   truncateLowDist = TRUE) {
+                   distType = NULL, xDistScale = NULL, yDistScale = NULL, zDistScale = NULL,
+                   normalizeDistance = NULL, normalizeTarget = NULL,
+                   truncateLowDist = NULL) {
             .computeSelfKernelDispatch(
               object, sigmaValues, lowerLimit, upperQuantile,
               normalizeKernel, minAveCellNeighor, rowNormalizeKernel,
@@ -355,9 +393,9 @@ setMethod("computeSelfKernel", "CoProMulti",
                    rowNormalizeKernel = FALSE, colNormalizeKernel = FALSE,
                    verbose = TRUE, overwrite = FALSE,
                    method = c("auto", "dense", "sparse"), autoThreshold = 5000L,
-                   distType = NULL, xDistScale = 1, yDistScale = 1, zDistScale = 1,
-                   normalizeDistance = TRUE, normalizeTarget = 0.01,
-                   truncateLowDist = TRUE) {
+                   distType = NULL, xDistScale = NULL, yDistScale = NULL, zDistScale = NULL,
+                   normalizeDistance = NULL, normalizeTarget = NULL,
+                   truncateLowDist = NULL) {
             .computeSelfKernelDispatch(
               object, sigmaValues, lowerLimit, upperQuantile,
               normalizeKernel, minAveCellNeighor, rowNormalizeKernel,

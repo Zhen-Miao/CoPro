@@ -1,3 +1,30 @@
+# CoPro (development version)
+
+## Bug fixes
+
+* **The sparse kernel path no longer ignores `computeDistance()`.** A CoPro
+  object now records the coordinate geometry its distances were built on in a
+  new `@distanceGeometry` slot, readable with `getDistanceGeometry()`.
+  `computeKernelMatrix(method = "sparse")` used to rebuild coordinates from its
+  own `distType` / `xDistScale` / `yDistScale` / `zDistScale` arguments, which
+  defaulted to unscaled. Two consequences, both silent: per-axis scales passed
+  to `computeDistance()` were dropped, and an object carrying a `z` column got
+  3-D kernels even when `computeDistance(distType = "Euclidean2D")` had asked
+  for 2-D. Because `method = "auto"` selects the sparse path above
+  `autoThreshold` cells, this switched on at exactly the dataset sizes where
+  the kernel is not checked by hand. These arguments now default to `NULL`,
+  meaning "inherit the recorded geometry"; passing a value that contradicts the
+  record is an error rather than a silent override (#39).
+* `computeDistance()` on a `CoProMulti` object now records
+  `@distanceScaleFactor`, which it previously left empty. Downstream helpers
+  fell back to re-deriving the factor from raw coordinates.
+* `.sigmaAwareBins()` sizes the bin-permutation grid per axis using the
+  recorded coordinate scales. Under anisotropic scaling one axis of the grid
+  was previously off by that factor, and `bin` is the default permutation null,
+  so this fed into reported p-values.
+* `.recoverDistanceScaleFactor()` rebuilds probe distances on the recorded
+  geometry instead of assuming raw, unscaled, 2-D `x,y`.
+
 # CoPro 1.1.3
 
 ## Performance

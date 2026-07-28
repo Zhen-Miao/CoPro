@@ -50,6 +50,16 @@ two cell types of interest.}
 distance scaling factor recorded at \code{computeDistance} time; persists after
 \code{computeKernelMatrix(dropDistances = TRUE)} clears \verb{@distances}.}
 
+\item{\code{distanceGeometry}}{A \code{list} recording the coordinate geometry the
+distances (and therefore the kernels) were built on: \code{distType}, the
+per-axis scales \code{xDistScale} / \code{yDistScale} / \code{zDistScale}, the distance
+processing flags \code{normalizeDistance} / \code{normalizeTarget} /
+\code{truncateLowDist}, and the \code{source} function that wrote it. Read it with
+\code{\link[=getDistanceGeometry]{getDistanceGeometry()}}. Empty until a distance- or kernel-building step
+has run. Like \verb{@distanceScaleFactor} it persists after
+\code{computeKernelMatrix(dropDistances = TRUE)} clears \verb{@distances}, so a
+stored object always knows which coordinates its kernels live on.}
+
 \item{\code{geneList}}{A \code{vector} object with elements being character. To store the
 gene names.}
 

@@ -560,6 +560,11 @@ setGeneric(
   # (.recoverDistanceScaleFactor / .sigmaAwareBins) keep working after
   # computeKernelMatrix(dropDistances = TRUE) clears @distances.
   object@distanceScaleFactor <- scaling_factor
+  object@distanceGeometry <- .makeDistanceGeometry(
+    distType, xDistScale, yDistScale, zDistScale,
+    normalizeDistance, normalizeTarget, truncateLowDist,
+    source = "computeDistance"
+  )
   return(object)
 }
 
@@ -653,6 +658,11 @@ setGeneric(
 
   object@distances <- distances
   object@distanceScaleFactor <- scaling_factor
+  object@distanceGeometry <- .makeDistanceGeometry(
+    distType, xDistScale, yDistScale, zDistScale,
+    normalizeDistance, normalizeTarget, truncateLowDist,
+    source = "computeDistance"
+  )
   return(object)
 }
 
@@ -731,12 +741,14 @@ setMethod("computeDistance", "CoProMulti", function(object, distType = c("Euclid
 }
 
 # Helper function to process multi-slide distance normalization
+# Returns list(distances, scaling_factor); scaling_factor is 1 when no
+# normalization could be applied, so the caller can record it verbatim.
 .normalizeDistancesMulti <- function(distances_all, slides, cts, global_min_percentile,
                                     pair_cell_types = NULL, verbose = TRUE,
                                     normalizeTarget = 0.01) {
   if (is.infinite(global_min_percentile)) {
     warning("Cannot normalize distances - no valid non-zero distances found across slides.")
-    return(distances_all)
+    return(list(distances = distances_all, scaling_factor = 1))
   }
 
   scaling_factor <- normalizeTarget / global_min_percentile
@@ -764,8 +776,8 @@ setMethod("computeDistance", "CoProMulti", function(object, distType = c("Euclid
       }
     }
   }
-  
-  return(distances_all)
+
+  return(list(distances = distances_all, scaling_factor = scaling_factor))
 }
 
 # Function for computing within-cell-type distances across multiple slides
@@ -862,13 +874,22 @@ setMethod("computeDistance", "CoProMulti", function(object, distType = c("Euclid
   }
 
   # Apply normalization if requested
+  scaling_factor <- 1
   if (normalizeDistance) {
-    distances_all <- .normalizeDistancesMulti(distances_all, slides, cts, global_min_percentile,
-                                             verbose = verbose,
-                                             normalizeTarget = normalizeTarget)
+    normalized <- .normalizeDistancesMulti(distances_all, slides, cts, global_min_percentile,
+                                           verbose = verbose,
+                                           normalizeTarget = normalizeTarget)
+    distances_all <- normalized$distances
+    scaling_factor <- normalized$scaling_factor
   }
 
   object@distances <- distances_all
+  object@distanceScaleFactor <- scaling_factor
+  object@distanceGeometry <- .makeDistanceGeometry(
+    distType, xDistScale, yDistScale, zDistScale,
+    normalizeDistance, normalizeTarget, truncateLowDist,
+    source = "computeDistance"
+  )
   return(object)
 }
 
@@ -985,12 +1006,21 @@ setMethod("computeDistance", "CoProMulti", function(object, distType = c("Euclid
   }
 
   # Apply normalization if requested
+  scaling_factor <- 1
   if (normalizeDistance) {
-    distances_all <- .normalizeDistancesMulti(distances_all, slides, cts, global_min_percentile,
-                                             pair_cell_types, verbose = verbose,
-                                             normalizeTarget = normalizeTarget)
+    normalized <- .normalizeDistancesMulti(distances_all, slides, cts, global_min_percentile,
+                                           pair_cell_types, verbose = verbose,
+                                           normalizeTarget = normalizeTarget)
+    distances_all <- normalized$distances
+    scaling_factor <- normalized$scaling_factor
   }
 
   object@distances <- distances_all
+  object@distanceScaleFactor <- scaling_factor
+  object@distanceGeometry <- .makeDistanceGeometry(
+    distType, xDistScale, yDistScale, zDistScale,
+    normalizeDistance, normalizeTarget, truncateLowDist,
+    source = "computeDistance"
+  )
   return(object)
 }

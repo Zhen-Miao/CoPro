@@ -156,9 +156,18 @@
 }
 
 #' Resolve streaming distance / kernel argument lists with defaults
+#'
+#' The streaming path builds its own coordinates, so it is a third place the
+#' geometry could be re-derived and disagree with `@distanceGeometry`. Anything
+#' the caller did not name in `distanceArgs` is inherited from the recorded
+#' geometry when there is one; anything they did name and that contradicts the
+#' record is an error, matching [computeKernelMatrix()].
+#'
+#' @param object CoPro object supplying the recorded geometry; `NULL` skips
+#'   inheritance (used when resolving arguments outside an object's context).
 #' @importFrom utils modifyList
 #' @noRd
-.resolveStreamingArgs <- function(distanceArgs, kernelArgs) {
+.resolveStreamingArgs <- function(distanceArgs, kernelArgs, object = NULL) {
   d_def <- list(
     distType = "Euclidean2D",
     xDistScale = 1, yDistScale = 1, zDistScale = 1,
@@ -188,6 +197,20 @@
   if (length(unknown_k) > 0) {
     stop("Unknown kernelArgs: ", paste(unknown_k, collapse = ", "),
          ". Allowed: ", paste(names(k_def), collapse = ", "))
+  }
+
+  if (!is.null(object)) {
+    requested <- distanceArgs[intersect(names(distanceArgs),
+                                        .DISTANCE_GEOMETRY_FIELDS)]
+    geometry <- .resolveDistanceGeometry(
+      object,
+      requested = stats::setNames(
+        lapply(.DISTANCE_GEOMETRY_FIELDS, function(f) requested[[f]]),
+        .DISTANCE_GEOMETRY_FIELDS
+      ),
+      what = "runGeneSpaceCCA (streaming)", verbose = FALSE
+    )
+    d_def <- modifyList(d_def, geometry[.DISTANCE_GEOMETRY_FIELDS])
   }
 
   d <- modifyList(d_def, distanceArgs)
@@ -289,7 +312,7 @@
                                            distanceArgs = list(),
                                            kernelArgs = list(),
                                            verbose = TRUE) {
-  args <- .resolveStreamingArgs(distanceArgs, kernelArgs)
+  args <- .resolveStreamingArgs(distanceArgs, kernelArgs, object = object)
   d <- args$dist
   k <- args$kern
 

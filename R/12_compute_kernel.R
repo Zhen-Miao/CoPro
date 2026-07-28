@@ -476,8 +476,15 @@ kernel_from_distance <- function(
 #'  Default 5000 (about 200 MB of doubles before temporary matrices and copies).
 #' @param distType,xDistScale,yDistScale,zDistScale,normalizeDistance,normalizeTarget,truncateLowDist
 #'  Distance options used only by the sparse path (see [computeDistance()] and
-#'  [computeSparseKernel()]). `distType` defaults to `"Euclidean3D"` when the
-#'  coordinates contain a `z` column, otherwise `"Euclidean2D"`.
+#'  [computeSparseKernel()]). Each defaults to `NULL`, meaning "inherit the
+#'  geometry recorded by [computeDistance()]", so sparse kernels are built on
+#'  the same coordinates as the distances rather than on this function's own
+#'  defaults. When nothing has been recorded, the fallbacks are `xDistScale` /
+#'  `yDistScale` / `zDistScale` `= 1`, `normalizeDistance = TRUE`,
+#'  `normalizeTarget = 0.01`, `truncateLowDist = TRUE`, and a `distType` of
+#'  `"Euclidean3D"` when the coordinates contain a `z` column, otherwise
+#'  `"Euclidean2D"`. Passing a value that contradicts the recorded geometry is
+#'  an error; inspect the record with [getDistanceGeometry()].
 #' @return The `CoPro` object with computed kernel matrices added. The kernel
 #' matrices are organized into a three-layer nested list object. The first layer
 #' is indexed by the sigma value, and the second and the third layers are cell
@@ -507,9 +514,9 @@ setGeneric(
            rowNormalizeKernel = FALSE, colNormalizeKernel = FALSE,
            method = c("auto", "dense", "sparse"), dropDistances = TRUE,
            autoThreshold = 5000L, distType = NULL,
-           xDistScale = 1, yDistScale = 1, zDistScale = 1,
-           normalizeDistance = TRUE, normalizeTarget = 0.01,
-           truncateLowDist = TRUE,
+           xDistScale = NULL, yDistScale = NULL, zDistScale = NULL,
+           normalizeDistance = NULL, normalizeTarget = NULL,
+           truncateLowDist = NULL,
            verbose = TRUE) standardGeneric("computeKernelMatrix"))
 
 #' @rdname computeKernelMatrix
@@ -521,9 +528,9 @@ setMethod("computeKernelMatrix", "CoProSingle",
                    rowNormalizeKernel = FALSE, colNormalizeKernel = FALSE,
                    method = c("auto", "dense", "sparse"), dropDistances = TRUE,
                    autoThreshold = 5000L, distType = NULL,
-                   xDistScale = 1, yDistScale = 1, zDistScale = 1,
-                   normalizeDistance = TRUE, normalizeTarget = 0.01,
-                   truncateLowDist = TRUE,
+                   xDistScale = NULL, yDistScale = NULL, zDistScale = NULL,
+                   normalizeDistance = NULL, normalizeTarget = NULL,
+                   truncateLowDist = NULL,
                    verbose = TRUE) {
             .computeKernelDispatch(object, sigmaValues, lowerLimit, upperQuantile,
                                    normalizeKernel, minAveCellNeighor, rowNormalizeKernel,
@@ -545,9 +552,9 @@ setMethod("computeKernelMatrix", "CoProMulti",
                    rowNormalizeKernel = FALSE, colNormalizeKernel = FALSE,
                    method = c("auto", "dense", "sparse"), dropDistances = TRUE,
                    autoThreshold = 5000L, distType = NULL,
-                   xDistScale = 1, yDistScale = 1, zDistScale = 1,
-                   normalizeDistance = TRUE, normalizeTarget = 0.01,
-                   truncateLowDist = TRUE,
+                   xDistScale = NULL, yDistScale = NULL, zDistScale = NULL,
+                   normalizeDistance = NULL, normalizeTarget = NULL,
+                   truncateLowDist = NULL,
                    verbose = TRUE) {
             .computeKernelDispatch(object, sigmaValues, lowerLimit, upperQuantile,
                                    normalizeKernel, minAveCellNeighor, rowNormalizeKernel,

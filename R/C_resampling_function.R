@@ -100,12 +100,15 @@ diagnose_bin_distribution <- function(location_data,
 #' truncated entries and avoids copying the full distance matrix.
 #'
 #' @details
-#' This assumes isotropic coordinates (`xDistScale = yDistScale`, the default).
-#' Under anisotropic scaling the recovered value is a representative, not exact,
-#' factor; the `[sigma, 4*sigma]` guardrail in [.sigmaAwareBins()] will flag a
-#' grossly mis-sized grid. When `normalizeDistance = FALSE` the recovered factor
-#' is simply the coordinate scale (1 by default), which is also correct because
-#' `sigma` is then on the raw coordinate scale.
+#' The raw coordinates are rebuilt using the geometry recorded in
+#' `@distanceGeometry` -- the per-axis scales and, for a 3-D `distType`, the `z`
+#' column -- so the probed ratio is the true constant rather than a spread of
+#' direction-dependent values. Objects with no recorded geometry (built before
+#' the slot existed) fall back to unscaled 2-D `x,y`, which is exact only under
+#' the default isotropic setting; the `[sigma, 4*sigma]` guardrail in
+#' [.sigmaAwareBins()] will flag a grossly mis-sized grid. When
+#' `normalizeDistance = FALSE` the recovered factor is simply 1, which is also
+#' correct because `sigma` is then on the (scaled) coordinate scale.
 #'
 #' @param object A CoPro object with `@distances` populated.
 #' @param n_probe Number of random cell pairs to probe (default 200).
@@ -137,6 +140,12 @@ diagnose_bin_distribution <- function(location_data,
     return(NA_real_)
   }
 
+  # Probe on the same coordinates the distances were built on, not on raw x,y:
+  # under per-axis scaling or a 3-D distType the ratio to raw 2-D distance is
+  # not a constant, and its median would silently stand in for a spread.
+  scales <- .geometryAxisScales(.getDistanceGeometry(object))
+  use_z <- !is.na(scales[["z"]]) && "z" %in% colnames(loc)
+
   loc_ids <- rownames(loc)
   ratios <- numeric(0)
   max_tries <- n_probe * 20L
@@ -149,9 +158,14 @@ diagnose_bin_distribution <- function(location_data,
     d_norm <- D[i, j]
     if (!is.finite(d_norm) || d_norm <= 0) next
     if (!(rn[i] %in% loc_ids) || !(cn[j] %in% loc_ids)) next
-    dx <- loc[rn[i], "x"] - loc[cn[j], "x"]
-    dy <- loc[rn[i], "y"] - loc[cn[j], "y"]
-    d_raw <- sqrt(dx * dx + dy * dy)
+    dx <- (loc[rn[i], "x"] - loc[cn[j], "x"]) * scales[["x"]]
+    dy <- (loc[rn[i], "y"] - loc[cn[j], "y"]) * scales[["y"]]
+    dz <- if (use_z) {
+      (loc[rn[i], "z"] - loc[cn[j], "z"]) * scales[["z"]]
+    } else {
+      0
+    }
+    d_raw <- sqrt(dx * dx + dy * dy + dz * dz)
     if (!is.finite(d_raw) || d_raw <= 0) next
     ratios <- c(ratios, d_norm / d_raw)
   }
@@ -174,7 +188,18 @@ diagnose_bin_distribution <- function(location_data,
 #' historical 10x10) ignores both the tissue extent and `sigma`, which is the
 #' root cause of mis-calibrated bin-wise permutation.
 #'
-#' @param object A CoPro object (uses `@locationDataSub` and `@distances`).
+#' @details
+#' The grid is laid out in raw `x,y` coordinate units, but `sigma` lives on the
+#' analysis distance scale, so the two are related by the distance scale factor
+#' *and* by the per-axis coordinate scales recorded in `@distanceGeometry`. A
+#' `yDistScale` of 2.5 stretches the y axis by 2.5 before distances are taken,
+#' so a patch that is `2 * sigma` wide on the analysis scale is 2.5 times
+#' narrower in raw y units than in raw x units. Each axis is therefore sized
+#' independently. A 3-D `distType` is binned on `x,y` only, as the permutation
+#' grid is two-dimensional; that is reported rather than silently assumed.
+#'
+#' @param object A CoPro object (uses `@locationDataSub`, `@distanceGeometry`,
+#'   and `@distances`).
 #' @param sigma Kernel bandwidth (numeric, on the normalized distance scale).
 #' @param min_bins Minimum number of bins per axis (default 2).
 #' @param verbose Whether to message the chosen grid (default TRUE).
@@ -196,14 +221,24 @@ diagnose_bin_distribution <- function(location_data,
     return(list(num_bins_x = 10L, num_bins_y = 10L, scale_factor = NA_real_))
   }
 
-  # Target patch side = 2*sigma on the normalized scale, in raw coordinate units
-  patch_raw <- (2 * sigma) / sf
-  nbx <- max(min_bins, floor(ext_x / patch_raw))
-  nby <- max(min_bins, floor(ext_y / patch_raw))
+  geom <- .getDistanceGeometry(object)
+  scales <- .geometryAxisScales(geom)
+  if (!is.na(scales[["z"]]) && verbose) {
+    message("sigma-aware bins: distances are 3-D but the permutation grid ",
+            "bins on x and y only; z structure is not preserved by the ",
+            "bin null.")
+  }
+
+  # Raw-unit patch side per axis: 2*sigma on the analysis scale, divided by the
+  # full raw -> analysis map for that axis (global scale factor x axis scale).
+  patch_raw_x <- (2 * sigma) / (sf * scales[["x"]])
+  patch_raw_y <- (2 * sigma) / (sf * scales[["y"]])
+  nbx <- max(min_bins, floor(ext_x / patch_raw_x))
+  nby <- max(min_bins, floor(ext_y / patch_raw_y))
 
   # Realized patch sides, mapped back to the normalized scale, for the guardrail
-  side_x <- (ext_x / nbx) * sf
-  side_y <- (ext_y / nby) * sf
+  side_x <- (ext_x / nbx) * sf * scales[["x"]]
+  side_y <- (ext_y / nby) * sf * scales[["y"]]
   for (ax in c("x", "y")) {
     s <- if (ax == "x") side_x else side_y
     if (s < sigma) {

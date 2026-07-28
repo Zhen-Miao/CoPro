@@ -380,6 +380,11 @@ setGeneric(
       is.na(overwrite)) {
     stop("overwrite must be TRUE or FALSE.")
   }
+  object <- .recordSparseKernelGeometry(
+    object, distType, xDistScale, yDistScale, zDistScale,
+    normalizeDistance, normalizeTarget, truncateLowDist,
+    "computeSparseKernelFloat32"
+  )
   blocks <- .float32KernelBlocks(object, cts, is_multi)
   normalization <- if (rowNormalizeKernel) {
     2L

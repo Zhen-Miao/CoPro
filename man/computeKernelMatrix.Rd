@@ -19,12 +19,12 @@ computeKernelMatrix(
   dropDistances = TRUE,
   autoThreshold = 5000L,
   distType = NULL,
-  xDistScale = 1,
-  yDistScale = 1,
-  zDistScale = 1,
-  normalizeDistance = TRUE,
-  normalizeTarget = 0.01,
-  truncateLowDist = TRUE,
+  xDistScale = NULL,
+  yDistScale = NULL,
+  zDistScale = NULL,
+  normalizeDistance = NULL,
+  normalizeTarget = NULL,
+  truncateLowDist = NULL,
   verbose = TRUE
 )
 
@@ -41,12 +41,12 @@ computeKernelMatrix(
   dropDistances = TRUE,
   autoThreshold = 5000L,
   distType = NULL,
-  xDistScale = 1,
-  yDistScale = 1,
-  zDistScale = 1,
-  normalizeDistance = TRUE,
-  normalizeTarget = 0.01,
-  truncateLowDist = TRUE,
+  xDistScale = NULL,
+  yDistScale = NULL,
+  zDistScale = NULL,
+  normalizeDistance = NULL,
+  normalizeTarget = NULL,
+  truncateLowDist = NULL,
   verbose = TRUE
 )
 
@@ -63,12 +63,12 @@ computeKernelMatrix(
   dropDistances = TRUE,
   autoThreshold = 5000L,
   distType = NULL,
-  xDistScale = 1,
-  yDistScale = 1,
-  zDistScale = 1,
-  normalizeDistance = TRUE,
-  normalizeTarget = 0.01,
-  truncateLowDist = TRUE,
+  xDistScale = NULL,
+  yDistScale = NULL,
+  zDistScale = NULL,
+  normalizeDistance = NULL,
+  normalizeTarget = NULL,
+  truncateLowDist = NULL,
   verbose = TRUE
 )
 }
@@ -126,8 +126,15 @@ selected when aggregate dense block entries reach \code{autoThreshold^2}.
 Default 5000 (about 200 MB of doubles before temporary matrices and copies).}
 
 \item{distType, xDistScale, yDistScale, zDistScale, normalizeDistance, normalizeTarget, truncateLowDist}{Distance options used only by the sparse path (see \code{\link[=computeDistance]{computeDistance()}} and
-\code{\link[=computeSparseKernel]{computeSparseKernel()}}). \code{distType} defaults to \code{"Euclidean3D"} when the
-coordinates contain a \code{z} column, otherwise \code{"Euclidean2D"}.}
+\code{\link[=computeSparseKernel]{computeSparseKernel()}}). Each defaults to \code{NULL}, meaning "inherit the
+geometry recorded by \code{\link[=computeDistance]{computeDistance()}}", so sparse kernels are built on
+the same coordinates as the distances rather than on this function's own
+defaults. When nothing has been recorded, the fallbacks are \code{xDistScale} /
+\code{yDistScale} / \code{zDistScale} \verb{= 1}, \code{normalizeDistance = TRUE},
+\code{normalizeTarget = 0.01}, \code{truncateLowDist = TRUE}, and a \code{distType} of
+\code{"Euclidean3D"} when the coordinates contain a \code{z} column, otherwise
+\code{"Euclidean2D"}. Passing a value that contradicts the recorded geometry is
+an error; inspect the record with \code{\link[=getDistanceGeometry]{getDistanceGeometry()}}.}
 
 \item{verbose}{Whether to output the progress and related information}
 }

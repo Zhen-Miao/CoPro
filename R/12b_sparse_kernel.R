@@ -136,18 +136,28 @@
     method, autoThreshold, distType, xDistScale, yDistScale, zDistScale,
     normalizeDistance, normalizeTarget, truncateLowDist,
     verbose, overwrite, is_multi) {
-  if (is.null(distType)) {
-    distType <- if ("z" %in% tolower(colnames(object@locationDataSub))) {
-      "Euclidean3D"
-    } else {
-      "Euclidean2D"
-    }
-  } else {
+  if (!is.null(distType)) {
     distType <- match.arg(
       distType,
       c("Euclidean2D", "Euclidean3D", "Morphology-Aware")
     )
   }
+  geometry <- .resolveDistanceGeometry(
+    object,
+    requested = list(distType = distType, xDistScale = xDistScale,
+                     yDistScale = yDistScale, zDistScale = zDistScale,
+                     normalizeDistance = normalizeDistance,
+                     normalizeTarget = normalizeTarget,
+                     truncateLowDist = truncateLowDist),
+    what = "computeSelfKernel", verbose = verbose
+  )
+  distType <- geometry$distType
+  xDistScale <- geometry$xDistScale
+  yDistScale <- geometry$yDistScale
+  zDistScale <- geometry$zDistScale
+  normalizeDistance <- geometry$normalizeDistance
+  normalizeTarget <- geometry$normalizeTarget
+  truncateLowDist <- geometry$truncateLowDist
 
   if (method == "auto") {
     n_max <- .maxCellTypeCount(object)
@@ -181,6 +191,9 @@
     ))
   }
 
+  # Sparse route only: see the matching note in .computeKernelDispatch().
+  object@distanceGeometry <- geometry
+
   .computeSparseSelfKernelCore(
     object, sigmaValues, lowerLimit, upperQuantile, normalizeKernel,
     minAveCellNeighor, rowNormalizeKernel, colNormalizeKernel,
@@ -199,14 +212,27 @@
                                    autoThreshold, distType, xDistScale, yDistScale, zDistScale,
                                    normalizeDistance, normalizeTarget, truncateLowDist,
                                    is_multi) {
-  # Infer distType from coordinates when not supplied (sparse path only uses it).
-  if (is.null(distType)) {
-    distType <- if ("z" %in% tolower(colnames(object@locationDataSub))) {
-      "Euclidean3D"
-    } else {
-      "Euclidean2D"
-    }
-  }
+  # Resolve the coordinate geometry once, before choosing a path. Any geometry
+  # already recorded on the object wins over this function's own defaults --
+  # otherwise the sparse path would rebuild coordinates from unscaled x,y (and
+  # flip to 3-D whenever a z column exists) regardless of what computeDistance()
+  # was told. Contradictory arguments are an error, not a silent preference.
+  geometry <- .resolveDistanceGeometry(
+    object,
+    requested = list(distType = distType, xDistScale = xDistScale,
+                     yDistScale = yDistScale, zDistScale = zDistScale,
+                     normalizeDistance = normalizeDistance,
+                     normalizeTarget = normalizeTarget,
+                     truncateLowDist = truncateLowDist),
+    what = "computeKernelMatrix", verbose = verbose
+  )
+  distType <- geometry$distType
+  xDistScale <- geometry$xDistScale
+  yDistScale <- geometry$yDistScale
+  zDistScale <- geometry$zDistScale
+  normalizeDistance <- geometry$normalizeDistance
+  normalizeTarget <- geometry$normalizeTarget
+  truncateLowDist <- geometry$truncateLowDist
 
   if (method == "auto") {
     n_max <- .maxCellTypeCount(object)
@@ -222,6 +248,14 @@
         method, n_max, dense_entries, autoThreshold,
         as.numeric(autoThreshold)^2))
     }
+  }
+
+  # Stamp the resolved geometry before dispatching, but only on the sparse
+  # route: that is the path that builds coordinates here. The dense path reads
+  # distances someone else built, so on a legacy object with no record there is
+  # nothing authoritative to write and a guess would be worse than a blank.
+  if (method == "sparse") {
+    object@distanceGeometry <- geometry
   }
 
   if (method == "dense") {
@@ -468,6 +502,40 @@
 #' @noRd
 .pairPercentileProb <- function(n_i, n_j) min(1e-3, 2 / max(n_i, n_j))
 
+#' Record the geometry a sparse kernel core built its coordinates on
+#'
+#' Reached from two directions. Via [computeKernelMatrix()] /
+#' [computeSelfKernel()] the arguments were already reconciled against any
+#' recorded geometry by `.resolveDistanceGeometry()`, so nothing can conflict
+#' here. Via [computeSparseKernel()] / [computeSparseKernelFloat32()] they are
+#' whatever the caller passed -- those generics have concrete defaults, so a
+#' disagreement can only be warned about, not attributed to an explicit
+#' argument. Either way the record ends up describing the coordinates the
+#' kernels were actually built on.
+#' @noRd
+.recordSparseKernelGeometry <- function(object, distType, xDistScale, yDistScale,
+                                        zDistScale, normalizeDistance,
+                                        normalizeTarget, truncateLowDist, what) {
+  requested <- list(
+    distType = distType, xDistScale = xDistScale, yDistScale = yDistScale,
+    zDistScale = zDistScale, normalizeDistance = normalizeDistance,
+    normalizeTarget = normalizeTarget, truncateLowDist = truncateLowDist
+  )
+  .warnDistanceGeometryMismatch(object, requested, what)
+  recorded <- .getDistanceGeometry(object)
+  object@distanceGeometry <- .makeDistanceGeometry(
+    distType, xDistScale, yDistScale, zDistScale,
+    normalizeDistance, normalizeTarget, truncateLowDist,
+    source = if (length(recorded) > 0 && !is.null(recorded$source) &&
+                 length(.geometryConflicts(recorded, requested)) == 0) {
+      recorded$source
+    } else {
+      what
+    }
+  )
+  object
+}
+
 # -----------------------------------------------------------------------------
 # Single-slide core
 # -----------------------------------------------------------------------------
@@ -480,6 +548,10 @@
   cts <- .checkInputSparseKernel(object, sigmaValues, lowerLimit, upperQuantile,
                                  minAveCellNeighor, rowNormalizeKernel,
                                  colNormalizeKernel, distType)
+  object <- .recordSparseKernelGeometry(
+    object, distType, xDistScale, yDistScale, zDistScale,
+    normalizeDistance, normalizeTarget, truncateLowDist, "computeSparseKernel"
+  )
   object@sigmaValues <- sigmaValues
   max_sigma <- max(sigmaValues)
 
@@ -603,6 +675,10 @@
                                  colNormalizeKernel, distType)
   slides <- getSlideList(object)
   if (length(slides) == 0) stop("No slides found in multi-slide object")
+  object <- .recordSparseKernelGeometry(
+    object, distType, xDistScale, yDistScale, zDistScale,
+    normalizeDistance, normalizeTarget, truncateLowDist, "computeSparseKernel"
+  )
   object@sigmaValues <- sigmaValues
   max_sigma <- max(sigmaValues)
   within_only <- length(cts) == 1
@@ -745,6 +821,10 @@
             "for single-cell-type kernels.")
     return(object)
   }
+  object <- .recordSparseKernelGeometry(
+    object, distType, xDistScale, yDistScale, zDistScale,
+    normalizeDistance, normalizeTarget, truncateLowDist, "computeSelfKernel"
+  )
 
   slides <- if (is_multi) getSlideList(object) else NULL
   if (is_multi && length(slides) == 0L) {
