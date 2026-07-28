@@ -1,6 +1,6 @@
 # Changelog
 
-## CoPro 1.1.2
+## CoPro 1.1.3
 
 ### Performance
 
@@ -256,6 +256,26 @@
   now falls back to sequential execution with a warning instead of
   aborting inside the worker.
 
+### Internal
+
+- The permutation entry points share one draw-evaluation path in
+  `R/D0_permutation_plan.R` instead of each carrying a sequential worker
+  plus a near-identical parallel copy.
+  [`runSkrCCAPermu()`](https://zhen-miao.github.io/CoPro/reference/runSkrCCAPermu.md)
+  no longer maintains its own PSOCK cluster block, and three copies of
+  the `"pc"` column-shuffling helper and the now-unused
+  `.parallelPermutationLapply()` were removed.
+- [`irlba::irlba()`](https://rdrr.io/pkg/irlba/man/irlba.html) is no
+  longer used anywhere in the package; the five `@importFrom` directives
+  naming it (three of which were already stale) were dropped.
+  [`irlba::prcomp_irlba()`](https://rdrr.io/pkg/irlba/man/prcomp_irlba.html)
+  in
+  [`computePCA()`](https://zhen-miao.github.io/CoPro/reference/computePCA.md)
+  is unaffected, and remains the one place where a seed still changes
+  results.
+
+## CoPro 1.1.2
+
 ### Documentation
 
 - New vignette *Handling very large datasets (Xenium, large MERFISH)*, a
@@ -285,21 +305,6 @@
 - Consolidated the `computePCA` documentation topic, which was
   previously split under a stale `computePCAMulti` help page with a
   bogus method alias.
-- The permutation entry points share one draw-evaluation path in
-  `R/D0_permutation_plan.R` instead of each carrying a sequential worker
-  plus a near-identical parallel copy.
-  [`runSkrCCAPermu()`](https://zhen-miao.github.io/CoPro/reference/runSkrCCAPermu.md)
-  no longer maintains its own PSOCK cluster block, and three copies of
-  the `"pc"` column-shuffling helper and the now-unused
-  `.parallelPermutationLapply()` were removed.
-- [`irlba::irlba()`](https://rdrr.io/pkg/irlba/man/irlba.html) is no
-  longer used anywhere in the package; the five `@importFrom` directives
-  naming it (three of which were already stale) were dropped.
-  [`irlba::prcomp_irlba()`](https://rdrr.io/pkg/irlba/man/prcomp_irlba.html)
-  in
-  [`computePCA()`](https://zhen-miao.github.io/CoPro/reference/computePCA.md)
-  is unaffected, and remains the one place where a seed still changes
-  results.
 
 ## CoPro 1.1.1
 
