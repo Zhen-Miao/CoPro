@@ -54,9 +54,23 @@ computeSelfDistance(
 
 \item{zDistScale}{Scale for z distance, default = 1}
 
-\item{normalizeDistance}{Whether to normalize distance? The normalization
-will make sure that the 0.01\% cell-cell distance will become 0.01, thus
-ensuring consistent scaling across cell types. Default = TRUE}
+\item{normalizeDistance}{How to scale the self-distances. One of:
+\describe{
+\item{\code{TRUE} (default)}{Derive a scaling factor from the self-distances'
+own low-distance percentile, so that the 0.01\% self-distance becomes
+0.01. This factor generally differs from the one \code{\link[=computeDistance]{computeDistance()}}
+derived from the cross-type distances, which means a self-kernel at a
+given nominal sigma sits at a different physical bandwidth from the
+cross-kernel at the same sigma. A warning is issued when the two
+disagree.}
+\item{\code{"inherit"}}{Reuse the scaling factor \code{\link[=computeDistance]{computeDistance()}} recorded
+on the object, so self- and cross-distances share one scale. This is
+what you want whenever the self-kernels will be combined with the
+cross-kernels -- notably as whitening operators in
+\code{\link[=computeNormalizedCorrelation]{computeNormalizedCorrelation()}}. Errors if no factor has been
+recorded.}
+\item{\code{FALSE}}{No scaling.}
+}}
 
 \item{truncateLowDist}{Whether to truncate small distances so that cells
 that are nearly overlapping do not have super small distances. Default = TRUE.}

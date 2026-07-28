@@ -22,9 +22,23 @@ NULL
 #' @param xDistScale Scale for x distance, default = 1
 #' @param yDistScale Scale for y distance, default = 1
 #' @param zDistScale Scale for z distance, default = 1
-#' @param normalizeDistance Whether to normalize distance? The normalization
-#'  will make sure that the 0.01% cell-cell distance will become 0.01, thus
-#'  ensuring consistent scaling across cell types. Default = TRUE
+#' @param normalizeDistance How to scale the self-distances. One of:
+#'  \describe{
+#'    \item{`TRUE` (default)}{Derive a scaling factor from the self-distances'
+#'      own low-distance percentile, so that the 0.01% self-distance becomes
+#'      0.01. This factor generally differs from the one [computeDistance()]
+#'      derived from the cross-type distances, which means a self-kernel at a
+#'      given nominal sigma sits at a different physical bandwidth from the
+#'      cross-kernel at the same sigma. A warning is issued when the two
+#'      disagree.}
+#'    \item{`"inherit"`}{Reuse the scaling factor [computeDistance()] recorded
+#'      on the object, so self- and cross-distances share one scale. This is
+#'      what you want whenever the self-kernels will be combined with the
+#'      cross-kernels -- notably as whitening operators in
+#'      [computeNormalizedCorrelation()]. Errors if no factor has been
+#'      recorded.}
+#'    \item{`FALSE`}{No scaling.}
+#'  }
 #' @param truncateLowDist Whether to truncate small distances so that cells
 #'  that are nearly overlapping do not have super small distances. Default = TRUE.
 #' @param verbose Whether to print info about the computation progress
@@ -104,12 +118,16 @@ setMethod("computeSelfDistance", "CoProMulti",
     cat("Computing self-distance matrices for", length(cts), "cell types\n")
   }
   
-  # Notify users if normalizeDistance = TRUE
-  if (normalizeDistance) {
+  # Notify users about the normalization that will be applied
+  scaling_mode <- .normalizeDistanceMode(normalizeDistance)
+  if (identical(scaling_mode, "own")) {
     cat("normalizeDistance is set to TRUE, so self-distances will be",
         "normalized so that 0.01 percentile distance will be scaled to 0.01\n")
+  } else if (identical(scaling_mode, "inherit")) {
+    cat("normalizeDistance = \"inherit\": self-distances will reuse the scaling",
+        "factor recorded by computeDistance()\n")
   }
-  
+
   # Compute self-distances for each cell type
   all_percentiles <- numeric(length(cts))
   names(all_percentiles) <- cts
@@ -150,13 +168,15 @@ setMethod("computeSelfDistance", "CoProMulti",
   }
   
   # Apply normalization if requested
-  if (normalizeDistance) {
+  if (!identical(scaling_mode, "none")) {
     valid_percentiles <- all_percentiles[!is.na(all_percentiles) & is.finite(all_percentiles)]
-    if (length(valid_percentiles) > 0) {
-      min_percentile <- min(valid_percentiles)
-      scaling_factor <- 0.01 / min_percentile
+    min_percentile <- if (length(valid_percentiles) > 0) min(valid_percentiles) else NA_real_
+    scaling_factor <- .resolveSelfDistanceScaling(
+      normalizeDistance, min_percentile, object@distanceScaleFactor
+    )
+    if (scaling_factor != 1) {
       cat("Self-distance scaling factor:", scaling_factor, "\n")
-      
+
       for (ct in cts) {
         flat_name <- .createDistMatrixName(ct, ct, slide = NULL)
         if (flat_name %in% names(distances) && !is.null(distances[[flat_name]])) {
@@ -165,7 +185,7 @@ setMethod("computeSelfDistance", "CoProMulti",
       }
     }
   }
-  
+
   object@distances <- distances
   return(object)
 }
@@ -196,12 +216,16 @@ setMethod("computeSelfDistance", "CoProMulti",
     cat("Computing self-distance matrices for", length(cts), "cell types across", length(slides), "slides\n")
   }
   
-  # Notify users if normalizeDistance = TRUE
-  if (normalizeDistance) {
+  # Notify users about the normalization that will be applied
+  scaling_mode <- .normalizeDistanceMode(normalizeDistance)
+  if (identical(scaling_mode, "own")) {
     cat("normalizeDistance is set to TRUE, so self-distances will be",
         "normalized across all slides so that 0.01 percentile distance will be scaled to 0.01\n")
+  } else if (identical(scaling_mode, "inherit")) {
+    cat("normalizeDistance = \"inherit\": self-distances will reuse the scaling",
+        "factor recorded by computeDistance()\n")
   }
-  
+
   global_min_percentile <- Inf
   
   # Compute self-distances for each cell type across all slides
@@ -246,20 +270,24 @@ setMethod("computeSelfDistance", "CoProMulti",
   }
   
   # Apply normalization if requested
-  if (normalizeDistance && is.finite(global_min_percentile)) {
-    scaling_factor <- 0.01 / global_min_percentile
-    cat("Global self-distance scaling factor:", scaling_factor, "\n")
-    
-    for (ct in cts) {
-      for (sID in slides) {
-        flat_name <- .createDistMatrixName(ct, ct, slide = sID)
-        if (flat_name %in% names(distances_all) && !is.null(distances_all[[flat_name]])) {
-          distances_all[[flat_name]] <- distances_all[[flat_name]] * scaling_factor
+  if (!identical(scaling_mode, "none")) {
+    scaling_factor <- .resolveSelfDistanceScaling(
+      normalizeDistance, global_min_percentile, object@distanceScaleFactor
+    )
+    if (scaling_factor != 1) {
+      cat("Global self-distance scaling factor:", scaling_factor, "\n")
+
+      for (ct in cts) {
+        for (sID in slides) {
+          flat_name <- .createDistMatrixName(ct, ct, slide = sID)
+          if (flat_name %in% names(distances_all) && !is.null(distances_all[[flat_name]])) {
+            distances_all[[flat_name]] <- distances_all[[flat_name]] * scaling_factor
+          }
         }
       }
     }
   }
-  
+
   object@distances <- distances_all
   return(object)
 }
@@ -292,6 +320,10 @@ setMethod("computeSelfDistance", "CoProMulti",
 #'  self-distance matrices are absent. Default 5000.
 #' @param distType,xDistScale,yDistScale,zDistScale,normalizeDistance,normalizeTarget,truncateLowDist
 #'  Distance options for the sparse path, matching [computeKernelMatrix()].
+#'  `normalizeDistance` additionally accepts `"inherit"`, which reuses the
+#'  scaling factor [computeDistance()] recorded rather than deriving one from
+#'  the self-distances; see [computeSelfDistance()]. Building self-kernels never
+#'  overwrites a factor already recorded on the object.
 #'
 #' @return `CoPro` object with self-kernel matrices added to the kernelMatrices slot
 #' @export
