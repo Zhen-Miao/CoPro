@@ -19,7 +19,8 @@ computeSparseKernelFloat32(
   xDistScale = 1,
   yDistScale = 1,
   zDistScale = 1,
-  normalizeDistance = TRUE,
+  normalizeDistance = FALSE,
+  normalizeMethod = "spacing",
   normalizeTarget = 0.01,
   truncateLowDist = TRUE,
   overwrite = TRUE,
@@ -39,7 +40,8 @@ computeSparseKernelFloat32(
   xDistScale = 1,
   yDistScale = 1,
   zDistScale = 1,
-  normalizeDistance = TRUE,
+  normalizeDistance = FALSE,
+  normalizeMethod = "spacing",
   normalizeTarget = 0.01,
   truncateLowDist = TRUE,
   overwrite = TRUE,
@@ -59,7 +61,8 @@ computeSparseKernelFloat32(
   xDistScale = 1,
   yDistScale = 1,
   zDistScale = 1,
-  normalizeDistance = TRUE,
+  normalizeDistance = FALSE,
+  normalizeMethod = "spacing",
   normalizeTarget = 0.01,
   truncateLowDist = TRUE,
   overwrite = TRUE,
@@ -87,7 +90,11 @@ nonempty row or column to sum to one. They cannot both be \code{TRUE}.}
 
 \item{xDistScale, yDistScale, zDistScale}{Per-axis coordinate scales.}
 
-\item{normalizeDistance}{Whether to normalize the low distance percentile.}
+\item{normalizeDistance}{Whether to rescale distances to a common unit.}
+
+\item{normalizeMethod}{How the reference distance is estimated when
+\code{normalizeDistance = TRUE}: \code{"spacing"} (median nearest-partner distance,
+combined across blocks by median) or \code{"percentile"} (pre-1.2.0 behavior).}
 
 \item{normalizeTarget}{Target low distance percentile after normalization.}
 
@@ -135,6 +142,7 @@ Other spatial-pipeline:
 \code{\link{computeKernelMatrix}()},
 \code{\link{computePCA}()},
 \code{\link{computeSparseKernel}()},
+\code{\link{detectSigmaRange}()},
 \code{\link{runGeneSpaceCCA}()},
 \code{\link{runSkrCCA}()},
 \code{\link{runSlideLevelInference}()}

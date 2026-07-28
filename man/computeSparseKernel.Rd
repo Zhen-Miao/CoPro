@@ -19,7 +19,8 @@ computeSparseKernel(
   xDistScale = 1,
   yDistScale = 1,
   zDistScale = 1,
-  normalizeDistance = TRUE,
+  normalizeDistance = FALSE,
+  normalizeMethod = "spacing",
   normalizeTarget = 0.01,
   truncateLowDist = TRUE,
   verbose = TRUE
@@ -38,7 +39,8 @@ computeSparseKernel(
   xDistScale = 1,
   yDistScale = 1,
   zDistScale = 1,
-  normalizeDistance = TRUE,
+  normalizeDistance = FALSE,
+  normalizeMethod = "spacing",
   normalizeTarget = 0.01,
   truncateLowDist = TRUE,
   verbose = TRUE
@@ -57,7 +59,8 @@ computeSparseKernel(
   xDistScale = 1,
   yDistScale = 1,
   zDistScale = 1,
-  normalizeDistance = TRUE,
+  normalizeDistance = FALSE,
+  normalizeMethod = "spacing",
   normalizeTarget = 0.01,
   truncateLowDist = TRUE,
   verbose = TRUE
@@ -100,6 +103,13 @@ supported by the sparse path).}
 \item{normalizeDistance, normalizeTarget, truncateLowDist}{distance-processing
 options, matching \code{\link[=computeDistance]{computeDistance()}}.}
 
+\item{normalizeMethod}{How the reference distance is estimated when
+\code{normalizeDistance = TRUE}. \code{"spacing"} (default) uses the median
+nearest-partner distance, taken across cell-type blocks by median, so the
+unit tracks local cell spacing and no single dense block sets the scale for
+the whole object. \code{"percentile"} reproduces the pre-1.2.0 behavior: the
+minimum, across blocks, of a low quantile of pairwise distances.}
+
 \item{verbose}{Whether to output the progress and related information}
 }
 \value{
@@ -123,6 +133,7 @@ Other spatial-pipeline:
 \code{\link{computeKernelMatrix}()},
 \code{\link{computePCA}()},
 \code{\link{computeSparseKernelFloat32}()},
+\code{\link{detectSigmaRange}()},
 \code{\link{runGeneSpaceCCA}()},
 \code{\link{runSkrCCA}()},
 \code{\link{runSlideLevelInference}()}

@@ -90,13 +90,21 @@ test_that("computeKernelMatrix works for single cell type", {
   expect_true(kernel_name %in% names(obj@kernelMatrices))
 })
 
-test_that("computeKernelMatrix requires distance computation first", {
+test_that("only the dense path requires computeDistance first", {
   obj <- create_test_copro_single(n_cells = 100, n_cell_types = 2, seed = 42)
   obj <- subsetData(obj, cellTypesOfInterest = c("CellTypeA", "CellTypeB"))
-  
+
+  # The dense path reads distance matrices, so it still needs them.
   expect_error(
-    computeKernelMatrix(obj, sigmaValues = c(0.1)),
+    computeKernelMatrix(obj, sigmaValues = c(0.1), method = "dense"),
     "run computeDistance"
+  )
+
+  # method = "auto" builds its own coordinates when there are no distances,
+  # so detectSigmaRange() -> computeKernelMatrix() works on its own.
+  sigma <- detectSigmaRange(obj, verbose = FALSE)$sigmaValues[1]
+  expect_no_error(
+    computeKernelMatrix(obj, sigmaValues = sigma, verbose = FALSE)
   )
 })
 

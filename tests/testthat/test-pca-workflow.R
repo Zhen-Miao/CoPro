@@ -104,7 +104,7 @@ test_that("runSkrCCA works for CoProSingle with two cell types", {
   obj <- subsetData(obj, cellTypesOfInterest = c("CellTypeA", "CellTypeB"))
   obj <- computeDistance(obj, distType = "Euclidean2D", 
                          normalizeDistance = TRUE, verbose = FALSE)
-  obj <- computeKernelMatrix(obj, sigmaValues = c(0.1), verbose = FALSE)
+  obj <- computeKernelMatrix(obj, sigmaValues = c(0.1), verbose = FALSE, normalizeDistance = TRUE)
   obj <- computePCA(obj, nPCA = 10, center = TRUE, scale. = TRUE)
   
   # Run skrCCA
@@ -132,7 +132,7 @@ test_that("runSkrCCA works for single cell type", {
   obj <- subsetData(obj, cellTypesOfInterest = c("CellTypeA"))
   obj <- computeDistance(obj, distType = "Euclidean2D", 
                          normalizeDistance = TRUE, verbose = FALSE)
-  obj <- computeKernelMatrix(obj, sigmaValues = c(0.1), verbose = FALSE)
+  obj <- computeKernelMatrix(obj, sigmaValues = c(0.1), verbose = FALSE, normalizeDistance = TRUE)
   obj <- computePCA(obj, nPCA = 10, center = TRUE, scale. = TRUE)
   
   # Run skrCCA
@@ -171,7 +171,7 @@ test_that("computeNormalizedCorrelation works", {
   obj <- subsetData(obj, cellTypesOfInterest = c("CellTypeA", "CellTypeB"))
   obj <- computeDistance(obj, distType = "Euclidean2D", 
                          normalizeDistance = TRUE, verbose = FALSE)
-  obj <- computeKernelMatrix(obj, sigmaValues = c(0.05, 0.1), verbose = FALSE)
+  obj <- computeKernelMatrix(obj, sigmaValues = c(0.05, 0.1), verbose = FALSE, normalizeDistance = TRUE)
   obj <- computePCA(obj, nPCA = 10, center = TRUE, scale. = TRUE)
   obj <- runSkrCCA(obj, scalePCs = TRUE, nCC = 2, maxIter = 100)
   
@@ -194,7 +194,7 @@ test_that("computeGeneAndCellScores works", {
   obj <- subsetData(obj, cellTypesOfInterest = c("CellTypeA", "CellTypeB"))
   obj <- computeDistance(obj, distType = "Euclidean2D", 
                          normalizeDistance = TRUE, verbose = FALSE)
-  obj <- computeKernelMatrix(obj, sigmaValues = c(0.1), verbose = FALSE)
+  obj <- computeKernelMatrix(obj, sigmaValues = c(0.1), verbose = FALSE, normalizeDistance = TRUE)
   obj <- computePCA(obj, nPCA = 10, center = TRUE, scale. = TRUE)
   obj <- runSkrCCA(obj, scalePCs = TRUE, nCC = 2, maxIter = 100)
   
@@ -221,7 +221,7 @@ test_that("getCellScores accessor works", {
   obj <- subsetData(obj, cellTypesOfInterest = c("CellTypeA", "CellTypeB"))
   obj <- computeDistance(obj, distType = "Euclidean2D", 
                          normalizeDistance = TRUE, verbose = FALSE)
-  obj <- computeKernelMatrix(obj, sigmaValues = c(0.1), verbose = FALSE)
+  obj <- computeKernelMatrix(obj, sigmaValues = c(0.1), verbose = FALSE, normalizeDistance = TRUE)
   obj <- computePCA(obj, nPCA = 10, center = TRUE, scale. = TRUE)
   obj <- runSkrCCA(obj, scalePCs = TRUE, nCC = 2, maxIter = 100)
   obj <- computeGeneAndCellScores(obj)
@@ -244,7 +244,7 @@ test_that("Full workflow runs without errors", {
                          normalizeDistance = TRUE, verbose = FALSE)
   # dropDistances = FALSE so we can assert the distances slot was populated
   obj <- computeKernelMatrix(obj, sigmaValues = c(0.05, 0.1),
-                             dropDistances = FALSE, verbose = FALSE)
+                             dropDistances = FALSE, verbose = FALSE, normalizeDistance = TRUE)
   obj <- runSkrCCA(obj, scalePCs = TRUE, nCC = 2, maxIter = 100)
   obj <- computeNormalizedCorrelation(obj)
   obj <- computeGeneAndCellScores(obj)
@@ -270,7 +270,7 @@ test_that("Multi-slide full workflow runs without errors", {
                          normalizeDistance = TRUE, verbose = FALSE)
   # dropDistances = FALSE so we can assert the distances slot was populated
   obj <- computeKernelMatrix(obj, sigmaValues = c(0.1),
-                             dropDistances = FALSE, verbose = FALSE)
+                             dropDistances = FALSE, verbose = FALSE, normalizeDistance = TRUE)
   obj <- runSkrCCA(obj, scalePCs = TRUE, nCC = 2, maxIter = 100)
   obj <- computeNormalizedCorrelation(obj)
   obj <- computeGeneAndCellScores(obj)
@@ -295,7 +295,7 @@ test_that("computeRegressionGeneScores works for CoProSingle", {
   obj <- subsetData(obj, cellTypesOfInterest = c("CellTypeA", "CellTypeB"))
   obj <- computeDistance(obj, distType = "Euclidean2D",
                          normalizeDistance = TRUE, verbose = FALSE)
-  obj <- computeKernelMatrix(obj, sigmaValues = c(0.1), verbose = FALSE)
+  obj <- computeKernelMatrix(obj, sigmaValues = c(0.1), verbose = FALSE, normalizeDistance = TRUE)
   obj <- computePCA(obj, nPCA = 10, center = TRUE, scale. = TRUE)
   obj <- runSkrCCA(obj, scalePCs = TRUE, nCC = 2, maxIter = 100)
   obj <- computeGeneAndCellScores(obj)
@@ -333,7 +333,7 @@ test_that("computeRegressionGeneScores works for CoProMulti", {
   obj <- computePCA(obj, nPCA = 10, center = TRUE, scale. = TRUE)
   obj <- computeDistance(obj, distType = "Euclidean2D",
                          normalizeDistance = TRUE, verbose = FALSE)
-  obj <- computeKernelMatrix(obj, sigmaValues = c(0.1), verbose = FALSE)
+  obj <- computeKernelMatrix(obj, sigmaValues = c(0.1), verbose = FALSE, normalizeDistance = TRUE)
   obj <- runSkrCCA(obj, scalePCs = TRUE, nCC = 2, maxIter = 100)
   obj <- computeGeneAndCellScores(obj)
 
@@ -362,7 +362,7 @@ test_that("computeRegressionGeneScores respects sigma parameter", {
   obj <- subsetData(obj, cellTypesOfInterest = c("CellTypeA", "CellTypeB"))
   obj <- computeDistance(obj, distType = "Euclidean2D",
                          normalizeDistance = TRUE, verbose = FALSE)
-  obj <- computeKernelMatrix(obj, sigmaValues = c(0.05, 0.1), verbose = FALSE)
+  obj <- computeKernelMatrix(obj, sigmaValues = c(0.05, 0.1), verbose = FALSE, normalizeDistance = TRUE)
   obj <- computePCA(obj, nPCA = 10, center = TRUE, scale. = TRUE)
   obj <- runSkrCCA(obj, scalePCs = TRUE, nCC = 2, maxIter = 100)
   obj <- computeGeneAndCellScores(obj)
@@ -398,7 +398,7 @@ test_that("computeNormalizedCorrelation works for CoProMulti aggregate mode", {
   obj <- computePCA(obj, nPCA = 10, center = TRUE, scale. = TRUE)
   obj <- computeDistance(obj, distType = "Euclidean2D",
                          normalizeDistance = TRUE, verbose = FALSE)
-  obj <- computeKernelMatrix(obj, sigmaValues = c(0.1), verbose = FALSE)
+  obj <- computeKernelMatrix(obj, sigmaValues = c(0.1), verbose = FALSE, normalizeDistance = TRUE)
   obj <- runSkrCCA(obj, scalePCs = TRUE, nCC = 2, maxIter = 100)
 
   obj <- computeNormalizedCorrelation(obj, calculationMode = "aggregate")
@@ -520,7 +520,7 @@ test_that("the two column-SD implementations give the same science", {
         o@normalizedDataSub[rows, , drop = FALSE], sd_fun)
     }
     o <- q(computePCA(o, nPCA = 8, center = FALSE, scale. = FALSE))
-    o <- q(computeSparseKernel(o, sigmaValues = c(0.05, 0.1), verbose = FALSE))
+    o <- q(computeSparseKernel(o, sigmaValues = c(0.05, 0.1), verbose = FALSE, normalizeDistance = TRUE))
     o <- q(runSkrCCA(o, scalePCs = TRUE, nCC = 2))
     o <- q(computeNormalizedCorrelation(o))
     o <- q(computeGeneAndCellScores(o))

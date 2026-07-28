@@ -174,7 +174,8 @@ with the nephron axis.
 
 ```{r supervised-vasc-weight, message=FALSE, results='hide'}
 sigma_choice <- c(0.04, 0.08, 0.1, 0.15)
-obj <- computeDistance(obj, distType = "Euclidean2D")
+obj <- computeDistance(obj, distType = "Euclidean2D",
+                            normalizeDistance = TRUE)
 obj <- computeKernelMatrix(obj, sigmaValues = sigma_choice)
 
 # Get vascular PCA scores

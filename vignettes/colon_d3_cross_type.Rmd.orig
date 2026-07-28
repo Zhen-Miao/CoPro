@@ -116,7 +116,8 @@ obj <- subsetData(obj, cellTypesOfInterest = cell_types)
 obj <- computePCA(obj, nPCA = 15, center = TRUE, scale. = TRUE)
 
 # Distance and kernel
-obj <- computeDistance(obj, distType = "Euclidean2D")
+obj <- computeDistance(obj, distType = "Euclidean2D",
+                            normalizeDistance = TRUE)
 
 sigma_choice <- c(0.005, 0.01, 0.02, 0.05, 0.1)
 obj <- computeKernelMatrix(obj, sigmaValues = sigma_choice)

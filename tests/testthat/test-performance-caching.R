@@ -137,9 +137,9 @@ test_that("batched permutation scoring matches direct pair/component loops", {
   obj <- subsetData(obj, cellTypesOfInterest =
                       c("CellTypeA", "CellTypeB", "CellTypeC"))
   obj <- computePCA(obj, nPCA = 8, center = TRUE, scale. = TRUE)
-  obj <- computeDistance(obj, distType = "Euclidean2D", verbose = FALSE)
+  obj <- computeDistance(obj, distType = "Euclidean2D", verbose = FALSE, normalizeDistance = TRUE)
   obj <- computeKernelMatrix(obj, sigmaValues = 0.1, method = "dense",
-                             dropDistances = FALSE, verbose = FALSE)
+                             dropDistances = FALSE, verbose = FALSE, normalizeDistance = TRUE)
   obj <- suppressMessages(suppressWarnings(
     runSkrCCA(obj, scalePCs = TRUE, nCC = 2, maxIter = 100, tol = 1e-6)
   ))

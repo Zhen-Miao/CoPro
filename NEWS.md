@@ -1,3 +1,80 @@
+# CoPro 1.2.0
+
+## Choosing sigma from the data
+
+* **New `detectSigmaRange()`.** `sigma` is a distance, so no recommended value
+  survives a change of units — microns, pixels and Visium coordinates all need
+  different numbers for the same biology. What does transfer is how many
+  neighbors a cell is coupled to: the kernel row sum
+  `m_a(sigma) = sum_b exp(-0.5 (d_ab / sigma)^2)` is the effective number of
+  partners cell `a` talks to, it is dimensionless, and it increases
+  monotonically in sigma. `detectSigmaRange()` inverts it, reporting the sigmas
+  at which the median cell reaches `minNeighbors` (default 5) and
+  `maxNeighbors` (default 20), for every cell-type pair and slide, plus a
+  recommended grid and a per-block diagnostic table.
+
+  Cost is bounded by sampling: anchor cells are compared against their nearest
+  partners via fixed-radius search rather than against all pairs, so it runs in
+  well under a second on hundreds of thousands of cells. Anchors are chosen by
+  a deterministic stride, so results are reproducible without a seed.
+
+  The recommended workflow is now:
+
+  ```r
+  rng <- detectSigmaRange(obj)
+  obj <- computeKernelMatrix(obj, sigmaValues = rng$sigmaValues)
+  ```
+
+  `method = "auto"` no longer selects the dense path when an object carries no
+  distance matrices, so this works at any size without a `computeDistance()`
+  call.
+
+## Breaking changes
+
+* **`normalizeDistance` now defaults to `FALSE`** in `computeDistance()`,
+  `computeSelfDistance()`, `computeKernelMatrix()`, `computeSparseKernel()` and
+  `computeSparseKernelFloat32()`. Rescaling distances existed so that one
+  recommended sigma could travel between datasets; `detectSigmaRange()` now
+  does that job without moving the coordinates results are reported on. The
+  first step that falls back to the default announces the change once per
+  session. **Pass `normalizeDistance = TRUE` explicitly to reproduce results
+  from CoPro 1.1.x.**
+
+* **New `normalizeMethod` argument** controls how the reference distance is
+  estimated when `normalizeDistance = TRUE`.
+
+  * `"spacing"` (new default) uses the median nearest-partner distance,
+    combined across cell-type blocks by median.
+  * `"percentile"` reproduces the pre-1.2.0 behavior: the *minimum*, across
+    blocks, of a low quantile of pairwise distances.
+
+  The old rule let the single densest block set the unit for the entire object,
+  so adding one tightly packed slide or cell type rescaled every other block.
+  Taking a median over blocks, of a statistic that estimates local spacing
+  directly, removes that dependence on tissue extent and on which block happens
+  to be densest. The percentile is still used to floor small distances when
+  `truncateLowDist = TRUE`; the two jobs are now separate quantities rather
+  than one shared number.
+
+## Memory
+
+* **`method = "auto"` now selects the float32 sparse representation** for large
+  data instead of float64. It stores 8 bytes per entry against 12, and streams
+  one cell-type block at a time rather than caching every block's neighbor
+  list, which is the larger saving. On a 12-slide/3-type synthetic benchmark
+  the peak dropped from 2.8 GB to 0.75 GB for the same three sigmas, with
+  normalized correlations agreeing to 1e-6. `method = "sparse"` still selects
+  float64 for exactness checks.
+
+* **`auto` now predicts kernel density before building, and warns when a sparse
+  representation would not help.** A fixed-radius kernel is only sparse while
+  its support radius stays well below the tissue scale; the radius grows
+  linearly in sigma, so density grows as `sigma^d` and saturates. Past about
+  two-thirds density, sparse storage costs *more* than dense. The warning
+  reports the predicted density and the sigma that would bring it under
+  `denseThreshold` (default 0.3), so an out-of-memory run at a too-large sigma
+  is now diagnosed rather than merely fatal.
+
 # CoPro (development version)
 
 ## Bug fixes

@@ -26,6 +26,7 @@ reference:
     contents:
       - computePCA
       - "`computePCA,CoProSingle-method`"
+      - detectSigmaRange
       - computeDistance
       - computeKernelMatrix
       - computeSparseKernel
@@ -48,6 +49,7 @@ reference:
       - getSelfDistMat
       - getKernelMatrix
       - getSelfKernelMatrix
+      - getDistanceGeometry
       - getColocScores
       - getSlideID
       - getSlideList

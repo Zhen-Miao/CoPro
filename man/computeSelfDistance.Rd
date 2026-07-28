@@ -12,7 +12,8 @@ computeSelfDistance(
   xDistScale = 1,
   yDistScale = 1,
   zDistScale = 1,
-  normalizeDistance = TRUE,
+  normalizeDistance = FALSE,
+  normalizeMethod = c("spacing", "percentile"),
   truncateLowDist = TRUE,
   verbose = TRUE,
   overwrite = FALSE
@@ -24,7 +25,8 @@ computeSelfDistance(
   xDistScale = 1,
   yDistScale = 1,
   zDistScale = 1,
-  normalizeDistance = TRUE,
+  normalizeDistance = FALSE,
+  normalizeMethod = c("spacing", "percentile"),
   truncateLowDist = TRUE,
   verbose = TRUE,
   overwrite = FALSE
@@ -36,7 +38,8 @@ computeSelfDistance(
   xDistScale = 1,
   yDistScale = 1,
   zDistScale = 1,
-  normalizeDistance = TRUE,
+  normalizeDistance = FALSE,
+  normalizeMethod = c("spacing", "percentile"),
   truncateLowDist = TRUE,
   verbose = TRUE,
   overwrite = FALSE
@@ -57,6 +60,15 @@ computeSelfDistance(
 \item{normalizeDistance}{Whether to normalize distance? The normalization
 will make sure that the 0.01\% cell-cell distance will become 0.01, thus
 ensuring consistent scaling across cell types. Default = TRUE}
+
+\item{normalizeMethod}{How the reference distance is estimated when
+\code{normalizeDistance = TRUE}. \code{"spacing"} (default) uses the median
+nearest-partner distance, combined across cell-type blocks by median, so the
+unit tracks local cell spacing and no single dense block sets the scale for
+the whole object. \code{"percentile"} reproduces the pre-1.2.0 behavior: the
+minimum, across blocks, of a low quantile of pairwise distances. Not
+available for \code{distType = "Morphology-Aware"}, which falls back to
+\code{"percentile"}.}
 
 \item{truncateLowDist}{Whether to truncate small distances so that cells
 that are nearly overlapping do not have super small distances. Default = TRUE.}

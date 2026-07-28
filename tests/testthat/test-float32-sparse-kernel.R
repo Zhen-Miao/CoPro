@@ -14,11 +14,11 @@ test_that("direct float32 kernels match float64 sparse kernels", {
   double <- computeKernelMatrix(
     object, sigmaValues = sigmas, method = "sparse",
     distType = "Euclidean2D", verbose = FALSE
-  )
+  , normalizeDistance = TRUE)
   float32 <- computeSparseKernelFloat32(
     object, sigmaValues = sigmas, distType = "Euclidean2D",
     verbose = FALSE
-  )
+  , normalizeDistance = TRUE)
 
   expect_length(float32@distances, 0L)
   expect_equal(float32@sigmaValues, double@sigmaValues)
@@ -151,7 +151,8 @@ test_that("float32 construction supports global, row, and column normalization",
       c(
         list(
           object = object, sigmaValues = 0.1, method = "sparse",
-          distType = "Euclidean2D", verbose = FALSE
+          distType = "Euclidean2D", verbose = FALSE,
+          normalizeDistance = TRUE
         ),
         arguments
       )
@@ -161,7 +162,8 @@ test_that("float32 construction supports global, row, and column normalization",
       c(
         list(
           object = object, sigmaValues = 0.1,
-          distType = "Euclidean2D", verbose = FALSE
+          distType = "Euclidean2D", verbose = FALSE,
+          normalizeDistance = TRUE
         ),
         arguments
       )
@@ -207,7 +209,7 @@ test_that("float32 construction supports global, row, and column normalization",
       object, sigmaValues = 0.1,
       rowNormalizeKernel = TRUE, colNormalizeKernel = TRUE,
       verbose = FALSE
-    ),
+    , normalizeDistance = TRUE),
     "Cannot do both"
   )
 })
@@ -228,7 +230,8 @@ test_that("normalized float32 self-kernels expand only when asymmetric", {
       c(
         list(
           object = object, sigmaValues = 0.1, method = "sparse",
-          distType = "Euclidean2D", verbose = FALSE
+          distType = "Euclidean2D", verbose = FALSE,
+          normalizeDistance = TRUE
         ),
         arguments
       )
@@ -238,7 +241,8 @@ test_that("normalized float32 self-kernels expand only when asymmetric", {
       c(
         list(
           object = object, sigmaValues = 0.1,
-          distType = "Euclidean2D", verbose = FALSE
+          distType = "Euclidean2D", verbose = FALSE,
+          normalizeDistance = TRUE
         ),
         arguments
       )
@@ -262,7 +266,7 @@ test_that("normalized float32 self-kernels expand only when asymmetric", {
   globally_normalized <- computeSparseKernelFloat32(
     object, sigmaValues = 0.1, normalizeKernel = TRUE,
     distType = "Euclidean2D", verbose = FALSE
-  )
+  , normalizeDistance = TRUE)
   encoded_global <- getKernelMatrix(
     globally_normalized, 0.1, "CellTypeA", "CellTypeA",
     verbose = FALSE, materialize = FALSE
@@ -331,11 +335,11 @@ test_that("float32 kernels run through skrCCA with stable cell scores", {
   double <- computeKernelMatrix(
     object, sigmaValues = c(0.05, 0.1), method = "sparse",
     distType = "Euclidean2D", verbose = FALSE
-  )
+  , normalizeDistance = TRUE)
   float32 <- computeSparseKernelFloat32(
     object, sigmaValues = c(0.05, 0.1),
     distType = "Euclidean2D", verbose = FALSE
-  )
+  , normalizeDistance = TRUE)
 
   set.seed(8401)
   double <- runSkrCCA(
@@ -389,11 +393,11 @@ test_that("float32 one-type symmetric kernels match float64 and run end to end",
   double <- computeKernelMatrix(
     object, sigmaValues = 0.1, method = "sparse",
     distType = "Euclidean2D", verbose = FALSE
-  )
+  , normalizeDistance = TRUE)
   float32 <- computeSparseKernelFloat32(
     object, sigmaValues = 0.1, distType = "Euclidean2D",
     verbose = FALSE
-  )
+  , normalizeDistance = TRUE)
 
   encoded <- getKernelMatrix(
     float32, 0.1, "CellTypeA", "CellTypeA",
@@ -464,7 +468,7 @@ test_that("float32 supports more than two cell types", {
   float32 <- computeSparseKernelFloat32(
     object, sigmaValues = 0.1, distType = "Euclidean2D",
     verbose = FALSE
-  )
+  , normalizeDistance = TRUE)
 
   expect_length(float32@kernelMatrices, 3L)
   expect_true(all(vapply(
@@ -516,11 +520,11 @@ test_that("float32 supports multi-slide pairwise and one-type kernels", {
   double <- computeKernelMatrix(
     object, sigmaValues = 0.1, method = "sparse",
     distType = "Euclidean2D", verbose = FALSE
-  )
+  , normalizeDistance = TRUE)
   float32 <- computeSparseKernelFloat32(
     object, sigmaValues = 0.1, distType = "Euclidean2D",
     verbose = FALSE
-  )
+  , normalizeDistance = TRUE)
   expect_equal(
     sort(names(float32@kernelMatrices)),
     sort(names(double@kernelMatrices))
@@ -566,7 +570,7 @@ test_that("float32 supports multi-slide pairwise and one-type kernels", {
   one_type <- computeSparseKernelFloat32(
     one_type, sigmaValues = 0.1, distType = "Euclidean2D",
     verbose = FALSE
-  )
+  , normalizeDistance = TRUE)
   expect_length(one_type@kernelMatrices, 2L)
   expect_true(all(vapply(
     one_type@kernelMatrices,

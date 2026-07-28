@@ -25,6 +25,14 @@ NULL
 #' @param normalizeDistance Whether to normalize distance? The normalization
 #'  will make sure that the 0.01% cell-cell distance will become 0.01, thus
 #'  ensuring consistent scaling across cell types. Default = TRUE
+#' @param normalizeMethod How the reference distance is estimated when
+#'  `normalizeDistance = TRUE`. `"spacing"` (default) uses the median
+#'  nearest-partner distance, combined across cell-type blocks by median, so the
+#'  unit tracks local cell spacing and no single dense block sets the scale for
+#'  the whole object. `"percentile"` reproduces the pre-1.2.0 behavior: the
+#'  minimum, across blocks, of a low quantile of pairwise distances. Not
+#'  available for `distType = "Morphology-Aware"`, which falls back to
+#'  `"percentile"`.
 #' @param truncateLowDist Whether to truncate small distances so that cells
 #'  that are nearly overlapping do not have super small distances. Default = TRUE.
 #' @param verbose Whether to print info about the computation progress
@@ -52,7 +60,8 @@ setGeneric(
   "computeSelfDistance",
   function(object, distType = c("Euclidean2D", "Euclidean3D", "Morphology-Aware"),
            xDistScale = 1, yDistScale = 1, zDistScale = 1, 
-           normalizeDistance = TRUE, truncateLowDist = TRUE, 
+           normalizeDistance = FALSE, normalizeMethod = c("spacing", "percentile"),
+           truncateLowDist = TRUE, 
            verbose = TRUE, overwrite = FALSE) standardGeneric("computeSelfDistance")
 )
 
@@ -61,11 +70,12 @@ setGeneric(
 setMethod("computeSelfDistance", "CoProSingle", 
           function(object, distType = c("Euclidean2D", "Euclidean3D", "Morphology-Aware"),
                    xDistScale = 1, yDistScale = 1, zDistScale = 1,
-                   normalizeDistance = TRUE, truncateLowDist = TRUE, 
+                   normalizeDistance = FALSE, normalizeMethod = c("spacing", "percentile"),
+           truncateLowDist = TRUE, 
                    verbose = TRUE, overwrite = FALSE) {
             distType <- match.arg(distType)
             .computeSelfDistanceCore(object, distType, xDistScale, yDistScale, zDistScale,
-                                    normalizeDistance, truncateLowDist, verbose, overwrite)
+                                    normalizeDistance, normalizeMethod, truncateLowDist, verbose, overwrite)
           })
 
 #' @rdname computeSelfDistance
@@ -73,17 +83,19 @@ setMethod("computeSelfDistance", "CoProSingle",
 setMethod("computeSelfDistance", "CoProMulti", 
           function(object, distType = c("Euclidean2D", "Euclidean3D", "Morphology-Aware"),
                    xDistScale = 1, yDistScale = 1, zDistScale = 1,
-                   normalizeDistance = TRUE, truncateLowDist = TRUE, 
+                   normalizeDistance = FALSE, normalizeMethod = c("spacing", "percentile"),
+           truncateLowDist = TRUE, 
                    verbose = TRUE, overwrite = FALSE) {
             distType <- match.arg(distType)
             .computeSelfDistanceCoreMulti(object, distType, xDistScale, yDistScale, zDistScale,
-                                         normalizeDistance, truncateLowDist, verbose, overwrite)
+                                         normalizeDistance, normalizeMethod, truncateLowDist, verbose, overwrite)
           })
 
 #' Core function for computing self-distances (single slide)
 #' @noRd
 .computeSelfDistanceCore <- function(object, distType, xDistScale, yDistScale, zDistScale,
-                                    normalizeDistance, truncateLowDist, verbose, overwrite) {
+                                    normalizeDistance, normalizeMethod, truncateLowDist, verbose, overwrite) {
+  normalizeMethod <- match.arg(normalizeMethod, .NORMALIZE_METHODS)
   
   # Validate inputs
   cts <- .checkInputDistance(object, distType, xDistScale, yDistScale, zDistScale)
@@ -151,10 +163,19 @@ setMethod("computeSelfDistance", "CoProMulti",
   
   # Apply normalization if requested
   if (normalizeDistance) {
-    valid_percentiles <- all_percentiles[!is.na(all_percentiles) & is.finite(all_percentiles)]
+    reference_values <- if (identical(normalizeMethod, "spacing")) {
+      vapply(cts, function(ct) {
+        coords_ct <- .getCoordinateMatrix(object, ct, distType,
+                                          xDistScale, yDistScale, zDistScale)
+        .blockNearestSpacing(coords_ct, coords_ct, within = TRUE)
+      }, numeric(1))
+    } else {
+      all_percentiles
+    }
+    valid_percentiles <- reference_values[!is.na(reference_values) & is.finite(reference_values)]
     if (length(valid_percentiles) > 0) {
-      min_percentile <- min(valid_percentiles)
-      scaling_factor <- 0.01 / min_percentile
+      scaling_factor <- 0.01 / .combineDistanceReference(valid_percentiles,
+                                                         normalizeMethod)
       cat("Self-distance scaling factor:", scaling_factor, "\n")
       
       for (ct in cts) {
@@ -169,7 +190,7 @@ setMethod("computeSelfDistance", "CoProMulti",
   object@distances <- distances
   object <- .recordSelfDistanceGeometry(object, distType, xDistScale, yDistScale,
                                         zDistScale, normalizeDistance,
-                                        truncateLowDist)
+                                        truncateLowDist, normalizeMethod)
   return(object)
 }
 
@@ -184,18 +205,20 @@ setMethod("computeSelfDistance", "CoProMulti",
 #' @noRd
 .recordSelfDistanceGeometry <- function(object, distType, xDistScale, yDistScale,
                                         zDistScale, normalizeDistance,
-                                        truncateLowDist) {
+                                        truncateLowDist,
+                                        normalizeMethod = "spacing") {
   requested <- list(
     distType = distType, xDistScale = xDistScale, yDistScale = yDistScale,
     zDistScale = zDistScale, normalizeDistance = normalizeDistance,
+    normalizeMethod = normalizeMethod,
     truncateLowDist = truncateLowDist
   )
   .warnDistanceGeometryMismatch(object, requested, "computeSelfDistance")
   if (length(.getDistanceGeometry(object)) == 0) {
     object@distanceGeometry <- .makeDistanceGeometry(
       distType, xDistScale, yDistScale, zDistScale,
-      normalizeDistance, normalizeTarget = 0.01,
-      truncateLowDist = truncateLowDist,
+      normalizeDistance, normalizeMethod = normalizeMethod,
+      normalizeTarget = 0.01, truncateLowDist = truncateLowDist,
       source = "computeSelfDistance"
     )
   }
@@ -205,7 +228,9 @@ setMethod("computeSelfDistance", "CoProMulti",
 #' Core function for computing self-distances (multi-slide)
 #' @noRd
 .computeSelfDistanceCoreMulti <- function(object, distType, xDistScale, yDistScale, zDistScale,
-                                         normalizeDistance, truncateLowDist, verbose, overwrite) {
+                                         normalizeDistance, normalizeMethod, truncateLowDist, verbose, overwrite) {
+  normalizeMethod <- match.arg(normalizeMethod, .NORMALIZE_METHODS)
+  normalizeMethod <- match.arg(normalizeMethod, .NORMALIZE_METHODS)
   
   # Validate inputs
   cts <- .checkInputDistance(object, distType, xDistScale, yDistScale, zDistScale)
@@ -235,6 +260,7 @@ setMethod("computeSelfDistance", "CoProMulti",
   }
   
   global_min_percentile <- Inf
+  self_spacings <- numeric(0)
   
   # Compute self-distances for each cell type across all slides
   for (ct in cts) {
@@ -264,6 +290,11 @@ setMethod("computeSelfDistance", "CoProMulti",
       
       if (!is.na(dist_percentile) && is.finite(dist_percentile)) {
         global_min_percentile <- min(global_min_percentile, dist_percentile, na.rm = TRUE)
+        if (normalizeDistance && identical(normalizeMethod, "spacing")) {
+          self_spacings <- c(self_spacings, .blockSpacingForBlock(
+            object, distType, xDistScale, yDistScale, zDistScale, sID, ct, ct
+          ))
+        }
       }
       
       # Save using flat structure
@@ -279,7 +310,10 @@ setMethod("computeSelfDistance", "CoProMulti",
   
   # Apply normalization if requested
   if (normalizeDistance && is.finite(global_min_percentile)) {
-    scaling_factor <- 0.01 / global_min_percentile
+    scaling_factor <- 0.01 / .combineDistanceReference(
+      if (identical(normalizeMethod, "spacing")) self_spacings else global_min_percentile,
+      normalizeMethod
+    )
     cat("Global self-distance scaling factor:", scaling_factor, "\n")
     
     for (ct in cts) {
@@ -295,7 +329,7 @@ setMethod("computeSelfDistance", "CoProMulti",
   object@distances <- distances_all
   object <- .recordSelfDistanceGeometry(object, distType, xDistScale, yDistScale,
                                         zDistScale, normalizeDistance,
-                                        truncateLowDist)
+                                        truncateLowDist, normalizeMethod)
   return(object)
 }
 
@@ -318,6 +352,9 @@ setMethod("computeSelfDistance", "CoProMulti",
 #' @param verbose Whether to output progress information
 #' @param overwrite Whether to overwrite existing kernel matrices. If FALSE,
 #'  will add self-kernel matrices to existing cross-type kernels. Default = FALSE
+#' @param normalizeMethod How the reference distance is estimated when
+#'  `normalizeDistance = TRUE`: `"spacing"` (median nearest-partner distance,
+#'  combined across blocks by median) or `"percentile"` (pre-1.2.0 behavior).
 #' @param method One of `"auto"`, `"dense"`, or `"sparse"`. The sparse path
 #'  constructs exact thresholded self-kernels directly from coordinates and
 #'  does not require [computeSelfDistance()].
@@ -358,7 +395,7 @@ setGeneric(
            verbose = TRUE, overwrite = FALSE,
            method = c("auto", "dense", "sparse"), autoThreshold = 5000L,
            distType = NULL, xDistScale = NULL, yDistScale = NULL, zDistScale = NULL,
-           normalizeDistance = NULL, normalizeTarget = NULL,
+           normalizeDistance = NULL, normalizeMethod = NULL, normalizeTarget = NULL,
            truncateLowDist = NULL) standardGeneric("computeSelfKernel")
 )
 
@@ -371,7 +408,7 @@ setMethod("computeSelfKernel", "CoProSingle",
                    verbose = TRUE, overwrite = FALSE,
                    method = c("auto", "dense", "sparse"), autoThreshold = 5000L,
                    distType = NULL, xDistScale = NULL, yDistScale = NULL, zDistScale = NULL,
-                   normalizeDistance = NULL, normalizeTarget = NULL,
+                   normalizeDistance = NULL, normalizeMethod = NULL, normalizeTarget = NULL,
                    truncateLowDist = NULL) {
             .computeSelfKernelDispatch(
               object, sigmaValues, lowerLimit, upperQuantile,
@@ -380,6 +417,7 @@ setMethod("computeSelfKernel", "CoProSingle",
               autoThreshold = autoThreshold, distType = distType,
               xDistScale = xDistScale, yDistScale = yDistScale,
               zDistScale = zDistScale, normalizeDistance = normalizeDistance,
+              normalizeMethod = normalizeMethod,
               normalizeTarget = normalizeTarget, truncateLowDist = truncateLowDist,
               verbose = verbose, overwrite = overwrite, is_multi = FALSE
             )
@@ -394,7 +432,7 @@ setMethod("computeSelfKernel", "CoProMulti",
                    verbose = TRUE, overwrite = FALSE,
                    method = c("auto", "dense", "sparse"), autoThreshold = 5000L,
                    distType = NULL, xDistScale = NULL, yDistScale = NULL, zDistScale = NULL,
-                   normalizeDistance = NULL, normalizeTarget = NULL,
+                   normalizeDistance = NULL, normalizeMethod = NULL, normalizeTarget = NULL,
                    truncateLowDist = NULL) {
             .computeSelfKernelDispatch(
               object, sigmaValues, lowerLimit, upperQuantile,
@@ -403,6 +441,7 @@ setMethod("computeSelfKernel", "CoProMulti",
               autoThreshold = autoThreshold, distType = distType,
               xDistScale = xDistScale, yDistScale = yDistScale,
               zDistScale = zDistScale, normalizeDistance = normalizeDistance,
+              normalizeMethod = normalizeMethod,
               normalizeTarget = normalizeTarget, truncateLowDist = truncateLowDist,
               verbose = verbose, overwrite = overwrite, is_multi = TRUE
             )
