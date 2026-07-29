@@ -559,7 +559,12 @@ setGeneric(
 
   object@kernelMatrices <- kernel_matrices
   object@sigmaValues <- sigmaValues
-  object@distanceScaleFactor <- scaling_factor
+  # Only a normalizing run has a factor to record. Writing the `scaling_factor
+  # <- 1` of a non-normalizing run would erase a factor computeDistance() had
+  # already pinned, and .recoverDistanceScaleFactor() reads that slot to map
+  # analysis coordinates back to raw ones for the permutation null. Matches the
+  # three guarded sites in 12b_sparse_kernel.R.
+  if (normalizeDistance) object@distanceScaleFactor <- scaling_factor
   object@distances <- list()
   object
 }

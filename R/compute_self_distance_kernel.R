@@ -123,7 +123,8 @@ setMethod("computeSelfDistance", "CoProMulti",
 .resolveSelfDistanceGeometry <- function(object, distType, xDistScale, yDistScale,
                                          zDistScale, normalizeDistance,
                                          normalizeMethod, normalizeTarget,
-                                         truncateLowDist, verbose) {
+                                         truncateLowDist, verbose,
+                                         rebuild = FALSE) {
   geometry <- .resolveDistanceGeometry(
     object,
     requested = list(
@@ -132,7 +133,7 @@ setMethod("computeSelfDistance", "CoProMulti",
       normalizeMethod = normalizeMethod, normalizeTarget = normalizeTarget,
       truncateLowDist = truncateLowDist
     ),
-    what = "computeSelfDistance", verbose = verbose
+    what = "computeSelfDistance", verbose = verbose, rebuild = rebuild
   )
   if (isTRUE(geometry$normalizeDistance) &&
       geometry$normalizeMethod %in% c("global", "spacing") &&
@@ -150,11 +151,15 @@ setMethod("computeSelfDistance", "CoProMulti",
 .computeSelfDistanceCore <- function(object, distType, xDistScale, yDistScale, zDistScale,
                                     normalizeDistance, normalizeMethod, normalizeTarget,
                                     truncateLowDist, verbose, overwrite) {
-  if (overwrite) object <- .clearDistanceRecord(object)
+  # Resolve against the record before clearing it: overwrite means "re-derive
+  # the scale", not "stop normalizing", so the recorded intent still supplies
+  # the defaults for arguments the caller did not give.
   geometry <- .resolveSelfDistanceGeometry(
     object, distType, xDistScale, yDistScale, zDistScale, normalizeDistance,
-    normalizeMethod, normalizeTarget, truncateLowDist, verbose
+    normalizeMethod, normalizeTarget, truncateLowDist, verbose,
+    rebuild = overwrite
   )
+  if (overwrite) object <- .clearDistanceRecord(object)
   distType <- geometry$distType
   xDistScale <- geometry$xDistScale
   yDistScale <- geometry$yDistScale
@@ -166,12 +171,12 @@ setMethod("computeSelfDistance", "CoProMulti",
 
   # Validate inputs
   cts <- .checkInputDistance(object, distType, xDistScale, yDistScale, zDistScale)
-  
+
   if (length(cts) == 1) {
     warning("Only one cell type detected. Use computeDistance() instead for single cell type.")
     return(object)
   }
-  
+
   # Initialize or preserve existing distances
   if (overwrite || length(object@distances) == 0) {
     distances <- list()
@@ -233,6 +238,7 @@ setMethod("computeSelfDistance", "CoProMulti",
   
   # Apply normalization if requested
   scaling_factor <- 1
+  normalized <- FALSE
   if (normalizeDistance) {
     # "global" measures the cells rather than these blocks, so it needs no
     # per-block reference at all.
@@ -263,6 +269,7 @@ setMethod("computeSelfDistance", "CoProMulti",
         flat_name <- .createDistMatrixName(ct, ct, slide = NULL)
         if (flat_name %in% names(distances) && !is.null(distances[[flat_name]])) {
           distances[[flat_name]] <- distances[[flat_name]] * scaling_factor
+          normalized <- TRUE
         }
       }
     }
@@ -270,9 +277,12 @@ setMethod("computeSelfDistance", "CoProMulti",
 
   object@distances <- distances
   # Pin the factor so a later step normalizes the blocks it adds the same way,
-  # and so .recoverDistanceScaleFactor() can map back to raw coordinates.
+  # and so .recoverDistanceScaleFactor() can map back to raw coordinates. The
+  # record has to agree with the slot: see .recordNormalizationOutcome().
   object@distanceScaleFactor <- scaling_factor
-  object@distanceGeometry <- geometry
+  object@distanceGeometry <- .recordNormalizationOutcome(
+    geometry, normalized, "computeSelfDistance"
+  )
   return(object)
 }
 
@@ -281,11 +291,13 @@ setMethod("computeSelfDistance", "CoProMulti",
 .computeSelfDistanceCoreMulti <- function(object, distType, xDistScale, yDistScale, zDistScale,
                                          normalizeDistance, normalizeMethod, normalizeTarget,
                                          truncateLowDist, verbose, overwrite) {
-  if (overwrite) object <- .clearDistanceRecord(object)
+  # See .computeSelfDistanceCore(): resolve first, clear second.
   geometry <- .resolveSelfDistanceGeometry(
     object, distType, xDistScale, yDistScale, zDistScale, normalizeDistance,
-    normalizeMethod, normalizeTarget, truncateLowDist, verbose
+    normalizeMethod, normalizeTarget, truncateLowDist, verbose,
+    rebuild = overwrite
   )
+  if (overwrite) object <- .clearDistanceRecord(object)
   distType <- geometry$distType
   xDistScale <- geometry$xDistScale
   yDistScale <- geometry$yDistScale
@@ -377,6 +389,7 @@ setMethod("computeSelfDistance", "CoProMulti",
   
   # Apply normalization if requested
   scaling_factor <- 1
+  normalized <- FALSE
   if (normalizeDistance && is.finite(global_min_percentile)) {
     scaling_factor <- .normalizationScaleFactor(
       object,
@@ -395,14 +408,17 @@ setMethod("computeSelfDistance", "CoProMulti",
         flat_name <- .createDistMatrixName(ct, ct, slide = sID)
         if (flat_name %in% names(distances_all) && !is.null(distances_all[[flat_name]])) {
           distances_all[[flat_name]] <- distances_all[[flat_name]] * scaling_factor
+          normalized <- TRUE
         }
       }
     }
   }
-  
+
   object@distances <- distances_all
   object@distanceScaleFactor <- scaling_factor
-  object@distanceGeometry <- geometry
+  object@distanceGeometry <- .recordNormalizationOutcome(
+    geometry, normalized, "computeSelfDistance"
+  )
   return(object)
 }
 

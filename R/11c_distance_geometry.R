@@ -59,6 +59,23 @@
   method
 }
 
+#' Validate a normalizeTarget argument
+#'
+#' `normalizeTarget` is the length every reference distance is mapped to, so it
+#' divides into the scale factor. A non-positive value silently flips the sign
+#' of every distance in the object; `NA` or `Inf` propagates into every block.
+#' Each entry point used to repeat this check inline, and the ones added later
+#' did not, so it lives here and is applied wherever a geometry is resolved.
+#' @noRd
+.checkNormalizeTarget <- function(target) {
+  if (is.null(target)) return(NULL)
+  if (!is.numeric(target) || length(target) != 1 || !is.finite(target) ||
+      target <= 0) {
+    stop("normalizeTarget must be a positive finite scalar.")
+  }
+  target
+}
+
 #' Announce the changed `normalizeDistance` default once per session
 #'
 #' The default flipped from `TRUE` to `FALSE` in CoPro 1.2.0, which changes
@@ -119,12 +136,16 @@
 #' Read the recorded geometry, tolerating objects built before the slot existed
 #'
 #' Objects serialized by an earlier CoPro version have no `distanceGeometry`
-#' slot, and `@` on a missing slot is an error, so probe `slotNames()` first.
+#' slot, and `@` on a missing slot is an error, so probe first. The probe must
+#' be [methods::.hasSlot()], which asks the *instance*: `slotNames()` reads the
+#' class definition, so it answers `TRUE` for every object of the current class
+#' including one deserialized without the slot -- exactly the case this guard
+#' exists for.
 #'
 #' @return The recorded geometry list, or `list()` when nothing is recorded.
 #' @noRd
 .getDistanceGeometry <- function(object) {
-  if (!("distanceGeometry" %in% methods::slotNames(object))) {
+  if (!methods::.hasSlot(object, "distanceGeometry")) {
     return(list())
   }
   geom <- object@distanceGeometry
@@ -200,13 +221,20 @@
 #' @param requested Named list of caller-supplied values, `NULL` where the
 #'   caller did not supply one.
 #' @param what Name of the calling step, used in messages.
+#' @param rebuild The caller is about to discard the blocks the record
+#'   describes (`overwrite = TRUE`). The record is then a source of defaults
+#'   rather than a constraint: a contradicting argument is honored instead of
+#'   raising, and the resulting record names this step as its source. Resolving
+#'   against the record before it is cleared is what makes `overwrite = TRUE`
+#'   re-derive the scale under the geometry already in use, rather than fall
+#'   back to `normalizeDistance = FALSE` and silently stop normalizing.
 #' @return A geometry record with every field filled in.
 #' @noRd
 .resolveDistanceGeometry <- function(object, requested, what = "computeKernelMatrix",
-                                     verbose = TRUE) {
+                                     verbose = TRUE, rebuild = FALSE) {
   recorded <- .getDistanceGeometry(object)
 
-  conflicts <- .geometryConflicts(recorded, requested)
+  conflicts <- if (rebuild) character(0) else .geometryConflicts(recorded, requested)
   if (length(conflicts) > 0) {
     stop(sprintf(
       paste0("%s was given distance arguments that contradict the geometry ",
@@ -221,6 +249,7 @@
   }
 
   .checkNormalizeMethod(requested[["normalizeMethod"]])
+  .checkNormalizeTarget(requested[["normalizeTarget"]])
 
   resolved <- list()
   defaulted <- character(0)
@@ -254,7 +283,8 @@
     ))
   }
 
-  resolved$source <- if (length(recorded) > 0 && !is.null(recorded$source)) {
+  resolved$source <- if (!rebuild && length(recorded) > 0 &&
+                         !is.null(recorded$source)) {
     recorded$source
   } else {
     what
@@ -273,14 +303,24 @@
 #' and self distances on two different units, with `@distanceScaleFactor`
 #' describing only one of them.
 #'
+#' An object with no record at all is treated as pinned by whatever wrote its
+#' slot. Objects serialized before CoPro 1.2.0 carry a factor but no
+#' `@distanceGeometry`, and re-deriving on top of one reintroduces precisely the
+#' two-unit bug this guard exists to prevent. Such objects stored `1` when they
+#' were not normalizing, and adopting `1` is the consistent choice there too:
+#' the existing blocks are on raw coordinates, so the blocks a later step adds
+#' must stay on raw coordinates as well.
+#'
 #' @return `NULL` when no normalization pass has been recorded, otherwise
 #'   `list(factor, source)`.
 #' @noRd
 .pinnedScaleFactor <- function(object) {
   geom <- .getDistanceGeometry(object)
-  if (!isTRUE(geom$normalizeDistance)) return(NULL)
   factor <- tryCatch(object@distanceScaleFactor, error = function(e) numeric(0))
   if (length(factor) != 1L || !is.finite(factor) || factor <= 0) return(NULL)
+  # A present record is authoritative: it says whether the stored factor
+  # describes a normalization pass or is the inert 1 of an unnormalized object.
+  if (length(geom) > 0 && !isTRUE(geom$normalizeDistance)) return(NULL)
   list(
     factor = factor,
     source = if (is.null(geom$source)) "an earlier step" else geom$source
@@ -297,9 +337,8 @@
 #' There is no universally right shared reference -- see the `normalizeMethod`
 #' discussion in [computeDistance()] -- so this pins consistency rather than
 #' claiming optimality. [computeDistance()] rebuilds `@distances` from scratch
-#' and therefore always re-derives; so does any additive step called with
-#' `overwrite = TRUE`, which clears the pin via [.clearDistanceRecord()].
-#' Those are the two documented ways to re-pin.
+#' and therefore always re-derives, as does [computeSelfDistance()] with
+#' `overwrite = TRUE`. See `.reDeriveRemedy()` for why the kernel steps cannot.
 #'
 #' @param computed The factor this step derived from its own blocks.
 #' @return The factor to use.
@@ -311,15 +350,63 @@
     message(sprintf(
       paste0("%s: using the distance scale factor already set by %s (%g) ",
              "instead of the %g its own blocks imply, so every block in this ",
-             "object stays on one unit.\n",
-             "  Pass overwrite = TRUE, or re-run computeDistance(), to ",
-             "re-derive the scale."),
+             "object stays on one unit.\n%s"),
       what, if (identical(pin$source, "an earlier step")) pin$source
             else paste0(pin$source, "()"),
-      pin$factor, computed
+      pin$factor, computed, .reDeriveRemedy(what)
     ))
   }
   pin$factor
+}
+
+#' How the calling step can be made to re-derive the scale, in its own terms
+#'
+#' Only a step that rebuilds `@distances` can re-pin: [computeDistance()]
+#' always does, and [computeSelfDistance()] does when `overwrite = TRUE` clears
+#' the record. The kernel steps consume a coordinate basis rather than owning
+#' one -- re-deriving there would leave the kernels they build on a different
+#' unit from the ones already in the object -- so the pin winning is correct
+#' for them, and their message must not offer `overwrite = TRUE`, which on
+#' those paths only replaces `@kernelMatrices`.
+#' @noRd
+.reDeriveRemedy <- function(what) {
+  if (identical(what, "computeSelfDistance")) {
+    paste0("  Pass overwrite = TRUE to re-derive the scale from the blocks ",
+           "this step builds, or re-run computeDistance() to re-derive it for ",
+           "the whole object.")
+  } else {
+    paste0("  Re-run computeDistance(), or computeSelfDistance(overwrite = ",
+           "TRUE), to re-derive the scale. overwrite = TRUE here replaces ",
+           "kernel matrices only and leaves the factor alone.")
+  }
+}
+
+#' Record the normalization that happened, not the one that was requested
+#'
+#' A step can be asked to normalize and then find nothing to measure -- every
+#' block too small to build, or no finite reference among the ones that were.
+#' Recording the request regardless leaves `normalizeDistance = TRUE` beside a
+#' factor of 1 that was never derived from anything, and [.pinnedScaleFactor()]
+#' reports that as a legitimate pin for every later step to adopt. Keeping the
+#' record and the slot in lockstep is what makes the geometry gate trustworthy.
+#'
+#' @param normalized Whether a scale factor was actually derived and applied.
+#' @return `geometry`, with `normalizeDistance` forced to `FALSE` when the
+#'   requested normalization did not happen.
+#' @noRd
+.recordNormalizationOutcome <- function(geometry, normalized, what) {
+  if (!isTRUE(geometry$normalizeDistance) || isTRUE(normalized)) {
+    return(geometry)
+  }
+  warning(sprintf(
+    paste0("%s was asked to normalize distances but found no valid reference ",
+           "across the blocks it built, so distances are left on their raw ",
+           "scale and the object records normalizeDistance = FALSE. Check for ",
+           "cell types with too few cells, or for coincident coordinates."),
+    what
+  ), call. = FALSE)
+  geometry$normalizeDistance <- FALSE
+  geometry
 }
 
 #' The scale factor a normalization pass should use
@@ -369,7 +456,7 @@
 #' uses. After this the step re-resolves from its own arguments and re-pins.
 #' @noRd
 .clearDistanceRecord <- function(object) {
-  if ("distanceGeometry" %in% methods::slotNames(object)) {
+  if (methods::.hasSlot(object, "distanceGeometry")) {
     object@distanceGeometry <- list()
   }
   object@distanceScaleFactor <- numeric(0)

@@ -147,6 +147,150 @@ test_that("overwrite = TRUE re-derives the factor from the self blocks", {
   ))
 })
 
+test_that("overwrite = TRUE re-derives without being told to keep normalizing", {
+  # The record is cleared so the pin is dropped, but it is read for defaults
+  # first: otherwise normalizeDistance falls back to the 1.2.0 default of FALSE
+  # and overwrite silently turns normalization off instead of re-deriving it.
+  # The test above passes normalizeDistance = TRUE explicitly and cannot see it.
+  obj <- .uneven_density_obj()
+  d <- computeDistance(obj, distType = "Euclidean2D", normalizeDistance = TRUE,
+                       normalizeMethod = "spacing", verbose = FALSE)
+  s <- suppressMessages(computeSelfDistance(d, verbose = FALSE, overwrite = TRUE))
+
+  expect_true(getDistanceGeometry(s)$normalizeDistance)
+  expect_equal(getDistanceGeometry(s)$normalizeMethod, "spacing")
+  expect_true(is.finite(s@distanceScaleFactor) && s@distanceScaleFactor > 0)
+  # Genuinely re-derived from the self blocks, not inherited and not 1.
+  expect_false(isTRUE(all.equal(s@distanceScaleFactor, d@distanceScaleFactor)))
+  expect_false(isTRUE(all.equal(s@distanceScaleFactor, 1)))
+})
+
+test_that("a normalization that could not happen is not recorded as one", {
+  # Every (slide, cellType) block sits at the <= 5 cell skip threshold, so no
+  # block is built and no reference can be measured. Recording the request
+  # anyway left normalizeDistance = TRUE beside the untouched scaling_factor of
+  # 1, which .pinnedScaleFactor() then served to every later step as a real pin.
+  types <- paste0("T", seq_len(4))
+  n_slides <- 4
+  per_block <- 5
+  set.seed(7)
+  slides <- rep(paste0("S", seq_len(n_slides)), each = length(types) * per_block)
+  labels <- rep(rep(types, each = per_block), times = n_slides)
+  n <- length(labels)
+  ids <- paste0("c", seq_len(n))
+  obj <- newCoProMulti(
+    normalizedData = matrix(rnorm(n * 30), n, 30,
+                            dimnames = list(ids, paste0("g", seq_len(30)))),
+    locationData = data.frame(x = runif(n, 0, 10), y = runif(n, 0, 10),
+                              row.names = ids),
+    metaData = data.frame(cell_type = labels, slide = slides, row.names = ids),
+    cellTypes = labels, slideID = slides
+  )
+  obj <- subsetData(obj, cellTypesOfInterest = types)
+
+  expect_warning(
+    s <- suppressMessages(computeSelfDistance(obj, normalizeDistance = TRUE,
+                                              verbose = FALSE)),
+    "no valid reference"
+  )
+  expect_length(s@distances, 0)
+  expect_false(getDistanceGeometry(s)$normalizeDistance)
+  expect_null(.pinnedScaleFactor(s))
+})
+
+test_that("computeSparseKernelFloat32 leaves a pinned factor alone", {
+  # It wrote the slot unconditionally, so a non-normalizing run overwrote the
+  # factor computeDistance() had pinned with its own inert 1 -- and
+  # .recoverDistanceScaleFactor() reads that slot to map analysis coordinates
+  # back to raw ones for the permutation null.
+  obj <- .uneven_density_obj()
+  d <- computeDistance(obj, distType = "Euclidean2D", normalizeDistance = TRUE,
+                       verbose = FALSE)
+  expect_gt(d@distanceScaleFactor, 0)
+
+  f32 <- suppressMessages(suppressWarnings(
+    computeSparseKernelFloat32(d, sigmaValues = 0.5, verbose = FALSE)
+  ))
+  expect_equal(f32@distanceScaleFactor, d@distanceScaleFactor)
+  expect_equal(.recoverDistanceScaleFactor(f32), d@distanceScaleFactor)
+})
+
+test_that("normalizeTarget is validated on every path that accepts it", {
+  obj <- .uneven_density_obj()
+  for (bad in list(-0.01, 0, NA_real_, Inf, c(0.01, 0.02), "0.01")) {
+    expect_error(
+      suppressMessages(computeSelfDistance(obj, normalizeDistance = TRUE,
+                                           normalizeTarget = bad, verbose = FALSE)),
+      "normalizeTarget must be a positive finite scalar"
+    )
+    expect_error(
+      computeDistance(obj, distType = "Euclidean2D", normalizeDistance = TRUE,
+                      normalizeTarget = bad, verbose = FALSE),
+      "normalizeTarget must be a positive finite scalar"
+    )
+  }
+})
+
+test_that("the remediation message names a remedy that path actually has", {
+  # computeSelfDistance() can re-derive, because overwrite clears the record.
+  # The kernel steps cannot -- re-deriving would leave the kernels they build
+  # on a different unit from the ones already in the object -- so their message
+  # must not offer overwrite = TRUE, which there only replaces kernel matrices.
+  obj <- .uneven_density_obj()
+  d <- computeDistance(obj, distType = "Euclidean2D", normalizeDistance = TRUE,
+                       normalizeMethod = "spacing", verbose = FALSE)
+
+  self_msg <- paste(capture.output(
+    invisible(computeSelfDistance(d, verbose = TRUE)), type = "message"
+  ), collapse = "\n")
+  expect_match(self_msg, "Pass overwrite = TRUE to re-derive the scale")
+
+  k <- suppressMessages(computeKernelMatrix(obj, sigmaValues = 0.05,
+                                            method = "sparse",
+                                            normalizeDistance = TRUE,
+                                            normalizeMethod = "spacing",
+                                            verbose = FALSE))
+  kern_msg <- paste(capture.output(
+    invisible(computeSelfKernel(k, sigmaValues = 0.05, method = "sparse",
+                                verbose = TRUE)), type = "message"
+  ), collapse = "\n")
+  expect_match(kern_msg, "replaces\\s+kernel matrices only")
+  expect_false(grepl("Pass overwrite = TRUE", kern_msg))
+
+  # ... and the claim the message makes is true: overwrite really is a no-op
+  # for the factor on the kernel path.
+  ks <- suppressMessages(computeSelfKernel(k, sigmaValues = 0.05, method = "sparse",
+                                           verbose = FALSE, overwrite = TRUE))
+  expect_equal(ks@distanceScaleFactor, k@distanceScaleFactor)
+})
+
+test_that("an object predating @distanceGeometry keeps its pinned factor", {
+  # .pinnedScaleFactor() gated on the record alone, so an object serialized
+  # before 1.2.0 -- valid factor, no record -- re-derived, which is exactly the
+  # two-unit bug this machinery exists to prevent. The slot probe has to ask
+  # the instance too: slotNames() reads the class definition and answers TRUE
+  # for such an object, then @ raises on the missing slot.
+  obj <- .uneven_density_obj()
+  d <- computeDistance(obj, distType = "Euclidean2D", normalizeDistance = TRUE,
+                       normalizeMethod = "spacing", verbose = FALSE)
+  legacy <- d
+  attr(legacy, "distanceGeometry") <- NULL
+
+  expect_true("distanceGeometry" %in% methods::slotNames(legacy))
+  expect_false(methods::.hasSlot(legacy, "distanceGeometry"))
+  expect_no_error(.getDistanceGeometry(legacy))
+  expect_length(.getDistanceGeometry(legacy), 0)
+
+  pin <- .pinnedScaleFactor(legacy)
+  expect_equal(pin$factor, d@distanceScaleFactor)
+
+  s <- suppressMessages(suppressWarnings(
+    computeSelfDistance(legacy, normalizeDistance = TRUE,
+                        normalizeMethod = "spacing", verbose = FALSE)
+  ))
+  expect_equal(s@distanceScaleFactor, d@distanceScaleFactor)
+})
+
 test_that("computeSelfKernel does not overwrite the pinned factor", {
   obj <- .uneven_density_obj()
 

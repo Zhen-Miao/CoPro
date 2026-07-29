@@ -129,8 +129,9 @@
   scale factor from the cross-type blocks and `computeSelfDistance()` derived a
   second one from the within-type blocks. The two references differ whenever
   cell types differ in abundance or in how tightly they colocalize — on a
-  two-type object with one type packed 10x more densely they differed by 1.9x —
-  so an object could hold cross and self distances on two units, with
+  two-type object with one type packed 10x more densely, the within-type
+  reference exceeded the cross-type one in all 30 seeds tried, by 1.07x to
+  4.41x — so an object could hold cross and self distances on two units, with
   `@distanceScaleFactor` describing only the cross ones. The new default
   `normalizeMethod = "global"` removes the divergence at its source by
   measuring the cells rather than the blocks (see *Breaking changes* above).
@@ -153,6 +154,44 @@
   `computeDistance()` call, `computeSelfDistance()` now defaults to
   `distType = "Euclidean3D"` (from the coordinate columns present) rather than
   `"Euclidean2D"`; pass `distType` explicitly to pin it.
+* **A normalization that could not happen is no longer recorded as one.** When
+  `normalizeDistance = TRUE` but no reference could be measured — every
+  cell-type block below the 5-cell threshold, or no finite reference among the
+  blocks that were built — the step left `normalizeDistance = TRUE` in the
+  geometry record beside an untouched scale factor of 1. Nothing had been
+  derived from anything, but every later step read that pair as a legitimate
+  pinned unit and adopted the 1. The record now reports what happened rather
+  than what was asked for, and the step warns. Affected `computeSelfDistance()`
+  on both the single- and multi-slide paths, and `computeDistance()` on its two
+  multi-slide paths.
+* **`computeSparseKernelFloat32()` no longer erases a pinned scale factor.** It
+  wrote `@distanceScaleFactor` unconditionally, so calling it with its default
+  `normalizeDistance = FALSE` on an object already normalized by
+  `computeDistance()` replaced the real factor with 1, and every helper that
+  maps analysis coordinates back to raw ones — including the permutation null's
+  neighbor graph — silently used the wrong unit. It now guards the write the
+  way `computeSparseKernel()` already did.
+* **`computeSelfDistance(overwrite = TRUE)` re-derives the scale instead of
+  quietly switching normalization off.** `overwrite` clears the geometry record
+  to drop the pin, which also dropped the recorded `normalizeDistance = TRUE`,
+  so the argument fell back to the new 1.2.0 default of `FALSE` and the result
+  was an unnormalized object with a scale factor of 1. The record is now read
+  for defaults before it is cleared, so `overwrite` means "re-derive the unit"
+  as documented. Arguments supplied alongside `overwrite = TRUE` still win, so
+  the geometry remains freely changeable.
+* **`normalizeTarget` is validated wherever it is accepted.** Each entry point
+  repeated the check inline and `computeSelfDistance()` never gained one, so
+  `computeSelfDistance(normalizeTarget = -0.01)` returned a negative scale
+  factor and flipped the sign of every distance in the object. The check now
+  lives with the other geometry validation and runs on every path.
+* **Objects serialized before CoPro 1.2.0 keep their scale factor.** The pin
+  was read only when `@distanceGeometry` was populated, so an object carrying a
+  valid factor but no record — every object written by an earlier version —
+  re-derived a second unit, which is the bug the pin exists to prevent. Such an
+  object now keeps its factor. Relatedly, the guard for the missing slot probed
+  `methods::slotNames()`, which reads the *class definition* and so answered
+  `TRUE` for exactly the objects it was meant to catch; it now uses
+  `methods::.hasSlot()`, which asks the instance.
 
 # CoPro 1.1.3
 

@@ -224,10 +224,7 @@
   if (any(c(d$xDistScale, d$yDistScale, d$zDistScale) <= 0)) {
     stop("Distance scales must be positive.")
   }
-  if (!is.numeric(d$normalizeTarget) || length(d$normalizeTarget) != 1 ||
-      !is.finite(d$normalizeTarget) || d$normalizeTarget <= 0) {
-    stop("normalizeTarget must be a positive finite scalar.")
-  }
+  .checkNormalizeTarget(d$normalizeTarget)
   if (k$rowNormalizeKernel && k$colNormalizeKernel) {
     stop("Cannot do both row-wise and column-wise normalization.")
   }

@@ -371,10 +371,7 @@ setGeneric(
                                 geodesic_cutoff = 7, normalizeTarget = 0.01) {
   cts <- .checkInputDistance(object, distType, xDistScale, yDistScale, zDistScale)
 
-  if (!is.numeric(normalizeTarget) || length(normalizeTarget) != 1 ||
-      !is.finite(normalizeTarget) || normalizeTarget <= 0) {
-    stop("normalizeTarget must be a positive finite scalar.")
-  }
+  .checkNormalizeTarget(normalizeTarget)
   normalizeMethod <- match.arg(normalizeMethod, .NORMALIZE_METHODS)
   if (normalizeDistance && normalizeMethod %in% c("global", "spacing") &&
       identical(distType, "Morphology-Aware")) {
@@ -788,10 +785,7 @@ setMethod("computeDistance", "CoProMulti", function(object, distType = c("Euclid
                                      geodesic_cutoff = 7, normalizeTarget = 0.01) {
   cts <- .checkInputDistance(object, distType, xDistScale, yDistScale, zDistScale)
 
-  if (!is.numeric(normalizeTarget) || length(normalizeTarget) != 1 ||
-      !is.finite(normalizeTarget) || normalizeTarget <= 0) {
-    stop("normalizeTarget must be a positive finite scalar.")
-  }
+  .checkNormalizeTarget(normalizeTarget)
   normalizeMethod <- match.arg(normalizeMethod, .NORMALIZE_METHODS)
   if (normalizeDistance && normalizeMethod %in% c("global", "spacing") &&
       identical(distType, "Morphology-Aware")) {
@@ -834,13 +828,14 @@ setMethod("computeDistance", "CoProMulti", function(object, distType = c("Euclid
 }
 
 # Helper function to process multi-slide distance normalization
-# Returns list(distances, scaling_factor); scaling_factor is 1 when no
-# normalization could be applied, so the caller can record it verbatim.
+# Returns list(distances, scaling_factor, normalized); scaling_factor is 1 and
+# normalized is FALSE when no normalization could be applied, so the caller can
+# record the outcome rather than the request. See .recordNormalizationOutcome().
 .normalizeDistancesMulti <- function(distances_all, slides, cts, scaling_factor,
                                     pair_cell_types = NULL, verbose = TRUE) {
   if (!is.finite(scaling_factor) || scaling_factor <= 0) {
     warning("Cannot normalize distances - no valid non-zero distances found across slides.")
-    return(list(distances = distances_all, scaling_factor = 1))
+    return(list(distances = distances_all, scaling_factor = 1, normalized = FALSE))
   }
 
   if (verbose) message(sprintf("Global distance scaling factor: %g", scaling_factor))
@@ -868,7 +863,8 @@ setMethod("computeDistance", "CoProMulti", function(object, distType = c("Euclid
     }
   }
 
-  return(list(distances = distances_all, scaling_factor = scaling_factor))
+  return(list(distances = distances_all, scaling_factor = scaling_factor,
+              normalized = TRUE))
 }
 
 # Function for computing within-cell-type distances across multiple slides
@@ -972,6 +968,7 @@ setMethod("computeDistance", "CoProMulti", function(object, distType = c("Euclid
 
   # Apply normalization if requested
   scaling_factor <- 1
+  normalized <- FALSE
   if (normalizeDistance) {
     # A degenerate reference warns here rather than erroring, which is what the
     # multi-slide path has always done: one unusable slide should not throw
@@ -984,19 +981,23 @@ setMethod("computeDistance", "CoProMulti", function(object, distType = c("Euclid
       distType = distType, xDistScale = xDistScale, yDistScale = yDistScale,
       zDistScale = zDistScale, adopt = FALSE
     ), error = function(e) NA_real_)
-    normalized <- .normalizeDistancesMulti(distances_all, slides, cts,
-                                           scaling_factor, verbose = verbose)
-    distances_all <- normalized$distances
-    scaling_factor <- normalized$scaling_factor
+    outcome <- .normalizeDistancesMulti(distances_all, slides, cts,
+                                        scaling_factor, verbose = verbose)
+    distances_all <- outcome$distances
+    scaling_factor <- outcome$scaling_factor
+    normalized <- outcome$normalized
   }
 
   object@distances <- distances_all
   object@distanceScaleFactor <- scaling_factor
-  object@distanceGeometry <- .makeDistanceGeometry(
-    distType, xDistScale, yDistScale, zDistScale,
-    normalizeDistance, normalizeMethod = normalizeMethod,
-    normalizeTarget = normalizeTarget, truncateLowDist = truncateLowDist,
-    source = "computeDistance"
+  object@distanceGeometry <- .recordNormalizationOutcome(
+    .makeDistanceGeometry(
+      distType, xDistScale, yDistScale, zDistScale,
+      normalizeDistance, normalizeMethod = normalizeMethod,
+      normalizeTarget = normalizeTarget, truncateLowDist = truncateLowDist,
+      source = "computeDistance"
+    ),
+    normalized, "computeDistance"
   )
   return(object)
 }
@@ -1121,6 +1122,7 @@ setMethod("computeDistance", "CoProMulti", function(object, distType = c("Euclid
 
   # Apply normalization if requested
   scaling_factor <- 1
+  normalized <- FALSE
   if (normalizeDistance) {
     # See .computeDistanceMultiWithin(): a degenerate reference warns.
     scaling_factor <- tryCatch(.normalizationScaleFactor(
@@ -1131,20 +1133,24 @@ setMethod("computeDistance", "CoProMulti", function(object, distType = c("Euclid
       distType = distType, xDistScale = xDistScale, yDistScale = yDistScale,
       zDistScale = zDistScale, adopt = FALSE
     ), error = function(e) NA_real_)
-    normalized <- .normalizeDistancesMulti(distances_all, slides, cts,
-                                           scaling_factor, pair_cell_types,
-                                           verbose = verbose)
-    distances_all <- normalized$distances
-    scaling_factor <- normalized$scaling_factor
+    outcome <- .normalizeDistancesMulti(distances_all, slides, cts,
+                                        scaling_factor, pair_cell_types,
+                                        verbose = verbose)
+    distances_all <- outcome$distances
+    scaling_factor <- outcome$scaling_factor
+    normalized <- outcome$normalized
   }
 
   object@distances <- distances_all
   object@distanceScaleFactor <- scaling_factor
-  object@distanceGeometry <- .makeDistanceGeometry(
-    distType, xDistScale, yDistScale, zDistScale,
-    normalizeDistance, normalizeMethod = normalizeMethod,
-    normalizeTarget = normalizeTarget, truncateLowDist = truncateLowDist,
-    source = "computeDistance"
+  object@distanceGeometry <- .recordNormalizationOutcome(
+    .makeDistanceGeometry(
+      distType, xDistScale, yDistScale, zDistScale,
+      normalizeDistance, normalizeMethod = normalizeMethod,
+      normalizeTarget = normalizeTarget, truncateLowDist = truncateLowDist,
+      source = "computeDistance"
+    ),
+    normalized, "computeDistance"
   )
   return(object)
 }
