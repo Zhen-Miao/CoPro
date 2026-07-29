@@ -703,11 +703,15 @@
   scaling_factor <- if (!normalizeDistance) {
     1
   } else {
-    .distanceScaleFactor(
-      .combineDistanceReference(
-        if (need_spacing) spacings else pctls, normalizeMethod
+    .adoptScaleFactor(
+      object,
+      computed = .distanceScaleFactor(
+        .combineDistanceReference(
+          if (need_spacing) spacings else pctls, normalizeMethod
+        ),
+        normalizeTarget, normalizeMethod
       ),
-      normalizeTarget, normalizeMethod
+      what = "computeSparseKernel", verbose = verbose
     )
   }
   if (normalizeDistance && verbose) {
@@ -862,11 +866,15 @@
   scaling_factor <- if (!normalizeDistance) {
     1
   } else {
-    .distanceScaleFactor(
-      .combineDistanceReference(
-        if (need_spacing) spacings else pctls, normalizeMethod
+    .adoptScaleFactor(
+      object,
+      computed = .distanceScaleFactor(
+        .combineDistanceReference(
+          if (need_spacing) spacings else pctls, normalizeMethod
+        ),
+        normalizeTarget, normalizeMethod
       ),
-      normalizeTarget, normalizeMethod
+      what = "computeSparseKernel", verbose = verbose
     )
   }
   if (normalizeDistance && verbose) {
@@ -1028,11 +1036,15 @@
   scaling_factor <- if (!normalizeDistance) {
     1
   } else {
-    .distanceScaleFactor(
-      .combineDistanceReference(
-        if (need_spacing) spacings else pctls, normalizeMethod
+    .adoptScaleFactor(
+      object,
+      computed = .distanceScaleFactor(
+        .combineDistanceReference(
+          if (need_spacing) spacings else pctls, normalizeMethod
+        ),
+        normalizeTarget, normalizeMethod
       ),
-      normalizeTarget, normalizeMethod
+      what = "computeSelfKernel", verbose = verbose
     )
   }
   if (normalizeDistance) {

@@ -258,6 +258,81 @@
   resolved
 }
 
+#' The distance scale factor already pinned on an object, if any
+#'
+#' Cross-type and within-type blocks reach normalization through different
+#' entry points -- [computeDistance()] / [computeKernelMatrix()] for the cross
+#' blocks, [computeSelfDistance()] / [computeSelfKernel()] for the self blocks
+#' -- and each used to derive its own reference length from its own blocks. The
+#' two references differ whenever cell types differ in abundance or in how
+#' tightly they colocalize, so an object could end up holding cross distances
+#' and self distances on two different units, with `@distanceScaleFactor`
+#' describing only one of them.
+#'
+#' @return `NULL` when no normalization pass has been recorded, otherwise
+#'   `list(factor, source)`.
+#' @noRd
+.pinnedScaleFactor <- function(object) {
+  geom <- .getDistanceGeometry(object)
+  if (!isTRUE(geom$normalizeDistance)) return(NULL)
+  factor <- tryCatch(object@distanceScaleFactor, error = function(e) numeric(0))
+  if (length(factor) != 1L || !is.finite(factor) || factor <= 0) return(NULL)
+  list(
+    factor = factor,
+    source = if (is.null(geom$source)) "an earlier step" else geom$source
+  )
+}
+
+#' Reuse the pinned scale factor so all blocks stay on one unit
+#'
+#' First normalization wins. A step that adds blocks to an already-normalized
+#' object adopts that object's factor rather than deriving a second one, so
+#' cross-type and within-type distances remain comparable and
+#' `@distanceScaleFactor` describes every block in the object.
+#'
+#' There is no universally right shared reference -- see the `normalizeMethod`
+#' discussion in [computeDistance()] -- so this pins consistency rather than
+#' claiming optimality. [computeDistance()] rebuilds `@distances` from scratch
+#' and therefore always re-derives; so does any additive step called with
+#' `overwrite = TRUE`, which clears the pin via [.clearDistanceRecord()].
+#' Those are the two documented ways to re-pin.
+#'
+#' @param computed The factor this step derived from its own blocks.
+#' @return The factor to use.
+#' @noRd
+.adoptScaleFactor <- function(object, computed, what, verbose = TRUE) {
+  pin <- .pinnedScaleFactor(object)
+  if (is.null(pin)) return(computed)
+  if (verbose && !isTRUE(all.equal(pin$factor, computed))) {
+    message(sprintf(
+      paste0("%s: using the distance scale factor already set by %s (%g) ",
+             "instead of the %g its own blocks imply, so every block in this ",
+             "object stays on one unit.\n",
+             "  Pass overwrite = TRUE, or re-run computeDistance(), to ",
+             "re-derive the scale."),
+      what, if (identical(pin$source, "an earlier step")) pin$source
+            else paste0(pin$source, "()"),
+      pin$factor, computed
+    ))
+  }
+  pin$factor
+}
+
+#' Forget the recorded geometry and pinned scale factor
+#'
+#' Called by the additive steps when `overwrite = TRUE`: the blocks the record
+#' described are about to be discarded, so keeping it would make the step
+#' inherit -- and be checked against -- a basis nothing in the object still
+#' uses. After this the step re-resolves from its own arguments and re-pins.
+#' @noRd
+.clearDistanceRecord <- function(object) {
+  if ("distanceGeometry" %in% methods::slotNames(object)) {
+    object@distanceGeometry <- list()
+  }
+  object@distanceScaleFactor <- numeric(0)
+  object
+}
+
 #' Warn when a step builds coordinates that disagree with the recorded ones
 #'
 #' Used by entry points such as [computeSparseKernel()] whose arguments have

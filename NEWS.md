@@ -75,8 +75,6 @@
   `denseThreshold` (default 0.3), so an out-of-memory run at a too-large sigma
   is now diagnosed rather than merely fatal.
 
-# CoPro (development version)
-
 ## Bug fixes
 
 * **The sparse kernel path no longer ignores `computeDistance()`.** A CoPro
@@ -101,6 +99,32 @@
   so this fed into reported p-values.
 * `.recoverDistanceScaleFactor()` rebuilds probe distances on the recorded
   geometry instead of assuming raw, unscaled, 2-D `x,y`.
+* **Within-type and cross-type distances no longer end up on different
+  units.** With `normalizeDistance = TRUE`, `computeDistance()` derived its
+  scale factor from the cross-type blocks and `computeSelfDistance()` derived a
+  second one from the within-type blocks. The two references differ whenever
+  cell types differ in abundance or in how tightly they colocalize — on a
+  two-type object with one type packed 10x more densely they differed by 1.9x —
+  so an object could hold cross and self distances on two units, with
+  `@distanceScaleFactor` describing only the cross ones. The first
+  normalization now wins: a later step adopts the pinned factor instead of
+  deriving its own, and says so. `computeDistance()`, which rebuilds
+  `@distances` from scratch, and `overwrite = TRUE`, which discards the blocks
+  the pin described, are the two ways to re-derive it.
+* `computeSelfDistance()` now writes `@distanceScaleFactor`, which it
+  previously left untouched while rescaling the blocks it built. On a
+  self-distance-only object every downstream helper that maps analysis
+  coordinates back to raw ones was reading a factor of 1 for rescaled
+  distances.
+* `computeSelfDistance()` gained a `normalizeTarget` argument and its geometry
+  arguments now default to `NULL`, inheriting the recorded geometry the way the
+  kernel entry points do. It previously hardcoded a target of 0.01, so
+  `computeDistance(normalizeTarget = 0.05)` followed by `computeSelfDistance()`
+  produced blocks 5x apart with nothing reporting the discrepancy. Contradicting
+  the record is now an error. **Behavior change:** on a 3-D object with no prior
+  `computeDistance()` call, `computeSelfDistance()` now defaults to
+  `distType = "Euclidean3D"` (from the coordinate columns present) rather than
+  `"Euclidean2D"`; pass `distType` explicitly to pin it.
 
 # CoPro 1.1.3
 

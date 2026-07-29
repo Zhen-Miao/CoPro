@@ -111,6 +111,17 @@ regression for determining the Euclidean distance cutoff. Default = 7.}
 computeDistance between pairs of cell types
 }
 \details{
+When \code{normalizeDistance = TRUE}, the scale factor this call derives is
+recorded in \verb{@distanceScaleFactor} and pinned for the object: a later
+\code{\link[=computeSelfDistance]{computeSelfDistance()}} or \code{\link[=computeSelfKernel]{computeSelfKernel()}} reuses it instead of
+deriving a second one from the within-type blocks, so every block stays on
+one unit. There is no single reference length that is right for both -- the
+within-type and cross-type references diverge with cell-type abundance and
+with how tightly the types colocalize -- so the package fixes one and
+reports it rather than choosing per block. \code{computeDistance()} rebuilds
+\verb{@distances} from scratch and therefore always re-derives the factor; that
+is how to reset it.
+
 For "Morphology-Aware" distance:
 This method addresses the issue where cells appear spatially close (small
 Euclidean distance) but are actually topologically distant due to tissue

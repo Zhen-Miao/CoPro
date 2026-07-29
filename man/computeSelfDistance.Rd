@@ -8,39 +8,42 @@
 \usage{
 computeSelfDistance(
   object,
-  distType = c("Euclidean2D", "Euclidean3D", "Morphology-Aware"),
-  xDistScale = 1,
-  yDistScale = 1,
-  zDistScale = 1,
-  normalizeDistance = FALSE,
-  normalizeMethod = c("spacing", "percentile"),
-  truncateLowDist = TRUE,
+  distType = NULL,
+  xDistScale = NULL,
+  yDistScale = NULL,
+  zDistScale = NULL,
+  normalizeDistance = NULL,
+  normalizeMethod = NULL,
+  normalizeTarget = NULL,
+  truncateLowDist = NULL,
   verbose = TRUE,
   overwrite = FALSE
 )
 
 \S4method{computeSelfDistance}{CoProSingle}(
   object,
-  distType = c("Euclidean2D", "Euclidean3D", "Morphology-Aware"),
-  xDistScale = 1,
-  yDistScale = 1,
-  zDistScale = 1,
-  normalizeDistance = FALSE,
-  normalizeMethod = c("spacing", "percentile"),
-  truncateLowDist = TRUE,
+  distType = NULL,
+  xDistScale = NULL,
+  yDistScale = NULL,
+  zDistScale = NULL,
+  normalizeDistance = NULL,
+  normalizeMethod = NULL,
+  normalizeTarget = NULL,
+  truncateLowDist = NULL,
   verbose = TRUE,
   overwrite = FALSE
 )
 
 \S4method{computeSelfDistance}{CoProMulti}(
   object,
-  distType = c("Euclidean2D", "Euclidean3D", "Morphology-Aware"),
-  xDistScale = 1,
-  yDistScale = 1,
-  zDistScale = 1,
-  normalizeDistance = FALSE,
-  normalizeMethod = c("spacing", "percentile"),
-  truncateLowDist = TRUE,
+  distType = NULL,
+  xDistScale = NULL,
+  yDistScale = NULL,
+  zDistScale = NULL,
+  normalizeDistance = NULL,
+  normalizeMethod = NULL,
+  normalizeTarget = NULL,
+  truncateLowDist = NULL,
   verbose = TRUE,
   overwrite = FALSE
 )
@@ -48,30 +51,38 @@ computeSelfDistance(
 \arguments{
 \item{object}{A \code{CoPro} object with multiple cell types}
 
-\item{distType}{Type of distance to compute: "Euclidean2D",
-"Euclidean3D", or "Morphology-Aware"}
+\item{distType}{Type of distance to compute: \code{"Euclidean2D"},
+\code{"Euclidean3D"}, or \code{"Morphology-Aware"}. \code{NULL} (default) inherits the
+recorded geometry, falling back to the coordinate columns present.}
 
-\item{xDistScale}{Scale for x distance, default = 1}
+\item{xDistScale}{Scale for x distance. \code{NULL} (default) inherits the
+recorded geometry, falling back to 1.}
 
-\item{yDistScale}{Scale for y distance, default = 1}
+\item{yDistScale}{Scale for y distance. \code{NULL} (default) inherits the
+recorded geometry, falling back to 1.}
 
-\item{zDistScale}{Scale for z distance, default = 1}
+\item{zDistScale}{Scale for z distance. \code{NULL} (default) inherits the
+recorded geometry, falling back to 1.}
 
-\item{normalizeDistance}{Whether to normalize distance? The normalization
-will make sure that the 0.01\% cell-cell distance will become 0.01, thus
-ensuring consistent scaling across cell types. Default = TRUE}
+\item{normalizeDistance}{Whether to rescale distances so that the reference
+cell-cell distance becomes \code{normalizeTarget}. \code{NULL} (default) inherits the
+recorded geometry, falling back to \code{FALSE} as of CoPro 1.2.0.}
 
 \item{normalizeMethod}{How the reference distance is estimated when
-\code{normalizeDistance = TRUE}. \code{"spacing"} (default) uses the median
-nearest-partner distance, combined across cell-type blocks by median, so the
-unit tracks local cell spacing and no single dense block sets the scale for
-the whole object. \code{"percentile"} reproduces the pre-1.2.0 behavior: the
-minimum, across blocks, of a low quantile of pairwise distances. Not
-available for \code{distType = "Morphology-Aware"}, which falls back to
-\code{"percentile"}.}
+\code{normalizeDistance = TRUE} and no scale factor is already pinned on the
+object. \code{"spacing"} uses the median nearest-partner distance, combined
+across cell-type blocks by median; \code{"percentile"} reproduces the pre-1.2.0
+behavior (the minimum, across blocks, of a low quantile of pairwise
+distances). \code{NULL} (default) inherits the recorded geometry, falling back
+to \code{"spacing"}.}
+
+\item{normalizeTarget}{Numeric scalar. The value the reference distance is
+rescaled to. \code{NULL} (default) inherits the recorded geometry, falling back
+to 0.01.}
 
 \item{truncateLowDist}{Whether to truncate small distances so that cells
-that are nearly overlapping do not have super small distances. Default = TRUE.}
+that are nearly overlapping do not have super small distances. \code{NULL}
+(default) inherits the recorded geometry, falling back to \code{TRUE}.}
 
 \item{verbose}{Whether to print info about the computation progress}
 
@@ -87,6 +98,20 @@ when multiple cell types are present. Unlike the standard computeDistance
 which only computes cross-type distances for multiple cell types, this
 function computes self-distances (within each cell type).
 }
+\details{
+\code{computeSelfDistance()} is normally additive: it adds within-type blocks to
+an object whose cross-type blocks \code{\link[=computeDistance]{computeDistance()}} already built. Its
+distance arguments therefore default to \code{NULL}, meaning "use whatever the
+existing distances were built on" (\code{\link[=getDistanceGeometry]{getDistanceGeometry()}}); supplying a
+value that contradicts that record is an error rather than a silent
+second basis. When nothing is recorded -- a self-distance-only workflow --
+the package defaults apply.
+
+When \code{normalizeDistance = TRUE} and the object already carries a scale
+factor, that factor is reused rather than re-derived from the within-type
+blocks, so cross-type and within-type distances stay on one unit. Pass
+\code{overwrite = TRUE} to discard the existing blocks and re-derive.
+}
 \examples{
 \dontrun{
 # Assume you have a CoPro object with multiple cell types
@@ -98,4 +123,7 @@ object <- computeSelfDistance(object)
 
 # Now you have both cross-type and self-type distance matrices
 }
+}
+\seealso{
+\code{\link[=computeDistance]{computeDistance()}}, \code{\link[=getDistanceGeometry]{getDistanceGeometry()}}
 }

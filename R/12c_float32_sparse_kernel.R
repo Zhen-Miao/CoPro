@@ -446,11 +446,15 @@ setGeneric(
   scaling_factor <- if (!normalizeDistance) {
     1
   } else {
-    .distanceScaleFactor(
-      .combineDistanceReference(
-        if (need_spacing) spacings else percentiles, normalizeMethod
+    .adoptScaleFactor(
+      object,
+      computed = .distanceScaleFactor(
+        .combineDistanceReference(
+          if (need_spacing) spacings else percentiles, normalizeMethod
+        ),
+        normalizeTarget, normalizeMethod
       ),
-      normalizeTarget, normalizeMethod
+      what = "computeSparseKernelFloat32", verbose = verbose
     )
   }
 
