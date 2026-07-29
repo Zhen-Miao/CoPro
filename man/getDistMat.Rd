@@ -59,6 +59,7 @@ for efficient access.
 Other accessors: 
 \code{\link{getCellScores}()},
 \code{\link{getCellScoresInSitu}()},
+\code{\link{getDistanceGeometry}()},
 \code{\link{getKernelMatrix}()}
 }
 \concept{accessors}

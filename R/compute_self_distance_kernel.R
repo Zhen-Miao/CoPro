@@ -24,8 +24,10 @@ NULL
 #' @param zDistScale Scale for z distance, default = 1
 #' @param normalizeDistance How to scale the self-distances. One of:
 #'  \describe{
-#'    \item{`TRUE` (default)}{Derive a scaling factor from the self-distances'
-#'      own low-distance percentile, so that the 0.01% self-distance becomes
+#'    \item{`FALSE` (default as of 1.2.0)}{No scaling; distances stay in the
+#'      coordinate units of `locationData`.}
+#'    \item{`TRUE`}{Derive a scaling factor from the self-distances' own
+#'      reference length (see `normalizeMethod`), so that reference becomes
 #'      0.01. This factor generally differs from the one [computeDistance()]
 #'      derived from the cross-type distances, which means a self-kernel at a
 #'      given nominal sigma sits at a different physical bandwidth from the
@@ -37,8 +39,15 @@ NULL
 #'      cross-kernels -- notably as whitening operators in
 #'      [computeNormalizedCorrelation()]. Errors if no factor has been
 #'      recorded.}
-#'    \item{`FALSE`}{No scaling.}
 #'  }
+#' @param normalizeMethod How the reference distance is estimated when
+#'  `normalizeDistance = TRUE`. `"spacing"` (default) uses the median
+#'  nearest-partner distance, combined across cell-type blocks by median, so the
+#'  unit tracks local cell spacing and no single dense block sets the scale for
+#'  the whole object. `"percentile"` reproduces the pre-1.2.0 behavior: the
+#'  minimum, across blocks, of a low quantile of pairwise distances. Not
+#'  available for `distType = "Morphology-Aware"`, which falls back to
+#'  `"percentile"`. Ignored when `normalizeDistance` is `FALSE` or `"inherit"`.
 #' @param truncateLowDist Whether to truncate small distances so that cells
 #'  that are nearly overlapping do not have super small distances. Default = TRUE.
 #' @param verbose Whether to print info about the computation progress
@@ -66,7 +75,8 @@ setGeneric(
   "computeSelfDistance",
   function(object, distType = c("Euclidean2D", "Euclidean3D", "Morphology-Aware"),
            xDistScale = 1, yDistScale = 1, zDistScale = 1, 
-           normalizeDistance = TRUE, truncateLowDist = TRUE, 
+           normalizeDistance = FALSE, normalizeMethod = c("spacing", "percentile"),
+           truncateLowDist = TRUE, 
            verbose = TRUE, overwrite = FALSE) standardGeneric("computeSelfDistance")
 )
 
@@ -75,11 +85,12 @@ setGeneric(
 setMethod("computeSelfDistance", "CoProSingle", 
           function(object, distType = c("Euclidean2D", "Euclidean3D", "Morphology-Aware"),
                    xDistScale = 1, yDistScale = 1, zDistScale = 1,
-                   normalizeDistance = TRUE, truncateLowDist = TRUE, 
+                   normalizeDistance = FALSE, normalizeMethod = c("spacing", "percentile"),
+           truncateLowDist = TRUE, 
                    verbose = TRUE, overwrite = FALSE) {
             distType <- match.arg(distType)
             .computeSelfDistanceCore(object, distType, xDistScale, yDistScale, zDistScale,
-                                    normalizeDistance, truncateLowDist, verbose, overwrite)
+                                    normalizeDistance, normalizeMethod, truncateLowDist, verbose, overwrite)
           })
 
 #' @rdname computeSelfDistance
@@ -87,17 +98,19 @@ setMethod("computeSelfDistance", "CoProSingle",
 setMethod("computeSelfDistance", "CoProMulti", 
           function(object, distType = c("Euclidean2D", "Euclidean3D", "Morphology-Aware"),
                    xDistScale = 1, yDistScale = 1, zDistScale = 1,
-                   normalizeDistance = TRUE, truncateLowDist = TRUE, 
+                   normalizeDistance = FALSE, normalizeMethod = c("spacing", "percentile"),
+           truncateLowDist = TRUE, 
                    verbose = TRUE, overwrite = FALSE) {
             distType <- match.arg(distType)
             .computeSelfDistanceCoreMulti(object, distType, xDistScale, yDistScale, zDistScale,
-                                         normalizeDistance, truncateLowDist, verbose, overwrite)
+                                         normalizeDistance, normalizeMethod, truncateLowDist, verbose, overwrite)
           })
 
 #' Core function for computing self-distances (single slide)
 #' @noRd
 .computeSelfDistanceCore <- function(object, distType, xDistScale, yDistScale, zDistScale,
-                                    normalizeDistance, truncateLowDist, verbose, overwrite) {
+                                    normalizeDistance, normalizeMethod, truncateLowDist, verbose, overwrite) {
+  normalizeMethod <- match.arg(normalizeMethod, .NORMALIZE_METHODS)
   
   # Validate inputs
   cts <- .checkInputDistance(object, distType, xDistScale, yDistScale, zDistScale)
@@ -169,10 +182,24 @@ setMethod("computeSelfDistance", "CoProMulti",
   
   # Apply normalization if requested
   if (!identical(scaling_mode, "none")) {
-    valid_percentiles <- all_percentiles[!is.na(all_percentiles) & is.finite(all_percentiles)]
-    min_percentile <- if (length(valid_percentiles) > 0) min(valid_percentiles) else NA_real_
+    # "inherit" reuses the recorded factor, so the reference is only estimated
+    # when the self-distances have to supply their own.
+    reference <- if (identical(scaling_mode, "own")) {
+      reference_values <- if (identical(normalizeMethod, "spacing")) {
+        vapply(cts, function(ct) {
+          coords_ct <- .getCoordinateMatrix(object, ct, distType,
+                                            xDistScale, yDistScale, zDistScale)
+          .blockNearestSpacing(coords_ct, coords_ct, within = TRUE)
+        }, numeric(1))
+      } else {
+        all_percentiles
+      }
+      .combineDistanceReference(reference_values, normalizeMethod)
+    } else {
+      NA_real_
+    }
     scaling_factor <- .resolveSelfDistanceScaling(
-      normalizeDistance, min_percentile, object@distanceScaleFactor
+      normalizeDistance, reference, object@distanceScaleFactor
     )
     if (scaling_factor != 1) {
       cat("Self-distance scaling factor:", scaling_factor, "\n")
@@ -187,14 +214,50 @@ setMethod("computeSelfDistance", "CoProMulti",
   }
 
   object@distances <- distances
+  object <- .recordSelfDistanceGeometry(object, distType, xDistScale, yDistScale,
+                                        zDistScale, normalizeDistance,
+                                        truncateLowDist, normalizeMethod)
   return(object)
+}
+
+#' Record (or check) the geometry a self-distance step used
+#'
+#' `computeSelfDistance()` is additive: it can run on top of cross-type
+#' distances built by `computeDistance()`. Overwriting their geometry record
+#' would misdescribe those blocks, so only fill an empty record here and warn
+#' when the caller asks for coordinates the existing blocks do not use.
+#' `normalizeTarget` is not a parameter of `computeSelfDistance()` (it floors
+#' at 0.01), so it takes no part in the mismatch check.
+#' @noRd
+.recordSelfDistanceGeometry <- function(object, distType, xDistScale, yDistScale,
+                                        zDistScale, normalizeDistance,
+                                        truncateLowDist,
+                                        normalizeMethod = "spacing") {
+  requested <- list(
+    distType = distType, xDistScale = xDistScale, yDistScale = yDistScale,
+    zDistScale = zDistScale, normalizeDistance = normalizeDistance,
+    normalizeMethod = normalizeMethod,
+    truncateLowDist = truncateLowDist
+  )
+  .warnDistanceGeometryMismatch(object, requested, "computeSelfDistance")
+  if (length(.getDistanceGeometry(object)) == 0) {
+    object@distanceGeometry <- .makeDistanceGeometry(
+      distType, xDistScale, yDistScale, zDistScale,
+      .recordedNormalizeDistance(normalizeDistance, list()),
+      normalizeMethod = normalizeMethod,
+      normalizeTarget = 0.01, truncateLowDist = truncateLowDist,
+      source = "computeSelfDistance"
+    )
+  }
+  object
 }
 
 #' Core function for computing self-distances (multi-slide)
 #' @noRd
 .computeSelfDistanceCoreMulti <- function(object, distType, xDistScale, yDistScale, zDistScale,
-                                         normalizeDistance, truncateLowDist, verbose, overwrite) {
-  
+                                         normalizeDistance, normalizeMethod, truncateLowDist, verbose, overwrite) {
+  normalizeMethod <- match.arg(normalizeMethod, .NORMALIZE_METHODS)
+
   # Validate inputs
   cts <- .checkInputDistance(object, distType, xDistScale, yDistScale, zDistScale)
   
@@ -227,6 +290,7 @@ setMethod("computeSelfDistance", "CoProMulti",
   }
 
   global_min_percentile <- Inf
+  self_spacings <- numeric(0)
   
   # Compute self-distances for each cell type across all slides
   for (ct in cts) {
@@ -256,6 +320,12 @@ setMethod("computeSelfDistance", "CoProMulti",
       
       if (!is.na(dist_percentile) && is.finite(dist_percentile)) {
         global_min_percentile <- min(global_min_percentile, dist_percentile, na.rm = TRUE)
+        if (identical(scaling_mode, "own") &&
+            identical(normalizeMethod, "spacing")) {
+          self_spacings <- c(self_spacings, .blockSpacingForBlock(
+            object, distType, xDistScale, yDistScale, zDistScale, sID, ct, ct
+          ))
+        }
       }
       
       # Save using flat structure
@@ -271,8 +341,16 @@ setMethod("computeSelfDistance", "CoProMulti",
   
   # Apply normalization if requested
   if (!identical(scaling_mode, "none")) {
+    reference <- if (identical(scaling_mode, "own")) {
+      .combineDistanceReference(
+        if (identical(normalizeMethod, "spacing")) self_spacings else global_min_percentile,
+        normalizeMethod
+      )
+    } else {
+      NA_real_
+    }
     scaling_factor <- .resolveSelfDistanceScaling(
-      normalizeDistance, global_min_percentile, object@distanceScaleFactor
+      normalizeDistance, reference, object@distanceScaleFactor
     )
     if (scaling_factor != 1) {
       cat("Global self-distance scaling factor:", scaling_factor, "\n")
@@ -289,6 +367,9 @@ setMethod("computeSelfDistance", "CoProMulti",
   }
 
   object@distances <- distances_all
+  object <- .recordSelfDistanceGeometry(object, distType, xDistScale, yDistScale,
+                                        zDistScale, normalizeDistance,
+                                        truncateLowDist, normalizeMethod)
   return(object)
 }
 
@@ -311,6 +392,9 @@ setMethod("computeSelfDistance", "CoProMulti",
 #' @param verbose Whether to output progress information
 #' @param overwrite Whether to overwrite existing kernel matrices. If FALSE,
 #'  will add self-kernel matrices to existing cross-type kernels. Default = FALSE
+#' @param normalizeMethod How the reference distance is estimated when
+#'  `normalizeDistance = TRUE`: `"spacing"` (median nearest-partner distance,
+#'  combined across blocks by median) or `"percentile"` (pre-1.2.0 behavior).
 #' @param method One of `"auto"`, `"dense"`, or `"sparse"`. The sparse path
 #'  constructs exact thresholded self-kernels directly from coordinates and
 #'  does not require [computeSelfDistance()].
@@ -319,11 +403,13 @@ setMethod("computeSelfDistance", "CoProMulti",
 #'  value, aggregate dense self-kernel entries reach its square, or required
 #'  self-distance matrices are absent. Default 5000.
 #' @param distType,xDistScale,yDistScale,zDistScale,normalizeDistance,normalizeTarget,truncateLowDist
-#'  Distance options for the sparse path, matching [computeKernelMatrix()].
-#'  `normalizeDistance` additionally accepts `"inherit"`, which reuses the
-#'  scaling factor [computeDistance()] recorded rather than deriving one from
-#'  the self-distances; see [computeSelfDistance()]. Building self-kernels never
-#'  overwrites a factor already recorded on the object.
+#'  Distance options for the sparse path, matching [computeKernelMatrix()]:
+#'  `NULL` inherits the geometry recorded by [computeDistance()] /
+#'  [computeSelfDistance()], and a value that contradicts that record is an
+#'  error. `normalizeDistance` additionally accepts `"inherit"`, which reuses
+#'  the scaling factor [computeDistance()] recorded rather than deriving one
+#'  from the self-distances; see [computeSelfDistance()]. Building self-kernels
+#'  never overwrites a factor already recorded on the object.
 #'
 #' @return `CoPro` object with self-kernel matrices added to the kernelMatrices slot
 #' @export
@@ -351,9 +437,9 @@ setGeneric(
            rowNormalizeKernel = FALSE, colNormalizeKernel = FALSE,
            verbose = TRUE, overwrite = FALSE,
            method = c("auto", "dense", "sparse"), autoThreshold = 5000L,
-           distType = NULL, xDistScale = 1, yDistScale = 1, zDistScale = 1,
-           normalizeDistance = TRUE, normalizeTarget = 0.01,
-           truncateLowDist = TRUE) standardGeneric("computeSelfKernel")
+           distType = NULL, xDistScale = NULL, yDistScale = NULL, zDistScale = NULL,
+           normalizeDistance = NULL, normalizeMethod = NULL, normalizeTarget = NULL,
+           truncateLowDist = NULL) standardGeneric("computeSelfKernel")
 )
 
 #' @rdname computeSelfKernel
@@ -364,9 +450,9 @@ setMethod("computeSelfKernel", "CoProSingle",
                    rowNormalizeKernel = FALSE, colNormalizeKernel = FALSE,
                    verbose = TRUE, overwrite = FALSE,
                    method = c("auto", "dense", "sparse"), autoThreshold = 5000L,
-                   distType = NULL, xDistScale = 1, yDistScale = 1, zDistScale = 1,
-                   normalizeDistance = TRUE, normalizeTarget = 0.01,
-                   truncateLowDist = TRUE) {
+                   distType = NULL, xDistScale = NULL, yDistScale = NULL, zDistScale = NULL,
+                   normalizeDistance = NULL, normalizeMethod = NULL, normalizeTarget = NULL,
+                   truncateLowDist = NULL) {
             .computeSelfKernelDispatch(
               object, sigmaValues, lowerLimit, upperQuantile,
               normalizeKernel, minAveCellNeighor, rowNormalizeKernel,
@@ -374,6 +460,7 @@ setMethod("computeSelfKernel", "CoProSingle",
               autoThreshold = autoThreshold, distType = distType,
               xDistScale = xDistScale, yDistScale = yDistScale,
               zDistScale = zDistScale, normalizeDistance = normalizeDistance,
+              normalizeMethod = normalizeMethod,
               normalizeTarget = normalizeTarget, truncateLowDist = truncateLowDist,
               verbose = verbose, overwrite = overwrite, is_multi = FALSE
             )
@@ -387,9 +474,9 @@ setMethod("computeSelfKernel", "CoProMulti",
                    rowNormalizeKernel = FALSE, colNormalizeKernel = FALSE,
                    verbose = TRUE, overwrite = FALSE,
                    method = c("auto", "dense", "sparse"), autoThreshold = 5000L,
-                   distType = NULL, xDistScale = 1, yDistScale = 1, zDistScale = 1,
-                   normalizeDistance = TRUE, normalizeTarget = 0.01,
-                   truncateLowDist = TRUE) {
+                   distType = NULL, xDistScale = NULL, yDistScale = NULL, zDistScale = NULL,
+                   normalizeDistance = NULL, normalizeMethod = NULL, normalizeTarget = NULL,
+                   truncateLowDist = NULL) {
             .computeSelfKernelDispatch(
               object, sigmaValues, lowerLimit, upperQuantile,
               normalizeKernel, minAveCellNeighor, rowNormalizeKernel,
@@ -397,6 +484,7 @@ setMethod("computeSelfKernel", "CoProMulti",
               autoThreshold = autoThreshold, distType = distType,
               xDistScale = xDistScale, yDistScale = yDistScale,
               zDistScale = zDistScale, normalizeDistance = normalizeDistance,
+              normalizeMethod = normalizeMethod,
               normalizeTarget = normalizeTarget, truncateLowDist = truncateLowDist,
               verbose = verbose, overwrite = overwrite, is_multi = TRUE
             )

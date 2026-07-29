@@ -95,21 +95,19 @@ reused across the grid. It is fitted from all PC columns, never from a
 fitted canonical score, which would leak the association under test into
 the denominator.
 
-\if{html}{\out{<div class="sourceCode">}}\preformatted{**This flattens the null when the scores share one correlation length,
-and should be treated as a diagnostic otherwise.** On a real targeted
-panel the principal components within a cell type generally do *not*
+\strong{This flattens the null when the scores share one correlation length,
+and should be treated as a diagnostic otherwise.} On a real targeted
+panel the principal components within a cell type generally do \emph{not}
 share one: measured per-component ranges spanned 0.3-4.1 cell-spacings on
 a colon MERFISH dataset, where the flat feature-average returned a
-sub-spacing range (so \eqn{R \approx I}, reproducing `"unwhitened"`)
+sub-spacing range (so \eqn{R \approx I}, reproducing \code{"unwhitened"})
 while pooling over the leading five components gave a range 6x longer.
 The selected bandwidth is steeply sensitive to that choice -- sweeping
 the assumed range over 0.4-5 cell-spacings moved it from 3.4 to 0.3
-spacings on the same data. Check `getNormalizerInfo()$ranges` against
-what you believe about the tissue, supply `normalizerControl$range`
+spacings on the same data. Check \code{getNormalizerInfo()$ranges} against
+what you believe about the tissue, supply \code{normalizerControl$range}
 if you have a better estimate, and prefer a permutation null when the
-selected bandwidth matters.\}
-}\if{html}{\out{</div>}}
-
+selected bandwidth matters.}
 }
 }
 

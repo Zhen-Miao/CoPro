@@ -16,6 +16,14 @@
 #'  scale is used for the distance matrix, the output will roughly be in
 #'  mm^3. This ensures that the kernel sizes from 0.001 to 0.1 will make
 #'  sense. Default = TRUE.
+#' @param normalizeMethod How the reference distance is estimated when
+#'  `normalizeDistance = TRUE`. `"spacing"` (default) uses the median
+#'  nearest-partner distance, combined across cell-type blocks by median, so the
+#'  unit tracks local cell spacing and no single dense block sets the scale for
+#'  the whole object. `"percentile"` reproduces the pre-1.2.0 behavior: the
+#'  minimum, across blocks, of a low quantile of pairwise distances. Not
+#'  available for `distType = "Morphology-Aware"`, which falls back to
+#'  `"percentile"`.
 #' @param normalizeTarget Numeric scalar. The target value that the
 #'  low-percentile cell-cell distance is rescaled to when
 #'  `normalizeDistance = TRUE`. Default = 0.01 (preserves historical
@@ -73,7 +81,8 @@ setGeneric(
   function(object, distType =
              c("Euclidean2D", "Euclidean3D", "Morphology-Aware"),
            xDistScale = 1, yDistScale = 1,
-           zDistScale = 1, normalizeDistance = TRUE,
+           zDistScale = 1, normalizeDistance = FALSE,
+           normalizeMethod = c("spacing", "percentile"),
            normalizeTarget = 0.01, truncateLowDist = TRUE,
            verbose = TRUE, knn_k = 10, geodesic_threshold = 10,
            geodesic_cutoff = 7) standardGeneric("computeDistance")
@@ -334,7 +343,7 @@ setGeneric(
 
 # Core dispatcher function
 .computeDistanceCore <- function(object, distType, xDistScale, yDistScale, zDistScale,
-                                normalizeDistance, truncateLowDist, verbose,
+                                normalizeDistance, normalizeMethod, truncateLowDist, verbose,
                                 knn_k = 10, geodesic_threshold = 10,
                                 geodesic_cutoff = 7, normalizeTarget = 0.01) {
   cts <- .checkInputDistance(object, distType, xDistScale, yDistScale, zDistScale)
@@ -343,16 +352,25 @@ setGeneric(
       !is.finite(normalizeTarget) || normalizeTarget <= 0) {
     stop("normalizeTarget must be a positive finite scalar.")
   }
+  normalizeMethod <- match.arg(normalizeMethod, .NORMALIZE_METHODS)
+  if (normalizeDistance && identical(normalizeMethod, "spacing") &&
+      identical(distType, "Morphology-Aware")) {
+    # The spacing reference is a Euclidean nearest-neighbor distance; a
+    # morphology-aware metric has no such neighbor graph to read it from.
+    warning(paste("normalizeMethod = 'spacing' is not defined for",
+                  "Morphology-Aware distances; using 'percentile'."))
+    normalizeMethod <- "percentile"
+  }
 
   # Determine whether to compute pairwise or within-cell-type distances
   if (length(cts) == 1) {
     return(.computeDistanceWithin(object, cts, distType, xDistScale, yDistScale, zDistScale,
-                                 normalizeDistance, truncateLowDist, verbose,
+                                 normalizeDistance, normalizeMethod, truncateLowDist, verbose,
                                  knn_k, geodesic_threshold, geodesic_cutoff,
                                  normalizeTarget = normalizeTarget))
   } else {
     return(.computeDistancePairs(object, cts, distType, xDistScale, yDistScale, zDistScale,
-                                normalizeDistance, truncateLowDist, verbose,
+                                normalizeDistance, normalizeMethod, truncateLowDist, verbose,
                                 knn_k, geodesic_threshold, geodesic_cutoff,
                                 normalizeTarget = normalizeTarget))
   }
@@ -509,7 +527,7 @@ setGeneric(
 
 # Function for computing distances between pairs of cell types
 .computeDistancePairs <- function(object, cts, distType, xDistScale, yDistScale, zDistScale,
-                                 normalizeDistance, truncateLowDist, verbose,
+                                 normalizeDistance, normalizeMethod, truncateLowDist, verbose,
                                  knn_k = 10, geodesic_threshold = 10,
                                  geodesic_cutoff = 7, normalizeTarget = 0.01) {
 
@@ -527,6 +545,7 @@ setGeneric(
   }
   
   dist_percentiles <- vector(mode = "numeric", length = ncol(pair_cell_types))
+  dist_spacings <- rep(NA_real_, ncol(pair_cell_types))
   
   # For Morphology-Aware: compute KNN and geodesic on ALL cells first
   geodesic_all <- NULL
@@ -591,6 +610,15 @@ setGeneric(
     processed <- .processDistanceMatrix(distances_ij, truncateLowDist)
     distances_ij <- processed$distances
     dist_percentiles[pp] <- processed$percentile
+    if (normalizeDistance && identical(normalizeMethod, "spacing")) {
+      # Same estimator, same inputs as the sparse path, so both paths land on
+      # an identical scale factor and their kernels stay entrywise equal.
+      dist_spacings[pp] <- .blockNearestSpacing(
+        .getCoordinateMatrix(object, i, distType, xDistScale, yDistScale, zDistScale),
+        .getCoordinateMatrix(object, j, distType, xDistScale, yDistScale, zDistScale),
+        within = FALSE
+      )
+    }
     
     # Save the distances using flat structure
     flat_name <- .createDistMatrixName(i, j, slide = NULL)
@@ -603,8 +631,11 @@ setGeneric(
   
   # Apply normalization if requested
   if (normalizeDistance) {
-    min_percentile <- min(dist_percentiles)
-    scaling_factor <- normalizeTarget / min_percentile
+    reference <- .combineDistanceReference(
+      if (identical(normalizeMethod, "spacing")) dist_spacings else dist_percentiles,
+      normalizeMethod
+    )
+    scaling_factor <- .distanceScaleFactor(reference, normalizeTarget, normalizeMethod)
     if (verbose) {
       message(sprintf(
         "Distance normalization scaling factor: %g", scaling_factor
@@ -626,12 +657,18 @@ setGeneric(
   # (.recoverDistanceScaleFactor / .sigmaAwareBins) keep working after
   # computeKernelMatrix(dropDistances = TRUE) clears @distances.
   object@distanceScaleFactor <- scaling_factor
+  object@distanceGeometry <- .makeDistanceGeometry(
+    distType, xDistScale, yDistScale, zDistScale,
+    normalizeDistance, normalizeMethod = normalizeMethod,
+    normalizeTarget = normalizeTarget, truncateLowDist = truncateLowDist,
+    source = "computeDistance"
+  )
   return(object)
 }
 
 # Function for computing within-cell-type distances
 .computeDistanceWithin <- function(object, cts, distType, xDistScale, yDistScale, zDistScale,
-                                  normalizeDistance, truncateLowDist, verbose,
+                                  normalizeDistance, normalizeMethod, truncateLowDist, verbose,
                                   knn_k = 10, geodesic_threshold = 10,
                                   geodesic_cutoff = 7, normalizeTarget = 0.01) {
 
@@ -705,7 +742,14 @@ setGeneric(
   
   # Apply normalization if requested
   if (normalizeDistance) {
-    scaling_factor <- normalizeTarget / dist_percentile
+    reference <- if (identical(normalizeMethod, "spacing")) {
+      coords_ct <- .getCoordinateMatrix(object, cts, distType,
+                                        xDistScale, yDistScale, zDistScale)
+      .blockNearestSpacing(coords_ct, coords_ct, within = TRUE)
+    } else {
+      dist_percentile
+    }
+    scaling_factor <- .distanceScaleFactor(reference, normalizeTarget, normalizeMethod)
     if (verbose) {
       message(sprintf(
         "Distance normalization scaling factor: %g", scaling_factor
@@ -719,6 +763,12 @@ setGeneric(
 
   object@distances <- distances
   object@distanceScaleFactor <- scaling_factor
+  object@distanceGeometry <- .makeDistanceGeometry(
+    distType, xDistScale, yDistScale, zDistScale,
+    normalizeDistance, normalizeMethod = normalizeMethod,
+    normalizeTarget = normalizeTarget, truncateLowDist = truncateLowDist,
+    source = "computeDistance"
+  )
   return(object)
 }
 
@@ -727,13 +777,14 @@ setGeneric(
 #' @export
 setMethod("computeDistance", "CoProSingle", function(object, distType = c("Euclidean2D", "Euclidean3D", "Morphology-Aware"),
                                                     xDistScale = 1, yDistScale = 1, zDistScale = 1,
-                                                    normalizeDistance = TRUE,
+                                                    normalizeDistance = FALSE,
+                                                    normalizeMethod = c("spacing", "percentile"),
                                                     normalizeTarget = 0.01,
                                                     truncateLowDist = TRUE, verbose = TRUE,
                                                     knn_k = 10, geodesic_threshold = 10, geodesic_cutoff = 7) {
   distType <- match.arg(distType)
   .computeDistanceCore(object, distType, xDistScale, yDistScale, zDistScale,
-                      normalizeDistance, truncateLowDist, verbose,
+                      normalizeDistance, normalizeMethod, truncateLowDist, verbose,
                       knn_k, geodesic_threshold, geodesic_cutoff,
                       normalizeTarget = normalizeTarget)
 })
@@ -743,20 +794,21 @@ setMethod("computeDistance", "CoProSingle", function(object, distType = c("Eucli
 #' @export
 setMethod("computeDistance", "CoProMulti", function(object, distType = c("Euclidean2D", "Euclidean3D", "Morphology-Aware"),
                                                    xDistScale = 1, yDistScale = 1, zDistScale = 1,
-                                                   normalizeDistance = TRUE,
+                                                   normalizeDistance = FALSE,
+                                                   normalizeMethod = c("spacing", "percentile"),
                                                    normalizeTarget = 0.01,
                                                    truncateLowDist = TRUE, verbose = TRUE,
                                                    knn_k = 10, geodesic_threshold = 10, geodesic_cutoff = 7) {
   distType <- match.arg(distType)
   .computeDistanceCoreMulti(object, distType, xDistScale, yDistScale, zDistScale,
-                           normalizeDistance, truncateLowDist, verbose,
+                           normalizeDistance, normalizeMethod, truncateLowDist, verbose,
                            knn_k, geodesic_threshold, geodesic_cutoff,
                            normalizeTarget = normalizeTarget)
 })
 
 # Core dispatcher for multi-slide objects
 .computeDistanceCoreMulti <- function(object, distType, xDistScale, yDistScale, zDistScale,
-                                     normalizeDistance, truncateLowDist, verbose,
+                                     normalizeDistance, normalizeMethod, truncateLowDist, verbose,
                                      knn_k = 10, geodesic_threshold = 10,
                                      geodesic_cutoff = 7, normalizeTarget = 0.01) {
   cts <- .checkInputDistance(object, distType, xDistScale, yDistScale, zDistScale)
@@ -765,16 +817,25 @@ setMethod("computeDistance", "CoProMulti", function(object, distType = c("Euclid
       !is.finite(normalizeTarget) || normalizeTarget <= 0) {
     stop("normalizeTarget must be a positive finite scalar.")
   }
+  normalizeMethod <- match.arg(normalizeMethod, .NORMALIZE_METHODS)
+  if (normalizeDistance && identical(normalizeMethod, "spacing") &&
+      identical(distType, "Morphology-Aware")) {
+    # The spacing reference is a Euclidean nearest-neighbor distance; a
+    # morphology-aware metric has no such neighbor graph to read it from.
+    warning(paste("normalizeMethod = 'spacing' is not defined for",
+                  "Morphology-Aware distances; using 'percentile'."))
+    normalizeMethod <- "percentile"
+  }
 
   # Determine whether to compute pairwise or within-cell-type distances across slides
   if (length(cts) == 1) {
     return(.computeDistanceMultiWithin(object, cts, distType, xDistScale, yDistScale, zDistScale,
-                                      normalizeDistance, truncateLowDist, verbose,
+                                      normalizeDistance, normalizeMethod, truncateLowDist, verbose,
                                       knn_k, geodesic_threshold, geodesic_cutoff,
                                       normalizeTarget = normalizeTarget))
   } else {
     return(.computeDistanceMultiPairs(object, cts, distType, xDistScale, yDistScale, zDistScale,
-                                     normalizeDistance, truncateLowDist, verbose,
+                                     normalizeDistance, normalizeMethod, truncateLowDist, verbose,
                                      knn_k, geodesic_threshold, geodesic_cutoff,
                                      normalizeTarget = normalizeTarget))
   }
@@ -797,15 +858,17 @@ setMethod("computeDistance", "CoProMulti", function(object, distType = c("Euclid
 }
 
 # Helper function to process multi-slide distance normalization
-.normalizeDistancesMulti <- function(distances_all, slides, cts, global_min_percentile,
+# Returns list(distances, scaling_factor); scaling_factor is 1 when no
+# normalization could be applied, so the caller can record it verbatim.
+.normalizeDistancesMulti <- function(distances_all, slides, cts, reference,
                                     pair_cell_types = NULL, verbose = TRUE,
                                     normalizeTarget = 0.01) {
-  if (is.infinite(global_min_percentile)) {
+  if (!is.finite(reference) || reference <= 0) {
     warning("Cannot normalize distances - no valid non-zero distances found across slides.")
-    return(distances_all)
+    return(list(distances = distances_all, scaling_factor = 1))
   }
 
-  scaling_factor <- normalizeTarget / global_min_percentile
+  scaling_factor <- normalizeTarget / reference
   if (verbose) message(sprintf("Global distance scaling factor: %g", scaling_factor))
   
   if (is.null(pair_cell_types)) {
@@ -830,19 +893,20 @@ setMethod("computeDistance", "CoProMulti", function(object, distType = c("Euclid
       }
     }
   }
-  
-  return(distances_all)
+
+  return(list(distances = distances_all, scaling_factor = scaling_factor))
 }
 
 # Function for computing within-cell-type distances across multiple slides
 .computeDistanceMultiWithin <- function(object, cts, distType, xDistScale, yDistScale, zDistScale,
-                                       normalizeDistance, truncateLowDist, verbose,
+                                       normalizeDistance, normalizeMethod, truncateLowDist, verbose,
                                        knn_k = 10, geodesic_threshold = 10,
                                        geodesic_cutoff = 7, normalizeTarget = 0.01) {
 
   slides <- getSlideList(object)
   distances_all <- .initializeDistanceStructureMulti(slides, cts)
   global_min_percentile <- Inf
+  block_spacings <- numeric(0)
 
   # Notify users if normalizeDistance = TRUE
   if (normalizeDistance && verbose) {
@@ -915,6 +979,11 @@ setMethod("computeDistance", "CoProMulti", function(object, distType = c("Euclid
     
     if (!is.na(dist_percentile) && is.finite(dist_percentile)) {
       global_min_percentile <- min(global_min_percentile, dist_percentile, na.rm = TRUE)
+      if (normalizeDistance && identical(normalizeMethod, "spacing")) {
+        block_spacings <- c(block_spacings, .blockSpacingForBlock(
+          object, distType, xDistScale, yDistScale, zDistScale, sID, cts, cts
+        ))
+      }
     }
     
     # Save the distances using flat structure
@@ -928,19 +997,33 @@ setMethod("computeDistance", "CoProMulti", function(object, distType = c("Euclid
   }
 
   # Apply normalization if requested
+  scaling_factor <- 1
   if (normalizeDistance) {
-    distances_all <- .normalizeDistancesMulti(distances_all, slides, cts, global_min_percentile,
-                                             verbose = verbose,
-                                             normalizeTarget = normalizeTarget)
+    reference <- .combineDistanceReference(
+      if (identical(normalizeMethod, "spacing")) block_spacings else global_min_percentile,
+      normalizeMethod
+    )
+    normalized <- .normalizeDistancesMulti(distances_all, slides, cts, reference,
+                                           verbose = verbose,
+                                           normalizeTarget = normalizeTarget)
+    distances_all <- normalized$distances
+    scaling_factor <- normalized$scaling_factor
   }
 
   object@distances <- distances_all
+  object@distanceScaleFactor <- scaling_factor
+  object@distanceGeometry <- .makeDistanceGeometry(
+    distType, xDistScale, yDistScale, zDistScale,
+    normalizeDistance, normalizeMethod = normalizeMethod,
+    normalizeTarget = normalizeTarget, truncateLowDist = truncateLowDist,
+    source = "computeDistance"
+  )
   return(object)
 }
 
 # Function for computing pairwise distances across multiple slides
 .computeDistanceMultiPairs <- function(object, cts, distType, xDistScale, yDistScale, zDistScale,
-                                      normalizeDistance, truncateLowDist, verbose,
+                                      normalizeDistance, normalizeMethod, truncateLowDist, verbose,
                                       knn_k = 10, geodesic_threshold = 10,
                                       geodesic_cutoff = 7, normalizeTarget = 0.01) {
 
@@ -948,6 +1031,7 @@ setMethod("computeDistance", "CoProMulti", function(object, distType = c("Euclid
   distances_all <- .initializeDistanceStructureMulti(slides, cts)
   pair_cell_types <- combn(cts, 2)
   global_min_percentile <- Inf
+  block_spacings <- numeric(0)
 
   # Notify users if normalizeDistance = TRUE
   if (normalizeDistance && verbose) {
@@ -1037,6 +1121,11 @@ setMethod("computeDistance", "CoProMulti", function(object, distType = c("Euclid
       
       if (!is.na(dist_percentile) && is.finite(dist_percentile)) {
         global_min_percentile <- min(global_min_percentile, dist_percentile, na.rm = TRUE)
+        if (normalizeDistance && identical(normalizeMethod, "spacing")) {
+          block_spacings <- c(block_spacings, .blockSpacingForBlock(
+            object, distType, xDistScale, yDistScale, zDistScale, sID, ct_i, ct_j
+          ))
+        }
       }
       
       # Save the distances using flat structure
@@ -1051,12 +1140,26 @@ setMethod("computeDistance", "CoProMulti", function(object, distType = c("Euclid
   }
 
   # Apply normalization if requested
+  scaling_factor <- 1
   if (normalizeDistance) {
-    distances_all <- .normalizeDistancesMulti(distances_all, slides, cts, global_min_percentile,
-                                             pair_cell_types, verbose = verbose,
-                                             normalizeTarget = normalizeTarget)
+    reference <- .combineDistanceReference(
+      if (identical(normalizeMethod, "spacing")) block_spacings else global_min_percentile,
+      normalizeMethod
+    )
+    normalized <- .normalizeDistancesMulti(distances_all, slides, cts, reference,
+                                           pair_cell_types, verbose = verbose,
+                                           normalizeTarget = normalizeTarget)
+    distances_all <- normalized$distances
+    scaling_factor <- normalized$scaling_factor
   }
 
   object@distances <- distances_all
+  object@distanceScaleFactor <- scaling_factor
+  object@distanceGeometry <- .makeDistanceGeometry(
+    distType, xDistScale, yDistScale, zDistScale,
+    normalizeDistance, normalizeMethod = normalizeMethod,
+    normalizeTarget = normalizeTarget, truncateLowDist = truncateLowDist,
+    source = "computeDistance"
+  )
   return(object)
 }

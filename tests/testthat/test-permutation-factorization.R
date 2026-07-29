@@ -16,7 +16,7 @@
   obj <- computeDistance(obj, distType = "Euclidean2D",
                          normalizeDistance = TRUE, verbose = FALSE)
   obj <- computeKernelMatrix(obj, sigmaValues = c(0.05, 0.1, 0.2),
-                             dropDistances = FALSE, verbose = FALSE)
+                             dropDistances = FALSE, verbose = FALSE, normalizeDistance = TRUE)
   suppressWarnings(
     obj <- computePCA(obj, nPCA = 8, center = TRUE, scale. = TRUE,
                       scalePCs = scalePCs)
@@ -138,7 +138,7 @@ test_that("planned Y matches the sparse product on float32 kernels", {
   obj <- computeDistance(obj, distType = "Euclidean2D",
                          normalizeDistance = TRUE, verbose = FALSE)
   sigma <- 0.1
-  f32 <- computeSparseKernelFloat32(obj, sigmaValues = sigma, verbose = FALSE)
+  f32 <- computeSparseKernelFloat32(obj, sigmaValues = sigma, verbose = FALSE, normalizeDistance = TRUE)
   suppressWarnings(
     f32 <- computePCA(f32, nPCA = 8, center = TRUE, scale. = TRUE,
                       scalePCs = TRUE)

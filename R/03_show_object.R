@@ -66,6 +66,12 @@ setMethod("show", "CoPro",
             if(length(object@sigmaValueChoice) > 0) {
               cat(sprintf("- Optimal sigma: %g\n", object@sigmaValueChoice))
             }
+            geom <- .getDistanceGeometry(object)
+            if (length(geom) > 0) {
+              cat(sprintf("- Distance geometry: %s (x/y/z scale %g/%g/%g), set by %s()\n",
+                          geom$distType, geom$xDistScale, geom$yDistScale,
+                          geom$zDistScale, geom$source))
+            }
 
             # Additional information
             has_meta_sub <- "metaDataSub" %in% methods::slotNames(object)

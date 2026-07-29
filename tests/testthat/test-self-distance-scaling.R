@@ -4,6 +4,10 @@
 ## bandwidth for a self-kernel than for a cross-kernel. These tests pin the
 ## new "inherit" mode, the warning on the historical mode, and the fact that
 ## building self-kernels no longer overwrites the recorded factor.
+##
+## `normalizeDistance` defaults to FALSE as of 1.2.0, and with no scaling there
+## is no factor to disagree about, so every test that is about the scaling asks
+## for it explicitly.
 
 quiet <- function(expr) suppressMessages(suppressWarnings(expr))
 
@@ -18,7 +22,8 @@ make_two_type_object <- function(n = 300, n_genes = 40, seed = 2) {
   obj <- newCoProSingle(expr, loc, meta, meta$cell_type)
   obj <- quiet(subsetData(obj, cellTypesOfInterest = c("TypeA", "TypeB")))
   obj <- quiet(computePCA(obj, nPCA = 5))
-  quiet(computeDistance(obj, distType = "Euclidean2D", verbose = FALSE))
+  quiet(computeDistance(obj, distType = "Euclidean2D", normalizeDistance = TRUE,
+                        verbose = FALSE))
 }
 
 self_key <- function(obj) {
@@ -30,7 +35,7 @@ test_that('normalizeDistance = "inherit" reuses the recorded cross-type factor',
   recorded <- obj@distanceScaleFactor
   expect_true(is.finite(recorded) && recorded > 0)
 
-  own <- quiet(computeSelfDistance(obj, verbose = FALSE))
+  own <- quiet(computeSelfDistance(obj, normalizeDistance = TRUE, verbose = FALSE))
   inherited <- quiet(computeSelfDistance(obj, normalizeDistance = "inherit",
                                          verbose = FALSE))
 
@@ -53,7 +58,8 @@ test_that('normalizeDistance = "inherit" reuses the recorded cross-type factor',
 test_that("the historical mode warns when it disagrees with the recorded factor", {
   obj <- make_two_type_object()
   expect_warning(
-    suppressMessages(computeSelfDistance(obj, verbose = FALSE)),
+    suppressMessages(computeSelfDistance(obj, normalizeDistance = TRUE,
+                                         verbose = FALSE)),
     "differs from the factor computeDistance"
   )
 })
@@ -87,6 +93,27 @@ test_that("normalizeDistance rejects values that are neither logical nor 'inheri
     quiet(computeSelfDistance(obj, normalizeDistance = "yes", verbose = FALSE)),
     'must be TRUE, FALSE, or "inherit"'
   )
+})
+
+test_that('"inherit" is not read as a contradiction of the recorded geometry', {
+  ## `normalizeDistance = "inherit"` says where the scaling factor comes from,
+  ## not which coordinates were used, so the geometry record it is checked
+  ## against must not treat it as a different basis -- and must not end up
+  ## storing the instruction, which a later step would have nothing to inherit
+  ## from.
+  obj <- make_two_type_object()
+  expect_identical(getDistanceGeometry(obj)$normalizeDistance, TRUE)
+
+  expect_no_warning(
+    suppressMessages(computeSelfDistance(obj, normalizeDistance = "inherit",
+                                         verbose = FALSE))
+  )
+
+  with_self <- quiet(computeSelfKernel(obj, sigmaValues = 0.05, method = "sparse",
+                                       normalizeDistance = "inherit",
+                                       verbose = FALSE))
+  expect_identical(getDistanceGeometry(with_self)$normalizeDistance, TRUE)
+  expect_true(length(with_self@kernelMatrices) > 0)
 })
 
 test_that("building self-kernels does not overwrite the recorded scale factor", {

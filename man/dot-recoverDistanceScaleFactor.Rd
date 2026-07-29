@@ -26,11 +26,14 @@ entries and take the median ratio, which is robust to the small fraction of
 truncated entries and avoids copying the full distance matrix.
 }
 \details{
-This assumes isotropic coordinates (\code{xDistScale = yDistScale}, the default).
-Under anisotropic scaling the recovered value is a representative, not exact,
-factor; the \verb{[sigma, 4*sigma]} guardrail in \code{\link[=.sigmaAwareBins]{.sigmaAwareBins()}} will flag a
-grossly mis-sized grid. When \code{normalizeDistance = FALSE} the recovered factor
-is simply the coordinate scale (1 by default), which is also correct because
-\code{sigma} is then on the raw coordinate scale.
+The raw coordinates are rebuilt using the geometry recorded in
+\verb{@distanceGeometry} -- the per-axis scales and, for a 3-D \code{distType}, the \code{z}
+column -- so the probed ratio is the true constant rather than a spread of
+direction-dependent values. Objects with no recorded geometry (built before
+the slot existed) fall back to unscaled 2-D \verb{x,y}, which is exact only under
+the default isotropic setting; the \verb{[sigma, 4*sigma]} guardrail in
+\code{\link[=.sigmaAwareBins]{.sigmaAwareBins()}} will flag a grossly mis-sized grid. When
+\code{normalizeDistance = FALSE} the recovered factor is simply 1, which is also
+correct because \code{sigma} is then on the (scaled) coordinate scale.
 }
 \keyword{internal}

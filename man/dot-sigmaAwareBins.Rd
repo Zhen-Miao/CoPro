@@ -7,7 +7,8 @@
 .sigmaAwareBins(object, sigma, min_bins = 2L, verbose = TRUE)
 }
 \arguments{
-\item{object}{A CoPro object (uses \verb{@locationDataSub} and \verb{@distances}).}
+\item{object}{A CoPro object (uses \verb{@locationDataSub}, \verb{@distanceGeometry},
+and \verb{@distances}).}
 
 \item{sigma}{Kernel bandwidth (numeric, on the normalized distance scale).}
 
@@ -28,5 +29,15 @@ autocorrelation (length scale \code{~sigma}) while shuffling whole patches still
 breaks longer-range cross-type coordination. A hard-coded grid (e.g. the
 historical 10x10) ignores both the tissue extent and \code{sigma}, which is the
 root cause of mis-calibrated bin-wise permutation.
+}
+\details{
+The grid is laid out in raw \verb{x,y} coordinate units, but \code{sigma} lives on the
+analysis distance scale, so the two are related by the distance scale factor
+\emph{and} by the per-axis coordinate scales recorded in \verb{@distanceGeometry}. A
+\code{yDistScale} of 2.5 stretches the y axis by 2.5 before distances are taken,
+so a patch that is \code{2 * sigma} wide on the analysis scale is 2.5 times
+narrower in raw y units than in raw x units. Each axis is therefore sized
+independently. A 3-D \code{distType} is binned on \verb{x,y} only, as the permutation
+grid is two-dimensional; that is reported rather than silently assumed.
 }
 \keyword{internal}

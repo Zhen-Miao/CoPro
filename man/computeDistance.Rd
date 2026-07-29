@@ -12,7 +12,8 @@ computeDistance(
   xDistScale = 1,
   yDistScale = 1,
   zDistScale = 1,
-  normalizeDistance = TRUE,
+  normalizeDistance = FALSE,
+  normalizeMethod = c("spacing", "percentile"),
   normalizeTarget = 0.01,
   truncateLowDist = TRUE,
   verbose = TRUE,
@@ -27,7 +28,8 @@ computeDistance(
   xDistScale = 1,
   yDistScale = 1,
   zDistScale = 1,
-  normalizeDistance = TRUE,
+  normalizeDistance = FALSE,
+  normalizeMethod = c("spacing", "percentile"),
   normalizeTarget = 0.01,
   truncateLowDist = TRUE,
   verbose = TRUE,
@@ -42,7 +44,8 @@ computeDistance(
   xDistScale = 1,
   yDistScale = 1,
   zDistScale = 1,
-  normalizeDistance = TRUE,
+  normalizeDistance = FALSE,
+  normalizeMethod = c("spacing", "percentile"),
   normalizeTarget = 0.01,
   truncateLowDist = TRUE,
   verbose = TRUE,
@@ -69,6 +72,15 @@ will make sure that the low-percentile cell-cell distance will become
 scale is used for the distance matrix, the output will roughly be in
 mm^3. This ensures that the kernel sizes from 0.001 to 0.1 will make
 sense. Default = TRUE.}
+
+\item{normalizeMethod}{How the reference distance is estimated when
+\code{normalizeDistance = TRUE}. \code{"spacing"} (default) uses the median
+nearest-partner distance, combined across cell-type blocks by median, so the
+unit tracks local cell spacing and no single dense block sets the scale for
+the whole object. \code{"percentile"} reproduces the pre-1.2.0 behavior: the
+minimum, across blocks, of a low quantile of pairwise distances. Not
+available for \code{distType = "Morphology-Aware"}, which falls back to
+\code{"percentile"}.}
 
 \item{normalizeTarget}{Numeric scalar. The target value that the
 low-percentile cell-cell distance is rescaled to when
@@ -138,6 +150,7 @@ Other spatial-pipeline:
 \code{\link{computePCA}()},
 \code{\link{computeSparseKernel}()},
 \code{\link{computeSparseKernelFloat32}()},
+\code{\link{detectSigmaRange}()},
 \code{\link{runGeneSpaceCCA}()},
 \code{\link{runSkrCCA}()},
 \code{\link{runSlideLevelInference}()}

@@ -57,13 +57,15 @@ test_that("sparse kernels match dense kernels for all normalization options", {
   )
 
   for (opt in norm_opts) {
-    dense <- computeDistance(obj, distType = "Euclidean2D", verbose = FALSE)
+    dense <- computeDistance(obj, distType = "Euclidean2D", verbose = FALSE, normalizeDistance = TRUE)
     dense <- do.call(computeKernelMatrix, c(
       list(dense, sigmaValues = sigmas, method = "dense",
-           dropDistances = FALSE, verbose = FALSE), opt))
+           dropDistances = FALSE, verbose = FALSE,
+           normalizeDistance = TRUE), opt))
     sparse <- do.call(computeKernelMatrix, c(
       list(obj, sigmaValues = sigmas, method = "sparse",
-           distType = "Euclidean2D", verbose = FALSE), opt))
+           distType = "Euclidean2D", verbose = FALSE,
+           normalizeDistance = TRUE), opt))
     .expect_kernel_equal(dense, sparse, 0.1, "CellTypeA", "CellTypeB")
   }
 })
@@ -74,11 +76,11 @@ test_that("sparse kernels match dense kernels for a single (within-type) cell ty
   obj <- subsetData(obj, cellTypesOfInterest = c("CellTypeA"))
   sigmas <- c(0.05, 0.1)
 
-  dense <- computeDistance(obj, distType = "Euclidean2D", verbose = FALSE)
+  dense <- computeDistance(obj, distType = "Euclidean2D", verbose = FALSE, normalizeDistance = TRUE)
   dense <- computeKernelMatrix(dense, sigmaValues = sigmas, method = "dense",
-                               dropDistances = FALSE, verbose = FALSE)
+                               dropDistances = FALSE, verbose = FALSE, normalizeDistance = TRUE)
   sparse <- computeKernelMatrix(obj, sigmaValues = sigmas, method = "sparse",
-                                distType = "Euclidean2D", verbose = FALSE)
+                                distType = "Euclidean2D", verbose = FALSE, normalizeDistance = TRUE)
 
   for (s in intersect(dense@sigmaValues, sparse@sigmaValues)) {
     Ks <- getKernelMatrix(sparse, sigma = s, cellType1 = "CellTypeA",
@@ -97,7 +99,7 @@ test_that("within-type sparse storage follows symmetry-preserving normalization"
   obj <- create_test_copro_single(n_cells = 180, n_genes = 25,
                                   n_cell_types = 2, seed = 31)
   obj <- subsetData(obj, cellTypesOfInterest = "CellTypeA")
-  with_dist <- computeDistance(obj, distType = "Euclidean2D", verbose = FALSE)
+  with_dist <- computeDistance(obj, distType = "Euclidean2D", verbose = FALSE, normalizeDistance = TRUE)
 
   for (row_normalize in c(FALSE, TRUE)) {
     dense <- computeKernelMatrix(
@@ -105,13 +107,13 @@ test_that("within-type sparse storage follows symmetry-preserving normalization"
       normalizeKernel = !row_normalize,
       rowNormalizeKernel = row_normalize,
       dropDistances = FALSE, verbose = FALSE
-    )
+    , normalizeDistance = TRUE)
     sparse <- computeKernelMatrix(
       obj, sigmaValues = 0.1, method = "sparse",
       normalizeKernel = !row_normalize,
       rowNormalizeKernel = row_normalize,
       distType = "Euclidean2D", verbose = FALSE
-    )
+    , normalizeDistance = TRUE)
     Kd <- getKernelMatrix(dense, 0.1, "CellTypeA", "CellTypeA",
                           verbose = FALSE)
     Ks <- getKernelMatrix(sparse, 0.1, "CellTypeA", "CellTypeA",
@@ -129,11 +131,11 @@ test_that("sparse kernels match dense kernels for multi-slide objects", {
   obj <- subsetData(obj, cellTypesOfInterest = c("CellTypeA", "CellTypeB"))
   sigmas <- c(0.1)
 
-  dense <- computeDistance(obj, distType = "Euclidean2D", verbose = FALSE)
+  dense <- computeDistance(obj, distType = "Euclidean2D", verbose = FALSE, normalizeDistance = TRUE)
   dense <- computeKernelMatrix(dense, sigmaValues = sigmas, method = "dense",
-                               dropDistances = FALSE, verbose = FALSE)
+                               dropDistances = FALSE, verbose = FALSE, normalizeDistance = TRUE)
   sparse <- computeKernelMatrix(obj, sigmaValues = sigmas, method = "sparse",
-                                distType = "Euclidean2D", verbose = FALSE)
+                                distType = "Euclidean2D", verbose = FALSE, normalizeDistance = TRUE)
 
   for (sID in getSlideList(obj)) {
     .expect_kernel_equal(dense, sparse, 0.1, "CellTypeA", "CellTypeB", slide = sID)
@@ -161,14 +163,14 @@ test_that("sparse path yields equivalent skrCCA weights and normalized correlati
   obj <- computePCA(obj, nPCA = 10, center = TRUE, scale. = TRUE)
   sigmas <- c(0.05, 0.1)
 
-  dense <- computeDistance(obj, distType = "Euclidean2D", verbose = FALSE)
+  dense <- computeDistance(obj, distType = "Euclidean2D", verbose = FALSE, normalizeDistance = TRUE)
   dense <- computeKernelMatrix(dense, sigmaValues = sigmas, method = "dense",
-                               dropDistances = FALSE, verbose = FALSE)
+                               dropDistances = FALSE, verbose = FALSE, normalizeDistance = TRUE)
   dense <- runSkrCCA(dense, scalePCs = TRUE, nCC = 2, maxIter = 300, tol = 1e-7)
   dense <- computeNormalizedCorrelation(dense)
 
   sparse <- computeKernelMatrix(obj, sigmaValues = sigmas, method = "sparse",
-                                distType = "Euclidean2D", verbose = FALSE)
+                                distType = "Euclidean2D", verbose = FALSE, normalizeDistance = TRUE)
   sparse <- runSkrCCA(sparse, scalePCs = TRUE, nCC = 2, maxIter = 300, tol = 1e-7)
   sparse <- computeNormalizedCorrelation(sparse)
 
@@ -285,19 +287,19 @@ test_that("dropDistances default clears distances; FALSE retains them", {
   obj <- create_test_copro_single(n_cells = 150, n_genes = 20,
                                   n_cell_types = 2, seed = 8)
   obj <- subsetData(obj, cellTypesOfInterest = c("CellTypeA", "CellTypeB"))
-  obj <- computeDistance(obj, distType = "Euclidean2D", verbose = FALSE)
+  obj <- computeDistance(obj, distType = "Euclidean2D", verbose = FALSE, normalizeDistance = TRUE)
 
   dropped <- computeKernelMatrix(obj, sigmaValues = c(0.1), method = "dense",
-                                 verbose = FALSE)  # dropDistances = TRUE default
+                                 verbose = FALSE, normalizeDistance = TRUE)  # dropDistances = TRUE default
   expect_equal(length(dropped@distances), 0)
 
   kept <- computeKernelMatrix(obj, sigmaValues = c(0.1), method = "dense",
-                              dropDistances = FALSE, verbose = FALSE)
+                              dropDistances = FALSE, verbose = FALSE, normalizeDistance = TRUE)
   expect_gt(length(kept@distances), 0)
 
   # sparse path leaves distances empty too (it never builds them)
   sp <- computeKernelMatrix(obj, sigmaValues = c(0.1), method = "sparse",
-                            distType = "Euclidean2D", verbose = FALSE)
+                            distType = "Euclidean2D", verbose = FALSE, normalizeDistance = TRUE)
   expect_equal(length(sp@distances), 0)
 })
 
@@ -311,16 +313,16 @@ test_that("method = 'auto' selects sparse above threshold and dense below", {
   threshold <- .maxCellTypeCount(obj)
   a <- computeKernelMatrix(obj, sigmaValues = c(0.1),
                            autoThreshold = threshold, distType = "Euclidean2D",
-                           verbose = FALSE)
+                           verbose = FALSE, normalizeDistance = TRUE)
   Ka <- getKernelMatrix(a, sigma = 0.1, cellType1 = "CellTypeA",
                         cellType2 = "CellTypeB", verbose = FALSE)
   expect_s4_class(Ka, "dgCMatrix")
 
   # high threshold -> dense (requires distances first)
-  obj_d <- computeDistance(obj, distType = "Euclidean2D", verbose = FALSE)
+  obj_d <- computeDistance(obj, distType = "Euclidean2D", verbose = FALSE, normalizeDistance = TRUE)
   b <- computeKernelMatrix(obj_d, sigmaValues = c(0.1),
                            autoThreshold = 1e9, dropDistances = FALSE,
-                           verbose = FALSE)
+                           verbose = FALSE, normalizeDistance = TRUE)
   Kb <- getKernelMatrix(b, sigma = 0.1, cellType1 = "CellTypeA",
                         cellType2 = "CellTypeB", verbose = FALSE)
   expect_true(is.matrix(Kb))
@@ -348,7 +350,7 @@ test_that("auto accounts for aggregate blocks and per-slide dimensions", {
   expect_gte(.denseKernelEntryCount(obj), 50^2)
   out <- computeKernelMatrix(obj, sigmaValues = 0.1,
                              autoThreshold = 50L,
-                             distType = "Euclidean2D", verbose = FALSE)
+                             distType = "Euclidean2D", verbose = FALSE, normalizeDistance = TRUE)
   K <- getKernelMatrix(out, sigma = 0.1, cellType1 = "CellTypeA",
                        cellType2 = "CellTypeB", slide = getSlideList(out)[1],
                        verbose = FALSE)
@@ -362,12 +364,12 @@ test_that("sparse path does not require computeDistance and rejects Morphology-A
 
   # No computeDistance() call beforehand -> still works
   sp <- computeKernelMatrix(obj, sigmaValues = c(0.1), method = "sparse",
-                            distType = "Euclidean2D", verbose = FALSE)
+                            distType = "Euclidean2D", verbose = FALSE, normalizeDistance = TRUE)
   expect_gt(length(sp@kernelMatrices), 0)
 
   expect_error(
     computeKernelMatrix(obj, sigmaValues = c(0.1), method = "sparse",
-                        distType = "Morphology-Aware", verbose = FALSE),
+                        distType = "Morphology-Aware", verbose = FALSE, normalizeDistance = TRUE),
     "Euclidean"
   )
 })

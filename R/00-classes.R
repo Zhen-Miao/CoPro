@@ -36,6 +36,15 @@ setClassUnion("matrixOrDataFrame", c("matrix", "data.frame"))
 #' @slot distanceScaleFactor A single numeric value. The raw-to-normalized
 #' distance scaling factor recorded at `computeDistance` time; persists after
 #' `computeKernelMatrix(dropDistances = TRUE)` clears `@distances`.
+#' @slot distanceGeometry A `list` recording the coordinate geometry the
+#' distances (and therefore the kernels) were built on: `distType`, the
+#' per-axis scales `xDistScale` / `yDistScale` / `zDistScale`, the distance
+#' processing flags `normalizeDistance` / `normalizeTarget` /
+#' `truncateLowDist`, and the `source` function that wrote it. Read it with
+#' [getDistanceGeometry()]. Empty until a distance- or kernel-building step
+#' has run. Like `@distanceScaleFactor` it persists after
+#' `computeKernelMatrix(dropDistances = TRUE)` clears `@distances`, so a
+#' stored object always knows which coordinates its kernels live on.
 #' @slot geneList A `vector` object with elements being character. To store the
 #' gene names.
 #' @slot kernelMatrices A `list` object. To store the kernel matrix generated
@@ -121,6 +130,7 @@ setClass("CoPro", contains  = "VIRTUAL",
            # Distance & Kernel (Slide-Specific if multiple slideID)
            distances = "list",      # Stores list(slideID = list(ct1 = list(ct2 = dist)))
            distanceScaleFactor = "numeric", # normalized/raw distance ratio; persists after @distances is dropped
+           distanceGeometry = "list", # distType + per-axis scales the distances/kernels were built on
            kernelMatrices = "list", # Stores list(sigma = list(slideID = list(ct1 = list(ct2 = K))))
            sigmaValues = "numeric",
 
@@ -152,6 +162,7 @@ setClass("CoPro", contains  = "VIRTUAL",
            nPermu = numeric(0),
            sigmaValueChoice = numeric(0),
            distanceScaleFactor = numeric(0),
+           distanceGeometry = list(),
            scalePCs = logical(0)
          )
 )

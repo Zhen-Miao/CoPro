@@ -12,7 +12,8 @@ computeSelfDistance(
   xDistScale = 1,
   yDistScale = 1,
   zDistScale = 1,
-  normalizeDistance = TRUE,
+  normalizeDistance = FALSE,
+  normalizeMethod = c("spacing", "percentile"),
   truncateLowDist = TRUE,
   verbose = TRUE,
   overwrite = FALSE
@@ -24,7 +25,8 @@ computeSelfDistance(
   xDistScale = 1,
   yDistScale = 1,
   zDistScale = 1,
-  normalizeDistance = TRUE,
+  normalizeDistance = FALSE,
+  normalizeMethod = c("spacing", "percentile"),
   truncateLowDist = TRUE,
   verbose = TRUE,
   overwrite = FALSE
@@ -36,7 +38,8 @@ computeSelfDistance(
   xDistScale = 1,
   yDistScale = 1,
   zDistScale = 1,
-  normalizeDistance = TRUE,
+  normalizeDistance = FALSE,
+  normalizeMethod = c("spacing", "percentile"),
   truncateLowDist = TRUE,
   verbose = TRUE,
   overwrite = FALSE
@@ -56,8 +59,10 @@ computeSelfDistance(
 
 \item{normalizeDistance}{How to scale the self-distances. One of:
 \describe{
-\item{\code{TRUE} (default)}{Derive a scaling factor from the self-distances'
-own low-distance percentile, so that the 0.01\% self-distance becomes
+\item{\code{FALSE} (default as of 1.2.0)}{No scaling; distances stay in the
+coordinate units of \code{locationData}.}
+\item{\code{TRUE}}{Derive a scaling factor from the self-distances' own
+reference length (see \code{normalizeMethod}), so that reference becomes
 0.01. This factor generally differs from the one \code{\link[=computeDistance]{computeDistance()}}
 derived from the cross-type distances, which means a self-kernel at a
 given nominal sigma sits at a different physical bandwidth from the
@@ -69,8 +74,16 @@ what you want whenever the self-kernels will be combined with the
 cross-kernels -- notably as whitening operators in
 \code{\link[=computeNormalizedCorrelation]{computeNormalizedCorrelation()}}. Errors if no factor has been
 recorded.}
-\item{\code{FALSE}}{No scaling.}
 }}
+
+\item{normalizeMethod}{How the reference distance is estimated when
+\code{normalizeDistance = TRUE}. \code{"spacing"} (default) uses the median
+nearest-partner distance, combined across cell-type blocks by median, so the
+unit tracks local cell spacing and no single dense block sets the scale for
+the whole object. \code{"percentile"} reproduces the pre-1.2.0 behavior: the
+minimum, across blocks, of a low quantile of pairwise distances. Not
+available for \code{distType = "Morphology-Aware"}, which falls back to
+\code{"percentile"}. Ignored when \code{normalizeDistance} is \code{FALSE} or \code{"inherit"}.}
 
 \item{truncateLowDist}{Whether to truncate small distances so that cells
 that are nearly overlapping do not have super small distances. Default = TRUE.}

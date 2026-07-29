@@ -134,20 +134,32 @@
     object, sigmaValues, lowerLimit, upperQuantile,
     normalizeKernel, minAveCellNeighor, rowNormalizeKernel, colNormalizeKernel,
     method, autoThreshold, distType, xDistScale, yDistScale, zDistScale,
-    normalizeDistance, normalizeTarget, truncateLowDist,
+    normalizeDistance, normalizeMethod, normalizeTarget, truncateLowDist,
     verbose, overwrite, is_multi) {
-  if (is.null(distType)) {
-    distType <- if ("z" %in% tolower(colnames(object@locationDataSub))) {
-      "Euclidean3D"
-    } else {
-      "Euclidean2D"
-    }
-  } else {
+  if (!is.null(distType)) {
     distType <- match.arg(
       distType,
       c("Euclidean2D", "Euclidean3D", "Morphology-Aware")
     )
   }
+  geometry <- .resolveDistanceGeometry(
+    object,
+    requested = list(distType = distType, xDistScale = xDistScale,
+                     yDistScale = yDistScale, zDistScale = zDistScale,
+                     normalizeDistance = normalizeDistance,
+                     normalizeMethod = normalizeMethod,
+                     normalizeTarget = normalizeTarget,
+                     truncateLowDist = truncateLowDist),
+    what = "computeSelfKernel", verbose = verbose
+  )
+  distType <- geometry$distType
+  xDistScale <- geometry$xDistScale
+  yDistScale <- geometry$yDistScale
+  zDistScale <- geometry$zDistScale
+  normalizeDistance <- geometry$normalizeDistance
+  normalizeMethod <- geometry$normalizeMethod
+  normalizeTarget <- geometry$normalizeTarget
+  truncateLowDist <- geometry$truncateLowDist
 
   if (method == "auto") {
     n_max <- .maxCellTypeCount(object)
@@ -181,13 +193,90 @@
     ))
   }
 
+  # Sparse route only: see the matching note in .computeKernelDispatch().
+  # `normalizeDistance = "inherit"` says where the scaling factor comes from,
+  # not which coordinates were used, so the record keeps the resulting scaling.
+  stamped <- geometry
+  stamped$normalizeDistance <- .recordedNormalizeDistance(
+    geometry$normalizeDistance, .getDistanceGeometry(object)
+  )
+  object@distanceGeometry <- stamped
+
   .computeSparseSelfKernelCore(
     object, sigmaValues, lowerLimit, upperQuantile, normalizeKernel,
     minAveCellNeighor, rowNormalizeKernel, colNormalizeKernel,
     distType, xDistScale, yDistScale, zDistScale,
-    normalizeDistance, normalizeTarget, truncateLowDist,
+    normalizeDistance, normalizeMethod, normalizeTarget, truncateLowDist,
     verbose, overwrite, is_multi
   )
+}
+
+#' Choose a sparse storage format, and say so when sparse is a poor fit
+#'
+#' Called once `method = "auto"` has ruled out the dense path on size. Two
+#' things are decided here:
+#'
+#' 1. Which sparse representation. `float32` is the default: it stores 8 bytes
+#'    per entry against `dgCMatrix`'s 12, streams one block at a time instead of
+#'    caching every block's neighbor triplets, and its `X' K X` operator agrees
+#'    with the float64 path to about 1e-5 relative -- far inside the tolerance
+#'    that matters for a CCA objective. `method = "sparse"` still selects
+#'    float64 explicitly, for exactness checks.
+#' 2. Whether sparse makes sense at all. A fixed-radius kernel is only sparse
+#'    while its support radius stays well below the tissue scale; the radius
+#'    grows linearly in sigma, so density grows as sigma^d and saturates. Past
+#'    saturation "sparse" storage costs more than dense and buys nothing, and
+#'    the user should hear about it rather than silently pay for it.
+#' @noRd
+.resolveSparseStorage <- function(object, sigmaValues, lowerLimit, geometry,
+                                  autoThreshold, denseThreshold, is_multi,
+                                  verbose) {
+  cts <- if (length(object@cellTypesOfInterest) != 0L) {
+    object@cellTypesOfInterest
+  } else {
+    unique(object@cellTypesSub)
+  }
+
+  probe <- tryCatch(
+    .kernelStorageProbe(object, cts, is_multi, geometry, sigmaValues, lowerLimit),
+    error = function(e) NULL
+  )
+  if (is.null(probe) || !is.finite(probe$maxDensity)) {
+    if (verbose) {
+      message("computeKernelMatrix: method='auto' -> 'float32' (density probe unavailable).")
+    }
+    return("float32")
+  }
+
+  bytes <- probe$nnz * 8          # float32 value + int32 column index
+  dense_bytes <- probe$denseEntries * 8
+  if (verbose) {
+    message(sprintf(
+      paste0("computeKernelMatrix: method='auto' -> 'float32' ",
+             "(predicted kernel density %.1f%% at sigma = %g, ~%.2f GB per ",
+             "sigma against ~%.2f GB dense)."),
+      100 * probe$maxDensity, max(sigmaValues),
+      bytes / 1e9, dense_bytes / 1e9))
+  }
+
+  if (probe$maxDensity >= denseThreshold) {
+    # density ~ sigma^d, so invert for the sigma that would come back under it
+    sigma_ok <- max(sigmaValues) *
+      (denseThreshold / probe$maxDensity)^(1 / probe$dim)
+    warning(sprintf(
+      paste0(
+        "The kernel at sigma = %g is predicted to be %.0f%% dense, so a ",
+        "fixed-radius sparse kernel saves little or no memory here (sparse ",
+        "storage costs more than dense past ~67%% density).\n",
+        "  Sigma below about %.3g would keep it under %.0f%%. Use ",
+        "detectSigmaRange() to pick sigma from the data, or build one sigma ",
+        "at a time to bound peak memory."
+      ),
+      max(sigmaValues), 100 * probe$maxDensity, sigma_ok,
+      100 * denseThreshold
+    ), call. = FALSE)
+  }
+  "float32"
 }
 
 #' Dispatch computeKernelMatrix() to the dense or sparse path and optionally
@@ -196,32 +285,71 @@
 .computeKernelDispatch <- function(object, sigmaValues, lowerLimit, upperQuantile,
                                    normalizeKernel, minAveCellNeighor, rowNormalizeKernel,
                                    colNormalizeKernel, verbose, method, dropDistances,
-                                   autoThreshold, distType, xDistScale, yDistScale, zDistScale,
-                                   normalizeDistance, normalizeTarget, truncateLowDist,
+                                   autoThreshold, denseThreshold, distType, xDistScale, yDistScale, zDistScale,
+                                   normalizeDistance, normalizeMethod, normalizeTarget, truncateLowDist,
                                    is_multi) {
-  # Infer distType from coordinates when not supplied (sparse path only uses it).
-  if (is.null(distType)) {
-    distType <- if ("z" %in% tolower(colnames(object@locationDataSub))) {
-      "Euclidean3D"
-    } else {
-      "Euclidean2D"
-    }
-  }
+  # Resolve the coordinate geometry once, before choosing a path. Any geometry
+  # already recorded on the object wins over this function's own defaults --
+  # otherwise the sparse path would rebuild coordinates from unscaled x,y (and
+  # flip to 3-D whenever a z column exists) regardless of what computeDistance()
+  # was told. Contradictory arguments are an error, not a silent preference.
+  geometry <- .resolveDistanceGeometry(
+    object,
+    requested = list(distType = distType, xDistScale = xDistScale,
+                     yDistScale = yDistScale, zDistScale = zDistScale,
+                     normalizeDistance = normalizeDistance,
+                     normalizeMethod = normalizeMethod,
+                     normalizeTarget = normalizeTarget,
+                     truncateLowDist = truncateLowDist),
+    what = "computeKernelMatrix", verbose = verbose
+  )
+  distType <- geometry$distType
+  xDistScale <- geometry$xDistScale
+  yDistScale <- geometry$yDistScale
+  zDistScale <- geometry$zDistScale
+  normalizeDistance <- geometry$normalizeDistance
+  normalizeMethod <- geometry$normalizeMethod
+  normalizeTarget <- geometry$normalizeTarget
+  truncateLowDist <- geometry$truncateLowDist
 
   if (method == "auto") {
     n_max <- .maxCellTypeCount(object)
     dense_entries <- .denseKernelEntryCount(object)
     sparse_by_block <- n_max >= autoThreshold
     sparse_by_total <- dense_entries >= as.numeric(autoThreshold)^2
-    method <- if (sparse_by_block || sparse_by_total) "sparse" else "dense"
-    if (verbose) {
-      message(sprintf(
-        paste0("computeKernelMatrix: method='auto' -> '%s' ",
-               "(largest block dimension = %d cells, estimated dense entries = %.3g, ",
-               "threshold = %d cells / %.3g entries)."),
-        method, n_max, dense_entries, autoThreshold,
-        as.numeric(autoThreshold)^2))
+    # The dense route reads distance matrices someone else built. With none on
+    # the object it cannot run at all, so size is irrelevant: take a route that
+    # builds its own coordinates. This is what lets the documented workflow --
+    # detectSigmaRange() then computeKernelMatrix() -- work without a separate
+    # computeDistance() call, on data of any size.
+    has_distances <- length(object@distances) > 0
+    if (!has_distances) {
+      sparse_by_block <- TRUE
     }
+    if (!sparse_by_block && !sparse_by_total) {
+      # Small enough that dense is both affordable and fastest; skip the probe.
+      method <- "dense"
+      if (verbose) {
+        message(sprintf(
+          paste0("computeKernelMatrix: method='auto' -> 'dense' ",
+                 "(largest block dimension = %d cells, estimated dense entries ",
+                 "= %.3g, threshold = %d cells / %.3g entries)."),
+          n_max, dense_entries, autoThreshold, as.numeric(autoThreshold)^2))
+      }
+    } else {
+      method <- .resolveSparseStorage(
+        object, sigmaValues, lowerLimit, geometry, autoThreshold,
+        denseThreshold, is_multi, verbose
+      )
+    }
+  }
+
+  # Stamp the resolved geometry before dispatching, but only on the routes that
+  # build coordinates here. The dense path reads distances someone else built,
+  # so on a legacy object with no record there is nothing authoritative to
+  # write and a guess would be worse than a blank.
+  if (method %in% c("sparse", "float32")) {
+    object@distanceGeometry <- geometry
   }
 
   if (method == "dense") {
@@ -234,19 +362,27 @@
                                    normalizeKernel, minAveCellNeighor, rowNormalizeKernel,
                                    colNormalizeKernel, verbose)
     }
-  } else {  # sparse
+  } else if (method == "float32") {
+    object <- .computeSparseKernelFloat32Core(
+      object, sigmaValues, lowerLimit, upperQuantile, normalizeKernel,
+      minAveCellNeighor, rowNormalizeKernel, colNormalizeKernel,
+      distType, xDistScale, yDistScale, zDistScale,
+      normalizeDistance, normalizeMethod, normalizeTarget, truncateLowDist,
+      overwrite = TRUE, verbose = verbose, is_multi = is_multi
+    )
+  } else {  # sparse (float64)
     if (is_multi) {
       object <- .computeSparseKernelCoreMulti(object, sigmaValues, lowerLimit, upperQuantile,
                                               normalizeKernel, minAveCellNeighor, rowNormalizeKernel,
                                               colNormalizeKernel, verbose,
                                               distType, xDistScale, yDistScale, zDistScale,
-                                              normalizeDistance, normalizeTarget, truncateLowDist)
+                                              normalizeDistance, normalizeMethod, normalizeTarget, truncateLowDist)
     } else {
       object <- .computeSparseKernelCore(object, sigmaValues, lowerLimit, upperQuantile,
                                          normalizeKernel, minAveCellNeighor, rowNormalizeKernel,
                                          colNormalizeKernel, verbose,
                                          distType, xDistScale, yDistScale, zDistScale,
-                                         normalizeDistance, normalizeTarget, truncateLowDist)
+                                         normalizeDistance, normalizeMethod, normalizeTarget, truncateLowDist)
     }
   }
 
@@ -468,6 +604,45 @@
 #' @noRd
 .pairPercentileProb <- function(n_i, n_j) min(1e-3, 2 / max(n_i, n_j))
 
+#' Record the geometry a sparse kernel core built its coordinates on
+#'
+#' Reached from two directions. Via [computeKernelMatrix()] /
+#' [computeSelfKernel()] the arguments were already reconciled against any
+#' recorded geometry by `.resolveDistanceGeometry()`, so nothing can conflict
+#' here. Via [computeSparseKernel()] / [computeSparseKernelFloat32()] they are
+#' whatever the caller passed -- those generics have concrete defaults, so a
+#' disagreement can only be warned about, not attributed to an explicit
+#' argument. Either way the record ends up describing the coordinates the
+#' kernels were actually built on.
+#' @noRd
+.recordSparseKernelGeometry <- function(object, distType, xDistScale, yDistScale,
+                                        zDistScale, normalizeDistance,
+                                        normalizeMethod, normalizeTarget,
+                                        truncateLowDist, what) {
+  requested <- list(
+    distType = distType, xDistScale = xDistScale, yDistScale = yDistScale,
+    zDistScale = zDistScale, normalizeDistance = normalizeDistance,
+    normalizeMethod = normalizeMethod,
+    normalizeTarget = normalizeTarget, truncateLowDist = truncateLowDist
+  )
+  .warnDistanceGeometryMismatch(object, requested, what)
+  recorded <- .getDistanceGeometry(object)
+  # A record describes the scaling the matrices ended up on, so the self-kernel
+  # paths' "inherit" instruction resolves to whatever it inherited from.
+  normalizeDistance <- .recordedNormalizeDistance(normalizeDistance, recorded)
+  object@distanceGeometry <- .makeDistanceGeometry(
+    distType, xDistScale, yDistScale, zDistScale,
+    normalizeDistance, normalizeMethod, normalizeTarget, truncateLowDist,
+    source = if (length(recorded) > 0 && !is.null(recorded$source) &&
+                 length(.geometryConflicts(recorded, requested)) == 0) {
+      recorded$source
+    } else {
+      what
+    }
+  )
+  object
+}
+
 # -----------------------------------------------------------------------------
 # Single-slide core
 # -----------------------------------------------------------------------------
@@ -475,11 +650,15 @@
                                      normalizeKernel, minAveCellNeighor,
                                      rowNormalizeKernel, colNormalizeKernel, verbose,
                                      distType, xDistScale, yDistScale, zDistScale,
-                                     normalizeDistance, normalizeTarget, truncateLowDist) {
+                                     normalizeDistance, normalizeMethod, normalizeTarget, truncateLowDist) {
 
   cts <- .checkInputSparseKernel(object, sigmaValues, lowerLimit, upperQuantile,
                                  minAveCellNeighor, rowNormalizeKernel,
                                  colNormalizeKernel, distType)
+  object <- .recordSparseKernelGeometry(
+    object, distType, xDistScale, yDistScale, zDistScale,
+    normalizeDistance, normalizeMethod, normalizeTarget, truncateLowDist, "computeSparseKernel"
+  )
   object@sigmaValues <- sigmaValues
   max_sigma <- max(sigmaValues)
 
@@ -499,30 +678,46 @@
                      function(k) list(i = pct[1, k], j = pct[2, k], within = FALSE))
   }
 
-  need_pct <- truncateLowDist || normalizeDistance
+  # The low percentile floors small distances; the scaling reference sets the
+  # unit. They were one number before 1.2.0, which is why one dense block could
+  # rescale the whole object. They are now computed separately.
+  need_pct <- truncateLowDist ||
+    (normalizeDistance && identical(normalizeMethod, "percentile"))
+  need_spacing <- normalizeDistance && identical(normalizeMethod, "spacing")
 
   if (verbose) {
     cat(sprintf("Computing sparse kernel for %d cell type(s) [%s]\n",
                 length(cts), if (within_only) "within" else "pairwise"))
   }
 
-  # PASS 1: per-block low-distance percentile + global scaling factor
+  # PASS 1: per-block reference distances + global scaling factor
   pctls <- rep(NA_real_, length(blocks))
-  if (need_pct) {
+  spacings <- rep(NA_real_, length(blocks))
+  if (need_pct || need_spacing) {
     for (b in seq_along(blocks)) {
       blk <- blocks[[b]]
       A <- ct_coords[[blk$i]]
       B <- if (blk$within) NULL else ct_coords[[blk$j]]
-      p <- if (blk$within) 1e-4 else .pairPercentileProb(nrow(A), nrow(B))
-      pctls[b] <- .lowPercentileBlock(A, B, p)$percentile
+      if (need_pct) {
+        p <- if (blk$within) 1e-4 else .pairPercentileProb(nrow(A), nrow(B))
+        pctls[b] <- .lowPercentileBlock(A, B, p)$percentile
+      }
+      if (need_spacing) {
+        spacings[b] <- .blockNearestSpacing(
+          A, if (blk$within) A else B, within = blk$within
+        )
+      }
     }
   }
-  scaling_factor <- if (normalizeDistance) normalizeTarget / min(pctls) else 1
-  if (normalizeDistance && (!is.finite(scaling_factor) || scaling_factor <= 0)) {
-    stop("Cannot compute distance normalization: no valid low-distance ",
-         "percentile across cell-type blocks (scaling factor is ",
-         scaling_factor, "). Check for cell types with degenerate or ",
-         "coincident coordinates, or set normalizeDistance = FALSE.")
+  scaling_factor <- if (!normalizeDistance) {
+    1
+  } else {
+    .distanceScaleFactor(
+      .combineDistanceReference(
+        if (need_spacing) spacings else pctls, normalizeMethod
+      ),
+      normalizeTarget, normalizeMethod
+    )
   }
   if (normalizeDistance && verbose) {
     message(sprintf("Distance normalization scaling factor: %g", scaling_factor))
@@ -596,17 +791,23 @@
                                           normalizeKernel, minAveCellNeighor,
                                           rowNormalizeKernel, colNormalizeKernel, verbose,
                                           distType, xDistScale, yDistScale, zDistScale,
-                                          normalizeDistance, normalizeTarget, truncateLowDist) {
+                                          normalizeDistance, normalizeMethod, normalizeTarget, truncateLowDist) {
 
   cts <- .checkInputSparseKernel(object, sigmaValues, lowerLimit, upperQuantile,
                                  minAveCellNeighor, rowNormalizeKernel,
                                  colNormalizeKernel, distType)
   slides <- getSlideList(object)
   if (length(slides) == 0) stop("No slides found in multi-slide object")
+  object <- .recordSparseKernelGeometry(
+    object, distType, xDistScale, yDistScale, zDistScale,
+    normalizeDistance, normalizeMethod, normalizeTarget, truncateLowDist, "computeSparseKernel"
+  )
   object@sigmaValues <- sigmaValues
   max_sigma <- max(sigmaValues)
   within_only <- length(cts) == 1
-  need_pct <- truncateLowDist || normalizeDistance
+  need_pct <- truncateLowDist ||
+    (normalizeDistance && identical(normalizeMethod, "percentile"))
+  need_spacing <- normalizeDistance && identical(normalizeMethod, "spacing")
 
   if (verbose) {
     cat(sprintf("Computing sparse kernel for %d cell type(s) across %d slides [%s]\n",
@@ -645,24 +846,37 @@
     coord_cache[[key]]
   }
 
-  # PASS 1: per-block percentiles + GLOBAL min across all slides/pairs
+  # PASS 1: per-block reference distances, combined into one global scale.
+  # "spacing" takes the median across slide/pair blocks, so a single dense
+  # block cannot set the unit for every other slide; "percentile" keeps the
+  # pre-1.2.0 minimum.
   pctls <- rep(NA_real_, length(blocks))
-  if (need_pct) {
+  spacings <- rep(NA_real_, length(blocks))
+  if (need_pct || need_spacing) {
     for (b in seq_along(blocks)) {
       blk <- blocks[[b]]
       A <- get_coords(blk$slide, blk$i)
       B <- if (blk$within) NULL else get_coords(blk$slide, blk$j)
-      p <- if (blk$within) 1e-4 else .pairPercentileProb(nrow(A), nrow(B))
-      pctls[b] <- .lowPercentileBlock(A, B, p)$percentile
+      if (need_pct) {
+        p <- if (blk$within) 1e-4 else .pairPercentileProb(nrow(A), nrow(B))
+        pctls[b] <- .lowPercentileBlock(A, B, p)$percentile
+      }
+      if (need_spacing) {
+        spacings[b] <- .blockNearestSpacing(
+          A, if (blk$within) A else B, within = blk$within
+        )
+      }
     }
   }
-  global_min_pct <- if (need_pct) min(pctls, na.rm = TRUE) else NA_real_
-  scaling_factor <- if (normalizeDistance) normalizeTarget / global_min_pct else 1
-  if (normalizeDistance && (!is.finite(scaling_factor) || scaling_factor <= 0)) {
-    stop("Cannot compute distance normalization: no valid low-distance ",
-         "percentile across slide/cell-type blocks (scaling factor is ",
-         scaling_factor, "). Check for cell types with degenerate or ",
-         "coincident coordinates, or set normalizeDistance = FALSE.")
+  scaling_factor <- if (!normalizeDistance) {
+    1
+  } else {
+    .distanceScaleFactor(
+      .combineDistanceReference(
+        if (need_spacing) spacings else pctls, normalizeMethod
+      ),
+      normalizeTarget, normalizeMethod
+    )
   }
   if (normalizeDistance && verbose) {
     message(sprintf("Global distance scaling factor: %g", scaling_factor))
@@ -734,7 +948,7 @@
     object, sigmaValues, lowerLimit, upperQuantile,
     normalizeKernel, minAveCellNeighor, rowNormalizeKernel, colNormalizeKernel,
     distType, xDistScale, yDistScale, zDistScale,
-    normalizeDistance, normalizeTarget, truncateLowDist,
+    normalizeDistance, normalizeMethod, normalizeTarget, truncateLowDist,
     verbose, overwrite, is_multi) {
   cts <- .checkInputSparseKernel(
     object, sigmaValues, lowerLimit, upperQuantile, minAveCellNeighor,
@@ -745,6 +959,10 @@
             "for single-cell-type kernels.")
     return(object)
   }
+  object <- .recordSparseKernelGeometry(
+    object, distType, xDistScale, yDistScale, zDistScale,
+    normalizeDistance, normalizeMethod, normalizeTarget, truncateLowDist, "computeSelfKernel"
+  )
 
   slides <- if (is_multi) getSlideList(object) else NULL
   if (is_multi && length(slides) == 0L) {
@@ -799,26 +1017,48 @@
     ))
   }
 
-  need_pct <- truncateLowDist || normalizeDistance
+  # normalizeDistance may be "inherit", so branch on the mode rather than on
+  # the argument itself.
+  scaling_mode <- .normalizeDistanceMode(normalizeDistance)
+  derive_own <- identical(scaling_mode, "own")
+  need_pct <- truncateLowDist ||
+    (derive_own && identical(normalizeMethod, "percentile"))
+  need_spacing <- derive_own && identical(normalizeMethod, "spacing")
   pctls <- rep(NA_real_, length(blocks))
-  if (need_pct) {
+  spacings <- rep(NA_real_, length(blocks))
+  if (need_pct || need_spacing) {
     for (b in seq_along(blocks)) {
       blk <- blocks[[b]]
-      pctls[b] <- .lowPercentileBlock(
-        get_coords(blk$slide, blk$i), NULL, 1e-4
-      )$percentile
+      A <- get_coords(blk$slide, blk$i)
+      if (need_pct) {
+        pctls[b] <- .lowPercentileBlock(A, NULL, 1e-4)$percentile
+      }
+      if (need_spacing) {
+        spacings[b] <- .blockNearestSpacing(A, A, within = TRUE)
+      }
     }
   }
-  global_min_pct <- if (need_pct) min(pctls, na.rm = TRUE) else NA_real_
-  scaling_mode <- .normalizeDistanceMode(normalizeDistance)
+  reference <- if (derive_own) {
+    .combineDistanceReference(
+      if (need_spacing) spacings else pctls, normalizeMethod
+    )
+  } else {
+    NA_real_
+  }
+  if (derive_own) {
+    # Raises the diagnostic when no block yielded a usable reference.
+    # .resolveSelfDistanceScaling() would quietly return 1 there, silently
+    # skipping the normalization the caller asked for.
+    .distanceScaleFactor(reference, normalizeTarget, normalizeMethod)
+  }
   scaling_factor <- .resolveSelfDistanceScaling(
-    normalizeDistance, global_min_pct, object@distanceScaleFactor,
+    normalizeDistance, reference, object@distanceScaleFactor,
     target = normalizeTarget
   )
   if (!identical(scaling_mode, "none") &&
       (!is.finite(scaling_factor) || scaling_factor <= 0)) {
     stop("Cannot normalize self-kernel distances: no valid low-distance ",
-         "percentile was found.")
+         "reference was found.")
   }
   if (!identical(scaling_mode, "none")) {
     ## Only record a factor when there is not already one. Overwriting the
@@ -932,6 +1172,12 @@
 #' @param xDistScale,yDistScale,zDistScale per-axis coordinate scales.
 #' @param normalizeDistance,normalizeTarget,truncateLowDist distance-processing
 #'   options, matching [computeDistance()].
+#' @param normalizeMethod How the reference distance is estimated when
+#'   `normalizeDistance = TRUE`. `"spacing"` (default) uses the median
+#'   nearest-partner distance, taken across cell-type blocks by median, so the
+#'   unit tracks local cell spacing and no single dense block sets the scale for
+#'   the whole object. `"percentile"` reproduces the pre-1.2.0 behavior: the
+#'   minimum, across blocks, of a low quantile of pairwise distances.
 #' @return The `CoPro` object with sparse kernel matrices in `@kernelMatrices`.
 #' @family spatial-pipeline
 #' @seealso [computeKernelMatrix()], [computeDistance()]
@@ -944,7 +1190,7 @@ setGeneric(
            rowNormalizeKernel = FALSE, colNormalizeKernel = FALSE,
            distType = c("Euclidean2D", "Euclidean3D"),
            xDistScale = 1, yDistScale = 1, zDistScale = 1,
-           normalizeDistance = TRUE, normalizeTarget = 0.01,
+           normalizeDistance = FALSE, normalizeMethod = "spacing", normalizeTarget = 0.01,
            truncateLowDist = TRUE, verbose = TRUE) standardGeneric("computeSparseKernel")
 )
 
@@ -956,14 +1202,14 @@ setMethod("computeSparseKernel", "CoProSingle",
                    rowNormalizeKernel = FALSE, colNormalizeKernel = FALSE,
                    distType = c("Euclidean2D", "Euclidean3D"),
                    xDistScale = 1, yDistScale = 1, zDistScale = 1,
-                   normalizeDistance = TRUE, normalizeTarget = 0.01,
+                   normalizeDistance = FALSE, normalizeMethod = "spacing", normalizeTarget = 0.01,
                    truncateLowDist = TRUE, verbose = TRUE) {
             distType <- match.arg(distType)
             .computeSparseKernelCore(object, sigmaValues, lowerLimit, upperQuantile,
                                      normalizeKernel, minAveCellNeighor,
                                      rowNormalizeKernel, colNormalizeKernel, verbose,
                                      distType, xDistScale, yDistScale, zDistScale,
-                                     normalizeDistance, normalizeTarget, truncateLowDist)
+                                     normalizeDistance, normalizeMethod, normalizeTarget, truncateLowDist)
           })
 
 #' @rdname computeSparseKernel
@@ -974,12 +1220,12 @@ setMethod("computeSparseKernel", "CoProMulti",
                    rowNormalizeKernel = FALSE, colNormalizeKernel = FALSE,
                    distType = c("Euclidean2D", "Euclidean3D"),
                    xDistScale = 1, yDistScale = 1, zDistScale = 1,
-                   normalizeDistance = TRUE, normalizeTarget = 0.01,
+                   normalizeDistance = FALSE, normalizeMethod = "spacing", normalizeTarget = 0.01,
                    truncateLowDist = TRUE, verbose = TRUE) {
             distType <- match.arg(distType)
             .computeSparseKernelCoreMulti(object, sigmaValues, lowerLimit, upperQuantile,
                                           normalizeKernel, minAveCellNeighor,
                                           rowNormalizeKernel, colNormalizeKernel, verbose,
                                           distType, xDistScale, yDistScale, zDistScale,
-                                          normalizeDistance, normalizeTarget, truncateLowDist)
+                                          normalizeDistance, normalizeMethod, normalizeTarget, truncateLowDist)
           })

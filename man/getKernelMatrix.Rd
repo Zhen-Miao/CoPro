@@ -73,6 +73,7 @@ nested structure and provides symmetric access when needed.
 Other accessors: 
 \code{\link{getCellScores}()},
 \code{\link{getCellScoresInSitu}()},
-\code{\link{getDistMat}()}
+\code{\link{getDistMat}()},
+\code{\link{getDistanceGeometry}()}
 }
 \concept{accessors}

@@ -15,16 +15,18 @@ computeKernelMatrix(
   minAveCellNeighor = 2,
   rowNormalizeKernel = FALSE,
   colNormalizeKernel = FALSE,
-  method = c("auto", "dense", "sparse"),
+  method = c("auto", "dense", "sparse", "float32"),
   dropDistances = TRUE,
   autoThreshold = 5000L,
+  denseThreshold = 0.3,
   distType = NULL,
-  xDistScale = 1,
-  yDistScale = 1,
-  zDistScale = 1,
-  normalizeDistance = TRUE,
-  normalizeTarget = 0.01,
-  truncateLowDist = TRUE,
+  xDistScale = NULL,
+  yDistScale = NULL,
+  zDistScale = NULL,
+  normalizeDistance = NULL,
+  normalizeMethod = NULL,
+  normalizeTarget = NULL,
+  truncateLowDist = NULL,
   verbose = TRUE
 )
 
@@ -37,16 +39,18 @@ computeKernelMatrix(
   minAveCellNeighor = 2,
   rowNormalizeKernel = FALSE,
   colNormalizeKernel = FALSE,
-  method = c("auto", "dense", "sparse"),
+  method = c("auto", "dense", "sparse", "float32"),
   dropDistances = TRUE,
   autoThreshold = 5000L,
+  denseThreshold = 0.3,
   distType = NULL,
-  xDistScale = 1,
-  yDistScale = 1,
-  zDistScale = 1,
-  normalizeDistance = TRUE,
-  normalizeTarget = 0.01,
-  truncateLowDist = TRUE,
+  xDistScale = NULL,
+  yDistScale = NULL,
+  zDistScale = NULL,
+  normalizeDistance = NULL,
+  normalizeMethod = NULL,
+  normalizeTarget = NULL,
+  truncateLowDist = NULL,
   verbose = TRUE
 )
 
@@ -59,16 +63,18 @@ computeKernelMatrix(
   minAveCellNeighor = 2,
   rowNormalizeKernel = FALSE,
   colNormalizeKernel = FALSE,
-  method = c("auto", "dense", "sparse"),
+  method = c("auto", "dense", "sparse", "float32"),
   dropDistances = TRUE,
   autoThreshold = 5000L,
+  denseThreshold = 0.3,
   distType = NULL,
-  xDistScale = 1,
-  yDistScale = 1,
-  zDistScale = 1,
-  normalizeDistance = TRUE,
-  normalizeTarget = 0.01,
-  truncateLowDist = TRUE,
+  xDistScale = NULL,
+  yDistScale = NULL,
+  zDistScale = NULL,
+  normalizeDistance = NULL,
+  normalizeMethod = NULL,
+  normalizeTarget = NULL,
+  truncateLowDist = NULL,
   verbose = TRUE
 )
 }
@@ -101,18 +107,23 @@ asymmetric result in skrCCA inference.}
 normalized? Note that row or column wise normalization will result in an
 asymmetric result in skrCCA inference.}
 
-\item{method}{One of \code{"auto"}, \code{"dense"}, or \code{"sparse"}. \code{"dense"} is the
-classic path that reads the distance matrices produced by
-\code{\link[=computeDistance]{computeDistance()}}. \code{"sparse"} is a fused, memory-efficient path
-(\code{\link[=computeSparseKernel]{computeSparseKernel()}}) that builds sparse kernels directly from
-coordinates via a fixed-radius neighbor search, never forming a dense
-\verb{n x n} matrix, and does not require \code{\link[=computeDistance]{computeDistance()}} to have been run.
-Symmetric within-type kernels retain one triangle in a \code{dsCMatrix};
-cross-type and asymmetrically normalized kernels use \code{dgCMatrix}. Results
-are numerically equivalent. \code{"auto"} (default) picks \code{"sparse"} when
-any per-slide cell-type block reaches \code{autoThreshold} cells or when the
-aggregate dense block workload reaches \code{autoThreshold^2} entries; otherwise
-it picks \code{"dense"}.}
+\item{method}{One of \code{"auto"}, \code{"dense"}, \code{"sparse"}, or \code{"float32"}.
+\code{"dense"} is the classic path that reads the distance matrices produced by
+\code{\link[=computeDistance]{computeDistance()}}. \code{"sparse"} and \code{"float32"} are fused, memory-efficient
+paths (\code{\link[=computeSparseKernel]{computeSparseKernel()}} and \code{\link[=computeSparseKernelFloat32]{computeSparseKernelFloat32()}}) that
+build kernels directly from coordinates via a fixed-radius neighbor search,
+never forming a dense \verb{n x n} matrix, and do not require \code{\link[=computeDistance]{computeDistance()}}
+to have been run. \code{"float32"} stores 8 bytes per entry against \code{"sparse"}'s
+12 and streams one block at a time instead of caching every block's
+neighbors, so it is the cheaper of the two; \code{"sparse"} keeps float64 values
+for exactness checks.
+
+\code{"auto"} (default) picks \code{"dense"} for small data, and otherwise \code{"float32"}.
+Small means every per-slide cell-type block is under \code{autoThreshold} cells
+and the aggregate dense workload is under \code{autoThreshold^2} entries. Above
+that, a neighbor probe predicts how dense the kernel will actually be and
+warns when a fixed-radius kernel would retain more than \code{denseThreshold} of
+each block, since sparse storage saves nothing there.}
 
 \item{dropDistances}{Logical. If \code{TRUE} (default), the (potentially large)
 \verb{@distances} slot is cleared after kernels are computed, since the
@@ -125,9 +136,25 @@ the sparse path for any kernel-block dimension. The sparse path is also
 selected when aggregate dense block entries reach \code{autoThreshold^2}.
 Default 5000 (about 200 MB of doubles before temporary matrices and copies).}
 
-\item{distType, xDistScale, yDistScale, zDistScale, normalizeDistance, normalizeTarget, truncateLowDist}{Distance options used only by the sparse path (see \code{\link[=computeDistance]{computeDistance()}} and
-\code{\link[=computeSparseKernel]{computeSparseKernel()}}). \code{distType} defaults to \code{"Euclidean3D"} when the
-coordinates contain a \code{z} column, otherwise \code{"Euclidean2D"}.}
+\item{denseThreshold}{Predicted kernel density above which \code{method = "auto"}
+warns that a sparse representation is a poor fit and suggests a smaller
+sigma. Default 0.3. A \code{dgCMatrix} costs 12 bytes per stored entry against 8
+for a dense double, so sparse storage is strictly worse past about 0.67.}
+
+\item{distType, xDistScale, yDistScale, zDistScale, normalizeDistance, normalizeMethod, normalizeTarget, truncateLowDist}{Distance options used only by the sparse paths (see \code{\link[=computeDistance]{computeDistance()}} and
+\code{\link[=computeSparseKernel]{computeSparseKernel()}}). Each defaults to \code{NULL}, meaning "inherit the
+geometry recorded by \code{\link[=computeDistance]{computeDistance()}}", so sparse kernels are built on
+the same coordinates as the distances rather than on this function's own
+defaults. When nothing has been recorded, the fallbacks are \code{xDistScale} /
+\code{yDistScale} / \code{zDistScale} \verb{= 1}, \code{normalizeDistance = FALSE},
+\code{normalizeMethod = "spacing"}, \code{normalizeTarget = 0.01},
+\code{truncateLowDist = TRUE}, and a \code{distType} of \code{"Euclidean3D"} when the
+coordinates contain a \code{z} column, otherwise \code{"Euclidean2D"}. Passing a value
+that contradicts the recorded geometry is an error; inspect the record with
+\code{\link[=getDistanceGeometry]{getDistanceGeometry()}}.
+
+\code{normalizeDistance} defaulted to \code{TRUE} before CoPro 1.2.0. Use
+\code{\link[=detectSigmaRange]{detectSigmaRange()}} to choose sigma in the data's own units instead.}
 
 \item{verbose}{Whether to output the progress and related information}
 }
@@ -169,6 +196,7 @@ Other spatial-pipeline:
 \code{\link{computePCA}()},
 \code{\link{computeSparseKernel}()},
 \code{\link{computeSparseKernelFloat32}()},
+\code{\link{detectSigmaRange}()},
 \code{\link{runGeneSpaceCCA}()},
 \code{\link{runSkrCCA}()},
 \code{\link{runSlideLevelInference}()}

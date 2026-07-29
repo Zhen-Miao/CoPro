@@ -32,6 +32,7 @@ Get cell score and location information as a data.frame
 Other accessors: 
 \code{\link{getCellScores}()},
 \code{\link{getDistMat}()},
+\code{\link{getDistanceGeometry}()},
 \code{\link{getKernelMatrix}()}
 }
 \concept{accessors}

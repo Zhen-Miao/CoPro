@@ -257,7 +257,10 @@ test_that("the variogram normalizer works on a multi-slide object", {
   cts <- sort(unique(as.character(obj@cellTypes)))[1:2]
   obj <- quiet(subsetData(obj, cellTypesOfInterest = cts))
   obj <- quiet(computePCA(obj, nPCA = 5))
-  obj <- quiet(computeDistance(obj, distType = "Euclidean2D", verbose = FALSE))
+  ## the helper lays cells out over a 10 x 10 field, so sigma = 0.05 only means
+  ## a populated kernel once the distances are rescaled
+  obj <- quiet(computeDistance(obj, distType = "Euclidean2D",
+                               normalizeDistance = TRUE, verbose = FALSE))
   obj <- quiet(computeKernelMatrix(obj, sigmaValues = 0.05, verbose = FALSE))
   obj <- quiet(runSkrCCA(obj, scalePCs = TRUE, nCC = 1))
 

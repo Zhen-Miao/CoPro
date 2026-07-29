@@ -161,6 +161,7 @@ Other spatial-pipeline:
 \code{\link{computePCA}()},
 \code{\link{computeSparseKernel}()},
 \code{\link{computeSparseKernelFloat32}()},
+\code{\link{detectSigmaRange}()},
 \code{\link{runSkrCCA}()},
 \code{\link{runSlideLevelInference}()}
 }
