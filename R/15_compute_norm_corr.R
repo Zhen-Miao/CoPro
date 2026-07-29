@@ -1,3 +1,10 @@
+# The \describe{} items below continue at a two-space indent, not four. A
+# paragraph break followed by a four-space indent reads as a markdown code
+# block, so roxygen wraps the rest of the item in \preformatted{} and escapes
+# the brace that was meant to close \item{}{}. The .Rd then has unbalanced
+# braces and R CMD check reports a WARNING from both "Rd files" and "can be
+# installed".
+
 #' Compute Normalized Correlation (approximation)
 #'
 #' This method calculates the normalized correlation between pairs of cell types
@@ -31,26 +38,26 @@
 #'     "at the same sigma" is generally at a different physical bandwidth from
 #'     the cross-kernel. Provided as a diagnostic, not for analysis.}
 #'   \item{`"variogram"`}{Estimate one within-type autocorrelation range per
-#'     cell type from the feature-averaged spatial autocorrelation of the PC
-#'     scores, and use \eqn{R = \exp(-d^2/2\ell^2)}. The range is a property of
-#'     the score field rather than of the bandwidth, so it is fitted once and
-#'     reused across the grid. It is fitted from all PC columns, never from a
-#'     fitted canonical score, which would leak the association under test into
-#'     the denominator.
+#'   cell type from the feature-averaged spatial autocorrelation of the PC
+#'   scores, and use \eqn{R = \exp(-d^2/2\ell^2)}. The range is a property of
+#'   the score field rather than of the bandwidth, so it is fitted once and
+#'   reused across the grid. It is fitted from all PC columns, never from a
+#'   fitted canonical score, which would leak the association under test into
+#'   the denominator.
 #'
-#'     **This flattens the null when the scores share one correlation length,
-#'     and should be treated as a diagnostic otherwise.** On a real targeted
-#'     panel the principal components within a cell type generally do *not*
-#'     share one: measured per-component ranges spanned 0.3-4.1 cell-spacings on
-#'     a colon MERFISH dataset, where the flat feature-average returned a
-#'     sub-spacing range (so \eqn{R \approx I}, reproducing `"unwhitened"`)
-#'     while pooling over the leading five components gave a range 6x longer.
-#'     The selected bandwidth is steeply sensitive to that choice -- sweeping
-#'     the assumed range over 0.4-5 cell-spacings moved it from 3.4 to 0.3
-#'     spacings on the same data. Check `getNormalizerInfo()$ranges` against
-#'     what you believe about the tissue, supply `normalizerControl$range`
-#'     if you have a better estimate, and prefer a permutation null when the
-#'     selected bandwidth matters.}
+#'   **This flattens the null when the scores share one correlation length,
+#'   and should be treated as a diagnostic otherwise.** On a real targeted
+#'   panel the principal components within a cell type generally do *not*
+#'   share one: measured per-component ranges spanned 0.3-4.1 cell-spacings on
+#'   a colon MERFISH dataset, where the flat feature-average returned a
+#'   sub-spacing range (so \eqn{R \approx I}, reproducing `"unwhitened"`)
+#'   while pooling over the leading five components gave a range 6x longer.
+#'   The selected bandwidth is steeply sensitive to that choice -- sweeping
+#'   the assumed range over 0.4-5 cell-spacings moved it from 3.4 to 0.3
+#'   spacings on the same data. Check `getNormalizerInfo()$ranges` against
+#'   what you believe about the tissue, supply `normalizerControl$range`
+#'   if you have a better estimate, and prefer a permutation null when the
+#'   selected bandwidth matters.}
 #' }
 #'
 #' @param object A `CoPro` or `CoProMulti` object containing CCA results and kernel matrices.
