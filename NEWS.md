@@ -43,18 +43,43 @@
 * **New `normalizeMethod` argument** controls how the reference distance is
   estimated when `normalizeDistance = TRUE`.
 
-  * `"spacing"` (new default) uses the median nearest-partner distance,
-    combined across cell-type blocks by median.
+  * `"global"` (new default) uses the median nearest-neighbor distance over all
+    cells of interest, ignoring their type labels.
+  * `"spacing"` uses the median nearest-partner distance measured per
+    cell-type block, combined across blocks by median.
   * `"percentile"` reproduces the pre-1.2.0 behavior: the *minimum*, across
     blocks, of a low quantile of pairwise distances.
 
   The old rule let the single densest block set the unit for the entire object,
   so adding one tightly packed slide or cell type rescaled every other block.
-  Taking a median over blocks, of a statistic that estimates local spacing
-  directly, removes that dependence on tissue extent and on which block happens
-  to be densest. The percentile is still used to floor small distances when
-  `truncateLowDist = TRUE`; the two jobs are now separate quantities rather
-  than one shared number.
+  Both new methods remove that dependence on tissue extent and on which block
+  happens to be densest. The percentile is still used to floor small distances
+  when `truncateLowDist = TRUE`; the two jobs are now separate quantities
+  rather than one shared number.
+
+  `"global"` goes further, and is the default for a reason that only shows up
+  when an object holds both cross-type and within-type blocks. Any per-block
+  reference is measured on the blocks a step happens to build: a cross-type
+  block measures the gap between two compartments, so it moves with
+  colocalization, while a within-type block measures one type's own packing, so
+  it moves with abundance — in 2-D, a type with a tenth of the cells sits about
+  `sqrt(10)` further from its nearest neighbor. `computeDistance()` and
+  `computeSelfDistance()` therefore derived different units for the same
+  tissue. On a two-type test object where one type is packed into a tenth of
+  the other's area, the cross-derived and self-derived factors differ by 1.3x
+  under `"spacing"` and by 17x under `"percentile"`; under `"global"` they are
+  identical to machine precision, in either order, with no coordination between
+  the steps.
+
+  What `"global"` deliberately does not do is equalize effective neighbor
+  counts across cell types — a rare type still couples to fewer partners at a
+  given bandwidth. That is a question about sigma rather than about units, and
+  `detectSigmaRange()` answers it per block. The scale factor fixes the unit;
+  sigma fixes the reach.
+
+  `"global"` and `"spacing"` both fall back to `"percentile"` for
+  `distType = "Morphology-Aware"`, which has no Euclidean neighbor graph to
+  read a spacing from.
 
 ## Memory
 
@@ -74,8 +99,6 @@
   reports the predicted density and the sigma that would bring it under
   `denseThreshold` (default 0.3), so an out-of-memory run at a too-large sigma
   is now diagnosed rather than merely fatal.
-
-# CoPro (development version)
 
 ## Bug fixes
 
@@ -101,6 +124,74 @@
   so this fed into reported p-values.
 * `.recoverDistanceScaleFactor()` rebuilds probe distances on the recorded
   geometry instead of assuming raw, unscaled, 2-D `x,y`.
+* **Within-type and cross-type distances no longer end up on different
+  units.** With `normalizeDistance = TRUE`, `computeDistance()` derived its
+  scale factor from the cross-type blocks and `computeSelfDistance()` derived a
+  second one from the within-type blocks. The two references differ whenever
+  cell types differ in abundance or in how tightly they colocalize — on a
+  two-type object with one type packed 10x more densely, the within-type
+  reference exceeded the cross-type one in all 30 seeds tried, by 1.07x to
+  4.41x — so an object could hold cross and self distances on two units, with
+  `@distanceScaleFactor` describing only the cross ones. The new default
+  `normalizeMethod = "global"` removes the divergence at its source by
+  measuring the cells rather than the blocks (see *Breaking changes* above).
+  For the block-based methods, where no shared reference exists, the first
+  normalization now wins: a later step adopts the pinned factor instead of
+  deriving its own, and says so. `computeDistance()`, which rebuilds
+  `@distances` from scratch, and `overwrite = TRUE`, which discards the blocks
+  the pin described, are the two ways to re-derive it.
+* `computeSelfDistance()` now writes `@distanceScaleFactor`, which it
+  previously left untouched while rescaling the blocks it built. On a
+  self-distance-only object every downstream helper that maps analysis
+  coordinates back to raw ones was reading a factor of 1 for rescaled
+  distances.
+* `computeSelfDistance()` gained a `normalizeTarget` argument and its geometry
+  arguments now default to `NULL`, inheriting the recorded geometry the way the
+  kernel entry points do. It previously hardcoded a target of 0.01, so
+  `computeDistance(normalizeTarget = 0.05)` followed by `computeSelfDistance()`
+  produced blocks 5x apart with nothing reporting the discrepancy. Contradicting
+  the record is now an error. **Behavior change:** on a 3-D object with no prior
+  `computeDistance()` call, `computeSelfDistance()` now defaults to
+  `distType = "Euclidean3D"` (from the coordinate columns present) rather than
+  `"Euclidean2D"`; pass `distType` explicitly to pin it.
+* **A normalization that could not happen is no longer recorded as one.** When
+  `normalizeDistance = TRUE` but no reference could be measured — every
+  cell-type block below the 5-cell threshold, or no finite reference among the
+  blocks that were built — the step left `normalizeDistance = TRUE` in the
+  geometry record beside an untouched scale factor of 1. Nothing had been
+  derived from anything, but every later step read that pair as a legitimate
+  pinned unit and adopted the 1. The record now reports what happened rather
+  than what was asked for, and the step warns. Affected `computeSelfDistance()`
+  on both the single- and multi-slide paths, and `computeDistance()` on its two
+  multi-slide paths.
+* **`computeSparseKernelFloat32()` no longer erases a pinned scale factor.** It
+  wrote `@distanceScaleFactor` unconditionally, so calling it with its default
+  `normalizeDistance = FALSE` on an object already normalized by
+  `computeDistance()` replaced the real factor with 1, and every helper that
+  maps analysis coordinates back to raw ones — including the permutation null's
+  neighbor graph — silently used the wrong unit. It now guards the write the
+  way `computeSparseKernel()` already did.
+* **`computeSelfDistance(overwrite = TRUE)` re-derives the scale instead of
+  quietly switching normalization off.** `overwrite` clears the geometry record
+  to drop the pin, which also dropped the recorded `normalizeDistance = TRUE`,
+  so the argument fell back to the new 1.2.0 default of `FALSE` and the result
+  was an unnormalized object with a scale factor of 1. The record is now read
+  for defaults before it is cleared, so `overwrite` means "re-derive the unit"
+  as documented. Arguments supplied alongside `overwrite = TRUE` still win, so
+  the geometry remains freely changeable.
+* **`normalizeTarget` is validated wherever it is accepted.** Each entry point
+  repeated the check inline and `computeSelfDistance()` never gained one, so
+  `computeSelfDistance(normalizeTarget = -0.01)` returned a negative scale
+  factor and flipped the sign of every distance in the object. The check now
+  lives with the other geometry validation and runs on every path.
+* **Objects serialized before CoPro 1.2.0 keep their scale factor.** The pin
+  was read only when `@distanceGeometry` was populated, so an object carrying a
+  valid factor but no record — every object written by an earlier version —
+  re-derived a second unit, which is the bug the pin exists to prevent. Such an
+  object now keeps its factor. Relatedly, the guard for the missing slot probed
+  `methods::slotNames()`, which reads the *class definition* and so answered
+  `TRUE` for exactly the objects it was meant to catch; it now uses
+  `methods::.hasSlot()`, which asks the instance.
 
 # CoPro 1.1.3
 

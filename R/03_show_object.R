@@ -71,6 +71,12 @@ setMethod("show", "CoPro",
               cat(sprintf("- Distance geometry: %s (x/y/z scale %g/%g/%g), set by %s()\n",
                           geom$distType, geom$xDistScale, geom$yDistScale,
                           geom$zDistScale, geom$source))
+              pin <- .pinnedScaleFactor(object)
+              if (!is.null(pin)) {
+                cat(sprintf(
+                  "- Distance scale factor: %g (raw -> analysis units, %s to %g; shared by all blocks)\n",
+                  pin$factor, geom$normalizeMethod, geom$normalizeTarget))
+              }
             }
 
             # Additional information

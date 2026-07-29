@@ -16,30 +16,52 @@ NULL
 #' which only computes cross-type distances for multiple cell types, this
 #' function computes self-distances (within each cell type).
 #'
+#' `computeSelfDistance()` is normally additive: it adds within-type blocks to
+#' an object whose cross-type blocks [computeDistance()] already built. Its
+#' distance arguments therefore default to `NULL`, meaning "use whatever the
+#' existing distances were built on" ([getDistanceGeometry()]); supplying a
+#' value that contradicts that record is an error rather than a silent
+#' second basis. When nothing is recorded -- a self-distance-only workflow --
+#' the package defaults apply.
+#'
+#' When `normalizeDistance = TRUE` and the object already carries a scale
+#' factor, that factor is reused rather than re-derived from the within-type
+#' blocks, so cross-type and within-type distances stay on one unit. Pass
+#' `overwrite = TRUE` to discard the existing blocks and re-derive.
+#'
 #' @param object A `CoPro` object with multiple cell types
-#' @param distType Type of distance to compute: "Euclidean2D",
-#'  "Euclidean3D", or "Morphology-Aware"
-#' @param xDistScale Scale for x distance, default = 1
-#' @param yDistScale Scale for y distance, default = 1
-#' @param zDistScale Scale for z distance, default = 1
-#' @param normalizeDistance Whether to normalize distance? The normalization
-#'  will make sure that the 0.01% cell-cell distance will become 0.01, thus
-#'  ensuring consistent scaling across cell types. Default = TRUE
+#' @param distType Type of distance to compute: `"Euclidean2D"`,
+#'  `"Euclidean3D"`, or `"Morphology-Aware"`. `NULL` (default) inherits the
+#'  recorded geometry, falling back to the coordinate columns present.
+#' @param xDistScale Scale for x distance. `NULL` (default) inherits the
+#'  recorded geometry, falling back to 1.
+#' @param yDistScale Scale for y distance. `NULL` (default) inherits the
+#'  recorded geometry, falling back to 1.
+#' @param zDistScale Scale for z distance. `NULL` (default) inherits the
+#'  recorded geometry, falling back to 1.
+#' @param normalizeDistance Whether to rescale distances so that the reference
+#'  cell-cell distance becomes `normalizeTarget`. `NULL` (default) inherits the
+#'  recorded geometry, falling back to `FALSE` as of CoPro 1.2.0.
 #' @param normalizeMethod How the reference distance is estimated when
-#'  `normalizeDistance = TRUE`. `"spacing"` (default) uses the median
-#'  nearest-partner distance, combined across cell-type blocks by median, so the
-#'  unit tracks local cell spacing and no single dense block sets the scale for
-#'  the whole object. `"percentile"` reproduces the pre-1.2.0 behavior: the
-#'  minimum, across blocks, of a low quantile of pairwise distances. Not
-#'  available for `distType = "Morphology-Aware"`, which falls back to
-#'  `"percentile"`.
+#'  `normalizeDistance = TRUE` and no scale factor is already pinned on the
+#'  object. `"global"` uses the median nearest-neighbor distance over all cells,
+#'  ignoring type labels, which gives the same unit here as in
+#'  [computeDistance()]; `"spacing"` measures the within-type blocks instead;
+#'  `"percentile"` reproduces the pre-1.2.0 behavior (the minimum, across
+#'  blocks, of a low quantile of pairwise distances). `NULL` (default) inherits
+#'  the recorded geometry, falling back to `"global"`.
+#' @param normalizeTarget Numeric scalar. The value the reference distance is
+#'  rescaled to. `NULL` (default) inherits the recorded geometry, falling back
+#'  to 0.01.
 #' @param truncateLowDist Whether to truncate small distances so that cells
-#'  that are nearly overlapping do not have super small distances. Default = TRUE.
+#'  that are nearly overlapping do not have super small distances. `NULL`
+#'  (default) inherits the recorded geometry, falling back to `TRUE`.
 #' @param verbose Whether to print info about the computation progress
 #' @param overwrite Whether to overwrite existing distance matrices. If FALSE,
 #'  will add self-distance matrices to existing cross-type distances. Default = FALSE
 #'
 #' @return `CoPro` object with self-distance matrices added to the distances slot
+#' @seealso [computeDistance()], [getDistanceGeometry()]
 #' @export
 #' @rdname computeSelfDistance
 #' @aliases computeSelfDistance,CoProSingle-method
@@ -58,53 +80,103 @@ NULL
 #' }
 setGeneric(
   "computeSelfDistance",
-  function(object, distType = c("Euclidean2D", "Euclidean3D", "Morphology-Aware"),
-           xDistScale = 1, yDistScale = 1, zDistScale = 1, 
-           normalizeDistance = FALSE, normalizeMethod = c("spacing", "percentile"),
-           truncateLowDist = TRUE, 
+  function(object, distType = NULL,
+           xDistScale = NULL, yDistScale = NULL, zDistScale = NULL,
+           normalizeDistance = NULL, normalizeMethod = NULL,
+           normalizeTarget = NULL, truncateLowDist = NULL,
            verbose = TRUE, overwrite = FALSE) standardGeneric("computeSelfDistance")
 )
 
 #' @rdname computeSelfDistance
 #' @export
-setMethod("computeSelfDistance", "CoProSingle", 
-          function(object, distType = c("Euclidean2D", "Euclidean3D", "Morphology-Aware"),
-                   xDistScale = 1, yDistScale = 1, zDistScale = 1,
-                   normalizeDistance = FALSE, normalizeMethod = c("spacing", "percentile"),
-           truncateLowDist = TRUE, 
+setMethod("computeSelfDistance", "CoProSingle",
+          function(object, distType = NULL,
+                   xDistScale = NULL, yDistScale = NULL, zDistScale = NULL,
+                   normalizeDistance = NULL, normalizeMethod = NULL,
+                   normalizeTarget = NULL, truncateLowDist = NULL,
                    verbose = TRUE, overwrite = FALSE) {
-            distType <- match.arg(distType)
             .computeSelfDistanceCore(object, distType, xDistScale, yDistScale, zDistScale,
-                                    normalizeDistance, normalizeMethod, truncateLowDist, verbose, overwrite)
+                                    normalizeDistance, normalizeMethod, normalizeTarget,
+                                    truncateLowDist, verbose, overwrite)
           })
 
 #' @rdname computeSelfDistance
 #' @export
-setMethod("computeSelfDistance", "CoProMulti", 
-          function(object, distType = c("Euclidean2D", "Euclidean3D", "Morphology-Aware"),
-                   xDistScale = 1, yDistScale = 1, zDistScale = 1,
-                   normalizeDistance = FALSE, normalizeMethod = c("spacing", "percentile"),
-           truncateLowDist = TRUE, 
+setMethod("computeSelfDistance", "CoProMulti",
+          function(object, distType = NULL,
+                   xDistScale = NULL, yDistScale = NULL, zDistScale = NULL,
+                   normalizeDistance = NULL, normalizeMethod = NULL,
+                   normalizeTarget = NULL, truncateLowDist = NULL,
                    verbose = TRUE, overwrite = FALSE) {
-            distType <- match.arg(distType)
             .computeSelfDistanceCoreMulti(object, distType, xDistScale, yDistScale, zDistScale,
-                                         normalizeDistance, normalizeMethod, truncateLowDist, verbose, overwrite)
+                                         normalizeDistance, normalizeMethod, normalizeTarget,
+                                         truncateLowDist, verbose, overwrite)
           })
+
+#' Resolve the geometry a self-distance step should build on
+#'
+#' `computeSelfDistance()` runs on top of whatever [computeDistance()] left
+#' behind, so its geometry arguments are `NULL`-defaulted and inherited rather
+#' than re-defaulted. Wraps [.resolveDistanceGeometry()] so both the single-
+#' and multi-slide cores enter with the same resolved values.
+#' @noRd
+.resolveSelfDistanceGeometry <- function(object, distType, xDistScale, yDistScale,
+                                         zDistScale, normalizeDistance,
+                                         normalizeMethod, normalizeTarget,
+                                         truncateLowDist, verbose,
+                                         rebuild = FALSE) {
+  geometry <- .resolveDistanceGeometry(
+    object,
+    requested = list(
+      distType = distType, xDistScale = xDistScale, yDistScale = yDistScale,
+      zDistScale = zDistScale, normalizeDistance = normalizeDistance,
+      normalizeMethod = normalizeMethod, normalizeTarget = normalizeTarget,
+      truncateLowDist = truncateLowDist
+    ),
+    what = "computeSelfDistance", verbose = verbose, rebuild = rebuild
+  )
+  if (isTRUE(geometry$normalizeDistance) &&
+      geometry$normalizeMethod %in% c("global", "spacing") &&
+      identical(geometry$distType, "Morphology-Aware")) {
+    warning(sprintf(paste("normalizeMethod = '%s' is not defined for",
+                          "Morphology-Aware distances; using 'percentile'."),
+                    geometry$normalizeMethod))
+    geometry$normalizeMethod <- "percentile"
+  }
+  geometry
+}
 
 #' Core function for computing self-distances (single slide)
 #' @noRd
 .computeSelfDistanceCore <- function(object, distType, xDistScale, yDistScale, zDistScale,
-                                    normalizeDistance, normalizeMethod, truncateLowDist, verbose, overwrite) {
-  normalizeMethod <- match.arg(normalizeMethod, .NORMALIZE_METHODS)
-  
+                                    normalizeDistance, normalizeMethod, normalizeTarget,
+                                    truncateLowDist, verbose, overwrite) {
+  # Resolve against the record before clearing it: overwrite means "re-derive
+  # the scale", not "stop normalizing", so the recorded intent still supplies
+  # the defaults for arguments the caller did not give.
+  geometry <- .resolveSelfDistanceGeometry(
+    object, distType, xDistScale, yDistScale, zDistScale, normalizeDistance,
+    normalizeMethod, normalizeTarget, truncateLowDist, verbose,
+    rebuild = overwrite
+  )
+  if (overwrite) object <- .clearDistanceRecord(object)
+  distType <- geometry$distType
+  xDistScale <- geometry$xDistScale
+  yDistScale <- geometry$yDistScale
+  zDistScale <- geometry$zDistScale
+  normalizeDistance <- geometry$normalizeDistance
+  normalizeMethod <- geometry$normalizeMethod
+  normalizeTarget <- geometry$normalizeTarget
+  truncateLowDist <- geometry$truncateLowDist
+
   # Validate inputs
   cts <- .checkInputDistance(object, distType, xDistScale, yDistScale, zDistScale)
-  
+
   if (length(cts) == 1) {
     warning("Only one cell type detected. Use computeDistance() instead for single cell type.")
     return(object)
   }
-  
+
   # Initialize or preserve existing distances
   if (overwrite || length(object@distances) == 0) {
     distances <- list()
@@ -117,11 +189,14 @@ setMethod("computeSelfDistance", "CoProMulti",
   }
   
   # Notify users if normalizeDistance = TRUE
-  if (normalizeDistance) {
-    cat("normalizeDistance is set to TRUE, so self-distances will be",
-        "normalized so that 0.01 percentile distance will be scaled to 0.01\n")
+  if (normalizeDistance && verbose) {
+    message(sprintf(
+      paste0("normalizeDistance is TRUE, so self-distances will be rescaled ",
+             "so that the reference cell-cell distance becomes %g."),
+      normalizeTarget
+    ))
   }
-  
+
   # Compute self-distances for each cell type
   all_percentiles <- numeric(length(cts))
   names(all_percentiles) <- cts
@@ -162,76 +237,76 @@ setMethod("computeSelfDistance", "CoProMulti",
   }
   
   # Apply normalization if requested
+  scaling_factor <- 1
+  normalized <- FALSE
   if (normalizeDistance) {
+    # "global" measures the cells rather than these blocks, so it needs no
+    # per-block reference at all.
     reference_values <- if (identical(normalizeMethod, "spacing")) {
       vapply(cts, function(ct) {
         coords_ct <- .getCoordinateMatrix(object, ct, distType,
                                           xDistScale, yDistScale, zDistScale)
         .blockNearestSpacing(coords_ct, coords_ct, within = TRUE)
       }, numeric(1))
-    } else {
+    } else if (identical(normalizeMethod, "percentile")) {
       all_percentiles
+    } else {
+      numeric(0)
     }
     valid_percentiles <- reference_values[!is.na(reference_values) & is.finite(reference_values)]
-    if (length(valid_percentiles) > 0) {
-      scaling_factor <- 0.01 / .combineDistanceReference(valid_percentiles,
-                                                         normalizeMethod)
-      cat("Self-distance scaling factor:", scaling_factor, "\n")
-      
+    if (identical(normalizeMethod, "global") || length(valid_percentiles) > 0) {
+      scaling_factor <- .normalizationScaleFactor(
+        object, blockValues = valid_percentiles,
+        normalizeMethod = normalizeMethod, normalizeTarget = normalizeTarget,
+        distType = distType, xDistScale = xDistScale, yDistScale = yDistScale,
+        zDistScale = zDistScale, what = "computeSelfDistance", verbose = verbose
+      )
+      if (verbose) {
+        message(sprintf("Self-distance scaling factor: %g", scaling_factor))
+      }
+
       for (ct in cts) {
         flat_name <- .createDistMatrixName(ct, ct, slide = NULL)
         if (flat_name %in% names(distances) && !is.null(distances[[flat_name]])) {
           distances[[flat_name]] <- distances[[flat_name]] * scaling_factor
+          normalized <- TRUE
         }
       }
     }
   }
-  
-  object@distances <- distances
-  object <- .recordSelfDistanceGeometry(object, distType, xDistScale, yDistScale,
-                                        zDistScale, normalizeDistance,
-                                        truncateLowDist, normalizeMethod)
-  return(object)
-}
 
-#' Record (or check) the geometry a self-distance step used
-#'
-#' `computeSelfDistance()` is additive: it can run on top of cross-type
-#' distances built by `computeDistance()`. Overwriting their geometry record
-#' would misdescribe those blocks, so only fill an empty record here and warn
-#' when the caller asks for coordinates the existing blocks do not use.
-#' `normalizeTarget` is not a parameter of `computeSelfDistance()` (it floors
-#' at 0.01), so it takes no part in the mismatch check.
-#' @noRd
-.recordSelfDistanceGeometry <- function(object, distType, xDistScale, yDistScale,
-                                        zDistScale, normalizeDistance,
-                                        truncateLowDist,
-                                        normalizeMethod = "spacing") {
-  requested <- list(
-    distType = distType, xDistScale = xDistScale, yDistScale = yDistScale,
-    zDistScale = zDistScale, normalizeDistance = normalizeDistance,
-    normalizeMethod = normalizeMethod,
-    truncateLowDist = truncateLowDist
+  object@distances <- distances
+  # Pin the factor so a later step normalizes the blocks it adds the same way,
+  # and so .recoverDistanceScaleFactor() can map back to raw coordinates. The
+  # record has to agree with the slot: see .recordNormalizationOutcome().
+  object@distanceScaleFactor <- scaling_factor
+  object@distanceGeometry <- .recordNormalizationOutcome(
+    geometry, normalized, "computeSelfDistance"
   )
-  .warnDistanceGeometryMismatch(object, requested, "computeSelfDistance")
-  if (length(.getDistanceGeometry(object)) == 0) {
-    object@distanceGeometry <- .makeDistanceGeometry(
-      distType, xDistScale, yDistScale, zDistScale,
-      normalizeDistance, normalizeMethod = normalizeMethod,
-      normalizeTarget = 0.01, truncateLowDist = truncateLowDist,
-      source = "computeSelfDistance"
-    )
-  }
-  object
+  return(object)
 }
 
 #' Core function for computing self-distances (multi-slide)
 #' @noRd
 .computeSelfDistanceCoreMulti <- function(object, distType, xDistScale, yDistScale, zDistScale,
-                                         normalizeDistance, normalizeMethod, truncateLowDist, verbose, overwrite) {
-  normalizeMethod <- match.arg(normalizeMethod, .NORMALIZE_METHODS)
-  normalizeMethod <- match.arg(normalizeMethod, .NORMALIZE_METHODS)
-  
+                                         normalizeDistance, normalizeMethod, normalizeTarget,
+                                         truncateLowDist, verbose, overwrite) {
+  # See .computeSelfDistanceCore(): resolve first, clear second.
+  geometry <- .resolveSelfDistanceGeometry(
+    object, distType, xDistScale, yDistScale, zDistScale, normalizeDistance,
+    normalizeMethod, normalizeTarget, truncateLowDist, verbose,
+    rebuild = overwrite
+  )
+  if (overwrite) object <- .clearDistanceRecord(object)
+  distType <- geometry$distType
+  xDistScale <- geometry$xDistScale
+  yDistScale <- geometry$yDistScale
+  zDistScale <- geometry$zDistScale
+  normalizeDistance <- geometry$normalizeDistance
+  normalizeMethod <- geometry$normalizeMethod
+  normalizeTarget <- geometry$normalizeTarget
+  truncateLowDist <- geometry$truncateLowDist
+
   # Validate inputs
   cts <- .checkInputDistance(object, distType, xDistScale, yDistScale, zDistScale)
   
@@ -254,11 +329,15 @@ setMethod("computeSelfDistance", "CoProMulti",
   }
   
   # Notify users if normalizeDistance = TRUE
-  if (normalizeDistance) {
-    cat("normalizeDistance is set to TRUE, so self-distances will be",
-        "normalized across all slides so that 0.01 percentile distance will be scaled to 0.01\n")
+  if (normalizeDistance && verbose) {
+    message(sprintf(
+      paste0("normalizeDistance is TRUE, so self-distances will be rescaled ",
+             "across all slides so that the reference cell-cell distance ",
+             "becomes %g."),
+      normalizeTarget
+    ))
   }
-  
+
   global_min_percentile <- Inf
   self_spacings <- numeric(0)
   
@@ -309,27 +388,37 @@ setMethod("computeSelfDistance", "CoProMulti",
   }
   
   # Apply normalization if requested
+  scaling_factor <- 1
+  normalized <- FALSE
   if (normalizeDistance && is.finite(global_min_percentile)) {
-    scaling_factor <- 0.01 / .combineDistanceReference(
-      if (identical(normalizeMethod, "spacing")) self_spacings else global_min_percentile,
-      normalizeMethod
+    scaling_factor <- .normalizationScaleFactor(
+      object,
+      blockValues = if (identical(normalizeMethod, "spacing")) self_spacings
+                    else global_min_percentile,
+      normalizeMethod = normalizeMethod, normalizeTarget = normalizeTarget,
+      distType = distType, xDistScale = xDistScale, yDistScale = yDistScale,
+      zDistScale = zDistScale, what = "computeSelfDistance", verbose = verbose
     )
-    cat("Global self-distance scaling factor:", scaling_factor, "\n")
-    
+    if (verbose) {
+      message(sprintf("Global self-distance scaling factor: %g", scaling_factor))
+    }
+
     for (ct in cts) {
       for (sID in slides) {
         flat_name <- .createDistMatrixName(ct, ct, slide = sID)
         if (flat_name %in% names(distances_all) && !is.null(distances_all[[flat_name]])) {
           distances_all[[flat_name]] <- distances_all[[flat_name]] * scaling_factor
+          normalized <- TRUE
         }
       }
     }
   }
-  
+
   object@distances <- distances_all
-  object <- .recordSelfDistanceGeometry(object, distType, xDistScale, yDistScale,
-                                        zDistScale, normalizeDistance,
-                                        truncateLowDist, normalizeMethod)
+  object@distanceScaleFactor <- scaling_factor
+  object@distanceGeometry <- .recordNormalizationOutcome(
+    geometry, normalized, "computeSelfDistance"
+  )
   return(object)
 }
 
@@ -353,8 +442,10 @@ setMethod("computeSelfDistance", "CoProMulti",
 #' @param overwrite Whether to overwrite existing kernel matrices. If FALSE,
 #'  will add self-kernel matrices to existing cross-type kernels. Default = FALSE
 #' @param normalizeMethod How the reference distance is estimated when
-#'  `normalizeDistance = TRUE`: `"spacing"` (median nearest-partner distance,
-#'  combined across blocks by median) or `"percentile"` (pre-1.2.0 behavior).
+#'  `normalizeDistance = TRUE`: `"global"` (median nearest-neighbor distance
+#'  over all cells, ignoring type labels), `"spacing"` (median nearest-partner
+#'  distance per block, combined by median), or `"percentile"` (pre-1.2.0
+#'  behavior). See [computeDistance()].
 #' @param method One of `"auto"`, `"dense"`, or `"sparse"`. The sparse path
 #'  constructs exact thresholded self-kernels directly from coordinates and
 #'  does not require [computeSelfDistance()].

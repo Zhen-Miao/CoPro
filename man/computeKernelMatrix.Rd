@@ -147,7 +147,7 @@ geometry recorded by \code{\link[=computeDistance]{computeDistance()}}", so spar
 the same coordinates as the distances rather than on this function's own
 defaults. When nothing has been recorded, the fallbacks are \code{xDistScale} /
 \code{yDistScale} / \code{zDistScale} \verb{= 1}, \code{normalizeDistance = FALSE},
-\code{normalizeMethod = "spacing"}, \code{normalizeTarget = 0.01},
+\code{normalizeMethod = "global"}, \code{normalizeTarget = 0.01},
 \code{truncateLowDist = TRUE}, and a \code{distType} of \code{"Euclidean3D"} when the
 coordinates contain a \code{z} column, otherwise \code{"Euclidean2D"}. Passing a value
 that contradicts the recorded geometry is an error; inspect the record with

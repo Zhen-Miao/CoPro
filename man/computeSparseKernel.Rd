@@ -20,7 +20,7 @@ computeSparseKernel(
   yDistScale = 1,
   zDistScale = 1,
   normalizeDistance = FALSE,
-  normalizeMethod = "spacing",
+  normalizeMethod = "global",
   normalizeTarget = 0.01,
   truncateLowDist = TRUE,
   verbose = TRUE
@@ -40,7 +40,7 @@ computeSparseKernel(
   yDistScale = 1,
   zDistScale = 1,
   normalizeDistance = FALSE,
-  normalizeMethod = "spacing",
+  normalizeMethod = "global",
   normalizeTarget = 0.01,
   truncateLowDist = TRUE,
   verbose = TRUE
@@ -60,7 +60,7 @@ computeSparseKernel(
   yDistScale = 1,
   zDistScale = 1,
   normalizeDistance = FALSE,
-  normalizeMethod = "spacing",
+  normalizeMethod = "global",
   normalizeTarget = 0.01,
   truncateLowDist = TRUE,
   verbose = TRUE
@@ -104,11 +104,13 @@ supported by the sparse path).}
 options, matching \code{\link[=computeDistance]{computeDistance()}}.}
 
 \item{normalizeMethod}{How the reference distance is estimated when
-\code{normalizeDistance = TRUE}. \code{"spacing"} (default) uses the median
-nearest-partner distance, taken across cell-type blocks by median, so the
-unit tracks local cell spacing and no single dense block sets the scale for
-the whole object. \code{"percentile"} reproduces the pre-1.2.0 behavior: the
-minimum, across blocks, of a low quantile of pairwise distances.}
+\code{normalizeDistance = TRUE}. \code{"global"} (default) uses the median
+nearest-neighbor distance over all cells of interest, ignoring their type
+labels, so the unit is a property of the tissue rather than of whichever
+blocks this call builds. \code{"spacing"} measures each cell-type block and
+takes the median across blocks. \code{"percentile"} reproduces the pre-1.2.0
+behavior: the minimum, across blocks, of a low quantile of pairwise
+distances.}
 
 \item{verbose}{Whether to output the progress and related information}
 }
