@@ -38,7 +38,7 @@ test_that("computeDistance records the geometry it used", {
   expect_equal(geom$xDistScale, 1.5)
   expect_equal(geom$yDistScale, 2.5)
   expect_true(geom$normalizeDistance)
-  expect_equal(geom$normalizeMethod, "spacing")
+  expect_equal(geom$normalizeMethod, "global")
   expect_equal(geom$normalizeTarget, 0.02)
   expect_false(geom$truncateLowDist)
   expect_equal(geom$source, "computeDistance")

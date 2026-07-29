@@ -221,11 +221,57 @@
 #' `"spacing"` takes the median across blocks: every cell-type pair gets a
 #' say, and one unusually dense pair cannot compress the whole object.
 #' `"percentile"` takes the minimum, reproducing the pre-1.2.0 behavior.
+#' `"global"` has only one value per slide to combine, and combines it the same
+#' way `"spacing"` does.
 #' @noRd
 .combineDistanceReference <- function(values, method) {
   values <- values[is.finite(values) & values > 0]
   if (length(values) == 0L) return(NA_real_)
-  if (identical(method, "spacing")) stats::median(values) else min(values)
+  if (identical(method, "percentile")) min(values) else stats::median(values)
+}
+
+#' Typical spacing between cells, ignoring cell type: the `"global"` reference
+#'
+#' Every other reference is measured on the blocks a step happens to build, and
+#' that is what made the unit depend on the step. A cross-type block measures
+#' the gap between two compartments, so it moves with colocalization; a
+#' within-type block measures the packing of one type, so it moves with that
+#' type's abundance -- in 2-D, a type with a tenth of the cells sits about
+#' `sqrt(10)` further from its own nearest neighbor. Either way, two steps
+#' looking at different blocks derive different units for the same tissue.
+#'
+#' Pooling all cells of interest removes both dependencies: the reference is a
+#' property of the tissue, so cross-type and within-type distances agree by
+#' construction, in any order, with no pin needed. It answers "how far apart
+#' are cells here", which is what a length unit should mean.
+#'
+#' What it deliberately does not do is equalize effective neighbor counts
+#' across types -- a rare type still couples to fewer partners at a given
+#' bandwidth. That is a question about sigma, not about units, and
+#' [detectSigmaRange()] answers it per block.
+#'
+#' @param slideID Restrict to one slide. `NULL` on a multi-slide object
+#'   measures each slide and takes the median, so one unusually dense section
+#'   cannot set the unit for the rest.
+#' @noRd
+.globalSpacingReference <- function(object, distType, xDistScale = 1,
+                                    yDistScale = 1, zDistScale = 1,
+                                    slideID = NULL) {
+  slides <- if (!is.null(slideID)) {
+    as.list(slideID)
+  } else if (isMultiSlide(object)) {
+    as.list(getSlideList(object))
+  } else {
+    list(NULL)
+  }
+  values <- vapply(slides, function(s) {
+    coords <- .getCoordinateMatrix(object, cellType = NULL, distType,
+                                   xDistScale, yDistScale, zDistScale,
+                                   slideID = s)
+    if (nrow(coords) < 2L) return(NA_real_)
+    .blockNearestSpacing(coords, coords, within = TRUE)
+  }, numeric(1))
+  .combineDistanceReference(values, "global")
 }
 
 #' Turn a combined reference distance into a multiplicative scale factor
@@ -289,18 +335,29 @@
   spacings <- vapply(samples, function(s) .medianNearestSpacing(s$distances),
                      numeric(1))
   # When distances are rescaled, the support radius in ORIGINAL units shrinks
-  # by the same factor. The probe estimates that factor from its own sample;
-  # for normalizeMethod = "percentile" the typical spacing stands in for the
-  # low percentile, which is close enough to pick a storage format.
-  scale_factor <- if (isTRUE(geometry$normalizeDistance)) {
-    reference <- .combineDistanceReference(spacings, geometry$normalizeMethod)
-    if (is.finite(reference) && reference > 0) {
-      geometry$normalizeTarget / reference
-    } else {
-      1
-    }
-  } else {
+  # by the same factor. A pinned factor is exact and is used as is; otherwise
+  # the probe estimates it, exactly for "global" and approximately for the
+  # block-based methods (where the typical spacing stands in for the low
+  # percentile). Approximate is fine: this only picks a storage format.
+  scale_factor <- if (!isTRUE(geometry$normalizeDistance)) {
     1
+  } else {
+    pin <- .pinnedScaleFactor(object)
+    if (!is.null(pin)) {
+      pin$factor
+    } else {
+      reference <- if (identical(geometry$normalizeMethod, "global")) {
+        .globalSpacingReference(object, geometry$distType, geometry$xDistScale,
+                                geometry$yDistScale, geometry$zDistScale)
+      } else {
+        .combineDistanceReference(spacings, geometry$normalizeMethod)
+      }
+      if (is.finite(reference) && reference > 0) {
+        geometry$normalizeTarget / reference
+      } else {
+        1
+      }
+    }
   }
   radius <- .kernelSupportMultiplier(lowerLimit) * max(sigmaValues) / scale_factor
 
@@ -474,10 +531,20 @@ setGeneric(
                "Pass distType = 'Euclidean2D' or 'Euclidean3D'."))
   }
   if (isTRUE(geometry$normalizeDistance)) {
+    # The two numbers are separate on purpose: the scale factor fixes the unit
+    # distances are reported in, sigma fixes how far a cell reaches. Reporting
+    # the factor lets a caller convert between them instead of guessing.
+    pin <- .pinnedScaleFactor(object)
     warning(paste(
       "This object records normalizeDistance = TRUE, but detectSigmaRange()",
       "reports bandwidths in raw coordinate units. Build kernels with",
-      "normalizeDistance = FALSE to use them directly."
+      "normalizeDistance = FALSE to use them directly,",
+      if (is.null(pin)) {
+        "or multiply them by @distanceScaleFactor."
+      } else {
+        sprintf("or multiply them by the recorded scale factor (%g).",
+                pin$factor)
+      }
     ))
   }
 

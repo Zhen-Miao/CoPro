@@ -43,18 +43,43 @@
 * **New `normalizeMethod` argument** controls how the reference distance is
   estimated when `normalizeDistance = TRUE`.
 
-  * `"spacing"` (new default) uses the median nearest-partner distance,
-    combined across cell-type blocks by median.
+  * `"global"` (new default) uses the median nearest-neighbor distance over all
+    cells of interest, ignoring their type labels.
+  * `"spacing"` uses the median nearest-partner distance measured per
+    cell-type block, combined across blocks by median.
   * `"percentile"` reproduces the pre-1.2.0 behavior: the *minimum*, across
     blocks, of a low quantile of pairwise distances.
 
   The old rule let the single densest block set the unit for the entire object,
   so adding one tightly packed slide or cell type rescaled every other block.
-  Taking a median over blocks, of a statistic that estimates local spacing
-  directly, removes that dependence on tissue extent and on which block happens
-  to be densest. The percentile is still used to floor small distances when
-  `truncateLowDist = TRUE`; the two jobs are now separate quantities rather
-  than one shared number.
+  Both new methods remove that dependence on tissue extent and on which block
+  happens to be densest. The percentile is still used to floor small distances
+  when `truncateLowDist = TRUE`; the two jobs are now separate quantities
+  rather than one shared number.
+
+  `"global"` goes further, and is the default for a reason that only shows up
+  when an object holds both cross-type and within-type blocks. Any per-block
+  reference is measured on the blocks a step happens to build: a cross-type
+  block measures the gap between two compartments, so it moves with
+  colocalization, while a within-type block measures one type's own packing, so
+  it moves with abundance — in 2-D, a type with a tenth of the cells sits about
+  `sqrt(10)` further from its nearest neighbor. `computeDistance()` and
+  `computeSelfDistance()` therefore derived different units for the same
+  tissue. On a two-type test object where one type is packed into a tenth of
+  the other's area, the cross-derived and self-derived factors differ by 1.3x
+  under `"spacing"` and by 17x under `"percentile"`; under `"global"` they are
+  identical to machine precision, in either order, with no coordination between
+  the steps.
+
+  What `"global"` deliberately does not do is equalize effective neighbor
+  counts across cell types — a rare type still couples to fewer partners at a
+  given bandwidth. That is a question about sigma rather than about units, and
+  `detectSigmaRange()` answers it per block. The scale factor fixes the unit;
+  sigma fixes the reach.
+
+  `"global"` and `"spacing"` both fall back to `"percentile"` for
+  `distType = "Morphology-Aware"`, which has no Euclidean neighbor graph to
+  read a spacing from.
 
 ## Memory
 
@@ -106,7 +131,10 @@
   cell types differ in abundance or in how tightly they colocalize — on a
   two-type object with one type packed 10x more densely they differed by 1.9x —
   so an object could hold cross and self distances on two units, with
-  `@distanceScaleFactor` describing only the cross ones. The first
+  `@distanceScaleFactor` describing only the cross ones. The new default
+  `normalizeMethod = "global"` removes the divergence at its source by
+  measuring the cells rather than the blocks (see *Breaking changes* above).
+  For the block-based methods, where no shared reference exists, the first
   normalization now wins: a later step adopts the pinned factor instead of
   deriving its own, and says so. `computeDistance()`, which rebuilds
   `@distances` from scratch, and `overwrite = TRUE`, which discards the blocks

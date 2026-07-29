@@ -70,11 +70,12 @@ recorded geometry, falling back to \code{FALSE} as of CoPro 1.2.0.}
 
 \item{normalizeMethod}{How the reference distance is estimated when
 \code{normalizeDistance = TRUE} and no scale factor is already pinned on the
-object. \code{"spacing"} uses the median nearest-partner distance, combined
-across cell-type blocks by median; \code{"percentile"} reproduces the pre-1.2.0
-behavior (the minimum, across blocks, of a low quantile of pairwise
-distances). \code{NULL} (default) inherits the recorded geometry, falling back
-to \code{"spacing"}.}
+object. \code{"global"} uses the median nearest-neighbor distance over all cells,
+ignoring type labels, which gives the same unit here as in
+\code{\link[=computeDistance]{computeDistance()}}; \code{"spacing"} measures the within-type blocks instead;
+\code{"percentile"} reproduces the pre-1.2.0 behavior (the minimum, across
+blocks, of a low quantile of pairwise distances). \code{NULL} (default) inherits
+the recorded geometry, falling back to \code{"global"}.}
 
 \item{normalizeTarget}{Numeric scalar. The value the reference distance is
 rescaled to. \code{NULL} (default) inherits the recorded geometry, falling back
