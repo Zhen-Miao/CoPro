@@ -137,7 +137,8 @@ clips extreme values. The only prerequisites are distance and kernel
 matrices.
 
 ```{r run-pipeline, message=FALSE, results='hide'}
-multi_obj <- computeDistance(multi_obj, distType = "Euclidean2D")
+multi_obj <- computeDistance(multi_obj, distType = "Euclidean2D",
+                            normalizeDistance = TRUE)
 
 sigma_choice <- 0.01
 multi_obj <- computeKernelMatrix(multi_obj, sigmaValues = sigma_choice)

@@ -385,8 +385,8 @@ test_that("runGeneSpaceCCA integration test with CoProMulti object", {
     n_cell_types = 2, seed = 42
   )
   obj <- subsetData(obj, cellTypesOfInterest = c("CellTypeA", "CellTypeB"))
-  obj <- computeDistance(obj, distType = "Euclidean2D")
-  obj <- computeKernelMatrix(obj, sigmaValues = 0.1, verbose = FALSE)
+  obj <- computeDistance(obj, distType = "Euclidean2D", normalizeDistance = TRUE)
+  obj <- computeKernelMatrix(obj, sigmaValues = 0.1, verbose = FALSE, normalizeDistance = TRUE)
 
   obj <- runGeneSpaceCCA(obj, sigma = 0.1, nCC = 2,
                          max_iter = 500, tol = 1e-4, verbose = FALSE)
@@ -451,8 +451,8 @@ test_that("runGeneSpaceCCA validates sigma against available values", {
     n_cell_types = 2, seed = 42
   )
   obj <- subsetData(obj, cellTypesOfInterest = c("CellTypeA", "CellTypeB"))
-  obj <- computeDistance(obj, distType = "Euclidean2D")
-  obj <- computeKernelMatrix(obj, sigmaValues = 0.1, verbose = FALSE)
+  obj <- computeDistance(obj, distType = "Euclidean2D", normalizeDistance = TRUE)
+  obj <- computeKernelMatrix(obj, sigmaValues = 0.1, verbose = FALSE, normalizeDistance = TRUE)
 
   expect_error(
     runGeneSpaceCCA(obj, sigma = 0.5, verbose = FALSE),
@@ -468,8 +468,8 @@ test_that("runGeneSpaceCCA validates nCC as integer", {
     n_cell_types = 2, seed = 42
   )
   obj <- subsetData(obj, cellTypesOfInterest = c("CellTypeA", "CellTypeB"))
-  obj <- computeDistance(obj, distType = "Euclidean2D")
-  obj <- computeKernelMatrix(obj, sigmaValues = 0.1, verbose = FALSE)
+  obj <- computeDistance(obj, distType = "Euclidean2D", normalizeDistance = TRUE)
+  obj <- computeKernelMatrix(obj, sigmaValues = 0.1, verbose = FALSE, normalizeDistance = TRUE)
 
   expect_error(
     runGeneSpaceCCA(obj, sigma = 0.1, nCC = 1.5, verbose = FALSE),
@@ -609,7 +609,7 @@ test_that("streaming default (no normalizationScope arg) matches slot under norm
   obj_slot <- computeDistance(obj, distType = "Euclidean2D",
                               normalizeDistance = TRUE, verbose = FALSE)
   obj_slot <- computeKernelMatrix(obj_slot, sigmaValues = test_sigma,
-                                  verbose = FALSE)
+                                  verbose = FALSE, normalizeDistance = TRUE)
   set.seed(123)
   obj_slot <- runGeneSpaceCCA(obj_slot, sigma = test_sigma, nCC = 2,
                               max_iter = 500, tol = 1e-6, verbose = FALSE)
@@ -654,7 +654,7 @@ test_that("streaming with normalizationScope='global' matches slot under normali
   obj_slot <- computeDistance(obj, distType = "Euclidean2D",
                               normalizeDistance = TRUE, verbose = FALSE)
   obj_slot <- computeKernelMatrix(obj_slot, sigmaValues = test_sigma,
-                                  verbose = FALSE)
+                                  verbose = FALSE, normalizeDistance = TRUE)
   set.seed(123)
   obj_slot <- runGeneSpaceCCA(obj_slot, sigma = test_sigma, nCC = 2,
                               max_iter = 500, tol = 1e-6, verbose = FALSE)
@@ -743,8 +743,8 @@ test_that("streaming = FALSE warns when distanceArgs / kernelArgs are passed", {
     n_cell_types = 2, seed = 42
   )
   obj <- subsetData(obj, cellTypesOfInterest = c("CellTypeA", "CellTypeB"))
-  obj <- computeDistance(obj, distType = "Euclidean2D", verbose = FALSE)
-  obj <- computeKernelMatrix(obj, sigmaValues = 0.1, verbose = FALSE)
+  obj <- computeDistance(obj, distType = "Euclidean2D", verbose = FALSE, normalizeDistance = TRUE)
+  obj <- computeKernelMatrix(obj, sigmaValues = 0.1, verbose = FALSE, normalizeDistance = TRUE)
 
   # max_iter caps the run so the test stays cheap, but it has to clear the
   # optimizer's own convergence bar or the "did not converge" warning escapes
@@ -897,8 +897,8 @@ test_that("runGeneSpaceCCA rejects nCC larger than the gene set", {
     n_cell_types = 2, seed = 42
   )
   obj <- subsetData(obj, cellTypesOfInterest = c("CellTypeA", "CellTypeB"))
-  obj <- computeDistance(obj, distType = "Euclidean2D", verbose = FALSE)
-  obj <- computeKernelMatrix(obj, sigmaValues = 0.1, verbose = FALSE)
+  obj <- computeDistance(obj, distType = "Euclidean2D", verbose = FALSE, normalizeDistance = TRUE)
+  obj <- computeKernelMatrix(obj, sigmaValues = 0.1, verbose = FALSE, normalizeDistance = TRUE)
 
   expect_error(
     runGeneSpaceCCA(obj, sigma = 0.1, nCC = 1000,
@@ -915,8 +915,8 @@ test_that("runGeneSpaceCCA validates the clip argument", {
     n_cell_types = 2, seed = 42
   )
   obj <- subsetData(obj, cellTypesOfInterest = c("CellTypeA", "CellTypeB"))
-  obj <- computeDistance(obj, distType = "Euclidean2D", verbose = FALSE)
-  obj <- computeKernelMatrix(obj, sigmaValues = 0.1, verbose = FALSE)
+  obj <- computeDistance(obj, distType = "Euclidean2D", verbose = FALSE, normalizeDistance = TRUE)
+  obj <- computeKernelMatrix(obj, sigmaValues = 0.1, verbose = FALSE, normalizeDistance = TRUE)
 
   # Numeric scalar is allowed (clamps expression at the threshold)
   expect_no_error(
@@ -954,8 +954,8 @@ test_that("computeGeneAndCellScores rejects gene-space CCA outputs", {
     n_cell_types = 2, seed = 42
   )
   obj <- subsetData(obj, cellTypesOfInterest = c("CellTypeA", "CellTypeB"))
-  obj <- computeDistance(obj, distType = "Euclidean2D", verbose = FALSE)
-  obj <- computeKernelMatrix(obj, sigmaValues = 0.1, verbose = FALSE)
+  obj <- computeDistance(obj, distType = "Euclidean2D", verbose = FALSE, normalizeDistance = TRUE)
+  obj <- computeKernelMatrix(obj, sigmaValues = 0.1, verbose = FALSE, normalizeDistance = TRUE)
   # Need pcaGlobal to reach the gscca-only branch in .checkInputGAC
   obj <- computePCA(obj, nPCA = 5)
   obj <- runGeneSpaceCCA(obj, sigma = 0.1, nCC = 2,

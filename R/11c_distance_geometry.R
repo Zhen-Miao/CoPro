@@ -19,18 +19,65 @@
 #' @noRd
 .DISTANCE_GEOMETRY_FIELDS <- c(
   "distType", "xDistScale", "yDistScale", "zDistScale",
-  "normalizeDistance", "normalizeTarget", "truncateLowDist"
+  "normalizeDistance", "normalizeMethod", "normalizeTarget", "truncateLowDist"
 )
 
 #' Hard defaults used when neither the caller nor the object supplies a value.
 #'
 #' `distType` is absent here because its default depends on the coordinates
 #' (see `.defaultDistType()`).
+#'
+#' `normalizeDistance` defaults to `FALSE` as of CoPro 1.2.0. Rescaling
+#' distances was a way to make one recommended sigma travel between datasets
+#' recorded in different units; [detectSigmaRange()] now derives sigma from the
+#' data itself, which achieves the same thing without moving the coordinates
+#' the results are reported on. See `.noteNormalizeDistanceDefault()`.
 #' @noRd
 .DISTANCE_GEOMETRY_DEFAULTS <- list(
   xDistScale = 1, yDistScale = 1, zDistScale = 1,
-  normalizeDistance = TRUE, normalizeTarget = 0.01, truncateLowDist = TRUE
+  normalizeDistance = FALSE, normalizeMethod = "spacing",
+  normalizeTarget = 0.01, truncateLowDist = TRUE
 )
+
+#' Supported distance-normalization strategies
+#' @noRd
+.NORMALIZE_METHODS <- c("spacing", "percentile")
+
+#' Validate a normalizeMethod argument
+#' @noRd
+.checkNormalizeMethod <- function(method) {
+  if (is.null(method)) return(NULL)
+  if (!is.character(method) || length(method) != 1L ||
+      !(method %in% .NORMALIZE_METHODS)) {
+    stop(sprintf("normalizeMethod must be one of: %s.",
+                 paste(.NORMALIZE_METHODS, collapse = ", ")))
+  }
+  method
+}
+
+#' Announce the changed `normalizeDistance` default once per session
+#'
+#' The default flipped from `TRUE` to `FALSE` in CoPro 1.2.0, which changes
+#' results for anyone who relied on it implicitly. Silence would let an
+#' existing script keep running while quietly analyzing different kernels, so
+#' the change is announced the first time a step falls back to the default.
+#' @noRd
+.noteNormalizeDistanceDefault <- local({
+  announced <- FALSE
+  function(what) {
+    if (announced) return(invisible(FALSE))
+    announced <<- TRUE
+    message(sprintf(
+      paste0(
+        "%s: normalizeDistance now defaults to FALSE (changed in CoPro ",
+        "1.2.0); sigma is interpreted in raw coordinate units.\n",
+        "  Use detectSigmaRange() to choose sigma for this dataset, or pass ",
+        "normalizeDistance = TRUE to reproduce earlier results."
+      ), what
+    ))
+    invisible(TRUE)
+  }
+})
 
 #' Distance type implied by the coordinate columns when none is supplied
 #' @noRd
@@ -48,7 +95,8 @@
 #'   that a mismatch report can name the step the user needs to re-run.
 #' @noRd
 .makeDistanceGeometry <- function(distType, xDistScale = 1, yDistScale = 1,
-                                  zDistScale = 1, normalizeDistance = TRUE,
+                                  zDistScale = 1, normalizeDistance = FALSE,
+                                  normalizeMethod = "spacing",
                                   normalizeTarget = 0.01, truncateLowDist = TRUE,
                                   source = NA_character_) {
   list(
@@ -57,6 +105,7 @@
     yDistScale = yDistScale,
     zDistScale = zDistScale,
     normalizeDistance = normalizeDistance,
+    normalizeMethod = normalizeMethod,
     normalizeTarget = normalizeTarget,
     truncateLowDist = truncateLowDist,
     source = source
@@ -167,7 +216,10 @@
     ), call. = FALSE)
   }
 
+  .checkNormalizeMethod(requested[["normalizeMethod"]])
+
   resolved <- list()
+  defaulted <- character(0)
   for (field in .DISTANCE_GEOMETRY_FIELDS) {
     resolved[[field]] <- if (!is.null(requested[[field]])) {
       requested[[field]]
@@ -176,8 +228,12 @@
     } else if (identical(field, "distType")) {
       .defaultDistType(object)
     } else {
+      defaulted <- c(defaulted, field)
       .DISTANCE_GEOMETRY_DEFAULTS[[field]]
     }
+  }
+  if ("normalizeDistance" %in% defaulted) {
+    .noteNormalizeDistanceDefault(what)
   }
 
   inherited <- length(recorded) > 0 &&

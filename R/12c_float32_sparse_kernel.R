@@ -295,7 +295,10 @@ materializeFloat32Kernels <- function(object, verbose = TRUE) {
 #'   nonempty row or column to sum to one. They cannot both be `TRUE`.
 #' @param distType `"Euclidean2D"` or `"Euclidean3D"`.
 #' @param xDistScale,yDistScale,zDistScale Per-axis coordinate scales.
-#' @param normalizeDistance Whether to normalize the low distance percentile.
+#' @param normalizeDistance Whether to rescale distances to a common unit.
+#' @param normalizeMethod How the reference distance is estimated when
+#'   `normalizeDistance = TRUE`: `"spacing"` (median nearest-partner distance,
+#'   combined across blocks by median) or `"percentile"` (pre-1.2.0 behavior).
 #' @param normalizeTarget Target low distance percentile after normalization.
 #' @param truncateLowDist Whether to floor very small distances.
 #' @param overwrite Whether to replace existing kernel matrices.
@@ -312,7 +315,7 @@ setGeneric(
       rowNormalizeKernel = FALSE, colNormalizeKernel = FALSE,
       distType = c("Euclidean2D", "Euclidean3D"),
       xDistScale = 1, yDistScale = 1, zDistScale = 1,
-      normalizeDistance = TRUE, normalizeTarget = 0.01,
+      normalizeDistance = FALSE, normalizeMethod = "spacing", normalizeTarget = 0.01,
       truncateLowDist = TRUE, overwrite = TRUE,
       verbose = TRUE) {
     standardGeneric("computeSparseKernelFloat32")
@@ -370,7 +373,7 @@ setGeneric(
     normalizeKernel, minAveCellNeighor,
     rowNormalizeKernel, colNormalizeKernel,
     distType, xDistScale, yDistScale, zDistScale,
-    normalizeDistance, normalizeTarget, truncateLowDist, overwrite,
+    normalizeDistance, normalizeMethod, normalizeTarget, truncateLowDist, overwrite,
     verbose, is_multi) {
   cts <- .checkInputSparseKernel(
     object, sigmaValues, lowerLimit, upperQuantile,
@@ -382,7 +385,7 @@ setGeneric(
   }
   object <- .recordSparseKernelGeometry(
     object, distType, xDistScale, yDistScale, zDistScale,
-    normalizeDistance, normalizeTarget, truncateLowDist,
+    normalizeDistance, normalizeMethod, normalizeTarget, truncateLowDist,
     "computeSparseKernelFloat32"
   )
   blocks <- .float32KernelBlocks(object, cts, is_multi)
@@ -404,11 +407,15 @@ setGeneric(
     )
   }
 
-  # Pass 1 retains only one scalar per block. The global minimum matches the
-  # distance normalization used by the ordinary sparse single/multi paths.
-  need_percentile <- truncateLowDist || normalizeDistance
+  # Pass 1 retains only two scalars per block: the low percentile that floors
+  # small distances, and the typical spacing that sets the unit. Combining them
+  # matches the ordinary sparse single/multi paths exactly.
+  need_percentile <- truncateLowDist ||
+    (normalizeDistance && identical(normalizeMethod, "percentile"))
+  need_spacing <- normalizeDistance && identical(normalizeMethod, "spacing")
   percentiles <- rep(NA_real_, length(blocks))
-  if (need_percentile) {
+  spacings <- rep(NA_real_, length(blocks))
+  if (need_percentile || need_spacing) {
     for (index in seq_along(blocks)) {
       block <- blocks[[index]]
       coordinate_1 <- get_coordinates(block, "cellType1")
@@ -417,23 +424,34 @@ setGeneric(
       } else {
         get_coordinates(block, "cellType2")
       }
-      probability <- if (block$symmetric) {
-        1e-4
-      } else {
-        .pairPercentileProb(nrow(coordinate_1), nrow(coordinate_2))
+      if (need_percentile) {
+        probability <- if (block$symmetric) {
+          1e-4
+        } else {
+          .pairPercentileProb(nrow(coordinate_1), nrow(coordinate_2))
+        }
+        percentiles[index] <- .lowPercentileBlock(
+          coordinate_1, coordinate_2, probability
+        )$percentile
       }
-      percentiles[index] <- .lowPercentileBlock(
-        coordinate_1, coordinate_2, probability
-      )$percentile
+      if (need_spacing) {
+        spacings[index] <- .blockNearestSpacing(
+          coordinate_1,
+          if (block$symmetric) coordinate_1 else coordinate_2,
+          within = block$symmetric
+        )
+      }
     }
   }
-  scaling_factor <- if (normalizeDistance) {
-    normalizeTarget / min(percentiles, na.rm = TRUE)
-  } else {
+  scaling_factor <- if (!normalizeDistance) {
     1
-  }
-  if (!is.finite(scaling_factor) || scaling_factor <= 0) {
-    stop("Unable to determine a finite positive distance scale.")
+  } else {
+    .distanceScaleFactor(
+      .combineDistanceReference(
+        if (need_spacing) spacings else percentiles, normalizeMethod
+      ),
+      normalizeTarget, normalizeMethod
+    )
   }
 
   kernel_matrices <- if (
@@ -553,7 +571,7 @@ setMethod(
       rowNormalizeKernel = FALSE, colNormalizeKernel = FALSE,
       distType = c("Euclidean2D", "Euclidean3D"),
       xDistScale = 1, yDistScale = 1, zDistScale = 1,
-      normalizeDistance = TRUE, normalizeTarget = 0.01,
+      normalizeDistance = FALSE, normalizeMethod = "spacing", normalizeTarget = 0.01,
       truncateLowDist = TRUE, overwrite = TRUE,
       verbose = TRUE) {
     .computeSparseKernelFloat32Core(
@@ -561,7 +579,7 @@ setMethod(
       normalizeKernel, minAveCellNeighor,
       rowNormalizeKernel, colNormalizeKernel,
       match.arg(distType), xDistScale, yDistScale, zDistScale,
-      normalizeDistance, normalizeTarget, truncateLowDist, overwrite,
+      normalizeDistance, normalizeMethod, normalizeTarget, truncateLowDist, overwrite,
       verbose, is_multi = FALSE
     )
   }
@@ -577,7 +595,7 @@ setMethod(
       rowNormalizeKernel = FALSE, colNormalizeKernel = FALSE,
       distType = c("Euclidean2D", "Euclidean3D"),
       xDistScale = 1, yDistScale = 1, zDistScale = 1,
-      normalizeDistance = TRUE, normalizeTarget = 0.01,
+      normalizeDistance = FALSE, normalizeMethod = "spacing", normalizeTarget = 0.01,
       truncateLowDist = TRUE, overwrite = TRUE,
       verbose = TRUE) {
     .computeSparseKernelFloat32Core(
@@ -585,7 +603,7 @@ setMethod(
       normalizeKernel, minAveCellNeighor,
       rowNormalizeKernel, colNormalizeKernel,
       match.arg(distType), xDistScale, yDistScale, zDistScale,
-      normalizeDistance, normalizeTarget, truncateLowDist, overwrite,
+      normalizeDistance, normalizeMethod, normalizeTarget, truncateLowDist, overwrite,
       verbose, is_multi = TRUE
     )
   }

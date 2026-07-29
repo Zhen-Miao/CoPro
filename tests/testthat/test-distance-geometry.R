@@ -1,7 +1,7 @@
 # The coordinate geometry a CoPro object's distances and kernels were built on
 # is recorded in @distanceGeometry, and every path that builds coordinates
 # defers to it. Before this record existed, computeKernelMatrix(method =
-# "sparse") re-derived distType and the per-axis scales from its own defaults
+# "sparse", normalizeDistance = TRUE) re-derived distType and the per-axis scales from its own defaults
 # and silently built kernels on coordinates computeDistance() was never told
 # about. See issue #39.
 
@@ -31,13 +31,14 @@ test_that("computeDistance records the geometry it used", {
   obj <- .two_type_obj()
   d <- computeDistance(obj, distType = "Euclidean2D", xDistScale = 1.5,
                        yDistScale = 2.5, normalizeTarget = 0.02,
-                       truncateLowDist = FALSE, verbose = FALSE)
+                       truncateLowDist = FALSE, verbose = FALSE, normalizeDistance = TRUE)
 
   geom <- getDistanceGeometry(d)
   expect_equal(geom$distType, "Euclidean2D")
   expect_equal(geom$xDistScale, 1.5)
   expect_equal(geom$yDistScale, 2.5)
   expect_true(geom$normalizeDistance)
+  expect_equal(geom$normalizeMethod, "spacing")
   expect_equal(geom$normalizeTarget, 0.02)
   expect_false(geom$truncateLowDist)
   expect_equal(geom$source, "computeDistance")
@@ -45,9 +46,9 @@ test_that("computeDistance records the geometry it used", {
 
 test_that("the geometry record survives dropDistances = TRUE", {
   obj <- .two_type_obj()
-  d <- computeDistance(obj, yDistScale = 2.5, verbose = FALSE)
+  d <- computeDistance(obj, yDistScale = 2.5, verbose = FALSE, normalizeDistance = TRUE)
   k <- computeKernelMatrix(d, sigmaValues = 0.1, method = "dense",
-                           dropDistances = TRUE, verbose = FALSE)
+                           dropDistances = TRUE, verbose = FALSE, normalizeDistance = TRUE)
 
   expect_length(k@distances, 0L)
   expect_equal(getDistanceGeometry(k)$yDistScale, 2.5)
@@ -62,7 +63,7 @@ test_that("multi-slide computeDistance records geometry and scale factor", {
                                  n_genes = 30, n_cell_types = 2, seed = 4)
   obj <- subsetData(obj, cellTypesOfInterest = c("CellTypeA", "CellTypeB"))
   d <- computeDistance(obj, distType = "Euclidean2D", yDistScale = 2,
-                       verbose = FALSE)
+                       verbose = FALSE, normalizeDistance = TRUE)
 
   expect_equal(getDistanceGeometry(d)$yDistScale, 2)
   expect_equal(getDistanceGeometry(d)$source, "computeDistance")
@@ -78,12 +79,12 @@ test_that("sparse kernels honor per-axis scales set by computeDistance", {
   obj <- .two_type_obj()
   sigma <- 0.1
   d <- computeDistance(obj, distType = "Euclidean2D", yDistScale = 2.5,
-                       verbose = FALSE)
+                       verbose = FALSE, normalizeDistance = TRUE)
 
   dense <- computeKernelMatrix(d, sigmaValues = sigma, method = "dense",
-                               dropDistances = FALSE, verbose = FALSE)
+                               dropDistances = FALSE, verbose = FALSE, normalizeDistance = TRUE)
   sparse <- computeKernelMatrix(d, sigmaValues = sigma, method = "sparse",
-                                verbose = FALSE)
+                                verbose = FALSE, normalizeDistance = TRUE)
 
   Kd <- getKernelMatrix(dense, sigma, "CellTypeA", "CellTypeB", verbose = FALSE)
   Ks <- getKernelMatrix(sparse, sigma, "CellTypeA", "CellTypeB", verbose = FALSE)
@@ -92,9 +93,9 @@ test_that("sparse kernels honor per-axis scales set by computeDistance", {
 
   # Guard against the test passing because yDistScale had no effect at all.
   flat <- computeKernelMatrix(
-    computeDistance(obj, distType = "Euclidean2D", verbose = FALSE),
+    computeDistance(obj, distType = "Euclidean2D", verbose = FALSE, normalizeDistance = TRUE),
     sigmaValues = sigma, method = "dense", dropDistances = FALSE,
-    verbose = FALSE)
+    verbose = FALSE, normalizeDistance = TRUE)
   Kf <- getKernelMatrix(flat, sigma, "CellTypeA", "CellTypeB", verbose = FALSE)
   expect_false(isTRUE(all.equal(as.matrix(Kd), as.matrix(Kf),
                                 tolerance = 1e-8, check.attributes = FALSE)))
@@ -103,12 +104,12 @@ test_that("sparse kernels honor per-axis scales set by computeDistance", {
 test_that("sparse kernels stay 2-D when computeDistance asked for 2-D", {
   obj <- .two_type_obj_3d()
   sigma <- 0.1
-  d <- computeDistance(obj, distType = "Euclidean2D", verbose = FALSE)
+  d <- computeDistance(obj, distType = "Euclidean2D", verbose = FALSE, normalizeDistance = TRUE)
 
   dense <- computeKernelMatrix(d, sigmaValues = sigma, method = "dense",
-                               dropDistances = FALSE, verbose = FALSE)
+                               dropDistances = FALSE, verbose = FALSE, normalizeDistance = TRUE)
   sparse <- computeKernelMatrix(d, sigmaValues = sigma, method = "sparse",
-                                verbose = FALSE)
+                                verbose = FALSE, normalizeDistance = TRUE)
 
   expect_equal(getDistanceGeometry(sparse)$distType, "Euclidean2D")
   expect_equal(
@@ -123,12 +124,12 @@ test_that("sparse kernels inherit a 3-D geometry too", {
   obj <- .two_type_obj_3d()
   sigma <- 0.1
   d <- computeDistance(obj, distType = "Euclidean3D", zDistScale = 0.5,
-                       verbose = FALSE)
+                       verbose = FALSE, normalizeDistance = TRUE)
 
   dense <- computeKernelMatrix(d, sigmaValues = sigma, method = "dense",
-                               dropDistances = FALSE, verbose = FALSE)
+                               dropDistances = FALSE, verbose = FALSE, normalizeDistance = TRUE)
   sparse <- computeKernelMatrix(d, sigmaValues = sigma, method = "sparse",
-                                verbose = FALSE)
+                                verbose = FALSE, normalizeDistance = TRUE)
 
   expect_equal(getDistanceGeometry(sparse)$distType, "Euclidean3D")
   expect_equal(getDistanceGeometry(sparse)$zDistScale, 0.5)
@@ -143,26 +144,28 @@ test_that("sparse kernels inherit a 3-D geometry too", {
 test_that("method = 'auto' above the threshold inherits the same geometry", {
   obj <- .two_type_obj()
   d <- computeDistance(obj, distType = "Euclidean2D", yDistScale = 2.5,
-                       verbose = FALSE)
+                       verbose = FALSE, normalizeDistance = TRUE)
   # autoThreshold below the block size forces the sparse route.
   auto <- computeKernelMatrix(d, sigmaValues = 0.1, method = "auto",
-                              autoThreshold = 10L, verbose = FALSE)
+                              autoThreshold = 10L, verbose = FALSE, normalizeDistance = TRUE)
   dense <- computeKernelMatrix(d, sigmaValues = 0.1, method = "dense",
-                               dropDistances = FALSE, verbose = FALSE)
+                               dropDistances = FALSE, verbose = FALSE, normalizeDistance = TRUE)
 
   expect_equal(getDistanceGeometry(auto)$yDistScale, 2.5)
+  # method = "auto" resolves to the float32 sparse route above the threshold,
+  # so agreement with dense is bounded by float32 precision, not double.
   expect_equal(
     as.matrix(getKernelMatrix(auto, 0.1, "CellTypeA", "CellTypeB",
                               verbose = FALSE)),
     as.matrix(getKernelMatrix(dense, 0.1, "CellTypeA", "CellTypeB",
                               verbose = FALSE)),
-    tolerance = 1e-8, ignore_attr = TRUE)
+    tolerance = 2e-6, ignore_attr = TRUE)
 })
 
 test_that("sparse kernels without a prior computeDistance keep their defaults", {
   obj <- .two_type_obj()
   sparse <- computeKernelMatrix(obj, sigmaValues = 0.1, method = "sparse",
-                                yDistScale = 2.5, verbose = FALSE)
+                                yDistScale = 2.5, verbose = FALSE, normalizeDistance = TRUE)
   geom <- getDistanceGeometry(sparse)
   expect_equal(geom$yDistScale, 2.5)
   expect_equal(geom$source, "computeKernelMatrix")
@@ -174,35 +177,35 @@ test_that("sparse kernels without a prior computeDistance keep their defaults", 
 test_that("kernel arguments that contradict the record are an error", {
   obj <- .two_type_obj()
   d <- computeDistance(obj, distType = "Euclidean2D", yDistScale = 2.5,
-                       verbose = FALSE)
+                       verbose = FALSE, normalizeDistance = TRUE)
 
   expect_error(
     computeKernelMatrix(d, sigmaValues = 0.1, method = "sparse",
-                        yDistScale = 1, verbose = FALSE),
+                        yDistScale = 1, verbose = FALSE, normalizeDistance = TRUE),
     "yDistScale")
   expect_error(
     computeKernelMatrix(d, sigmaValues = 0.1, method = "dense",
-                        distType = "Euclidean3D", verbose = FALSE),
+                        distType = "Euclidean3D", verbose = FALSE, normalizeDistance = TRUE),
     "distType")
   # Restating the recorded value is not a contradiction.
   expect_no_error(
     computeKernelMatrix(d, sigmaValues = 0.1, method = "sparse",
-                        yDistScale = 2.5, verbose = FALSE))
+                        yDistScale = 2.5, verbose = FALSE, normalizeDistance = TRUE))
 })
 
 test_that("computeSparseKernel warns rather than errors on a mismatch", {
   obj <- .two_type_obj()
   d <- computeDistance(obj, distType = "Euclidean2D", yDistScale = 2.5,
-                       verbose = FALSE)
+                       verbose = FALSE, normalizeDistance = TRUE)
 
   expect_warning(
     computeSparseKernel(d, sigmaValues = 0.1, distType = "Euclidean2D",
-                        verbose = FALSE),
+                        verbose = FALSE, normalizeDistance = TRUE),
     "different coordinates")
   # Called as intended -- instead of computeDistance() -- nothing fires.
   expect_no_warning(
     computeSparseKernel(obj, sigmaValues = 0.1, distType = "Euclidean2D",
-                        verbose = FALSE))
+                        verbose = FALSE, normalizeDistance = TRUE))
 })
 
 

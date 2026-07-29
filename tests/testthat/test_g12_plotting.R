@@ -192,7 +192,7 @@ test_that("getCorrTwoTypes keeps float32 kernels encoded and agrees with the dec
   obj <- q(subsetData(obj, cellTypesOfInterest = c("CellTypeA", "CellTypeB")))
   obj <- q(computePCA(obj, nPCA = 6))
   obj <- q(computeSparseKernelFloat32(obj, sigmaValues = c(0.05, 0.1),
-                                      verbose = FALSE))
+                                      verbose = FALSE, normalizeDistance = TRUE))
   obj <- q(runSkrCCA(obj, scalePCs = TRUE, nCC = 1))
   obj <- q(computeNormalizedCorrelation(obj))
   obj <- q(computeGeneAndCellScores(obj))
@@ -234,7 +234,7 @@ test_that("multi-slide getCorrTwoTypes keeps float32 kernels encoded too", {
   obj <- q(subsetData(obj, cellTypesOfInterest = c("CellTypeA", "CellTypeB")))
   obj <- q(computePCA(obj, nPCA = 6))
   obj <- q(computeSparseKernelFloat32(obj, sigmaValues = c(0.05, 0.1),
-                                      verbose = FALSE))
+                                      verbose = FALSE, normalizeDistance = TRUE))
   obj <- q(runSkrCCA(obj, scalePCs = TRUE, nCC = 1))
   obj <- q(computeNormalizedCorrelation(obj))
   obj <- q(computeGeneAndCellScores(obj))

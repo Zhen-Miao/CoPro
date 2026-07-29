@@ -171,7 +171,8 @@
   d_def <- list(
     distType = "Euclidean2D",
     xDistScale = 1, yDistScale = 1, zDistScale = 1,
-    normalizeDistance = TRUE,
+    normalizeDistance = FALSE,
+    normalizeMethod = "spacing",
     normalizeTarget = 0.01,
     normalizationScope = "global",  # or "per_slide"
     truncateLowDist = TRUE,
@@ -354,40 +355,60 @@
   per_slide_percentiles <- vector("list", length(slides))
   names(per_slide_percentiles) <- slides
   for (s in slides) per_slide_percentiles[[s]] <- rep(NA_real_, length(pairs))
+  # The scaling reference is tracked separately from the flooring percentile,
+  # exactly as in the non-streaming paths, so the two agree entrywise.
+  per_slide_references <- per_slide_percentiles
+  use_spacing <- isTRUE(d$normalizeDistance) &&
+    identical(d$normalizeMethod, "spacing")
 
-  need_percentiles <- isTRUE(d$normalizeDistance) || isTRUE(d$truncateLowDist)
-  if (need_percentiles) {
+  need_percentiles <- isTRUE(d$truncateLowDist) ||
+    (isTRUE(d$normalizeDistance) && !use_spacing)
+  if (need_percentiles || use_spacing) {
     if (verbose && scope == "global") {
       message("  Streaming phase 1: per-pair percentiles (global scope)...")
     }
     for (s in slides) {
-      pcts <- numeric(length(pairs))
+      pcts <- rep(NA_real_, length(pairs))
+      refs <- rep(NA_real_, length(pairs))
       for (pp in seq_along(pairs)) {
         ct_i <- pairs[[pp]][1]
         ct_j <- pairs[[pp]][2]
         if (sparse_euclidean) {
           A <- get_pair_coordinates(s, ct_i)
           B <- get_pair_coordinates(s, ct_j)
-          p <- .pairPercentileProb(nrow(A), nrow(B))
-          pcts[pp] <- .lowPercentileBlock(A, B, p)$percentile
+          if (need_percentiles) {
+            p <- .pairPercentileProb(nrow(A), nrow(B))
+            pcts[pp] <- .lowPercentileBlock(A, B, p)$percentile
+          }
+          if (use_spacing) {
+            refs[pp] <- .blockNearestSpacing(A, B, within = FALSE)
+          }
         } else {
           dist_mat <- .streamingPairDistance(object, s, ct_i, ct_j, d)
           proc <- .processDistanceMatrix(dist_mat, d$truncateLowDist)
           pcts[pp] <- proc$percentile
           rm(dist_mat, proc)
           gc(verbose = FALSE, full = TRUE)
+          if (use_spacing) {
+            refs[pp] <- .blockSpacingForBlock(
+              object, d$distType, d$xDistScale, d$yDistScale, d$zDistScale,
+              s, ct_i, ct_j
+            )
+          }
         }
       }
       per_slide_percentiles[[s]] <- pcts
+      per_slide_references[[s]] <- if (use_spacing) refs else pcts
     }
 
     if (isTRUE(d$normalizeDistance) && scope == "global") {
-      all_pcts <- unlist(per_slide_percentiles)
-      finite_pcts <- all_pcts[is.finite(all_pcts) & !is.na(all_pcts)]
-      if (length(finite_pcts) == 0) {
-        stop("Streaming: no valid distance percentile across slides.")
+      reference <- .combineDistanceReference(
+        unlist(per_slide_references), d$normalizeMethod
+      )
+      if (!is.finite(reference)) {
+        stop("Streaming: no valid distance reference across slides.")
       }
-      global_scaling <- d$normalizeTarget / min(finite_pcts)
+      global_scaling <- d$normalizeTarget / reference
       if (verbose) {
         message(sprintf("  Streaming GLOBAL scaling factor = %g", global_scaling))
       }
@@ -400,12 +421,13 @@
 
     if (isTRUE(d$normalizeDistance)) {
       if (scope == "per_slide") {
-        finite_pcts <- per_slide_percentiles[[s]]
-        finite_pcts <- finite_pcts[is.finite(finite_pcts) & !is.na(finite_pcts)]
-        if (length(finite_pcts) == 0) {
-          stop(sprintf("Streaming: no valid distance percentile for slide '%s'.", s))
+        reference <- .combineDistanceReference(
+          per_slide_references[[s]], d$normalizeMethod
+        )
+        if (!is.finite(reference)) {
+          stop(sprintf("Streaming: no valid distance reference for slide '%s'.", s))
         }
-        slide_scaling <- d$normalizeTarget / min(finite_pcts)
+        slide_scaling <- d$normalizeTarget / reference
         if (verbose) {
           message(sprintf("    per-slide scaling factor = %g", slide_scaling))
         }

@@ -24,6 +24,7 @@ computeSelfKernel(
   yDistScale = NULL,
   zDistScale = NULL,
   normalizeDistance = NULL,
+  normalizeMethod = NULL,
   normalizeTarget = NULL,
   truncateLowDist = NULL
 )
@@ -46,6 +47,7 @@ computeSelfKernel(
   yDistScale = NULL,
   zDistScale = NULL,
   normalizeDistance = NULL,
+  normalizeMethod = NULL,
   normalizeTarget = NULL,
   truncateLowDist = NULL
 )
@@ -68,6 +70,7 @@ computeSelfKernel(
   yDistScale = NULL,
   zDistScale = NULL,
   normalizeDistance = NULL,
+  normalizeMethod = NULL,
   normalizeTarget = NULL,
   truncateLowDist = NULL
 )
@@ -107,6 +110,10 @@ self-distance matrices are absent. Default 5000.}
 \code{NULL} inherits the geometry recorded by \code{\link[=computeDistance]{computeDistance()}} /
 \code{\link[=computeSelfDistance]{computeSelfDistance()}}, and a value that contradicts that record is an
 error.}
+
+\item{normalizeMethod}{How the reference distance is estimated when
+\code{normalizeDistance = TRUE}: \code{"spacing"} (median nearest-partner distance,
+combined across blocks by median) or \code{"percentile"} (pre-1.2.0 behavior).}
 }
 \value{
 \code{CoPro} object with self-kernel matrices added to the kernelMatrices slot

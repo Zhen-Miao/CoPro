@@ -25,11 +25,11 @@ test_that("sparse multitype self-kernels match dense self-kernels", {
   obj <- subsetData(obj, cellTypesOfInterest = c("CellTypeA", "CellTypeB"))
   sigmas <- c(0.05, 0.1)
 
-  dense <- computeSelfDistance(obj, distType = "Euclidean2D", verbose = FALSE)
+  dense <- computeSelfDistance(obj, distType = "Euclidean2D", verbose = FALSE, normalizeDistance = TRUE)
   dense <- computeSelfKernel(dense, sigmaValues = sigmas, method = "dense",
-                             verbose = FALSE)
+                             verbose = FALSE, normalizeDistance = TRUE)
   sparse <- computeSelfKernel(obj, sigmaValues = sigmas, method = "sparse",
-                              distType = "Euclidean2D", verbose = FALSE)
+                              distType = "Euclidean2D", verbose = FALSE, normalizeDistance = TRUE)
 
   for (sigma in sigmas) {
     for (ct in obj@cellTypesOfInterest) {
@@ -51,7 +51,7 @@ test_that("self-kernel auto dispatches to sparse without dense distances", {
   # Even below a deliberately high size threshold, missing dense self-distance
   # inputs make the fused sparse route the only one-pass path.
   out <- computeSelfKernel(obj, sigmaValues = 0.1, autoThreshold = 1e9,
-                           distType = "Euclidean2D", verbose = FALSE)
+                           distType = "Euclidean2D", verbose = FALSE, normalizeDistance = TRUE)
   for (ct in obj@cellTypesOfInterest) {
     expect_s4_class(
       getSelfKernelMatrix(out, 0.1, ct, verbose = FALSE),
@@ -65,11 +65,11 @@ test_that("sparse multislide self-kernels match dense self-kernels", {
                                  n_genes = 15, n_cell_types = 2, seed = 613)
   obj <- subsetData(obj, cellTypesOfInterest = c("CellTypeA", "CellTypeB"))
 
-  dense <- computeSelfDistance(obj, distType = "Euclidean2D", verbose = FALSE)
+  dense <- computeSelfDistance(obj, distType = "Euclidean2D", verbose = FALSE, normalizeDistance = TRUE)
   dense <- computeSelfKernel(dense, sigmaValues = 0.1, method = "dense",
-                             verbose = FALSE)
+                             verbose = FALSE, normalizeDistance = TRUE)
   sparse <- computeSelfKernel(obj, sigmaValues = 0.1, method = "sparse",
-                              distType = "Euclidean2D", verbose = FALSE)
+                              distType = "Euclidean2D", verbose = FALSE, normalizeDistance = TRUE)
 
   for (slide in getSlideList(obj)) {
     for (ct in obj@cellTypesOfInterest) {
@@ -109,7 +109,7 @@ test_that("sparse self-kernels persist the distance scaling factor", {
                                   n_genes = 15, n_cell_types = 2, seed = 615)
   objm <- subsetData(objm, cellTypesOfInterest = c("CellTypeA", "CellTypeB"))
   sparsem <- computeSelfKernel(objm, sigmaValues = 0.1, method = "sparse",
-                               distType = "Euclidean2D", verbose = FALSE)
+                               distType = "Euclidean2D", verbose = FALSE, normalizeDistance = TRUE)
   expect_length(sparsem@distanceScaleFactor, 1L)
   expect_true(is.finite(sparsem@distanceScaleFactor) &&
                 sparsem@distanceScaleFactor > 0)

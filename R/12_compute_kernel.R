@@ -453,18 +453,27 @@ kernel_from_distance <- function(
 #' @param colNormalizeKernel Whether the kernel matrix will be column-wise
 #' normalized? Note that row or column wise normalization will result in an
 #' asymmetric result in skrCCA inference.
-#' @param method One of `"auto"`, `"dense"`, or `"sparse"`. `"dense"` is the
-#'  classic path that reads the distance matrices produced by
-#'  [computeDistance()]. `"sparse"` is a fused, memory-efficient path
-#'  ([computeSparseKernel()]) that builds sparse kernels directly from
-#'  coordinates via a fixed-radius neighbor search, never forming a dense
-#'  `n x n` matrix, and does not require [computeDistance()] to have been run.
-#'  Symmetric within-type kernels retain one triangle in a `dsCMatrix`;
-#'  cross-type and asymmetrically normalized kernels use `dgCMatrix`. Results
-#'  are numerically equivalent. `"auto"` (default) picks `"sparse"` when
-#'  any per-slide cell-type block reaches `autoThreshold` cells or when the
-#'  aggregate dense block workload reaches `autoThreshold^2` entries; otherwise
-#'  it picks `"dense"`.
+#' @param method One of `"auto"`, `"dense"`, `"sparse"`, or `"float32"`.
+#'  `"dense"` is the classic path that reads the distance matrices produced by
+#'  [computeDistance()]. `"sparse"` and `"float32"` are fused, memory-efficient
+#'  paths ([computeSparseKernel()] and [computeSparseKernelFloat32()]) that
+#'  build kernels directly from coordinates via a fixed-radius neighbor search,
+#'  never forming a dense `n x n` matrix, and do not require [computeDistance()]
+#'  to have been run. `"float32"` stores 8 bytes per entry against `"sparse"`'s
+#'  12 and streams one block at a time instead of caching every block's
+#'  neighbors, so it is the cheaper of the two; `"sparse"` keeps float64 values
+#'  for exactness checks.
+#'
+#'  `"auto"` (default) picks `"dense"` for small data, and otherwise `"float32"`.
+#'  Small means every per-slide cell-type block is under `autoThreshold` cells
+#'  and the aggregate dense workload is under `autoThreshold^2` entries. Above
+#'  that, a neighbor probe predicts how dense the kernel will actually be and
+#'  warns when a fixed-radius kernel would retain more than `denseThreshold` of
+#'  each block, since sparse storage saves nothing there.
+#' @param denseThreshold Predicted kernel density above which `method = "auto"`
+#'  warns that a sparse representation is a poor fit and suggests a smaller
+#'  sigma. Default 0.3. A `dgCMatrix` costs 12 bytes per stored entry against 8
+#'  for a dense double, so sparse storage is strictly worse past about 0.67.
 #' @param dropDistances Logical. If `TRUE` (default), the (potentially large)
 #'  `@distances` slot is cleared after kernels are computed, since the
 #'  downstream pipeline only needs the kernels. Set `FALSE` to keep distances
@@ -474,17 +483,21 @@ kernel_from_distance <- function(
 #'  the sparse path for any kernel-block dimension. The sparse path is also
 #'  selected when aggregate dense block entries reach `autoThreshold^2`.
 #'  Default 5000 (about 200 MB of doubles before temporary matrices and copies).
-#' @param distType,xDistScale,yDistScale,zDistScale,normalizeDistance,normalizeTarget,truncateLowDist
-#'  Distance options used only by the sparse path (see [computeDistance()] and
+#' @param distType,xDistScale,yDistScale,zDistScale,normalizeDistance,normalizeMethod,normalizeTarget,truncateLowDist
+#'  Distance options used only by the sparse paths (see [computeDistance()] and
 #'  [computeSparseKernel()]). Each defaults to `NULL`, meaning "inherit the
 #'  geometry recorded by [computeDistance()]", so sparse kernels are built on
 #'  the same coordinates as the distances rather than on this function's own
 #'  defaults. When nothing has been recorded, the fallbacks are `xDistScale` /
-#'  `yDistScale` / `zDistScale` `= 1`, `normalizeDistance = TRUE`,
-#'  `normalizeTarget = 0.01`, `truncateLowDist = TRUE`, and a `distType` of
-#'  `"Euclidean3D"` when the coordinates contain a `z` column, otherwise
-#'  `"Euclidean2D"`. Passing a value that contradicts the recorded geometry is
-#'  an error; inspect the record with [getDistanceGeometry()].
+#'  `yDistScale` / `zDistScale` `= 1`, `normalizeDistance = FALSE`,
+#'  `normalizeMethod = "spacing"`, `normalizeTarget = 0.01`,
+#'  `truncateLowDist = TRUE`, and a `distType` of `"Euclidean3D"` when the
+#'  coordinates contain a `z` column, otherwise `"Euclidean2D"`. Passing a value
+#'  that contradicts the recorded geometry is an error; inspect the record with
+#'  [getDistanceGeometry()].
+#'
+#'  `normalizeDistance` defaulted to `TRUE` before CoPro 1.2.0. Use
+#'  [detectSigmaRange()] to choose sigma in the data's own units instead.
 #' @return The `CoPro` object with computed kernel matrices added. The kernel
 #' matrices are organized into a three-layer nested list object. The first layer
 #' is indexed by the sigma value, and the second and the third layers are cell
@@ -512,10 +525,10 @@ setGeneric(
   function(object, sigmaValues, lowerLimit = 1e-7, upperQuantile = 0.85,
            normalizeKernel = FALSE, minAveCellNeighor = 2,
            rowNormalizeKernel = FALSE, colNormalizeKernel = FALSE,
-           method = c("auto", "dense", "sparse"), dropDistances = TRUE,
-           autoThreshold = 5000L, distType = NULL,
+           method = c("auto", "dense", "sparse", "float32"), dropDistances = TRUE,
+           autoThreshold = 5000L, denseThreshold = 0.3, distType = NULL,
            xDistScale = NULL, yDistScale = NULL, zDistScale = NULL,
-           normalizeDistance = NULL, normalizeTarget = NULL,
+           normalizeDistance = NULL, normalizeMethod = NULL, normalizeTarget = NULL,
            truncateLowDist = NULL,
            verbose = TRUE) standardGeneric("computeKernelMatrix"))
 
@@ -526,19 +539,20 @@ setMethod("computeKernelMatrix", "CoProSingle",
           function(object, sigmaValues, lowerLimit = 1e-7, upperQuantile = 0.85,
                    normalizeKernel = FALSE, minAveCellNeighor = 2,
                    rowNormalizeKernel = FALSE, colNormalizeKernel = FALSE,
-                   method = c("auto", "dense", "sparse"), dropDistances = TRUE,
-                   autoThreshold = 5000L, distType = NULL,
+                   method = c("auto", "dense", "sparse", "float32"), dropDistances = TRUE,
+                   autoThreshold = 5000L, denseThreshold = 0.3, distType = NULL,
                    xDistScale = NULL, yDistScale = NULL, zDistScale = NULL,
-                   normalizeDistance = NULL, normalizeTarget = NULL,
+                   normalizeDistance = NULL, normalizeMethod = NULL, normalizeTarget = NULL,
                    truncateLowDist = NULL,
                    verbose = TRUE) {
             .computeKernelDispatch(object, sigmaValues, lowerLimit, upperQuantile,
                                    normalizeKernel, minAveCellNeighor, rowNormalizeKernel,
                                    colNormalizeKernel, verbose,
                                    method = match.arg(method), dropDistances = dropDistances,
-                                   autoThreshold = autoThreshold, distType = distType,
+                                   autoThreshold = autoThreshold, denseThreshold = denseThreshold, distType = distType,
                                    xDistScale = xDistScale, yDistScale = yDistScale,
                                    zDistScale = zDistScale, normalizeDistance = normalizeDistance,
+                                   normalizeMethod = normalizeMethod,
                                    normalizeTarget = normalizeTarget,
                                    truncateLowDist = truncateLowDist, is_multi = FALSE)
           })
@@ -550,19 +564,20 @@ setMethod("computeKernelMatrix", "CoProMulti",
           function(object, sigmaValues, lowerLimit = 1e-7, upperQuantile = 0.85,
                    normalizeKernel = FALSE, minAveCellNeighor = 2,
                    rowNormalizeKernel = FALSE, colNormalizeKernel = FALSE,
-                   method = c("auto", "dense", "sparse"), dropDistances = TRUE,
-                   autoThreshold = 5000L, distType = NULL,
+                   method = c("auto", "dense", "sparse", "float32"), dropDistances = TRUE,
+                   autoThreshold = 5000L, denseThreshold = 0.3, distType = NULL,
                    xDistScale = NULL, yDistScale = NULL, zDistScale = NULL,
-                   normalizeDistance = NULL, normalizeTarget = NULL,
+                   normalizeDistance = NULL, normalizeMethod = NULL, normalizeTarget = NULL,
                    truncateLowDist = NULL,
                    verbose = TRUE) {
             .computeKernelDispatch(object, sigmaValues, lowerLimit, upperQuantile,
                                    normalizeKernel, minAveCellNeighor, rowNormalizeKernel,
                                    colNormalizeKernel, verbose,
                                    method = match.arg(method), dropDistances = dropDistances,
-                                   autoThreshold = autoThreshold, distType = distType,
+                                   autoThreshold = autoThreshold, denseThreshold = denseThreshold, distType = distType,
                                    xDistScale = xDistScale, yDistScale = yDistScale,
                                    zDistScale = zDistScale, normalizeDistance = normalizeDistance,
+                                   normalizeMethod = normalizeMethod,
                                    normalizeTarget = normalizeTarget,
                                    truncateLowDist = truncateLowDist, is_multi = TRUE)
           })
