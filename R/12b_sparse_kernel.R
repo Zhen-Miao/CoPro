@@ -194,7 +194,13 @@
   }
 
   # Sparse route only: see the matching note in .computeKernelDispatch().
-  object@distanceGeometry <- geometry
+  # `normalizeDistance = "inherit"` says where the scaling factor comes from,
+  # not which coordinates were used, so the record keeps the resulting scaling.
+  stamped <- geometry
+  stamped$normalizeDistance <- .recordedNormalizeDistance(
+    geometry$normalizeDistance, .getDistanceGeometry(object)
+  )
+  object@distanceGeometry <- stamped
 
   .computeSparseSelfKernelCore(
     object, sigmaValues, lowerLimit, upperQuantile, normalizeKernel,
@@ -621,6 +627,9 @@
   )
   .warnDistanceGeometryMismatch(object, requested, what)
   recorded <- .getDistanceGeometry(object)
+  # A record describes the scaling the matrices ended up on, so the self-kernel
+  # paths' "inherit" instruction resolves to whatever it inherited from.
+  normalizeDistance <- .recordedNormalizeDistance(normalizeDistance, recorded)
   object@distanceGeometry <- .makeDistanceGeometry(
     distType, xDistScale, yDistScale, zDistScale,
     normalizeDistance, normalizeMethod, normalizeTarget, truncateLowDist,
@@ -1008,9 +1017,13 @@
     ))
   }
 
+  # normalizeDistance may be "inherit", so branch on the mode rather than on
+  # the argument itself.
+  scaling_mode <- .normalizeDistanceMode(normalizeDistance)
+  derive_own <- identical(scaling_mode, "own")
   need_pct <- truncateLowDist ||
-    (normalizeDistance && identical(normalizeMethod, "percentile"))
-  need_spacing <- normalizeDistance && identical(normalizeMethod, "spacing")
+    (derive_own && identical(normalizeMethod, "percentile"))
+  need_spacing <- derive_own && identical(normalizeMethod, "spacing")
   pctls <- rep(NA_real_, length(blocks))
   spacings <- rep(NA_real_, length(blocks))
   if (need_pct || need_spacing) {
@@ -1025,18 +1038,37 @@
       }
     }
   }
-  scaling_factor <- if (!normalizeDistance) {
-    1
-  } else {
-    .distanceScaleFactor(
-      .combineDistanceReference(
-        if (need_spacing) spacings else pctls, normalizeMethod
-      ),
-      normalizeTarget, normalizeMethod
+  reference <- if (derive_own) {
+    .combineDistanceReference(
+      if (need_spacing) spacings else pctls, normalizeMethod
     )
+  } else {
+    NA_real_
   }
-  if (normalizeDistance) {
-    object@distanceScaleFactor <- scaling_factor
+  if (derive_own) {
+    # Raises the diagnostic when no block yielded a usable reference.
+    # .resolveSelfDistanceScaling() would quietly return 1 there, silently
+    # skipping the normalization the caller asked for.
+    .distanceScaleFactor(reference, normalizeTarget, normalizeMethod)
+  }
+  scaling_factor <- .resolveSelfDistanceScaling(
+    normalizeDistance, reference, object@distanceScaleFactor,
+    target = normalizeTarget
+  )
+  if (!identical(scaling_mode, "none") &&
+      (!is.finite(scaling_factor) || scaling_factor <= 0)) {
+    stop("Cannot normalize self-kernel distances: no valid low-distance ",
+         "reference was found.")
+  }
+  if (!identical(scaling_mode, "none")) {
+    ## Only record a factor when there is not already one. Overwriting the
+    ## value computeDistance() derived from the cross-type distances would
+    ## leave the object claiming a scale its cross-kernels were not built at,
+    ## and everything downstream that reads the slot -- the variogram
+    ## normalizer in particular -- would build operators in the wrong units.
+    if (length(object@distanceScaleFactor) == 0L) {
+      object@distanceScaleFactor <- scaling_factor
+    }
     if (verbose) message(sprintf("Self-distance scaling factor: %g", scaling_factor))
   }
 

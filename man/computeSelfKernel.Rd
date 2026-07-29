@@ -109,7 +109,10 @@ self-distance matrices are absent. Default 5000.}
 \item{distType, xDistScale, yDistScale, zDistScale, normalizeDistance, normalizeTarget, truncateLowDist}{Distance options for the sparse path, matching \code{\link[=computeKernelMatrix]{computeKernelMatrix()}}:
 \code{NULL} inherits the geometry recorded by \code{\link[=computeDistance]{computeDistance()}} /
 \code{\link[=computeSelfDistance]{computeSelfDistance()}}, and a value that contradicts that record is an
-error.}
+error. \code{normalizeDistance} additionally accepts \code{"inherit"}, which reuses
+the scaling factor \code{\link[=computeDistance]{computeDistance()}} recorded rather than deriving one
+from the self-distances; see \code{\link[=computeSelfDistance]{computeSelfDistance()}}. Building self-kernels
+never overwrites a factor already recorded on the object.}
 
 \item{normalizeMethod}{How the reference distance is estimated when
 \code{normalizeDistance = TRUE}: \code{"spacing"} (median nearest-partner distance,

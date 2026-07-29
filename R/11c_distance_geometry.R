@@ -43,6 +43,34 @@
 #' @noRd
 .NORMALIZE_METHODS <- c("spacing", "percentile")
 
+#' Is this `normalizeDistance` the "reuse the recorded factor" instruction?
+#'
+#' The self-distance and self-kernel paths accept `normalizeDistance =
+#' "inherit"`, which says to reuse the scaling factor [computeDistance()]
+#' recorded rather than derive one from the within-type blocks. It describes
+#' where the factor comes from, not a different coordinate basis, so it agrees
+#' with any record by construction and must never read as a contradiction.
+#' @noRd
+.isInheritNormalize <- function(value) identical(value, "inherit")
+
+#' The `normalizeDistance` to write into a record when the caller said "inherit"
+#'
+#' A record is a description of the coordinates the object's matrices live on.
+#' Storing the instruction instead of its outcome would leave later steps
+#' inheriting `"inherit"` from an object that has nothing left to inherit from.
+#' @noRd
+.recordedNormalizeDistance <- function(resolved, recorded) {
+  if (!.isInheritNormalize(resolved)) return(resolved)
+  if (!is.null(recorded[["normalizeDistance"]])) {
+    recorded[["normalizeDistance"]]
+  } else {
+    # Unreachable in practice: inheriting with nothing recorded already errored
+    # in .resolveSelfDistanceScaling(). TRUE is the honest description anyway --
+    # the blocks did get scaled.
+    TRUE
+  }
+}
+
 #' Validate a normalizeMethod argument
 #' @noRd
 .checkNormalizeMethod <- function(method) {
@@ -173,6 +201,7 @@
     want <- requested[[field]]
     have <- recorded[[field]]
     if (is.null(want) || is.null(have)) next
+    if (identical(field, "normalizeDistance") && .isInheritNormalize(want)) next
     if (!isTRUE(all.equal(want, have))) {
       conflicts <- c(conflicts, sprintf(
         "  %s: requested %s, but distances were built with %s",

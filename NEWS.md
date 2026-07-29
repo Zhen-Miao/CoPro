@@ -56,6 +56,14 @@
   `truncateLowDist = TRUE`; the two jobs are now separate quantities rather
   than one shared number.
 
+* **`normalizeDistance = "inherit"`** is accepted by `computeSelfDistance()` and
+  `computeSelfKernel()` as a third value alongside `TRUE` and `FALSE`. It reuses
+  the factor `computeDistance()` recorded for the cross-type distances instead
+  of deriving a separate one from the within-type blocks, so `sigma = s` means
+  the same physical bandwidth for a self-kernel as for a cross-kernel. Deriving
+  a separate factor (`TRUE`) now warns when the two disagree, and building
+  self-kernels never overwrites the factor already recorded on the object.
+
 ## Memory
 
 * **`method = "auto"` now selects the float32 sparse representation** for large
