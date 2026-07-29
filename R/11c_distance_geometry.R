@@ -35,13 +35,17 @@
 #' @noRd
 .DISTANCE_GEOMETRY_DEFAULTS <- list(
   xDistScale = 1, yDistScale = 1, zDistScale = 1,
-  normalizeDistance = FALSE, normalizeMethod = "spacing",
+  normalizeDistance = FALSE, normalizeMethod = "global",
   normalizeTarget = 0.01, truncateLowDist = TRUE
 )
 
 #' Supported distance-normalization strategies
+#'
+#' `"global"` is the default because it is the only one whose reference does
+#' not depend on which blocks a step happens to build. See
+#' `.globalSpacingReference()` for why that matters.
 #' @noRd
-.NORMALIZE_METHODS <- c("spacing", "percentile")
+.NORMALIZE_METHODS <- c("global", "spacing", "percentile")
 
 #' Validate a normalizeMethod argument
 #' @noRd
@@ -96,7 +100,7 @@
 #' @noRd
 .makeDistanceGeometry <- function(distType, xDistScale = 1, yDistScale = 1,
                                   zDistScale = 1, normalizeDistance = FALSE,
-                                  normalizeMethod = "spacing",
+                                  normalizeMethod = "global",
                                   normalizeTarget = 0.01, truncateLowDist = TRUE,
                                   source = NA_character_) {
   list(
@@ -316,6 +320,45 @@
     ))
   }
   pin$factor
+}
+
+#' The scale factor a normalization pass should use
+#'
+#' One entry point for every step that rescales distances, so the choice of
+#' reference, the conversion to a factor, and the reuse of an already-pinned
+#' factor cannot drift apart between the dense, sparse, float32, self, and
+#' streaming paths.
+#'
+#' Under `normalizeMethod = "global"` the reference comes from the cells, not
+#' from the blocks this particular step builds, so every step computes the same
+#' number and `adopt` never has anything to do. The pin still runs: it is what
+#' keeps an object consistent when the record was written under one of the
+#' block-based methods.
+#'
+#' @param blockValues Per-block reference distances gathered by the caller
+#'   (spacings or low percentiles). Ignored by `"global"`.
+#' @param adopt Whether an already-pinned factor wins. `FALSE` for
+#'   [computeDistance()], which rebuilds `@distances` wholesale and is
+#'   therefore the step that re-pins.
+#' @param slideID Restrict a `"global"` reference to one slide; `NULL` combines
+#'   across slides.
+#' @return A positive scale factor.
+#' @noRd
+.normalizationScaleFactor <- function(object, blockValues, normalizeMethod,
+                                      normalizeTarget, distType,
+                                      xDistScale = 1, yDistScale = 1,
+                                      zDistScale = 1, what = "computeDistance",
+                                      verbose = TRUE, slideID = NULL,
+                                      adopt = TRUE) {
+  reference <- if (identical(normalizeMethod, "global")) {
+    .globalSpacingReference(object, distType, xDistScale, yDistScale,
+                            zDistScale, slideID = slideID)
+  } else {
+    .combineDistanceReference(blockValues, normalizeMethod)
+  }
+  computed <- .distanceScaleFactor(reference, normalizeTarget, normalizeMethod)
+  if (!adopt) return(computed)
+  .adoptScaleFactor(object, computed, what = what, verbose = verbose)
 }
 
 #' Forget the recorded geometry and pinned scale factor

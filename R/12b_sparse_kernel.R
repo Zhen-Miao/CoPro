@@ -703,15 +703,11 @@
   scaling_factor <- if (!normalizeDistance) {
     1
   } else {
-    .adoptScaleFactor(
-      object,
-      computed = .distanceScaleFactor(
-        .combineDistanceReference(
-          if (need_spacing) spacings else pctls, normalizeMethod
-        ),
-        normalizeTarget, normalizeMethod
-      ),
-      what = "computeSparseKernel", verbose = verbose
+    .normalizationScaleFactor(
+      object, blockValues = if (need_spacing) spacings else pctls,
+      normalizeMethod = normalizeMethod, normalizeTarget = normalizeTarget,
+      distType = distType, xDistScale = xDistScale, yDistScale = yDistScale,
+      zDistScale = zDistScale, what = "computeSparseKernel", verbose = verbose
     )
   }
   if (normalizeDistance && verbose) {
@@ -866,15 +862,11 @@
   scaling_factor <- if (!normalizeDistance) {
     1
   } else {
-    .adoptScaleFactor(
-      object,
-      computed = .distanceScaleFactor(
-        .combineDistanceReference(
-          if (need_spacing) spacings else pctls, normalizeMethod
-        ),
-        normalizeTarget, normalizeMethod
-      ),
-      what = "computeSparseKernel", verbose = verbose
+    .normalizationScaleFactor(
+      object, blockValues = if (need_spacing) spacings else pctls,
+      normalizeMethod = normalizeMethod, normalizeTarget = normalizeTarget,
+      distType = distType, xDistScale = xDistScale, yDistScale = yDistScale,
+      zDistScale = zDistScale, what = "computeSparseKernel", verbose = verbose
     )
   }
   if (normalizeDistance && verbose) {
@@ -1036,15 +1028,11 @@
   scaling_factor <- if (!normalizeDistance) {
     1
   } else {
-    .adoptScaleFactor(
-      object,
-      computed = .distanceScaleFactor(
-        .combineDistanceReference(
-          if (need_spacing) spacings else pctls, normalizeMethod
-        ),
-        normalizeTarget, normalizeMethod
-      ),
-      what = "computeSelfKernel", verbose = verbose
+    .normalizationScaleFactor(
+      object, blockValues = if (need_spacing) spacings else pctls,
+      normalizeMethod = normalizeMethod, normalizeTarget = normalizeTarget,
+      distType = distType, xDistScale = xDistScale, yDistScale = yDistScale,
+      zDistScale = zDistScale, what = "computeSelfKernel", verbose = verbose
     )
   }
   if (normalizeDistance) {
@@ -1153,11 +1141,13 @@
 #' @param normalizeDistance,normalizeTarget,truncateLowDist distance-processing
 #'   options, matching [computeDistance()].
 #' @param normalizeMethod How the reference distance is estimated when
-#'   `normalizeDistance = TRUE`. `"spacing"` (default) uses the median
-#'   nearest-partner distance, taken across cell-type blocks by median, so the
-#'   unit tracks local cell spacing and no single dense block sets the scale for
-#'   the whole object. `"percentile"` reproduces the pre-1.2.0 behavior: the
-#'   minimum, across blocks, of a low quantile of pairwise distances.
+#'   `normalizeDistance = TRUE`. `"global"` (default) uses the median
+#'   nearest-neighbor distance over all cells of interest, ignoring their type
+#'   labels, so the unit is a property of the tissue rather than of whichever
+#'   blocks this call builds. `"spacing"` measures each cell-type block and
+#'   takes the median across blocks. `"percentile"` reproduces the pre-1.2.0
+#'   behavior: the minimum, across blocks, of a low quantile of pairwise
+#'   distances.
 #' @return The `CoPro` object with sparse kernel matrices in `@kernelMatrices`.
 #' @family spatial-pipeline
 #' @seealso [computeKernelMatrix()], [computeDistance()]
@@ -1170,7 +1160,7 @@ setGeneric(
            rowNormalizeKernel = FALSE, colNormalizeKernel = FALSE,
            distType = c("Euclidean2D", "Euclidean3D"),
            xDistScale = 1, yDistScale = 1, zDistScale = 1,
-           normalizeDistance = FALSE, normalizeMethod = "spacing", normalizeTarget = 0.01,
+           normalizeDistance = FALSE, normalizeMethod = "global", normalizeTarget = 0.01,
            truncateLowDist = TRUE, verbose = TRUE) standardGeneric("computeSparseKernel")
 )
 
@@ -1182,7 +1172,7 @@ setMethod("computeSparseKernel", "CoProSingle",
                    rowNormalizeKernel = FALSE, colNormalizeKernel = FALSE,
                    distType = c("Euclidean2D", "Euclidean3D"),
                    xDistScale = 1, yDistScale = 1, zDistScale = 1,
-                   normalizeDistance = FALSE, normalizeMethod = "spacing", normalizeTarget = 0.01,
+                   normalizeDistance = FALSE, normalizeMethod = "global", normalizeTarget = 0.01,
                    truncateLowDist = TRUE, verbose = TRUE) {
             distType <- match.arg(distType)
             .computeSparseKernelCore(object, sigmaValues, lowerLimit, upperQuantile,
@@ -1200,7 +1190,7 @@ setMethod("computeSparseKernel", "CoProMulti",
                    rowNormalizeKernel = FALSE, colNormalizeKernel = FALSE,
                    distType = c("Euclidean2D", "Euclidean3D"),
                    xDistScale = 1, yDistScale = 1, zDistScale = 1,
-                   normalizeDistance = FALSE, normalizeMethod = "spacing", normalizeTarget = 0.01,
+                   normalizeDistance = FALSE, normalizeMethod = "global", normalizeTarget = 0.01,
                    truncateLowDist = TRUE, verbose = TRUE) {
             distType <- match.arg(distType)
             .computeSparseKernelCoreMulti(object, sigmaValues, lowerLimit, upperQuantile,

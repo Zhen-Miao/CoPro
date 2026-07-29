@@ -544,6 +544,47 @@ test_that("streaming path matches slot-based path with normalizeDistance=FALSE",
   expect_true(test_sigma %in% obj_stream@sigmaValues)
 })
 
+test_that("streaming path matches slot-based path with normalizeDistance=TRUE", {
+  # normalizeMethod = "global" reads its reference off the cells rather than
+  # off the pair blocks, so the streaming path never materializes the per-pair
+  # references the other methods need. That is a separate branch from the
+  # normalizeDistance = FALSE case above, and it has to land on the same scale
+  # factor -- and therefore the same kernels -- as the slot-based path.
+  skip_if_not_installed("CoPro")
+
+  obj <- create_test_copro_multi(
+    n_cells_per_slide = 60, n_slides = 2, n_genes = 30,
+    n_cell_types = 2, seed = 42
+  )
+  obj <- subsetData(obj, cellTypesOfInterest = c("CellTypeA", "CellTypeB"))
+  test_sigma <- 0.05
+
+  obj_slot <- computeDistance(obj, distType = "Euclidean2D",
+                              normalizeDistance = TRUE, verbose = FALSE)
+  expect_equal(getDistanceGeometry(obj_slot)$normalizeMethod, "global")
+  obj_slot <- computeKernelMatrix(obj_slot, sigmaValues = test_sigma,
+                                  verbose = FALSE)
+  set.seed(123)
+  obj_slot <- runGeneSpaceCCA(obj_slot, sigma = test_sigma, nCC = 2,
+                              max_iter = 500, tol = 1e-6, verbose = FALSE)
+
+  set.seed(123)
+  obj_stream <- runGeneSpaceCCA(
+    obj, sigma = test_sigma, nCC = 2,
+    max_iter = 500, tol = 1e-6,
+    streaming = TRUE,
+    distanceArgs = list(distType = "Euclidean2D", normalizeDistance = TRUE),
+    verbose = FALSE
+  )
+
+  expect_equal(names(obj_slot@geneScores), names(obj_stream@geneScores))
+  for (k in names(obj_slot@geneScores)) {
+    expect_equal(obj_stream@geneScores[[k]], obj_slot@geneScores[[k]],
+                 tolerance = 1e-8,
+                 info = paste("geneScores mismatch for:", k))
+  }
+})
+
 test_that("streaming path matches slot-based path with 3 cell types (multiple pairs)", {
   # Multi-pair regression: with 3 cell types the per-slide pair loop has
   # to handle 3 cross-pairs. An earlier draft of the streaming code freed

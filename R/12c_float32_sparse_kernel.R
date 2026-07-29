@@ -297,8 +297,10 @@ materializeFloat32Kernels <- function(object, verbose = TRUE) {
 #' @param xDistScale,yDistScale,zDistScale Per-axis coordinate scales.
 #' @param normalizeDistance Whether to rescale distances to a common unit.
 #' @param normalizeMethod How the reference distance is estimated when
-#'   `normalizeDistance = TRUE`: `"spacing"` (median nearest-partner distance,
-#'   combined across blocks by median) or `"percentile"` (pre-1.2.0 behavior).
+#'   `normalizeDistance = TRUE`: `"global"` (median nearest-neighbor distance
+#'   over all cells, ignoring type labels), `"spacing"` (median nearest-partner
+#'   distance per block, combined by median), or `"percentile"` (pre-1.2.0
+#'   behavior). See [computeDistance()].
 #' @param normalizeTarget Target low distance percentile after normalization.
 #' @param truncateLowDist Whether to floor very small distances.
 #' @param overwrite Whether to replace existing kernel matrices.
@@ -315,7 +317,7 @@ setGeneric(
       rowNormalizeKernel = FALSE, colNormalizeKernel = FALSE,
       distType = c("Euclidean2D", "Euclidean3D"),
       xDistScale = 1, yDistScale = 1, zDistScale = 1,
-      normalizeDistance = FALSE, normalizeMethod = "spacing", normalizeTarget = 0.01,
+      normalizeDistance = FALSE, normalizeMethod = "global", normalizeTarget = 0.01,
       truncateLowDist = TRUE, overwrite = TRUE,
       verbose = TRUE) {
     standardGeneric("computeSparseKernelFloat32")
@@ -446,15 +448,12 @@ setGeneric(
   scaling_factor <- if (!normalizeDistance) {
     1
   } else {
-    .adoptScaleFactor(
-      object,
-      computed = .distanceScaleFactor(
-        .combineDistanceReference(
-          if (need_spacing) spacings else percentiles, normalizeMethod
-        ),
-        normalizeTarget, normalizeMethod
-      ),
-      what = "computeSparseKernelFloat32", verbose = verbose
+    .normalizationScaleFactor(
+      object, blockValues = if (need_spacing) spacings else percentiles,
+      normalizeMethod = normalizeMethod, normalizeTarget = normalizeTarget,
+      distType = distType, xDistScale = xDistScale, yDistScale = yDistScale,
+      zDistScale = zDistScale, what = "computeSparseKernelFloat32",
+      verbose = verbose
     )
   }
 
@@ -575,7 +574,7 @@ setMethod(
       rowNormalizeKernel = FALSE, colNormalizeKernel = FALSE,
       distType = c("Euclidean2D", "Euclidean3D"),
       xDistScale = 1, yDistScale = 1, zDistScale = 1,
-      normalizeDistance = FALSE, normalizeMethod = "spacing", normalizeTarget = 0.01,
+      normalizeDistance = FALSE, normalizeMethod = "global", normalizeTarget = 0.01,
       truncateLowDist = TRUE, overwrite = TRUE,
       verbose = TRUE) {
     .computeSparseKernelFloat32Core(
@@ -599,7 +598,7 @@ setMethod(
       rowNormalizeKernel = FALSE, colNormalizeKernel = FALSE,
       distType = c("Euclidean2D", "Euclidean3D"),
       xDistScale = 1, yDistScale = 1, zDistScale = 1,
-      normalizeDistance = FALSE, normalizeMethod = "spacing", normalizeTarget = 0.01,
+      normalizeDistance = FALSE, normalizeMethod = "global", normalizeTarget = 0.01,
       truncateLowDist = TRUE, overwrite = TRUE,
       verbose = TRUE) {
     .computeSparseKernelFloat32Core(

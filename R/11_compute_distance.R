@@ -17,13 +17,16 @@
 #'  mm^3. This ensures that the kernel sizes from 0.001 to 0.1 will make
 #'  sense. Default = TRUE.
 #' @param normalizeMethod How the reference distance is estimated when
-#'  `normalizeDistance = TRUE`. `"spacing"` (default) uses the median
-#'  nearest-partner distance, combined across cell-type blocks by median, so the
-#'  unit tracks local cell spacing and no single dense block sets the scale for
-#'  the whole object. `"percentile"` reproduces the pre-1.2.0 behavior: the
-#'  minimum, across blocks, of a low quantile of pairwise distances. Not
-#'  available for `distType = "Morphology-Aware"`, which falls back to
-#'  `"percentile"`.
+#'  `normalizeDistance = TRUE`. `"global"` (default) uses the median
+#'  nearest-neighbor distance over all cells of interest, ignoring their type
+#'  labels: one length for the tissue, so cross-type and within-type distances
+#'  land on the same unit no matter which step runs first.
+#'  `"spacing"` measures each cell-type block instead and takes the median
+#'  across blocks, which makes the unit depend on cell-type abundance and
+#'  colocalization. `"percentile"` reproduces the pre-1.2.0 behavior: the
+#'  minimum, across blocks, of a low quantile of pairwise distances. Neither
+#'  `"global"` nor `"spacing"` is available for
+#'  `distType = "Morphology-Aware"`, which falls back to `"percentile"`.
 #' @param normalizeTarget Numeric scalar. The target value that the
 #'  low-percentile cell-cell distance is rescaled to when
 #'  `normalizeDistance = TRUE`. Default = 0.01 (preserves historical
@@ -58,15 +61,24 @@
 #' @export
 #' @details
 #' When `normalizeDistance = TRUE`, the scale factor this call derives is
-#' recorded in `@distanceScaleFactor` and pinned for the object: a later
-#' [computeSelfDistance()] or [computeSelfKernel()] reuses it instead of
-#' deriving a second one from the within-type blocks, so every block stays on
-#' one unit. There is no single reference length that is right for both -- the
-#' within-type and cross-type references diverge with cell-type abundance and
-#' with how tightly the types colocalize -- so the package fixes one and
-#' reports it rather than choosing per block. `computeDistance()` rebuilds
-#' `@distances` from scratch and therefore always re-derives the factor; that
-#' is how to reset it.
+#' recorded in `@distanceScaleFactor`. It answers a different question than
+#' `sigmaValues` does: the factor fixes the *unit* distances are reported in,
+#' while sigma fixes *how far* a cell reaches within that unit. Two numbers,
+#' two jobs -- rescaling cannot substitute for choosing a bandwidth, which is
+#' what [detectSigmaRange()] is for.
+#'
+#' Under the default `normalizeMethod = "global"` the unit is read off the
+#' cells, not off the blocks this call happens to build, so a later
+#' [computeSelfDistance()] or [computeSelfKernel()] derives the same number and
+#' every block agrees regardless of the order steps run in.
+#'
+#' The block-based methods cannot make that guarantee: within-type and
+#' cross-type references diverge with cell-type abundance and with how tightly
+#' the types colocalize, and no single per-block reference is right for both.
+#' Under `"spacing"` or `"percentile"`, the factor is therefore pinned -- a
+#' later self step reuses it rather than deriving a second one, and says so.
+#' `computeDistance()` rebuilds `@distances` from scratch and always
+#' re-derives; that is how to reset it.
 #'
 #' For "Morphology-Aware" distance:
 #' This method addresses the issue where cells appear spatially close (small
@@ -93,7 +105,7 @@ setGeneric(
              c("Euclidean2D", "Euclidean3D", "Morphology-Aware"),
            xDistScale = 1, yDistScale = 1,
            zDistScale = 1, normalizeDistance = FALSE,
-           normalizeMethod = c("spacing", "percentile"),
+           normalizeMethod = c("global", "spacing", "percentile"),
            normalizeTarget = 0.01, truncateLowDist = TRUE,
            verbose = TRUE, knn_k = 10, geodesic_threshold = 10,
            geodesic_cutoff = 7) standardGeneric("computeDistance")
@@ -364,12 +376,13 @@ setGeneric(
     stop("normalizeTarget must be a positive finite scalar.")
   }
   normalizeMethod <- match.arg(normalizeMethod, .NORMALIZE_METHODS)
-  if (normalizeDistance && identical(normalizeMethod, "spacing") &&
+  if (normalizeDistance && normalizeMethod %in% c("global", "spacing") &&
       identical(distType, "Morphology-Aware")) {
-    # The spacing reference is a Euclidean nearest-neighbor distance; a
-    # morphology-aware metric has no such neighbor graph to read it from.
-    warning(paste("normalizeMethod = 'spacing' is not defined for",
-                  "Morphology-Aware distances; using 'percentile'."))
+    # Both references are Euclidean nearest-neighbor distances; a
+    # morphology-aware metric has no such neighbor graph to read them from.
+    warning(sprintf(paste("normalizeMethod = '%s' is not defined for",
+                          "Morphology-Aware distances; using 'percentile'."),
+                    normalizeMethod))
     normalizeMethod <- "percentile"
   }
 
@@ -388,22 +401,29 @@ setGeneric(
 }
 
 # Helper function to extract coordinate matrix
+# cellType = NULL takes every cell of interest, ignoring the labels: that is
+# the sample .globalSpacingReference() measures the tissue's spacing on.
 .getCoordinateMatrix <- function(object, cellType, distType, xDistScale, yDistScale, zDistScale, slideID = NULL) {
   # Get cell type subset indices
   if (is.null(slideID)) {
     # Single slide case
-    ct_indices <- object@cellTypesSub == cellType
+    ct_indices <- if (is.null(cellType)) {
+      rep(TRUE, length(object@cellTypesSub))
+    } else {
+      object@cellTypesSub == cellType
+    }
   } else {
     # Multi-slide case - filter by both cell type and slide
     ct_indices <- .getSlideCellTypeIndices(object, slide = slideID, cellType = cellType)
   }
-  
+
   # Check if any cells were found
   if (!any(ct_indices)) {
+    label <- if (is.null(cellType)) "the cell types of interest" else cellType
     if (is.null(slideID)) {
-      stop(paste("No cells found for cell type:", cellType))
+      stop(paste("No cells found for cell type:", label))
     } else {
-      stop(paste("No cells found for cell type:", cellType, "in slide:", slideID))
+      stop(paste("No cells found for cell type:", label, "in slide:", slideID))
     }
   }
   
@@ -576,11 +596,16 @@ setGeneric(
   
   # Apply normalization if requested
   if (normalizeDistance) {
-    reference <- .combineDistanceReference(
-      if (identical(normalizeMethod, "spacing")) dist_spacings else dist_percentiles,
-      normalizeMethod
+    # adopt = FALSE: computeDistance() rebuilds @distances wholesale, so it is
+    # the step that re-derives the unit rather than inheriting one.
+    scaling_factor <- .normalizationScaleFactor(
+      object,
+      blockValues = if (identical(normalizeMethod, "spacing")) dist_spacings
+                    else dist_percentiles,
+      normalizeMethod = normalizeMethod, normalizeTarget = normalizeTarget,
+      distType = distType, xDistScale = xDistScale, yDistScale = yDistScale,
+      zDistScale = zDistScale, adopt = FALSE
     )
-    scaling_factor <- .distanceScaleFactor(reference, normalizeTarget, normalizeMethod)
     if (verbose) {
       message(sprintf(
         "Distance normalization scaling factor: %g", scaling_factor
@@ -687,14 +712,19 @@ setGeneric(
   
   # Apply normalization if requested
   if (normalizeDistance) {
-    reference <- if (identical(normalizeMethod, "spacing")) {
+    block_reference <- if (identical(normalizeMethod, "spacing")) {
       coords_ct <- .getCoordinateMatrix(object, cts, distType,
                                         xDistScale, yDistScale, zDistScale)
       .blockNearestSpacing(coords_ct, coords_ct, within = TRUE)
     } else {
       dist_percentile
     }
-    scaling_factor <- .distanceScaleFactor(reference, normalizeTarget, normalizeMethod)
+    scaling_factor <- .normalizationScaleFactor(
+      object, blockValues = block_reference,
+      normalizeMethod = normalizeMethod, normalizeTarget = normalizeTarget,
+      distType = distType, xDistScale = xDistScale, yDistScale = yDistScale,
+      zDistScale = zDistScale, adopt = FALSE
+    )
     if (verbose) {
       message(sprintf(
         "Distance normalization scaling factor: %g", scaling_factor
@@ -723,7 +753,7 @@ setGeneric(
 setMethod("computeDistance", "CoProSingle", function(object, distType = c("Euclidean2D", "Euclidean3D", "Morphology-Aware"),
                                                     xDistScale = 1, yDistScale = 1, zDistScale = 1,
                                                     normalizeDistance = FALSE,
-                                                    normalizeMethod = c("spacing", "percentile"),
+                                                    normalizeMethod = c("global", "spacing", "percentile"),
                                                     normalizeTarget = 0.01,
                                                     truncateLowDist = TRUE, verbose = TRUE,
                                                     knn_k = 10, geodesic_threshold = 10, geodesic_cutoff = 7) {
@@ -740,7 +770,7 @@ setMethod("computeDistance", "CoProSingle", function(object, distType = c("Eucli
 setMethod("computeDistance", "CoProMulti", function(object, distType = c("Euclidean2D", "Euclidean3D", "Morphology-Aware"),
                                                    xDistScale = 1, yDistScale = 1, zDistScale = 1,
                                                    normalizeDistance = FALSE,
-                                                   normalizeMethod = c("spacing", "percentile"),
+                                                   normalizeMethod = c("global", "spacing", "percentile"),
                                                    normalizeTarget = 0.01,
                                                    truncateLowDist = TRUE, verbose = TRUE,
                                                    knn_k = 10, geodesic_threshold = 10, geodesic_cutoff = 7) {
@@ -763,12 +793,13 @@ setMethod("computeDistance", "CoProMulti", function(object, distType = c("Euclid
     stop("normalizeTarget must be a positive finite scalar.")
   }
   normalizeMethod <- match.arg(normalizeMethod, .NORMALIZE_METHODS)
-  if (normalizeDistance && identical(normalizeMethod, "spacing") &&
+  if (normalizeDistance && normalizeMethod %in% c("global", "spacing") &&
       identical(distType, "Morphology-Aware")) {
-    # The spacing reference is a Euclidean nearest-neighbor distance; a
-    # morphology-aware metric has no such neighbor graph to read it from.
-    warning(paste("normalizeMethod = 'spacing' is not defined for",
-                  "Morphology-Aware distances; using 'percentile'."))
+    # Both references are Euclidean nearest-neighbor distances; a
+    # morphology-aware metric has no such neighbor graph to read them from.
+    warning(sprintf(paste("normalizeMethod = '%s' is not defined for",
+                          "Morphology-Aware distances; using 'percentile'."),
+                    normalizeMethod))
     normalizeMethod <- "percentile"
   }
 
@@ -805,15 +836,13 @@ setMethod("computeDistance", "CoProMulti", function(object, distType = c("Euclid
 # Helper function to process multi-slide distance normalization
 # Returns list(distances, scaling_factor); scaling_factor is 1 when no
 # normalization could be applied, so the caller can record it verbatim.
-.normalizeDistancesMulti <- function(distances_all, slides, cts, reference,
-                                    pair_cell_types = NULL, verbose = TRUE,
-                                    normalizeTarget = 0.01) {
-  if (!is.finite(reference) || reference <= 0) {
+.normalizeDistancesMulti <- function(distances_all, slides, cts, scaling_factor,
+                                    pair_cell_types = NULL, verbose = TRUE) {
+  if (!is.finite(scaling_factor) || scaling_factor <= 0) {
     warning("Cannot normalize distances - no valid non-zero distances found across slides.")
     return(list(distances = distances_all, scaling_factor = 1))
   }
 
-  scaling_factor <- normalizeTarget / reference
   if (verbose) message(sprintf("Global distance scaling factor: %g", scaling_factor))
   
   if (is.null(pair_cell_types)) {
@@ -944,13 +973,19 @@ setMethod("computeDistance", "CoProMulti", function(object, distType = c("Euclid
   # Apply normalization if requested
   scaling_factor <- 1
   if (normalizeDistance) {
-    reference <- .combineDistanceReference(
-      if (identical(normalizeMethod, "spacing")) block_spacings else global_min_percentile,
-      normalizeMethod
-    )
-    normalized <- .normalizeDistancesMulti(distances_all, slides, cts, reference,
-                                           verbose = verbose,
-                                           normalizeTarget = normalizeTarget)
+    # A degenerate reference warns here rather than erroring, which is what the
+    # multi-slide path has always done: one unusable slide should not throw
+    # away the others.
+    scaling_factor <- tryCatch(.normalizationScaleFactor(
+      object,
+      blockValues = if (identical(normalizeMethod, "spacing")) block_spacings
+                    else global_min_percentile,
+      normalizeMethod = normalizeMethod, normalizeTarget = normalizeTarget,
+      distType = distType, xDistScale = xDistScale, yDistScale = yDistScale,
+      zDistScale = zDistScale, adopt = FALSE
+    ), error = function(e) NA_real_)
+    normalized <- .normalizeDistancesMulti(distances_all, slides, cts,
+                                           scaling_factor, verbose = verbose)
     distances_all <- normalized$distances
     scaling_factor <- normalized$scaling_factor
   }
@@ -1087,13 +1122,18 @@ setMethod("computeDistance", "CoProMulti", function(object, distType = c("Euclid
   # Apply normalization if requested
   scaling_factor <- 1
   if (normalizeDistance) {
-    reference <- .combineDistanceReference(
-      if (identical(normalizeMethod, "spacing")) block_spacings else global_min_percentile,
-      normalizeMethod
-    )
-    normalized <- .normalizeDistancesMulti(distances_all, slides, cts, reference,
-                                           pair_cell_types, verbose = verbose,
-                                           normalizeTarget = normalizeTarget)
+    # See .computeDistanceMultiWithin(): a degenerate reference warns.
+    scaling_factor <- tryCatch(.normalizationScaleFactor(
+      object,
+      blockValues = if (identical(normalizeMethod, "spacing")) block_spacings
+                    else global_min_percentile,
+      normalizeMethod = normalizeMethod, normalizeTarget = normalizeTarget,
+      distType = distType, xDistScale = xDistScale, yDistScale = yDistScale,
+      zDistScale = zDistScale, adopt = FALSE
+    ), error = function(e) NA_real_)
+    normalized <- .normalizeDistancesMulti(distances_all, slides, cts,
+                                           scaling_factor, pair_cell_types,
+                                           verbose = verbose)
     distances_all <- normalized$distances
     scaling_factor <- normalized$scaling_factor
   }

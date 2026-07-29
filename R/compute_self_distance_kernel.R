@@ -44,11 +44,12 @@ NULL
 #'  recorded geometry, falling back to `FALSE` as of CoPro 1.2.0.
 #' @param normalizeMethod How the reference distance is estimated when
 #'  `normalizeDistance = TRUE` and no scale factor is already pinned on the
-#'  object. `"spacing"` uses the median nearest-partner distance, combined
-#'  across cell-type blocks by median; `"percentile"` reproduces the pre-1.2.0
-#'  behavior (the minimum, across blocks, of a low quantile of pairwise
-#'  distances). `NULL` (default) inherits the recorded geometry, falling back
-#'  to `"spacing"`.
+#'  object. `"global"` uses the median nearest-neighbor distance over all cells,
+#'  ignoring type labels, which gives the same unit here as in
+#'  [computeDistance()]; `"spacing"` measures the within-type blocks instead;
+#'  `"percentile"` reproduces the pre-1.2.0 behavior (the minimum, across
+#'  blocks, of a low quantile of pairwise distances). `NULL` (default) inherits
+#'  the recorded geometry, falling back to `"global"`.
 #' @param normalizeTarget Numeric scalar. The value the reference distance is
 #'  rescaled to. `NULL` (default) inherits the recorded geometry, falling back
 #'  to 0.01.
@@ -134,10 +135,11 @@ setMethod("computeSelfDistance", "CoProMulti",
     what = "computeSelfDistance", verbose = verbose
   )
   if (isTRUE(geometry$normalizeDistance) &&
-      identical(geometry$normalizeMethod, "spacing") &&
+      geometry$normalizeMethod %in% c("global", "spacing") &&
       identical(geometry$distType, "Morphology-Aware")) {
-    warning(paste("normalizeMethod = 'spacing' is not defined for",
-                  "Morphology-Aware distances; using 'percentile'."))
+    warning(sprintf(paste("normalizeMethod = '%s' is not defined for",
+                          "Morphology-Aware distances; using 'percentile'."),
+                    geometry$normalizeMethod))
     geometry$normalizeMethod <- "percentile"
   }
   geometry
@@ -232,24 +234,26 @@ setMethod("computeSelfDistance", "CoProMulti",
   # Apply normalization if requested
   scaling_factor <- 1
   if (normalizeDistance) {
+    # "global" measures the cells rather than these blocks, so it needs no
+    # per-block reference at all.
     reference_values <- if (identical(normalizeMethod, "spacing")) {
       vapply(cts, function(ct) {
         coords_ct <- .getCoordinateMatrix(object, ct, distType,
                                           xDistScale, yDistScale, zDistScale)
         .blockNearestSpacing(coords_ct, coords_ct, within = TRUE)
       }, numeric(1))
-    } else {
+    } else if (identical(normalizeMethod, "percentile")) {
       all_percentiles
+    } else {
+      numeric(0)
     }
     valid_percentiles <- reference_values[!is.na(reference_values) & is.finite(reference_values)]
-    if (length(valid_percentiles) > 0) {
-      scaling_factor <- .adoptScaleFactor(
-        object,
-        computed = .distanceScaleFactor(
-          .combineDistanceReference(valid_percentiles, normalizeMethod),
-          normalizeTarget, normalizeMethod
-        ),
-        what = "computeSelfDistance", verbose = verbose
+    if (identical(normalizeMethod, "global") || length(valid_percentiles) > 0) {
+      scaling_factor <- .normalizationScaleFactor(
+        object, blockValues = valid_percentiles,
+        normalizeMethod = normalizeMethod, normalizeTarget = normalizeTarget,
+        distType = distType, xDistScale = xDistScale, yDistScale = yDistScale,
+        zDistScale = zDistScale, what = "computeSelfDistance", verbose = verbose
       )
       if (verbose) {
         message(sprintf("Self-distance scaling factor: %g", scaling_factor))
@@ -374,16 +378,13 @@ setMethod("computeSelfDistance", "CoProMulti",
   # Apply normalization if requested
   scaling_factor <- 1
   if (normalizeDistance && is.finite(global_min_percentile)) {
-    scaling_factor <- .adoptScaleFactor(
+    scaling_factor <- .normalizationScaleFactor(
       object,
-      computed = .distanceScaleFactor(
-        .combineDistanceReference(
-          if (identical(normalizeMethod, "spacing")) self_spacings else global_min_percentile,
-          normalizeMethod
-        ),
-        normalizeTarget, normalizeMethod
-      ),
-      what = "computeSelfDistance", verbose = verbose
+      blockValues = if (identical(normalizeMethod, "spacing")) self_spacings
+                    else global_min_percentile,
+      normalizeMethod = normalizeMethod, normalizeTarget = normalizeTarget,
+      distType = distType, xDistScale = xDistScale, yDistScale = yDistScale,
+      zDistScale = zDistScale, what = "computeSelfDistance", verbose = verbose
     )
     if (verbose) {
       message(sprintf("Global self-distance scaling factor: %g", scaling_factor))
@@ -425,8 +426,10 @@ setMethod("computeSelfDistance", "CoProMulti",
 #' @param overwrite Whether to overwrite existing kernel matrices. If FALSE,
 #'  will add self-kernel matrices to existing cross-type kernels. Default = FALSE
 #' @param normalizeMethod How the reference distance is estimated when
-#'  `normalizeDistance = TRUE`: `"spacing"` (median nearest-partner distance,
-#'  combined across blocks by median) or `"percentile"` (pre-1.2.0 behavior).
+#'  `normalizeDistance = TRUE`: `"global"` (median nearest-neighbor distance
+#'  over all cells, ignoring type labels), `"spacing"` (median nearest-partner
+#'  distance per block, combined by median), or `"percentile"` (pre-1.2.0
+#'  behavior). See [computeDistance()].
 #' @param method One of `"auto"`, `"dense"`, or `"sparse"`. The sparse path
 #'  constructs exact thresholded self-kernels directly from coordinates and
 #'  does not require [computeSelfDistance()].

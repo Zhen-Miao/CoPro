@@ -13,7 +13,7 @@ computeDistance(
   yDistScale = 1,
   zDistScale = 1,
   normalizeDistance = FALSE,
-  normalizeMethod = c("spacing", "percentile"),
+  normalizeMethod = c("global", "spacing", "percentile"),
   normalizeTarget = 0.01,
   truncateLowDist = TRUE,
   verbose = TRUE,
@@ -29,7 +29,7 @@ computeDistance(
   yDistScale = 1,
   zDistScale = 1,
   normalizeDistance = FALSE,
-  normalizeMethod = c("spacing", "percentile"),
+  normalizeMethod = c("global", "spacing", "percentile"),
   normalizeTarget = 0.01,
   truncateLowDist = TRUE,
   verbose = TRUE,
@@ -45,7 +45,7 @@ computeDistance(
   yDistScale = 1,
   zDistScale = 1,
   normalizeDistance = FALSE,
-  normalizeMethod = c("spacing", "percentile"),
+  normalizeMethod = c("global", "spacing", "percentile"),
   normalizeTarget = 0.01,
   truncateLowDist = TRUE,
   verbose = TRUE,
@@ -74,13 +74,16 @@ mm^3. This ensures that the kernel sizes from 0.001 to 0.1 will make
 sense. Default = TRUE.}
 
 \item{normalizeMethod}{How the reference distance is estimated when
-\code{normalizeDistance = TRUE}. \code{"spacing"} (default) uses the median
-nearest-partner distance, combined across cell-type blocks by median, so the
-unit tracks local cell spacing and no single dense block sets the scale for
-the whole object. \code{"percentile"} reproduces the pre-1.2.0 behavior: the
-minimum, across blocks, of a low quantile of pairwise distances. Not
-available for \code{distType = "Morphology-Aware"}, which falls back to
-\code{"percentile"}.}
+\code{normalizeDistance = TRUE}. \code{"global"} (default) uses the median
+nearest-neighbor distance over all cells of interest, ignoring their type
+labels: one length for the tissue, so cross-type and within-type distances
+land on the same unit no matter which step runs first.
+\code{"spacing"} measures each cell-type block instead and takes the median
+across blocks, which makes the unit depend on cell-type abundance and
+colocalization. \code{"percentile"} reproduces the pre-1.2.0 behavior: the
+minimum, across blocks, of a low quantile of pairwise distances. Neither
+\code{"global"} nor \code{"spacing"} is available for
+\code{distType = "Morphology-Aware"}, which falls back to \code{"percentile"}.}
 
 \item{normalizeTarget}{Numeric scalar. The target value that the
 low-percentile cell-cell distance is rescaled to when
@@ -112,15 +115,24 @@ computeDistance between pairs of cell types
 }
 \details{
 When \code{normalizeDistance = TRUE}, the scale factor this call derives is
-recorded in \verb{@distanceScaleFactor} and pinned for the object: a later
-\code{\link[=computeSelfDistance]{computeSelfDistance()}} or \code{\link[=computeSelfKernel]{computeSelfKernel()}} reuses it instead of
-deriving a second one from the within-type blocks, so every block stays on
-one unit. There is no single reference length that is right for both -- the
-within-type and cross-type references diverge with cell-type abundance and
-with how tightly the types colocalize -- so the package fixes one and
-reports it rather than choosing per block. \code{computeDistance()} rebuilds
-\verb{@distances} from scratch and therefore always re-derives the factor; that
-is how to reset it.
+recorded in \verb{@distanceScaleFactor}. It answers a different question than
+\code{sigmaValues} does: the factor fixes the \emph{unit} distances are reported in,
+while sigma fixes \emph{how far} a cell reaches within that unit. Two numbers,
+two jobs -- rescaling cannot substitute for choosing a bandwidth, which is
+what \code{\link[=detectSigmaRange]{detectSigmaRange()}} is for.
+
+Under the default \code{normalizeMethod = "global"} the unit is read off the
+cells, not off the blocks this call happens to build, so a later
+\code{\link[=computeSelfDistance]{computeSelfDistance()}} or \code{\link[=computeSelfKernel]{computeSelfKernel()}} derives the same number and
+every block agrees regardless of the order steps run in.
+
+The block-based methods cannot make that guarantee: within-type and
+cross-type references diverge with cell-type abundance and with how tightly
+the types colocalize, and no single per-block reference is right for both.
+Under \code{"spacing"} or \code{"percentile"}, the factor is therefore pinned -- a
+later self step reuses it rather than deriving a second one, and says so.
+\code{computeDistance()} rebuilds \verb{@distances} from scratch and always
+re-derives; that is how to reset it.
 
 For "Morphology-Aware" distance:
 This method addresses the issue where cells appear spatially close (small
