@@ -6,11 +6,29 @@
 \alias{computeNormalizedCorrelation,CoProMulti-method}
 \title{Compute Normalized Correlation (approximation)}
 \usage{
-computeNormalizedCorrelation(object, tol = 1e-04, calculationMode = "perSlide")
+computeNormalizedCorrelation(
+  object,
+  tol = 1e-04,
+  calculationMode = "perSlide",
+  normalizer = c("legacy", "unwhitened", "kernel", "variogram"),
+  normalizerControl = list()
+)
 
-\S4method{computeNormalizedCorrelation}{CoPro}(object, tol = 1e-04)
+\S4method{computeNormalizedCorrelation}{CoPro}(
+  object,
+  tol = 1e-04,
+  calculationMode = "perSlide",
+  normalizer = c("legacy", "unwhitened", "kernel", "variogram"),
+  normalizerControl = list()
+)
 
-\S4method{computeNormalizedCorrelation}{CoProMulti}(object, tol = 1e-04, calculationMode = "perSlide")
+\S4method{computeNormalizedCorrelation}{CoProMulti}(
+  object,
+  tol = 1e-04,
+  calculationMode = "perSlide",
+  normalizer = c("legacy", "unwhitened", "kernel", "variogram"),
+  normalizerControl = list()
+)
 }
 \arguments{
 \item{object}{A \code{CoPro} or \code{CoProMulti} object containing CCA results and kernel matrices.}
@@ -19,23 +37,86 @@ computeNormalizedCorrelation(object, tol = 1e-04, calculationMode = "perSlide")
 
 \item{calculationMode}{(for CoProMulti only) either "perSlide" or "aggregate",
 for single slide analysis, it is ignored, with default value "perSlide".}
+
+\item{normalizer}{Which whitening operators to use in the denominator; one of
+\code{"legacy"}, \code{"unwhitened"}, \code{"kernel"}, \code{"variogram"}. See details.}
+
+\item{normalizerControl}{A named list tuning the \code{"variogram"} normalizer.
+\code{distType}, \code{xDistScale}, \code{yDistScale}, \code{zDistScale} must match what was
+passed to \code{\link[=computeDistance]{computeDistance()}} (they are not stored on the object).
+\code{range} accepts a named numeric vector of per-cell-type ranges, in
+normalized distance units, to skip estimation. Remaining entries
+(\code{maxCells}, \code{nBins}, \code{maxLagQuantile}, \code{minCorrelation}, \code{minBins},
+\code{lowerLimit}) tune the fit and the operator's truncation.}
 }
 \value{
 The object with the normalized correlation value
 between any pair of cell types
-added as a new slot, \code{normalizedCorrelation}.
+added as a new slot, \code{normalizedCorrelation}. The resolved normalizer is
+attached as an attribute and can be read back with \code{\link[=getNormalizerInfo]{getNormalizerInfo()}}.
 }
 \description{
 This method calculates the normalized correlation between pairs of cell types
-based on CCA weights and the respective kernel matrix. It uses the
-whitened-Frobenius norm ||R_x^(1/2) K_c R_y^(1/2)||_F of the kernel for
-normalization (R_x, R_y = matched-sigma within-type kernels).
+based on CCA weights and the respective kernel matrix. It divides the
+bilinear statistic \eqn{T = a' K b} by the whitened-Frobenius norm
+\eqn{\|R_x^{1/2} K_c R_y^{1/2}\|_F}, which is the null standard deviation of
+\eqn{T} when the score vectors carry within-type covariance proportional to
+\eqn{R_x} and \eqn{R_y}.
 }
+\section{Choosing the normalizer}{
+
+The whitening operators decide how the criterion behaves across the sigma
+grid, and therefore which bandwidth \code{sigmaValueChoice} ends up at.
+
+\describe{
+\item{\code{"legacy"} (default)}{The historical behaviour, kept so that stored
+results reproduce: use the matched-sigma within-type kernels when the
+object happens to contain them, and \eqn{R = I} otherwise. Because
+\code{computeKernelMatrix()} builds only cross-type kernels, this is normally
+\eqn{\|K_c\|_F}; but it silently becomes the whitened norm on an object
+that has been through \code{computeSelfKernel()}. Which one applied is now
+reported, and recorded by \code{\link[=getNormalizerInfo]{getNormalizerInfo()}}.}
+\item{\code{"unwhitened"}}{Force \eqn{R_x = R_y = I}, i.e. \eqn{\|K_c\|_F}. This
+assumes spatially independent scores, so it under-counts noise at large
+sigma and biases the selected bandwidth upward.}
+\item{\code{"kernel"}}{Force \eqn{R = K(\sigma)}, the matched-sigma self-kernel,
+with the unit diagonal restored. Errors if the self-kernels are absent
+rather than falling back. This over-counts noise at large sigma and
+biases the selected bandwidth downward, and it carries a second problem:
+\code{\link[=computeSelfDistance]{computeSelfDistance()}} normalizes self-distances by its own scaling
+factor rather than the one \code{\link[=computeDistance]{computeDistance()}} recorded, so a self-kernel
+"at the same sigma" is generally at a different physical bandwidth from
+the cross-kernel. Provided as a diagnostic, not for analysis.}
+\item{\code{"variogram"}}{Estimate one within-type autocorrelation range per
+cell type from the feature-averaged spatial autocorrelation of the PC
+scores, and use \eqn{R = \exp(-d^2/2\ell^2)}. The range is a property of
+the score field rather than of the bandwidth, so it is fitted once and
+reused across the grid. It is fitted from all PC columns, never from a
+fitted canonical score, which would leak the association under test into
+the denominator.
+
+\strong{This flattens the null when the scores share one correlation length,
+and should be treated as a diagnostic otherwise.} On a real targeted
+panel the principal components within a cell type generally do \emph{not}
+share one: measured per-component ranges spanned 0.3-4.1 cell-spacings on
+a colon MERFISH dataset, where the flat feature-average returned a
+sub-spacing range (so \eqn{R \approx I}, reproducing \code{"unwhitened"})
+while pooling over the leading five components gave a range 6x longer.
+The selected bandwidth is steeply sensitive to that choice -- sweeping
+the assumed range over 0.4-5 cell-spacings moved it from 3.4 to 0.3
+spacings on the same data. Check \code{getNormalizerInfo()$ranges} against
+what you believe about the tissue, supply \code{normalizerControl$range}
+if you have a better estimate, and prefer a permutation null when the
+selected bandwidth matters.}
+}
+}
+
 \seealso{
 \code{\link[=runSkrCCA]{runSkrCCA()}}, \code{\link[=computeBidirCorrelation]{computeBidirCorrelation()}},
-\code{\link[=computeGeneAndCellScores]{computeGeneAndCellScores()}}
+\code{\link[=computeGeneAndCellScores]{computeGeneAndCellScores()}}, \code{\link[=getNormalizerInfo]{getNormalizerInfo()}}
 
 Other scores-and-correlation: 
-\code{\link{computeGeneAndCellScores}()}
+\code{\link{computeGeneAndCellScores}()},
+\code{\link{getNormalizerInfo}()}
 }
 \concept{scores-and-correlation}

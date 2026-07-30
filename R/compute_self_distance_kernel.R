@@ -39,17 +39,35 @@ NULL
 #'  recorded geometry, falling back to 1.
 #' @param zDistScale Scale for z distance. `NULL` (default) inherits the
 #'  recorded geometry, falling back to 1.
-#' @param normalizeDistance Whether to rescale distances so that the reference
-#'  cell-cell distance becomes `normalizeTarget`. `NULL` (default) inherits the
-#'  recorded geometry, falling back to `FALSE` as of CoPro 1.2.0.
+#' @param normalizeDistance How to scale the self-distances. One of:
+#'  \describe{
+#'    \item{`NULL` (default)}{Inherit the recorded geometry, falling back to
+#'      `FALSE` as of CoPro 1.2.0.}
+#'    \item{`FALSE`}{No scaling; distances stay in the coordinate units of
+#'      `locationData`.}
+#'    \item{`TRUE`}{Rescale so that the reference cell-cell distance becomes
+#'      `normalizeTarget`. When the object already carries a scale factor, that
+#'      factor is reused rather than re-derived from the within-type blocks, so
+#'      cross-type and within-type distances stay on one unit; the substitution
+#'      is reported. Pass `overwrite = TRUE` to discard the existing blocks and
+#'      re-derive.}
+#'    \item{`"inherit"`}{Reuse the scaling factor [computeDistance()] recorded
+#'      on the object, and error if it recorded none. Differs from `TRUE` only
+#'      on an object with nothing pinned, where `TRUE` derives a unit from the
+#'      within-type blocks; use it to assert that the cross-type scale must
+#'      exist -- notably when the self-kernels become whitening operators in
+#'      [computeNormalizedCorrelation()].}
+#'  }
 #' @param normalizeMethod How the reference distance is estimated when
 #'  `normalizeDistance = TRUE` and no scale factor is already pinned on the
 #'  object. `"global"` uses the median nearest-neighbor distance over all cells,
 #'  ignoring type labels, which gives the same unit here as in
 #'  [computeDistance()]; `"spacing"` measures the within-type blocks instead;
 #'  `"percentile"` reproduces the pre-1.2.0 behavior (the minimum, across
-#'  blocks, of a low quantile of pairwise distances). `NULL` (default) inherits
-#'  the recorded geometry, falling back to `"global"`.
+#'  blocks, of a low quantile of pairwise distances). Not available for
+#'  `distType = "Morphology-Aware"`, which falls back to `"percentile"`. `NULL`
+#'  (default) inherits the recorded geometry, falling back to `"global"`.
+#'  Ignored when `normalizeDistance` is `FALSE` or `"inherit"`.
 #' @param normalizeTarget Numeric scalar. The value the reference distance is
 #'  rescaled to. `NULL` (default) inherits the recorded geometry, falling back
 #'  to 0.01.
@@ -188,13 +206,20 @@ setMethod("computeSelfDistance", "CoProMulti",
     cat("Computing self-distance matrices for", length(cts), "cell types\n")
   }
   
-  # Notify users if normalizeDistance = TRUE
-  if (normalizeDistance && verbose) {
+  # Notify users about the normalization that will be applied. normalizeDistance
+  # may be "inherit", so branch on the mode rather than on the argument itself.
+  scaling_mode <- .normalizeDistanceMode(normalizeDistance)
+  if (verbose && identical(scaling_mode, "own")) {
     message(sprintf(
       paste0("normalizeDistance is TRUE, so self-distances will be rescaled ",
              "so that the reference cell-cell distance becomes %g."),
       normalizeTarget
     ))
+  } else if (verbose && identical(scaling_mode, "inherit")) {
+    message(
+      'normalizeDistance = "inherit": self-distances will reuse the scaling ',
+      "factor recorded by computeDistance()."
+    )
   }
 
   # Compute self-distances for each cell type
@@ -239,10 +264,12 @@ setMethod("computeSelfDistance", "CoProMulti",
   # Apply normalization if requested
   scaling_factor <- 1
   normalized <- FALSE
-  if (normalizeDistance) {
-    # "global" measures the cells rather than these blocks, so it needs no
-    # per-block reference at all.
-    reference_values <- if (identical(normalizeMethod, "spacing")) {
+  if (!identical(scaling_mode, "none")) {
+    # "global" measures the cells rather than these blocks, and "inherit"
+    # measures nothing at all, so neither needs a per-block reference.
+    reference_values <- if (!identical(scaling_mode, "own")) {
+      numeric(0)
+    } else if (identical(normalizeMethod, "spacing")) {
       vapply(cts, function(ct) {
         coords_ct <- .getCoordinateMatrix(object, ct, distType,
                                           xDistScale, yDistScale, zDistScale)
@@ -254,9 +281,11 @@ setMethod("computeSelfDistance", "CoProMulti",
       numeric(0)
     }
     valid_percentiles <- reference_values[!is.na(reference_values) & is.finite(reference_values)]
-    if (identical(normalizeMethod, "global") || length(valid_percentiles) > 0) {
-      scaling_factor <- .normalizationScaleFactor(
-        object, blockValues = valid_percentiles,
+    have_reference <- !identical(scaling_mode, "own") ||
+      identical(normalizeMethod, "global") || length(valid_percentiles) > 0
+    if (have_reference) {
+      scaling_factor <- .selfScaleFactor(
+        object, normalizeDistance, blockValues = valid_percentiles,
         normalizeMethod = normalizeMethod, normalizeTarget = normalizeTarget,
         distType = distType, xDistScale = xDistScale, yDistScale = yDistScale,
         zDistScale = zDistScale, what = "computeSelfDistance", verbose = verbose
@@ -280,6 +309,12 @@ setMethod("computeSelfDistance", "CoProMulti",
   # and so .recoverDistanceScaleFactor() can map back to raw coordinates. The
   # record has to agree with the slot: see .recordNormalizationOutcome().
   object@distanceScaleFactor <- scaling_factor
+  # "inherit" says where the factor came from, not which coordinates were built
+  # on, so the record stores the normalization that happened rather than the
+  # instruction -- a later step has nothing to inherit from the word "inherit".
+  geometry$normalizeDistance <- .recordedNormalizeDistance(
+    geometry$normalizeDistance, list()
+  )
   object@distanceGeometry <- .recordNormalizationOutcome(
     geometry, normalized, "computeSelfDistance"
   )
@@ -328,14 +363,21 @@ setMethod("computeSelfDistance", "CoProMulti",
     cat("Computing self-distance matrices for", length(cts), "cell types across", length(slides), "slides\n")
   }
   
-  # Notify users if normalizeDistance = TRUE
-  if (normalizeDistance && verbose) {
+  # Notify users about the normalization that will be applied. normalizeDistance
+  # may be "inherit", so branch on the mode rather than on the argument itself.
+  scaling_mode <- .normalizeDistanceMode(normalizeDistance)
+  if (verbose && identical(scaling_mode, "own")) {
     message(sprintf(
       paste0("normalizeDistance is TRUE, so self-distances will be rescaled ",
              "across all slides so that the reference cell-cell distance ",
              "becomes %g."),
       normalizeTarget
     ))
+  } else if (verbose && identical(scaling_mode, "inherit")) {
+    message(
+      'normalizeDistance = "inherit": self-distances will reuse the scaling ',
+      "factor recorded by computeDistance()."
+    )
   }
 
   global_min_percentile <- Inf
@@ -369,7 +411,8 @@ setMethod("computeSelfDistance", "CoProMulti",
       
       if (!is.na(dist_percentile) && is.finite(dist_percentile)) {
         global_min_percentile <- min(global_min_percentile, dist_percentile, na.rm = TRUE)
-        if (normalizeDistance && identical(normalizeMethod, "spacing")) {
+        if (identical(scaling_mode, "own") &&
+            identical(normalizeMethod, "spacing")) {
           self_spacings <- c(self_spacings, .blockSpacingForBlock(
             object, distType, xDistScale, yDistScale, zDistScale, sID, ct, ct
           ))
@@ -390,9 +433,9 @@ setMethod("computeSelfDistance", "CoProMulti",
   # Apply normalization if requested
   scaling_factor <- 1
   normalized <- FALSE
-  if (normalizeDistance && is.finite(global_min_percentile)) {
-    scaling_factor <- .normalizationScaleFactor(
-      object,
+  if (!identical(scaling_mode, "none") && is.finite(global_min_percentile)) {
+    scaling_factor <- .selfScaleFactor(
+      object, normalizeDistance,
       blockValues = if (identical(normalizeMethod, "spacing")) self_spacings
                     else global_min_percentile,
       normalizeMethod = normalizeMethod, normalizeTarget = normalizeTarget,
@@ -416,6 +459,11 @@ setMethod("computeSelfDistance", "CoProMulti",
 
   object@distances <- distances_all
   object@distanceScaleFactor <- scaling_factor
+  # See .computeSelfDistanceCore(): record the normalization, not the word
+  # "inherit".
+  geometry$normalizeDistance <- .recordedNormalizeDistance(
+    geometry$normalizeDistance, list()
+  )
   object@distanceGeometry <- .recordNormalizationOutcome(
     geometry, normalized, "computeSelfDistance"
   )
@@ -457,7 +505,10 @@ setMethod("computeSelfDistance", "CoProMulti",
 #'  Distance options for the sparse path, matching [computeKernelMatrix()]:
 #'  `NULL` inherits the geometry recorded by [computeDistance()] /
 #'  [computeSelfDistance()], and a value that contradicts that record is an
-#'  error.
+#'  error. `normalizeDistance` additionally accepts `"inherit"`, which reuses
+#'  the scaling factor [computeDistance()] recorded rather than deriving one
+#'  from the self-distances; see [computeSelfDistance()]. Building self-kernels
+#'  never overwrites a factor already recorded on the object.
 #'
 #' @return `CoPro` object with self-kernel matrices added to the kernelMatrices slot
 #' @export

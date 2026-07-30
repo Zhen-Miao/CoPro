@@ -47,6 +47,34 @@
 #' @noRd
 .NORMALIZE_METHODS <- c("global", "spacing", "percentile")
 
+#' Is this `normalizeDistance` the "reuse the recorded factor" instruction?
+#'
+#' The self-distance and self-kernel paths accept `normalizeDistance =
+#' "inherit"`, which says to reuse the scaling factor [computeDistance()]
+#' recorded rather than derive one from the within-type blocks. It describes
+#' where the factor comes from, not a different coordinate basis, so it agrees
+#' with any record by construction and must never read as a contradiction.
+#' @noRd
+.isInheritNormalize <- function(value) identical(value, "inherit")
+
+#' The `normalizeDistance` to write into a record when the caller said "inherit"
+#'
+#' A record is a description of the coordinates the object's matrices live on.
+#' Storing the instruction instead of its outcome would leave later steps
+#' inheriting `"inherit"` from an object that has nothing left to inherit from.
+#' @noRd
+.recordedNormalizeDistance <- function(resolved, recorded) {
+  if (!.isInheritNormalize(resolved)) return(resolved)
+  if (!is.null(recorded[["normalizeDistance"]])) {
+    recorded[["normalizeDistance"]]
+  } else {
+    # Unreachable in practice: inheriting with nothing recorded already errored
+    # in .resolveSelfDistanceScaling(). TRUE is the honest description anyway --
+    # the blocks did get scaled.
+    TRUE
+  }
+}
+
 #' Validate a normalizeMethod argument
 #' @noRd
 .checkNormalizeMethod <- function(method) {
@@ -74,6 +102,21 @@
     stop("normalizeTarget must be a positive finite scalar.")
   }
   target
+}
+
+#' Reject a malformed `normalizeDistance` before it is read as a contradiction
+#'
+#' [.normalizeDistanceMode()] is the validator, but it runs at the point the
+#' factor is derived -- long after the geometry gate has compared the argument
+#' against the record. Without this, `normalizeDistance = "yes"` on an object
+#' built with `TRUE` is reported as a disagreement about geometry rather than as
+#' the typo it is, and the remedy the message offers ("drop the conflicting
+#' argument") does not address it.
+#' @noRd
+.checkNormalizeDistance <- function(value) {
+  if (is.null(value)) return(NULL)
+  .normalizeDistanceMode(value)
+  value
 }
 
 #' Announce the changed `normalizeDistance` default once per session
@@ -198,6 +241,7 @@
     want <- requested[[field]]
     have <- recorded[[field]]
     if (is.null(want) || is.null(have)) next
+    if (identical(field, "normalizeDistance") && .isInheritNormalize(want)) next
     if (!isTRUE(all.equal(want, have))) {
       conflicts <- c(conflicts, sprintf(
         "  %s: requested %s, but distances were built with %s",
@@ -234,6 +278,13 @@
                                      verbose = TRUE, rebuild = FALSE) {
   recorded <- .getDistanceGeometry(object)
 
+  # Validate before comparing against the record. An argument that is malformed
+  # is malformed whatever the object was built with, and reporting it as a
+  # geometry contradiction sends the caller after the wrong fix.
+  .checkNormalizeDistance(requested[["normalizeDistance"]])
+  .checkNormalizeMethod(requested[["normalizeMethod"]])
+  .checkNormalizeTarget(requested[["normalizeTarget"]])
+
   conflicts <- if (rebuild) character(0) else .geometryConflicts(recorded, requested)
   if (length(conflicts) > 0) {
     stop(sprintf(
@@ -247,9 +298,6 @@
       if (is.null(recorded$source)) "computeDistance" else recorded$source
     ), call. = FALSE)
   }
-
-  .checkNormalizeMethod(requested[["normalizeMethod"]])
-  .checkNormalizeTarget(requested[["normalizeTarget"]])
 
   resolved <- list()
   defaulted <- character(0)
@@ -446,6 +494,51 @@
   computed <- .distanceScaleFactor(reference, normalizeTarget, normalizeMethod)
   if (!adopt) return(computed)
   .adoptScaleFactor(object, computed, what = what, verbose = verbose)
+}
+
+#' The scale factor a within-type step should use
+#'
+#' `normalizeDistance` carries three answers on the self paths rather than two.
+#' `FALSE` leaves the blocks in coordinate units. `TRUE` derives a reference
+#' from the blocks this step built and then defers to any factor already pinned
+#' on the object, so cross-type and within-type distances stay on one unit; see
+#' [.adoptScaleFactor()]. `"inherit"` says up front that the recorded factor is
+#' the one that matters, and refuses to guess when there is none.
+#'
+#' The two differ only on an object with nothing pinned: `TRUE` derives a unit
+#' from the within-type blocks, `"inherit"` errors. That gap is what makes
+#' `"inherit"` worth keeping under `normalizeMethod = "spacing"` /
+#' `"percentile"`, where the within-type blocks measure one type's packing and
+#' so genuinely disagree with the cross-type reference. Under the `"global"`
+#' default the reference comes from the cells rather than from the blocks, so
+#' every step computes the same number and the distinction is moot.
+#'
+#' @param blockValues Per-block reference distances gathered by the caller.
+#'   Ignored by `"global"` and by `"inherit"`, which measures nothing.
+#' @return A positive scale factor.
+#' @noRd
+.selfScaleFactor <- function(object, normalizeDistance, blockValues,
+                             normalizeMethod, normalizeTarget, distType,
+                             xDistScale = 1, yDistScale = 1, zDistScale = 1,
+                             what = "computeSelfDistance", verbose = TRUE,
+                             slideID = NULL) {
+  mode <- .normalizeDistanceMode(normalizeDistance)
+  if (identical(mode, "none")) return(1)
+  if (identical(mode, "inherit")) {
+    pin <- .pinnedScaleFactor(object)
+    if (is.null(pin)) {
+      stop('normalizeDistance = "inherit" reuses the scaling factor recorded ',
+           "by computeDistance(), and this object has none. Run ",
+           "computeDistance() first, or pass TRUE / FALSE.", call. = FALSE)
+    }
+    return(pin$factor)
+  }
+  .normalizationScaleFactor(
+    object, blockValues = blockValues, normalizeMethod = normalizeMethod,
+    normalizeTarget = normalizeTarget, distType = distType,
+    xDistScale = xDistScale, yDistScale = yDistScale, zDistScale = zDistScale,
+    what = what, verbose = verbose, slideID = slideID
+  )
 }
 
 #' Forget the recorded geometry and pinned scale factor

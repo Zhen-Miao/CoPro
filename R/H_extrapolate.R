@@ -383,6 +383,12 @@ getTransferCellScores <- function(ref_obj, tar_obj, sigma_choice,
 #' # getTransferCellScores(..., agg_cell_type = FALSE)
 #' # res <- getTransferNormCorr(tar_obj, trans_scores, sigma_choice = 2.0)
 #'
+#' @param normalizer,normalizerControl Which whitening operators to use in the
+#'   denominator, and their tuning; see [computeNormalizedCorrelation()]. Match
+#'   whatever was used on the reference object, or the transferred correlations
+#'   will not be on the same scale. The autocorrelation range for `"variogram"`
+#'   is fitted from the target object's PC scores, never from the transferred
+#'   canonical scores, which would leak signal into the denominator.
 #' @importFrom utils combn
 #' @export
 getTransferNormCorr <- function(tar_obj,
@@ -391,7 +397,11 @@ getTransferNormCorr <- function(tar_obj,
                                 tol = 1e-4,
                                 calculationMode = NULL,
                                 sigma_choice_tar = NULL,
+                                normalizer = c("legacy", "unwhitened", "kernel",
+                                               "variogram"),
+                                normalizerControl = list(),
                                 verbose = TRUE) {
+  normalizer <- match.arg(normalizer)
   # --- Input validation ---
   if (!(is(tar_obj, "CoProMulti") || is(tar_obj, "CoProSingle"))) {
     stop("tar_obj must be a CoProSingle or CoProMulti object")
@@ -462,14 +472,25 @@ getTransferNormCorr <- function(tar_obj,
     return(scores_mat)
   }
 
+  tar_scalePCs <- if (length(tar_obj@scalePCs) == 0) FALSE else tar_obj@scalePCs
+
   if (!is_multi) {
-    # Precompute whitened-Frobenius normalizers using existing helper
+    # Precompute whitened-Frobenius normalizers using existing helper. The
+    # whitening operators are built from the target object's PC scores, not
+    # from `transfer_cell_scores` -- those are canonical directions, and using
+    # them here would put the association under test into the denominator.
+    resolver <- .makeWhiteningResolver(
+      tar_obj, normalizer, normalizerControl,
+      scoreMats = .getAllPCMats(allPCs = tar_obj@pcaGlobal,
+                                scalePCs = tar_scalePCs),
+      cts = cts
+    )
     norm_K12 <- .computeCrossKernelNorm(
       object = tar_obj, tol = tol, cts = cts,
-      scalePCs = if (length(tar_obj@scalePCs) == 0) FALSE else tar_obj@scalePCs,
+      scalePCs = tar_scalePCs,
       sigmaValues = sigma_choice_tar,
       nCC = if (length(tar_obj@nCC) == 0) nCC else tar_obj@nCC,
-      pair_cell_types = pair_cell_types
+      pair_cell_types = pair_cell_types, resolver = resolver
     )
 
     # --- Single slide object ---
@@ -518,10 +539,18 @@ getTransferNormCorr <- function(tar_obj,
   # --- Multi-slide object ---
   slides <- getSlideList(tar_obj)
   # Precompute whitened-Frobenius normalizers using existing multi-slide helper
+  resolver <- .makeWhiteningResolver(
+    tar_obj, normalizer, normalizerControl,
+    scoreMats = .preparePCMatrices(
+      pc_data = tar_obj@pcaResults, pca_global = tar_obj@pcaGlobal,
+      scalePCs = tar_scalePCs, slides = slides, cts = cts
+    ),
+    cts = cts, slides = slides
+  )
   norm_K_all <- .computeCrossKernelNormMulti(
     object = tar_obj, tol = tol, cts = cts, slides = slides,
     sigmas_run = sigma_name_tar, nCC = if (length(tar_obj@nCC) == 0) nCC else tar_obj@nCC,
-    pair_cell_types = pair_cell_types
+    pair_cell_types = pair_cell_types, resolver = resolver
   )
 
   if (calculationMode == "perSlide") {

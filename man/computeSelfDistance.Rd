@@ -64,9 +64,25 @@ recorded geometry, falling back to 1.}
 \item{zDistScale}{Scale for z distance. \code{NULL} (default) inherits the
 recorded geometry, falling back to 1.}
 
-\item{normalizeDistance}{Whether to rescale distances so that the reference
-cell-cell distance becomes \code{normalizeTarget}. \code{NULL} (default) inherits the
-recorded geometry, falling back to \code{FALSE} as of CoPro 1.2.0.}
+\item{normalizeDistance}{How to scale the self-distances. One of:
+\describe{
+\item{\code{NULL} (default)}{Inherit the recorded geometry, falling back to
+\code{FALSE} as of CoPro 1.2.0.}
+\item{\code{FALSE}}{No scaling; distances stay in the coordinate units of
+\code{locationData}.}
+\item{\code{TRUE}}{Rescale so that the reference cell-cell distance becomes
+\code{normalizeTarget}. When the object already carries a scale factor, that
+factor is reused rather than re-derived from the within-type blocks, so
+cross-type and within-type distances stay on one unit; the substitution
+is reported. Pass \code{overwrite = TRUE} to discard the existing blocks and
+re-derive.}
+\item{\code{"inherit"}}{Reuse the scaling factor \code{\link[=computeDistance]{computeDistance()}} recorded
+on the object, and error if it recorded none. Differs from \code{TRUE} only
+on an object with nothing pinned, where \code{TRUE} derives a unit from the
+within-type blocks; use it to assert that the cross-type scale must
+exist -- notably when the self-kernels become whitening operators in
+\code{\link[=computeNormalizedCorrelation]{computeNormalizedCorrelation()}}.}
+}}
 
 \item{normalizeMethod}{How the reference distance is estimated when
 \code{normalizeDistance = TRUE} and no scale factor is already pinned on the
@@ -74,8 +90,10 @@ object. \code{"global"} uses the median nearest-neighbor distance over all cells
 ignoring type labels, which gives the same unit here as in
 \code{\link[=computeDistance]{computeDistance()}}; \code{"spacing"} measures the within-type blocks instead;
 \code{"percentile"} reproduces the pre-1.2.0 behavior (the minimum, across
-blocks, of a low quantile of pairwise distances). \code{NULL} (default) inherits
-the recorded geometry, falling back to \code{"global"}.}
+blocks, of a low quantile of pairwise distances). Not available for
+\code{distType = "Morphology-Aware"}, which falls back to \code{"percentile"}. \code{NULL}
+(default) inherits the recorded geometry, falling back to \code{"global"}.
+Ignored when \code{normalizeDistance} is \code{FALSE} or \code{"inherit"}.}
 
 \item{normalizeTarget}{Numeric scalar. The value the reference distance is
 rescaled to. \code{NULL} (default) inherits the recorded geometry, falling back
