@@ -11,7 +11,9 @@ optimize_genespace_avg_corr(
   cell_types,
   max_iter = 3000,
   tol = 1e-06,
-  verbose = TRUE
+  verbose = TRUE,
+  sweep = c("gauss-seidel", "jacobi"),
+  objective = c("sumcor", "sumcov")
 )
 }
 \arguments{
@@ -30,6 +32,30 @@ matrix-free operators.}
 \item{tol}{Convergence tolerance on max weight change (default 1e-6).}
 
 \item{verbose}{Print progress every 500 iterations (default TRUE).}
+
+\item{sweep}{Which block sweep to use.
+
+\code{"gauss-seidel"} (default) updates each cell type using the blocks already
+updated in the current sweep. With \code{sigma} held fixed this makes each block
+update the exact maximizer over that block -- the objective is linear in
+\code{w_i} once the others are fixed -- so \verb{w_i' g_i = \\|g_i\\| >= 0} always and
+the iteration cannot come to rest on a negative-objective solution.
+
+\code{"jacobi"} updates every block from the previous iterate. All blocks then
+move off stale values, which is not coordinate ascent: the iteration can
+settle on the \emph{negative} singular pair as a period-2 sign orbit, which
+\code{check_convergence()}'s sign-tolerant test accepts as converged. That is
+what the post-hoc sign flip below exists to repair, and it is applied only
+on this path. The flip is a valid repair for two cell types, where flipping
+one block negates the single pairwise term; it is \strong{not} valid for three
+or more, where flipping one block negates only the terms touching it and
+can lower the objective. Retained so results computed before
+\code{"gauss-seidel"} became the default can be reproduced exactly.}
+
+\item{objective}{\code{"sumcor"} (default) divides each slide's cross term by that
+slide's own score scales. \code{"sumcov"} fixes every scale at 1, giving the
+plain sum of kernel-smoothed cross-covariances -- the gene-space
+counterpart of \code{\link[=runSkrCCA]{runSkrCCA()}}'s default.}
 }
 \value{
 Named list of weight vectors, one per cell type (each a G x 1 matrix).

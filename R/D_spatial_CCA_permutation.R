@@ -219,6 +219,30 @@
   invisible(NULL)
 }
 
+# The permutation machinery re-optimizes each draw with the SUMCOV solvers and
+# the factorized PC-space operators. Running it against weights that were fitted
+# under `objective = "sumcor"` would compare an observed statistic from one
+# criterion to a null built from another, so refuse rather than silently mix.
+#
+# Extending this is not hard when wanted: a within-slide label permutation
+# permutes the rows of X_i^(s), which leaves G_i^(s) = X_i^(s)' X_i^(s)
+# unchanged, so the per-slide scales that SUMCOR divides by are
+# permutation-invariant and the existing operator-reuse factorization still
+# applies. Only the optimizer call would need swapping.
+.rejectSumcorForPermutation <- function(object, what = "This permutation test") {
+  record <- attr(object@skrCCAOut, "ccaObjective")
+  if (is.null(record) || !identical(record$objective, "sumcor")) {
+    return(invisible(NULL))
+  }
+  stop(
+    what, " builds its null with the sumcov solvers, but these weights were ",
+    "fitted under objective = \"sumcor\" (slideWeight = \"",
+    record$slideWeight, "\"). Comparing the two mixes criteria. Re-run ",
+    "runSkrCCA(objective = \"sumcov\") before testing, or use ",
+    "runSlideLevelInference() for replicate-level inference."
+  )
+}
+
 # Resolve the library directory that holds an *installed* CoPro, or NULL when
 # CoPro is only available via devtools::load_all(). PSOCK workers start fresh R
 # sessions and must library(CoPro); under load_all() find.package() points at the
@@ -417,6 +441,7 @@ runSkrCCAPermu <- function(object, tol = 1e-5, nPermu = 999,
     stop("Input object must be a CoPro object")
   }
   .rejectCellPermutationForMulti(object)
+  .rejectSumcorForPermutation(object, "runSkrCCAPermu()")
 
   ## Apply conservative settings if requested
   ## Conservative = better preserve spatial autocorrelation = lower FPR
@@ -1252,6 +1277,7 @@ runSkrCCAPermu_FairSigma <- function(object,
     stop("Input must be a CoPro object")
   }
   .rejectCellPermutationForMulti(object)
+  .rejectSumcorForPermutation(object, "runSkrCCAPermu_FairSigma()")
 
   if (length(object@skrCCAOut) == 0) {
     stop("Please run runSkrCCA() first")
@@ -1723,6 +1749,7 @@ runSkrCCAPermu_Conditional <- function(object,
     stop("Input must be a CoPro object")
   }
   .rejectCellPermutationForMulti(object)
+  .rejectSumcorForPermutation(object, "runSkrCCAPermu_Conditional()")
   if (length(object@skrCCAOut) == 0) {
     stop("Please run runSkrCCA() first")
   }

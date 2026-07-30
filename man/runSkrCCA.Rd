@@ -15,7 +15,12 @@ runSkrCCA(
   maxIter = 200,
   sigmaChoice = NULL,
   n_cores = 1,
-  step_size = 1
+  step_size = 1,
+  space = c("pca", "gene"),
+  objective = c("sumcov", "sumcor"),
+  slideWeight = NULL,
+  minCellsPerSlide = 10,
+  ...
 )
 
 \S4method{runSkrCCA}{CoPro}(
@@ -27,7 +32,12 @@ runSkrCCA(
   maxIter = 200,
   sigmaChoice = NULL,
   n_cores = 1,
-  step_size = 1
+  step_size = 1,
+  space = c("pca", "gene"),
+  objective = c("sumcov", "sumcor"),
+  slideWeight = NULL,
+  minCellsPerSlide = 10,
+  ...
 )
 
 \S4method{runSkrCCA}{CoProMulti}(
@@ -39,7 +49,12 @@ runSkrCCA(
   maxIter = 200,
   sigmaChoice = NULL,
   n_cores = 1,
-  step_size = 1
+  step_size = 1,
+  space = c("pca", "gene"),
+  objective = c("sumcov", "sumcor"),
+  slideWeight = NULL,
+  minCellsPerSlide = 10,
+  ...
 )
 }
 \arguments{
@@ -64,13 +79,77 @@ the transferred weight on each PC. Otherwise, the value should be set to NULL.}
 \item{step_size}{Step size for damped power iteration. Default 1 (standard
 power iteration). Values in (0,1) blend old and new weights for smoother
 convergence, which can help with many cells or many CCs.}
+
+\item{space}{Which feature space to optimize in. \code{"pca"} (default) runs the
+PC-space optimizer described here. \code{"gene"} forwards to
+\code{\link[=runGeneSpaceCCA]{runGeneSpaceCCA()}}, which needs a single \code{sigma} -- supply it through
+\code{sigmaChoice} -- and accepts its own arguments (\code{clip}, \code{min_prevalence},
+\code{streaming}, ...) through \code{...}.}
+
+\item{objective}{Which canonical criterion to maximize.
+
+\code{"sumcov"} (default) maximizes the sum of kernel-smoothed cross-covariances
+\eqn{\sum_{i<j} w_i' (\sum_s X_i^{(s)'} K_{ij}^{(s)} X_j^{(s)}) w_j} under
+\eqn{\|w_i\| = 1}.
+
+\code{"sumcor"} maximizes the per-slide self-normalized sum, dividing each
+slide's cross term by that slide's own score scales.
+
+\strong{With one slide these are the same problem}, and \code{"sumcor"} is routed to
+the exact \code{"sumcov"} solvers: whitened PCs give \eqn{X_i'X_i = (n_i-1) I},
+so \eqn{\|w_i\| = 1} is the unit-variance constraint, and the
+scale-invariant SUMCOR attains its maximum there, where every denominator
+is 1. Single-slide results -- including >2 cell types -- are therefore
+already Kettenring SUMCOR and are unaffected by this argument.
+
+They differ only across slides. SUMCOV factors exactly as
+\eqn{\sum_s \sqrt{n_i^{(s)} n_j^{(s)}} \sigma_i^{(s)} \sigma_j^{(s)}
+  \rho_{ij}^{(s)}}, so it already sums per-slide correlations -- weighted by
+cell count \emph{and} by per-slide score scale. The scale factor is what lets a
+slide with inflated variance along the canonical direction dominate;
+\code{"sumcor"} removes it and keeps the cell-count factor under
+\code{slideWeight = "size"}.}
+
+\item{slideWeight}{Per-slide weighting, only valid with
+\code{objective = "sumcor"} (an error otherwise, since under \code{"sumcov"} the
+weighting is fixed by the objective). \code{"size"} (default) weights slide \code{s}
+by \eqn{\sqrt{n_i^{(s)} n_j^{(s)}}}, so larger slides count for more
+without per-slide variance re-entering. \code{"equal"} weights every slide the
+same -- strict Kettenring SUMCOR, matching \code{\link[=runGeneSpaceCCA]{runGeneSpaceCCA()}}.}
+
+\item{minCellsPerSlide}{Minimum cells per (slide, cell type). Slides below
+this are \strong{dropped} under \code{objective = "sumcor"}, which divides by a
+per-slide scale that a near-empty slide drives to its floor. Under
+\code{"sumcov"} they are only reported, not dropped: a thin slide simply
+contributes little to the summed operator, and dropping it would change
+results computed before this rule existed.}
+
+\item{...}{Passed to \code{\link[=runGeneSpaceCCA]{runGeneSpaceCCA()}} when \code{space = "gene"}; ignored
+otherwise.}
 }
 \value{
-CoPro object with skrCCA results computed
+CoPro object with skrCCA results computed. The objective actually
+used is recorded on \verb{@skrCCAOut} and readable with \code{\link[=getCCAObjective]{getCCAObjective()}}.
 }
 \description{
 runSkrCCA
 }
+\section{Batch effects}{
+
+\code{objective = "sumcor"} removes the per-slide \emph{scale} sensitivity but not a
+per-slide \emph{mean shift}. PC scores are centered globally
+(\code{computePCA(center_per_slide = FALSE)}), so a shared technical shift leaves
+\eqn{u_i^{(s)} \approx M_i^{(s)} \mathbf{1} + \epsilon} and the numerator
+picks up \eqn{M_i M_j \mathbf{1}'K\mathbf{1}}, positive whenever both cell
+types shift the same way. Dividing by \code{sigma} does not rescue this: for a
+nonnegative kernel the leading singular pair is close to the Perron vector,
+so a constant score reaches \eqn{\rho \approx \sigma_{max}(K)} on every
+slide. Pair multi-slide \code{"sumcor"} with
+\code{computePCA(..., center_per_slide = TRUE)}, which is the half of the fix that
+addresses the mean shift. This applies to \code{"sumcov"} too and is independent
+of the objective choice.
+}
+
 \examples{
 \donttest{
 toy <- readRDS(system.file("extdata", "toy_copro_data.rds", package = "CoPro"))
@@ -89,7 +168,8 @@ obj <- runSkrCCA(obj, scalePCs = TRUE, nCC = 2)
 }
 \seealso{
 \code{\link[=computePCA]{computePCA()}}, \code{\link[=computeKernelMatrix]{computeKernelMatrix()}},
-\code{\link[=computeNormalizedCorrelation]{computeNormalizedCorrelation()}}, \code{\link[=computeGeneAndCellScores]{computeGeneAndCellScores()}}
+\code{\link[=computeNormalizedCorrelation]{computeNormalizedCorrelation()}}, \code{\link[=computeGeneAndCellScores]{computeGeneAndCellScores()}},
+\code{\link[=runGeneSpaceCCA]{runGeneSpaceCCA()}}, \code{\link[=getCCAObjective]{getCCAObjective()}}
 
 Other spatial-pipeline: 
 \code{\link{computeDistance}()},

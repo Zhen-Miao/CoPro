@@ -1,7 +1,5 @@
-# Per-slide minimum number of cells per cell type. Below this the
-# G x G covariance from the slide is too noisy to be useful (rank <= n-1).
-# Slides failing this for any requested cell type are dropped with a warning.
-.min_cells_per_slide <- 10
+# `.min_cells_per_slide` is defined in 02_helper_functions.R and shared with the
+# PCA-space sumcor route, so both spaces drop the same slides.
 
 #' Prepare standardized gene expression matrices per slide per cell type
 #'
@@ -640,6 +638,20 @@
 #'   streaming path (e.g., \code{lowerLimit}, \code{upperQuantile},
 #'   \code{normalizeKernel}). Ignored when \code{streaming = FALSE}.
 #' @param verbose Print progress messages (default TRUE).
+#' @param sweep Block sweep for the power iteration: \code{"gauss-seidel"}
+#'   (default) or \code{"jacobi"}. Gauss-Seidel reads the blocks already updated
+#'   in the current sweep, which makes each block update an exact maximization
+#'   over that block and rules out convergence to a negative objective. Jacobi
+#'   reads only the previous iterate and can settle on the negative singular
+#'   pair, which is why it needs a post-hoc sign repair -- valid for two cell
+#'   types, not for three or more. Kept so results computed before
+#'   \code{"gauss-seidel"} became the default reproduce exactly. See
+#'   [optimize_genespace_avg_corr()].
+#' @param objective \code{"sumcor"} (default) normalizes each slide's cross
+#'   term by that slide's own score scales. \code{"sumcov"} fixes every scale at
+#'   1, giving the plain sum of kernel-smoothed cross-covariances -- the
+#'   gene-space counterpart of [runSkrCCA()]'s default objective, provided so
+#'   the space and the criterion can be varied independently.
 #'
 #' @return The CoPro object with gene weights in \code{geneScores},
 #'   cell scores in \code{cellScores}, and weight vectors in \code{skrCCAOut}.
@@ -704,7 +716,9 @@ setGeneric(
            streaming = FALSE,
            distanceArgs = list(),
            kernelArgs = list(),
-           verbose = TRUE) standardGeneric("runGeneSpaceCCA")
+           verbose = TRUE,
+           sweep = c("gauss-seidel", "jacobi"),
+           objective = c("sumcor", "sumcov")) standardGeneric("runGeneSpaceCCA")
 )
 
 #' @rdname runGeneSpaceCCA
@@ -718,7 +732,9 @@ setMethod(
            streaming = FALSE,
            distanceArgs = list(),
            kernelArgs = list(),
-           verbose = TRUE) {
+           verbose = TRUE,
+           sweep = c("gauss-seidel", "jacobi"),
+           objective = c("sumcor", "sumcov")) {
     stop("runGeneSpaceCCA requires a CoProMulti object (multi-slide data). ",
          "Got: ", class(object)[1])
   }
@@ -735,7 +751,9 @@ setMethod(
            streaming = FALSE,
            distanceArgs = list(),
            kernelArgs = list(),
-           verbose = TRUE) {
+           verbose = TRUE,
+           sweep = c("gauss-seidel", "jacobi"),
+           objective = c("sumcor", "sumcov")) {
 
     # Validate inputs
     if (!is.logical(streaming) || length(streaming) != 1 || is.na(streaming)) {
@@ -772,6 +790,8 @@ setMethod(
     if (!is.numeric(nCC) || length(nCC) != 1 || nCC < 1 || nCC != as.integer(nCC)) {
       stop("nCC must be a positive integer.")
     }
+    sweep <- match.arg(sweep)
+    objective <- match.arg(objective)
 
     cts <- if (length(object@cellTypesOfInterest) > 0) {
       object@cellTypesOfInterest
@@ -839,7 +859,9 @@ setMethod(
       cell_types = cts,
       max_iter = max_iter,
       tol = tol,
-      verbose = verbose
+      verbose = verbose,
+      sweep = sweep,
+      objective = objective
     )
 
     if (nCC > 1) {
@@ -852,7 +874,9 @@ setMethod(
         nCC = nCC,
         max_iter = max_iter,
         tol = tol,
-        verbose = verbose
+        verbose = verbose,
+        sweep = sweep,
+        objective = objective
       )
     }
 

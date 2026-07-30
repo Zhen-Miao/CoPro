@@ -28,6 +28,7 @@ computeGeneAndCellScores
 
 Other scores-and-correlation: 
 \code{\link{computeNormalizedCorrelation}()},
+\code{\link{getCCAObjective}()},
 \code{\link{getNormalizerInfo}()}
 }
 \concept{scores-and-correlation}

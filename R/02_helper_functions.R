@@ -404,3 +404,108 @@ setMethod("isMultiSlide", "CoProSingle", function(object) {
 setMethod("isMultiSlide", "CoProMulti", function(object) {
   TRUE
 })
+
+# ============================================================================
+# Per-slide adequacy
+# ============================================================================
+
+# Per-slide minimum number of cells per cell type. Below this the per-slide
+# second-moment estimate from that slide is too noisy to divide by: the
+# covariance has rank <= n-1, so for many features the estimate is dominated
+# by sampling noise and the per-slide sigma floor starts to bite.
+#
+# Shared by both CCA spaces. Gene space applies it in .prepareGeneSpaceData();
+# PCA space applies it in .dropDegenerateSlides() on the sumcor route. The
+# threshold is a numerical-stability floor, not a statistical one: 10 keeps the
+# slide-level second moment well defined while still admitting modest cell
+# populations.
+.min_cells_per_slide <- 10
+
+#' Drop slides that cannot support a per-slide normalization
+#'
+#' Only the `sumcor` objectives divide by a per-slide quantity, so only they
+#' need this. Under `sumcov` a thin slide simply contributes little to the
+#' summed operator and is harmless, which is why the caller there reports
+#' rather than drops -- dropping would silently change results computed before
+#' this function existed.
+#'
+#' A slide is kept only when *every* requested cell type clears `minCells` on
+#' it. A slide missing one type of a pair contributes nothing to that pair's
+#' correlation but would still occupy a slot in the average, so partial slides
+#' are dropped rather than partially used.
+#'
+#' @param X_list_all `X_list_all[[slide]][[cellType]]` cell-by-feature matrices.
+#' @param cts Cell types that must all be adequately represented.
+#' @param minCells Minimum cells per (slide, cell type).
+#' @param nFeatures Optional feature count; when supplied, surviving slides
+#'   with `n <= nFeatures` get a rank-deficiency warning. The per-slide Gram
+#'   matrix is then singular, which is tolerable -- `sigma` is only zero if the
+#'   weight lands in its null space -- but worth surfacing.
+#' @param what Label used in messages to name the calling routine.
+#' @param verbose Emit the per-slide report.
+#' @return A list with `X_list_all` (filtered), `slides` (survivors), and
+#'   `dropped`.
+#' @noRd
+.dropDegenerateSlides <- function(X_list_all, cts, minCells = .min_cells_per_slide,
+                                  nFeatures = NULL, what = "sumcor",
+                                  verbose = TRUE) {
+  slides <- names(X_list_all)
+  if (is.null(slides)) {
+    stop("X_list_all must be a named list of slides.")
+  }
+
+  counts <- lapply(slides, function(s) {
+    vapply(cts, function(ct) {
+      X <- X_list_all[[s]][[ct]]
+      if (is.null(X)) 0L else nrow(X)
+    }, integer(1))
+  })
+  names(counts) <- slides
+
+  keep <- vapply(slides, function(s) all(counts[[s]] >= minCells), logical(1))
+  dropped <- slides[!keep]
+
+  for (s in dropped) {
+    thin <- cts[counts[[s]] < minCells]
+    warning(sprintf(
+      "%s: slide '%s' dropped -- cell type(s) %s have fewer than %d cells (%s).",
+      what, s, paste(thin, collapse = ", "), minCells,
+      paste(sprintf("%s=%d", thin, counts[[s]][thin]), collapse = ", ")
+    ), call. = FALSE)
+  }
+
+  survivors <- slides[keep]
+  if (length(survivors) == 0) {
+    stop(sprintf(
+      "%s: no slide has at least %d cells for every requested cell type. %s",
+      what, minCells,
+      "Use objective = \"sumcov\", or analyse the slides separately."
+    ))
+  }
+
+  if (!is.null(nFeatures)) {
+    for (s in survivors) {
+      thin <- cts[counts[[s]] <= nFeatures]
+      if (length(thin) > 0) {
+        warning(sprintf(
+          paste0("%s: slide '%s' has n <= nFeatures (%d) for cell type(s) %s, ",
+                 "so its per-slide Gram matrix is rank deficient. The ",
+                 "per-slide scale is still usable but is estimated from few ",
+                 "cells."),
+          what, s, nFeatures, paste(thin, collapse = ", ")
+        ), call. = FALSE)
+      }
+    }
+  }
+
+  if (verbose && length(dropped) > 0) {
+    message(sprintf("  %s: using %d of %d slides.",
+                    what, length(survivors), length(slides)))
+  }
+
+  list(
+    X_list_all = X_list_all[survivors],
+    slides = survivors,
+    dropped = dropped
+  )
+}

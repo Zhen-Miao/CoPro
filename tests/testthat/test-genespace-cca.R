@@ -1007,3 +1007,197 @@ test_that("computeGeneAndCellScores rejects gene-space CCA outputs", {
     "gene-space CCA"
   )
 })
+
+# ============================================================================
+# Sweep choice: Gauss-Seidel vs Jacobi, and the sign-repair question
+# ============================================================================
+
+.sweep_fixture <- function(nct = 2L, seed = 42L) {
+  obj <- create_test_copro_multi(
+    n_cells_per_slide = 140, n_slides = 2, n_genes = 30,
+    n_cell_types = nct, seed = seed
+  )
+  cts <- paste0("CellType", LETTERS[seq_len(nct)])
+  obj <- subsetData(obj, cellTypesOfInterest = cts)
+  obj <- computeDistance(obj, distType = "Euclidean2D",
+                         normalizeDistance = TRUE, verbose = FALSE)
+  obj <- computeKernelMatrix(obj, sigmaValues = 0.1, verbose = FALSE,
+                             normalizeDistance = TRUE)
+  gsd <- CoPro:::.prepareGeneSpaceData(obj, "quantile", 0.008, 20, cts,
+                                       getSlideList(obj))
+  cm <- CoPro:::.precomputeCovarianceMatrices(
+    gsd$Z_by_slide, obj@kernelMatrices, 0.1, gsd$slides, cts
+  )
+  list(obj = obj, cts = cts, slides = gsd$slides,
+       C_self = cm$C_self, C_cross = cm$C_cross)
+}
+
+test_that("flipping one block does not negate the objective for 3+ cell types", {
+  # This is the algebra that makes the legacy sign repair invalid beyond two
+  # cell types, and it is why the fix is to stop needing the repair rather than
+  # to patch it. f = rho_AB + rho_AC + rho_BC. Flipping block A gives
+  # -rho_AB - rho_AC + rho_BC, which differs from -f by exactly 2 * rho_BC.
+  fx <- .sweep_fixture(nct = 3L)
+  set.seed(555)
+  w <- suppressWarnings(suppressMessages(optimize_genespace_avg_corr(
+    fx$C_self, fx$C_cross, fx$slides, fx$cts,
+    max_iter = 400, tol = 1e-6, verbose = FALSE
+  )))
+
+  f <- CoPro:::.compute_p1b_objective(w, fx$C_self, fx$C_cross, fx$slides, fx$cts)
+
+  w_flip_one <- w
+  w_flip_one[[fx$cts[1]]] <- -w_flip_one[[fx$cts[1]]]
+  f_flip_one <- CoPro:::.compute_p1b_objective(
+    w_flip_one, fx$C_self, fx$C_cross, fx$slides, fx$cts
+  )
+
+  expect_false(isTRUE(all.equal(f_flip_one, -f, tolerance = 1e-6)))
+
+  # And the discrepancy is exactly twice the pair that does not touch block A.
+  sigma_all <- CoPro:::.compute_per_slide_sigma(w, fx$C_self, fx$slides, fx$cts)
+  rho_bc <- sum(vapply(fx$slides, function(s) {
+    C <- CoPro:::.get_C_cross(fx$C_cross[[s]], fx$cts[2], fx$cts[3])
+    CoPro:::.genespace_cross_bilinear(w[[fx$cts[2]]], C, w[[fx$cts[3]]]) /
+      (sigma_all[[s]][[fx$cts[2]]] * sigma_all[[s]][[fx$cts[3]]])
+  }, numeric(1))) / length(fx$slides)
+  expect_equal(f_flip_one, -f + 2 * rho_bc, tolerance = 1e-8)
+})
+
+test_that("flipping every block leaves the objective unchanged", {
+  # Each pairwise term picks up two sign flips, so a global flip is the same
+  # solution -- which is also why it could never repair a negative objective.
+  for (nct in c(2L, 3L)) {
+    fx <- .sweep_fixture(nct = nct)
+    set.seed(555)
+    w <- suppressWarnings(suppressMessages(optimize_genespace_avg_corr(
+      fx$C_self, fx$C_cross, fx$slides, fx$cts,
+      max_iter = 400, tol = 1e-6, verbose = FALSE
+    )))
+    f <- CoPro:::.compute_p1b_objective(w, fx$C_self, fx$C_cross,
+                                        fx$slides, fx$cts)
+    w_all <- lapply(w, function(m) -m)
+    f_all <- CoPro:::.compute_p1b_objective(w_all, fx$C_self, fx$C_cross,
+                                            fx$slides, fx$cts)
+    expect_equal(f_all, f, tolerance = 1e-10, info = paste("nct =", nct))
+  }
+})
+
+test_that("gauss-seidel never converges to a negative objective", {
+  # At a Gauss-Seidel fixed point every block satisfies w_i' g_i = ||g_i|| >= 0.
+  # Summing that over blocks gives 2f >= 0 (the per-slide sigmas are positive
+  # scalars and do not change the sign structure), so no sign repair can ever be
+  # needed -- which is the whole justification for dropping it on this path.
+  for (nct in c(2L, 3L)) {
+    for (dseed in c(42L, 101L)) {
+      fx <- .sweep_fixture(nct = nct, seed = dseed)
+      for (iseed in c(3L, 555L)) {
+        set.seed(iseed)
+        w <- suppressWarnings(suppressMessages(optimize_genespace_avg_corr(
+          fx$C_self, fx$C_cross, fx$slides, fx$cts,
+          max_iter = 400, tol = 1e-6, verbose = FALSE, sweep = "gauss-seidel"
+        )))
+        f <- CoPro:::.compute_p1b_objective(w, fx$C_self, fx$C_cross,
+                                            fx$slides, fx$cts)
+        expect_gte(f, 0)
+      }
+    }
+  }
+})
+
+test_that("sweep = jacobi reproduces the pre-change gene-space result", {
+  # Regression lock for results computed before "gauss-seidel" became the
+  # default. The expected values were measured on a pristine checkout of the
+  # commit before the sweep argument existed, using this exact fixture, seed and
+  # settings; the old code path had no sweep argument and always did what
+  # sweep = "jacobi" now does. Compared as a checksum of |weights| so an
+  # incidental sign flip does not fail the test.
+  expected <- c(nct2 = 1.823708199481756e+01, nct3 = 2.640422549226658e+01)
+
+  for (nct in c(2L, 3L)) {
+    obj <- create_test_copro_multi(
+      n_cells_per_slide = 60, n_slides = 2, n_genes = 30,
+      n_cell_types = nct, seed = 42
+    )
+    cts <- paste0("CellType", LETTERS[seq_len(nct)])
+    obj <- subsetData(obj, cellTypesOfInterest = cts)
+    obj <- computeDistance(obj, distType = "Euclidean2D",
+                           normalizeDistance = TRUE, verbose = FALSE)
+    obj <- computeKernelMatrix(obj, sigmaValues = 0.1, verbose = FALSE,
+                               normalizeDistance = TRUE)
+
+    set.seed(20260729)
+    fit <- suppressWarnings(suppressMessages(runGeneSpaceCCA(
+      obj, sigma = 0.1, nCC = 2, max_iter = 500, tol = 1e-4,
+      verbose = FALSE, sweep = "jacobi"
+    )))
+    w <- fit@skrCCAOut[["gscca_sigma_0.1"]]
+    checksum <- sum(vapply(w, function(m) sum(abs(m)), numeric(1)))
+    expect_equal(checksum, unname(expected[[paste0("nct", nct)]]),
+                 tolerance = 1e-6, info = paste("nct =", nct))
+  }
+})
+
+test_that("both sweeps produce unit-norm weights and run for 3 cell types", {
+  fx <- .sweep_fixture(nct = 3L)
+  for (sw in c("gauss-seidel", "jacobi")) {
+    set.seed(555)
+    w <- suppressWarnings(suppressMessages(optimize_genespace_avg_corr_n(
+      fx$C_self, fx$C_cross, fx$slides, fx$cts,
+      w_list = suppressWarnings(suppressMessages(optimize_genespace_avg_corr(
+        fx$C_self, fx$C_cross, fx$slides, fx$cts,
+        max_iter = 200, tol = 1e-5, verbose = FALSE, sweep = sw
+      ))),
+      nCC = 2, max_iter = 200, tol = 1e-5, verbose = FALSE, sweep = sw
+    )))
+    for (ct in fx$cts) {
+      expect_equal(ncol(w[[ct]]), 2, info = sw)
+      for (cc in seq_len(2)) {
+        expect_equal(sqrt(sum(w[[ct]][, cc]^2)), 1, tolerance = 1e-6,
+                     info = paste(sw, ct, cc))
+      }
+    }
+  }
+})
+
+test_that("gene-space objective = sumcov drops the per-slide denominators", {
+  # Completes the {space} x {objective} grid: gene space can run the same
+  # criterion runSkrCCA() defaults to.
+  fx <- .sweep_fixture(nct = 2L)
+
+  # With objective = "sumcov" every scale is pinned at 1, so the objective is
+  # the plain average cross-covariance.
+  sigma_all <- CoPro:::.compute_per_slide_sigma(
+    list(CellTypeA = matrix(1, 1, 1), CellTypeB = matrix(1, 1, 1)),
+    fx$C_self, fx$slides, fx$cts, objective = "sumcov"
+  )
+  expect_true(all(unlist(sigma_all) == 1))
+
+  set.seed(555)
+  w <- suppressWarnings(suppressMessages(optimize_genespace_avg_corr(
+    fx$C_self, fx$C_cross, fx$slides, fx$cts,
+    max_iter = 300, tol = 1e-6, verbose = FALSE, objective = "sumcov"
+  )))
+  for (ct in fx$cts) {
+    expect_equal(sqrt(sum(w[[ct]]^2)), 1, tolerance = 1e-6)
+  }
+
+  # Rescaling one slide's expression must move a covariance objective; this is
+  # the contrast that makes the sumcor default worth having.
+  f_cov <- CoPro:::.compute_p1b_objective(w, fx$C_self, fx$C_cross, fx$slides,
+                                          fx$cts, objective = "sumcov")
+  f_cor <- CoPro:::.compute_p1b_objective(w, fx$C_self, fx$C_cross, fx$slides,
+                                          fx$cts, objective = "sumcor")
+  expect_false(isTRUE(all.equal(f_cov, f_cor, tolerance = 1e-6)))
+})
+
+test_that("an unknown sweep or gene-space objective is rejected", {
+  fx <- .sweep_fixture(nct = 2L)
+  expect_error(optimize_genespace_avg_corr(
+    fx$C_self, fx$C_cross, fx$slides, fx$cts, verbose = FALSE, sweep = "sor"
+  ))
+  expect_error(optimize_genespace_avg_corr(
+    fx$C_self, fx$C_cross, fx$slides, fx$cts, verbose = FALSE,
+    objective = "sumsquares"
+  ))
+})

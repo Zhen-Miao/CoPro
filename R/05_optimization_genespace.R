@@ -92,22 +92,55 @@ NULL
 }
 
 #' Compute per-slide score standard deviations for all cell types
+#'
+#' Because `.prepareGeneSpaceData()` centers every (slide, cell type) block,
+#' `mean(Z w) = 0` exactly and this is the per-slide standard deviation of the
+#' scores. It is the *unsmoothed* second moment -- no kernel enters -- so the
+#' objective's ratio has a kernel-smoothed numerator over an unsmoothed
+#' denominator, and is bounded by the kernel's largest singular value rather
+#' than by 1. `.sumcorSigma()` uses the same convention in PC space.
+#'
 #' @param w_list Named list of weight vectors (each G x 1 matrix)
 #' @param C_self_slide List of per-slide self-covariance:
 #'   \code{C_self_slide[[slide]][[ct]]}
 #' @param slides Character vector of slide IDs
 #' @param cell_types Character vector of cell type names
+#' @param objective `"sumcor"` returns the per-slide scales; `"sumcov"` returns
+#'   1 everywhere, which turns the objective below into the plain sum of
+#'   kernel-smoothed cross-covariances.
 #' @return Named list: \code{sigma_all[[slide]][[ct]]} = scalar sigma value (floored at 1e-12)
 #' @noRd
-.compute_per_slide_sigma <- function(w_list, C_self_slide, slides, cell_types) {
+.compute_per_slide_sigma <- function(w_list, C_self_slide, slides, cell_types,
+                                     objective = "sumcor") {
   sigma_all <- setNames(vector("list", length(slides)), slides)
+  unit <- identical(objective, "sumcov")
   for (s in slides) {
     sigma_all[[s]] <- setNames(vector("list", length(cell_types)), cell_types)
     for (ct in cell_types) {
+      if (unit) {
+        sigma_all[[s]][[ct]] <- 1
+        next
+      }
       w <- w_list[[ct]]
       val <- .genespace_self_quad(C_self_slide[[s]][[ct]], w)
       sigma_all[[s]][[ct]] <- max(sqrt(max(val, 0)), 1e-12)
     }
+  }
+  sigma_all
+}
+
+#' Refresh the per-slide scales for a single cell type
+#'
+#' The Gauss-Seidel sweep updates one block at a time and later blocks in the
+#' same sweep must divide by current scales, so only the block just updated is
+#' recomputed rather than the whole structure.
+#' @noRd
+.refresh_slide_sigma <- function(sigma_all, w_list, C_self_slide, slides, ct,
+                                 objective = "sumcor") {
+  if (identical(objective, "sumcov")) return(sigma_all)
+  for (s in slides) {
+    val <- .genespace_self_quad(C_self_slide[[s]][[ct]], w_list[[ct]])
+    sigma_all[[s]][[ct]] <- max(sqrt(max(val, 0)), 1e-12)
   }
   sigma_all
 }
@@ -118,13 +151,17 @@ NULL
 #' @param C_cross_slide Per-slide cross-covariance matrices
 #' @param slides Slide IDs
 #' @param cell_types Cell type names
+#' @param objective `"sumcor"` (per-slide self-normalized) or `"sumcov"` (plain
+#'   sum of kernel-smoothed cross-covariances).
 #' @return Scalar objective value
 #' @importFrom utils combn
 #' @noRd
 .compute_p1b_objective <- function(w_list, C_self_slide, C_cross_slide,
-                                   slides, cell_types) {
+                                   slides, cell_types,
+                                   objective = "sumcor") {
   S <- length(slides)
-  sigma_all <- .compute_per_slide_sigma(w_list, C_self_slide, slides, cell_types)
+  sigma_all <- .compute_per_slide_sigma(w_list, C_self_slide, slides,
+                                        cell_types, objective)
 
   obj <- 0
   pairs <- combn(cell_types, 2, simplify = FALSE)
@@ -163,6 +200,28 @@ NULL
 #' @param max_iter Maximum iterations (default 3000). Must be >= 1.
 #' @param tol Convergence tolerance on max weight change (default 1e-6).
 #' @param verbose Print progress every 500 iterations (default TRUE).
+#' @param sweep Which block sweep to use.
+#'
+#'   `"gauss-seidel"` (default) updates each cell type using the blocks already
+#'   updated in the current sweep. With `sigma` held fixed this makes each block
+#'   update the exact maximizer over that block -- the objective is linear in
+#'   `w_i` once the others are fixed -- so `w_i' g_i = \|g_i\| >= 0` always and
+#'   the iteration cannot come to rest on a negative-objective solution.
+#'
+#'   `"jacobi"` updates every block from the previous iterate. All blocks then
+#'   move off stale values, which is not coordinate ascent: the iteration can
+#'   settle on the *negative* singular pair as a period-2 sign orbit, which
+#'   `check_convergence()`'s sign-tolerant test accepts as converged. That is
+#'   what the post-hoc sign flip below exists to repair, and it is applied only
+#'   on this path. The flip is a valid repair for two cell types, where flipping
+#'   one block negates the single pairwise term; it is **not** valid for three
+#'   or more, where flipping one block negates only the terms touching it and
+#'   can lower the objective. Retained so results computed before
+#'   `"gauss-seidel"` became the default can be reproduced exactly.
+#' @param objective `"sumcor"` (default) divides each slide's cross term by that
+#'   slide's own score scales. `"sumcov"` fixes every scale at 1, giving the
+#'   plain sum of kernel-smoothed cross-covariances -- the gene-space
+#'   counterpart of [runSkrCCA()]'s default.
 #'
 #' @return Named list of weight vectors, one per cell type (each a G x 1 matrix).
 #' @importFrom stats rnorm
@@ -171,7 +230,11 @@ NULL
 optimize_genespace_avg_corr <- function(C_self_slide, C_cross_slide,
                                         slides, cell_types,
                                         max_iter = 3000, tol = 1e-6,
-                                        verbose = TRUE) {
+                                        verbose = TRUE,
+                                        sweep = c("gauss-seidel", "jacobi"),
+                                        objective = c("sumcor", "sumcov")) {
+  sweep <- match.arg(sweep)
+  objective <- match.arg(objective)
   if (length(cell_types) < 2) {
     stop("Gene-space CCA requires at least 2 cell types. Found: ",
          paste(cell_types, collapse = ", "))
@@ -198,17 +261,24 @@ optimize_genespace_avg_corr <- function(C_self_slide, C_cross_slide,
     w_list_old <- w_list
 
     # Compute per-slide sigmas
-    sigma_all <- .compute_per_slide_sigma(w_list, C_self_slide, slides, cell_types)
+    sigma_all <- .compute_per_slide_sigma(w_list, C_self_slide, slides,
+                                          cell_types, objective)
 
     # Update each cell type. The update below is the gradient of f_avg w.r.t.
-    # w_i evaluated with sigma_i, sigma_j held FIXED at their previous-iterate
-    # values (frozen-sigma surrogate). The full gradient would also include
+    # w_i evaluated with sigma_i, sigma_j held FIXED at their current values
+    # (frozen-sigma surrogate). The full gradient would also include
     # a -rho * C_ii * w_i / sigma_i^2 correction term from differentiating
     # 1/sigma_i; omitting it makes this an ALS-style alternating maximization,
     # not exact coordinate ascent. Standard for generalized power methods
     # (NIPALS treats denominators as fixed within a sweep).
+    #
+    # Which iterate the cross term reads is the sweep choice: `w_source` is the
+    # in-progress `w_list` under Gauss-Seidel and the frozen `w_list_old` under
+    # Jacobi. See the `sweep` argument for why that decides whether a sign
+    # repair is needed at all.
     for (ct_i in cell_types) {
       update <- matrix(0, nrow = n_genes, ncol = 1)
+      w_source <- if (identical(sweep, "gauss-seidel")) w_list else w_list_old
 
       for (s in slides) {
         sig_i <- sigma_all[[s]][[ct_i]]
@@ -218,7 +288,7 @@ optimize_genespace_avg_corr <- function(C_self_slide, C_cross_slide,
           sig_j <- sigma_all[[s]][[ct_j]]
           C_ij <- .get_C_cross(C_cross_slide[[s]], ct_i, ct_j)
           update <- update + (1 / sig_i) *
-            .genespace_cross_mult(C_ij, w_list_old[[ct_j]] / sig_j)
+            .genespace_cross_mult(C_ij, w_source[[ct_j]] / sig_j)
         }
       }
       update <- update / S
@@ -229,6 +299,10 @@ optimize_genespace_avg_corr <- function(C_self_slide, C_cross_slide,
       norm_val <- sqrt(sum(update^2))
       if (norm_val > 0) {
         w_list[[ct_i]] <- update / norm_val
+        if (identical(sweep, "gauss-seidel")) {
+          sigma_all <- .refresh_slide_sigma(sigma_all, w_list, C_self_slide,
+                                            slides, ct_i, objective)
+        }
       } else {
         warning(sprintf(
           "Zero gradient norm for cell type '%s' at iter %d; keeping previous weight.",
@@ -242,14 +316,14 @@ optimize_genespace_avg_corr <- function(C_self_slide, C_cross_slide,
 
     if (verbose && (iter %% 500 == 0 || iter == 1)) {
       obj <- .compute_p1b_objective(w_list, C_self_slide, C_cross_slide,
-                                    slides, cell_types)
+                                    slides, cell_types, objective)
       message(sprintf("  Iter %d: max_diff = %.2e, objective = %.4f", iter, max_diff, obj))
     }
 
     if (max_diff <= tol) {
       if (verbose) {
         obj <- .compute_p1b_objective(w_list, C_self_slide, C_cross_slide,
-                                      slides, cell_types)
+                                      slides, cell_types, objective)
         message(sprintf("  Converged at iteration %d (max_diff = %.2e, objective = %.4f)",
                         iter, max_diff, obj))
       }
@@ -266,13 +340,23 @@ optimize_genespace_avg_corr <- function(C_self_slide, C_cross_slide,
     if (!is.matrix(w_list[[ct]])) w_list[[ct]] <- matrix(w_list[[ct]], ncol = 1)
   }
 
-  # Fix sign ambiguity: the power iteration can converge to either sign.
-  # Flip the first cell type's weights if the objective is negative so that
-  # pairwise canonical correlations are consistently positive.
-  obj <- .compute_p1b_objective(w_list, C_self_slide, C_cross_slide,
-                                slides, cell_types)
-  if (obj < 0) {
-    w_list[[cell_types[1]]] <- -w_list[[cell_types[1]]]
+  if (identical(sweep, "jacobi")) {
+    # Legacy sign repair. Only correct for two cell types; see the `sweep`
+    # argument. Gauss-Seidel needs none, because it cannot converge here.
+    obj <- .compute_p1b_objective(w_list, C_self_slide, C_cross_slide,
+                                  slides, cell_types, objective)
+    if (obj < 0) {
+      w_list[[cell_types[1]]] <- -w_list[[cell_types[1]]]
+      if (length(cell_types) > 2) {
+        warning(sprintf(
+          paste0("sweep = \"jacobi\" converged to a negative objective (%.6f) ",
+                 "with %d cell types. Flipping one block negates only the ",
+                 "pairs touching it, so this repair can lower the objective. ",
+                 "Use sweep = \"gauss-seidel\"."),
+          obj, length(cell_types)
+        ), call. = FALSE)
+      }
+    }
   }
 
   w_list
@@ -294,6 +378,7 @@ optimize_genespace_avg_corr <- function(C_self_slide, C_cross_slide,
 #' @param max_iter Maximum iterations per component.
 #' @param tol Convergence tolerance.
 #' @param verbose Print progress.
+#' @inheritParams optimize_genespace_avg_corr
 #'
 #' @return Named list of weight matrices, each G x nCC.
 #' @keywords internal
@@ -302,7 +387,11 @@ optimize_genespace_avg_corr_n <- function(C_self_slide, C_cross_slide,
                                           slides, cell_types,
                                           w_list, nCC = 2,
                                           max_iter = 3000, tol = 1e-6,
-                                          verbose = TRUE) {
+                                          verbose = TRUE,
+                                          sweep = c("gauss-seidel", "jacobi"),
+                                          objective = c("sumcor", "sumcov")) {
+  sweep <- match.arg(sweep)
+  objective <- match.arg(objective)
   if (!is.numeric(max_iter) || length(max_iter) != 1 || max_iter < 1) {
     stop("max_iter must be a positive integer.")
   }
@@ -332,14 +421,18 @@ optimize_genespace_avg_corr_n <- function(C_self_slide, C_cross_slide,
       w_current_old <- w_current
 
       # Compute per-slide sigmas using current weights
-      sigma_all <- .compute_per_slide_sigma(w_current, C_self_slide, slides, cell_types)
+      sigma_all <- .compute_per_slide_sigma(w_current, C_self_slide, slides,
+                                            cell_types, objective)
 
-      # Update each cell type. Same frozen-sigma surrogate as the first
-      # component: holding sigma_i, sigma_j fixed at the previous iterate.
-      # See the comment in optimize_genespace_avg_corr for why we omit the
-      # -rho * C_ii * w_i / sigma_i^2 correction term.
+      # Update each cell type. Same frozen-sigma surrogate and same sweep
+      # choice as the first component; see optimize_genespace_avg_corr().
       for (ct_i in cell_types) {
         update <- matrix(0, nrow = n_genes, ncol = 1)
+        w_source <- if (identical(sweep, "gauss-seidel")) {
+          w_current
+        } else {
+          w_current_old
+        }
 
         for (s in slides) {
           sig_i <- sigma_all[[s]][[ct_i]]
@@ -348,7 +441,7 @@ optimize_genespace_avg_corr_n <- function(C_self_slide, C_cross_slide,
             sig_j <- sigma_all[[s]][[ct_j]]
             C_ij <- .get_C_cross(C_cross_slide[[s]], ct_i, ct_j)
             update <- update + (1 / sig_i) *
-              .genespace_cross_mult(C_ij, w_current_old[[ct_j]] / sig_j)
+              .genespace_cross_mult(C_ij, w_source[[ct_j]] / sig_j)
           }
         }
         update <- update / S
@@ -368,6 +461,10 @@ optimize_genespace_avg_corr_n <- function(C_self_slide, C_cross_slide,
         norm_val <- sqrt(sum(update^2))
         if (norm_val > 0) {
           w_current[[ct_i]] <- update / norm_val
+          if (identical(sweep, "gauss-seidel")) {
+            sigma_all <- .refresh_slide_sigma(sigma_all, w_current, C_self_slide,
+                                              slides, ct_i, objective)
+          }
         } else {
           warning(sprintf(
             "Zero norm after Gram-Schmidt deflation for cell type '%s' at CC %d; signal subspace likely exhausted.",
@@ -397,11 +494,22 @@ optimize_genespace_avg_corr_n <- function(C_self_slide, C_cross_slide,
                       cc, max_iter, max_diff))
     }
 
-    # Fix sign ambiguity for this component (same logic as first component)
-    obj_cc <- .compute_p1b_objective(w_current, C_self_slide, C_cross_slide,
-                                     slides, cell_types)
-    if (obj_cc < 0) {
-      w_current[[cell_types[1]]] <- -w_current[[cell_types[1]]]
+    if (identical(sweep, "jacobi")) {
+      # Legacy sign repair; see optimize_genespace_avg_corr(). Not applied under
+      # Gauss-Seidel, which cannot converge to a negative objective.
+      obj_cc <- .compute_p1b_objective(w_current, C_self_slide, C_cross_slide,
+                                       slides, cell_types, objective)
+      if (obj_cc < 0) {
+        w_current[[cell_types[1]]] <- -w_current[[cell_types[1]]]
+        if (length(cell_types) > 2) {
+          warning(sprintf(
+            paste0("sweep = \"jacobi\" gave CC %d a negative objective (%.6f) ",
+                   "with %d cell types; the one-block flip can lower it. ",
+                   "Use sweep = \"gauss-seidel\"."),
+            cc, obj_cc, length(cell_types)
+          ), call. = FALSE)
+        }
+      }
     }
 
     # Append this component to w_list
