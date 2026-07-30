@@ -12,7 +12,7 @@ vignette: >
 knitr::opts_chunk$set(echo = TRUE, eval = TRUE,
                       fig.width = 7, fig.height = 5,
                       dpi = 192,
-                      fig.path = "kidney_guided_gradient_files/")
+                      fig.path = "figures/kidney_guided_gradient-")
 ```
 
 ## Overview
