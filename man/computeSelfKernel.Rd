@@ -115,8 +115,10 @@ from the self-distances; see \code{\link[=computeSelfDistance]{computeSelfDistan
 never overwrites a factor already recorded on the object.}
 
 \item{normalizeMethod}{How the reference distance is estimated when
-\code{normalizeDistance = TRUE}: \code{"spacing"} (median nearest-partner distance,
-combined across blocks by median) or \code{"percentile"} (pre-1.2.0 behavior).}
+\code{normalizeDistance = TRUE}: \code{"global"} (median nearest-neighbor distance
+over all cells, ignoring type labels), \code{"spacing"} (median nearest-partner
+distance per block, combined by median), or \code{"percentile"} (pre-1.2.0
+behavior). See \code{\link[=computeDistance]{computeDistance()}}.}
 }
 \value{
 \code{CoPro} object with self-kernel matrices added to the kernelMatrices slot

@@ -297,8 +297,10 @@ materializeFloat32Kernels <- function(object, verbose = TRUE) {
 #' @param xDistScale,yDistScale,zDistScale Per-axis coordinate scales.
 #' @param normalizeDistance Whether to rescale distances to a common unit.
 #' @param normalizeMethod How the reference distance is estimated when
-#'   `normalizeDistance = TRUE`: `"spacing"` (median nearest-partner distance,
-#'   combined across blocks by median) or `"percentile"` (pre-1.2.0 behavior).
+#'   `normalizeDistance = TRUE`: `"global"` (median nearest-neighbor distance
+#'   over all cells, ignoring type labels), `"spacing"` (median nearest-partner
+#'   distance per block, combined by median), or `"percentile"` (pre-1.2.0
+#'   behavior). See [computeDistance()].
 #' @param normalizeTarget Target low distance percentile after normalization.
 #' @param truncateLowDist Whether to floor very small distances.
 #' @param overwrite Whether to replace existing kernel matrices.
@@ -315,7 +317,7 @@ setGeneric(
       rowNormalizeKernel = FALSE, colNormalizeKernel = FALSE,
       distType = c("Euclidean2D", "Euclidean3D"),
       xDistScale = 1, yDistScale = 1, zDistScale = 1,
-      normalizeDistance = FALSE, normalizeMethod = "spacing", normalizeTarget = 0.01,
+      normalizeDistance = FALSE, normalizeMethod = "global", normalizeTarget = 0.01,
       truncateLowDist = TRUE, overwrite = TRUE,
       verbose = TRUE) {
     standardGeneric("computeSparseKernelFloat32")
@@ -446,11 +448,12 @@ setGeneric(
   scaling_factor <- if (!normalizeDistance) {
     1
   } else {
-    .distanceScaleFactor(
-      .combineDistanceReference(
-        if (need_spacing) spacings else percentiles, normalizeMethod
-      ),
-      normalizeTarget, normalizeMethod
+    .normalizationScaleFactor(
+      object, blockValues = if (need_spacing) spacings else percentiles,
+      normalizeMethod = normalizeMethod, normalizeTarget = normalizeTarget,
+      distType = distType, xDistScale = xDistScale, yDistScale = yDistScale,
+      zDistScale = zDistScale, what = "computeSparseKernelFloat32",
+      verbose = verbose
     )
   }
 
@@ -556,7 +559,12 @@ setGeneric(
 
   object@kernelMatrices <- kernel_matrices
   object@sigmaValues <- sigmaValues
-  object@distanceScaleFactor <- scaling_factor
+  # Only a normalizing run has a factor to record. Writing the `scaling_factor
+  # <- 1` of a non-normalizing run would erase a factor computeDistance() had
+  # already pinned, and .recoverDistanceScaleFactor() reads that slot to map
+  # analysis coordinates back to raw ones for the permutation null. Matches the
+  # three guarded sites in 12b_sparse_kernel.R.
+  if (normalizeDistance) object@distanceScaleFactor <- scaling_factor
   object@distances <- list()
   object
 }
@@ -571,7 +579,7 @@ setMethod(
       rowNormalizeKernel = FALSE, colNormalizeKernel = FALSE,
       distType = c("Euclidean2D", "Euclidean3D"),
       xDistScale = 1, yDistScale = 1, zDistScale = 1,
-      normalizeDistance = FALSE, normalizeMethod = "spacing", normalizeTarget = 0.01,
+      normalizeDistance = FALSE, normalizeMethod = "global", normalizeTarget = 0.01,
       truncateLowDist = TRUE, overwrite = TRUE,
       verbose = TRUE) {
     .computeSparseKernelFloat32Core(
@@ -595,7 +603,7 @@ setMethod(
       rowNormalizeKernel = FALSE, colNormalizeKernel = FALSE,
       distType = c("Euclidean2D", "Euclidean3D"),
       xDistScale = 1, yDistScale = 1, zDistScale = 1,
-      normalizeDistance = FALSE, normalizeMethod = "spacing", normalizeTarget = 0.01,
+      normalizeDistance = FALSE, normalizeMethod = "global", normalizeTarget = 0.01,
       truncateLowDist = TRUE, overwrite = TRUE,
       verbose = TRUE) {
     .computeSparseKernelFloat32Core(

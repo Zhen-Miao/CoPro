@@ -490,7 +490,7 @@ kernel_from_distance <- function(
 #'  the same coordinates as the distances rather than on this function's own
 #'  defaults. When nothing has been recorded, the fallbacks are `xDistScale` /
 #'  `yDistScale` / `zDistScale` `= 1`, `normalizeDistance = FALSE`,
-#'  `normalizeMethod = "spacing"`, `normalizeTarget = 0.01`,
+#'  `normalizeMethod = "global"`, `normalizeTarget = 0.01`,
 #'  `truncateLowDist = TRUE`, and a `distType` of `"Euclidean3D"` when the
 #'  coordinates contain a `z` column, otherwise `"Euclidean2D"`. Passing a value
 #'  that contradicts the recorded geometry is an error; inspect the record with

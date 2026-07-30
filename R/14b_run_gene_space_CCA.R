@@ -172,7 +172,7 @@
     distType = "Euclidean2D",
     xDistScale = 1, yDistScale = 1, zDistScale = 1,
     normalizeDistance = FALSE,
-    normalizeMethod = "spacing",
+    normalizeMethod = "global",
     normalizeTarget = 0.01,
     normalizationScope = "global",  # or "per_slide"
     truncateLowDist = TRUE,
@@ -224,10 +224,7 @@
   if (any(c(d$xDistScale, d$yDistScale, d$zDistScale) <= 0)) {
     stop("Distance scales must be positive.")
   }
-  if (!is.numeric(d$normalizeTarget) || length(d$normalizeTarget) != 1 ||
-      !is.finite(d$normalizeTarget) || d$normalizeTarget <= 0) {
-    stop("normalizeTarget must be a positive finite scalar.")
-  }
+  .checkNormalizeTarget(d$normalizeTarget)
   if (k$rowNormalizeKernel && k$colNormalizeKernel) {
     stop("Cannot do both row-wise and column-wise normalization.")
   }
@@ -360,9 +357,23 @@
   per_slide_references <- per_slide_percentiles
   use_spacing <- isTRUE(d$normalizeDistance) &&
     identical(d$normalizeMethod, "spacing")
+  # normalizeMethod = "global" measures the cells of a slide, not its pairs, so
+  # it needs neither the percentiles nor the per-pair spacings. Note that this
+  # "global" is the normalizeMethod; `scope` below is a separate axis, about
+  # whether slides share one factor.
+  use_global <- isTRUE(d$normalizeDistance) &&
+    identical(d$normalizeMethod, "global")
 
   need_percentiles <- isTRUE(d$truncateLowDist) ||
-    (isTRUE(d$normalizeDistance) && !use_spacing)
+    (isTRUE(d$normalizeDistance) && identical(d$normalizeMethod, "percentile"))
+  if (use_global) {
+    for (s in slides) {
+      per_slide_references[[s]] <- .globalSpacingReference(
+        object, d$distType, d$xDistScale, d$yDistScale, d$zDistScale,
+        slideID = s
+      )
+    }
+  }
   if (need_percentiles || use_spacing) {
     if (verbose && scope == "global") {
       message("  Streaming phase 1: per-pair percentiles (global scope)...")
@@ -398,20 +409,22 @@
         }
       }
       per_slide_percentiles[[s]] <- pcts
-      per_slide_references[[s]] <- if (use_spacing) refs else pcts
+      if (!use_global) {
+        per_slide_references[[s]] <- if (use_spacing) refs else pcts
+      }
     }
+  }
 
-    if (isTRUE(d$normalizeDistance) && scope == "global") {
-      reference <- .combineDistanceReference(
-        unlist(per_slide_references), d$normalizeMethod
-      )
-      if (!is.finite(reference)) {
-        stop("Streaming: no valid distance reference across slides.")
-      }
-      global_scaling <- d$normalizeTarget / reference
-      if (verbose) {
-        message(sprintf("  Streaming GLOBAL scaling factor = %g", global_scaling))
-      }
+  if (isTRUE(d$normalizeDistance) && scope == "global") {
+    reference <- .combineDistanceReference(
+      unlist(per_slide_references), d$normalizeMethod
+    )
+    if (!is.finite(reference)) {
+      stop("Streaming: no valid distance reference across slides.")
+    }
+    global_scaling <- d$normalizeTarget / reference
+    if (verbose) {
+      message(sprintf("  Streaming GLOBAL scaling factor = %g", global_scaling))
     }
   }
 

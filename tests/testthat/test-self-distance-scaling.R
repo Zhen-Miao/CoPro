@@ -2,8 +2,15 @@
 ## independently of the factor computeDistance() derived from the cross-type
 ## distances. The two differ, so "sigma = s" meant a different physical
 ## bandwidth for a self-kernel than for a cross-kernel. These tests pin the
-## new "inherit" mode, the warning on the historical mode, and the fact that
-## building self-kernels no longer overwrites the recorded factor.
+## "inherit" mode and the fact that building self-kernels never overwrites the
+## recorded factor.
+##
+## `normalizeDistance = TRUE` no longer derives a second unit on top of a
+## recorded one: it adopts the pinned factor, so it cannot disagree with the
+## cross-type scale and there is no disagreement warning to assert. That path is
+## covered in test-distance-scale-consistency.R. What remains distinctive about
+## `"inherit"` is that it refuses to guess when nothing has been pinned, where
+## `TRUE` would derive a unit from the within-type blocks.
 ##
 ## `normalizeDistance` defaults to FALSE as of 1.2.0, and with no scaling there
 ## is no factor to disagree about, so every test that is about the scaling asks
@@ -45,28 +52,48 @@ test_that('normalizeDistance = "inherit" reuses the recorded cross-type factor',
   d_inh <- inherited@distances[[key]]
   finite <- is.finite(d_own) & is.finite(d_inh)
 
-  ## the two modes differ by exactly the ratio of the two scaling factors
-  ratio <- median(d_own[finite] / d_inh[finite])
-  expect_gt(abs(ratio - 1), 0.05)
+  ## TRUE adopts the pinned factor rather than deriving a second unit, so the
+  ## two modes now land on the same scale instead of differing by the ratio of
+  ## two independently derived factors.
+  expect_equal(median(d_own[finite] / d_inh[finite]), 1, tolerance = 1e-8)
 
-  ## and "inherit" puts self-distances on the same scale as the cross-distances
-  raw <- quiet(computeSelfDistance(obj, normalizeDistance = FALSE, verbose = FALSE))
+  ## and "inherit" puts self-distances on the same scale as the cross-distances.
+  ## Getting unscaled blocks out of an object whose record says TRUE needs
+  ## overwrite = TRUE: contradicting the record is otherwise an error, since the
+  ## blocks already in the object are on the recorded unit.
+  raw <- quiet(computeSelfDistance(obj, normalizeDistance = FALSE,
+                                   overwrite = TRUE, verbose = FALSE))
   d_raw <- raw@distances[[key]]
   expect_equal(median(d_inh[finite] / d_raw[finite]), recorded, tolerance = 1e-8)
 })
 
-test_that("the historical mode warns when it disagrees with the recorded factor", {
+test_that('"inherit" still differs from TRUE when nothing has been pinned', {
+  ## The one case where the two modes part company: with no recorded factor
+  ## there is nothing to adopt, so TRUE measures the within-type blocks while
+  ## "inherit" refuses. Uses "spacing", since "global" reads the unit off the
+  ## cells and would agree with the cross-type scale regardless.
   obj <- make_two_type_object()
-  expect_warning(
-    suppressMessages(computeSelfDistance(obj, normalizeDistance = TRUE,
-                                         verbose = FALSE)),
-    "differs from the factor computeDistance"
+  obj@distanceScaleFactor <- numeric(0)
+  obj@distanceGeometry <- list()
+
+  derived <- quiet(computeSelfDistance(obj, normalizeDistance = TRUE,
+                                       normalizeMethod = "spacing",
+                                       verbose = FALSE))
+  expect_true(is.finite(derived@distanceScaleFactor))
+  expect_gt(derived@distanceScaleFactor, 0)
+
+  expect_error(
+    quiet(computeSelfDistance(obj, normalizeDistance = "inherit", verbose = FALSE)),
+    "reuses the scaling factor recorded"
   )
 })
 
 test_that("normalizeDistance = FALSE leaves the distances unscaled", {
   obj <- make_two_type_object()
-  raw <- quiet(computeSelfDistance(obj, normalizeDistance = FALSE, verbose = FALSE))
+  ## overwrite = TRUE: see above -- the fixture's record says TRUE, and only a
+  ## step that discards the blocks that record describes may contradict it.
+  raw <- quiet(computeSelfDistance(obj, normalizeDistance = FALSE,
+                                   overwrite = TRUE, verbose = FALSE))
   key <- self_key(raw)
 
   coords <- cbind(obj@locationDataSub$x[obj@cellTypesSub == "TypeA"],

@@ -20,7 +20,7 @@ computeSparseKernelFloat32(
   yDistScale = 1,
   zDistScale = 1,
   normalizeDistance = FALSE,
-  normalizeMethod = "spacing",
+  normalizeMethod = "global",
   normalizeTarget = 0.01,
   truncateLowDist = TRUE,
   overwrite = TRUE,
@@ -41,7 +41,7 @@ computeSparseKernelFloat32(
   yDistScale = 1,
   zDistScale = 1,
   normalizeDistance = FALSE,
-  normalizeMethod = "spacing",
+  normalizeMethod = "global",
   normalizeTarget = 0.01,
   truncateLowDist = TRUE,
   overwrite = TRUE,
@@ -62,7 +62,7 @@ computeSparseKernelFloat32(
   yDistScale = 1,
   zDistScale = 1,
   normalizeDistance = FALSE,
-  normalizeMethod = "spacing",
+  normalizeMethod = "global",
   normalizeTarget = 0.01,
   truncateLowDist = TRUE,
   overwrite = TRUE,
@@ -93,8 +93,10 @@ nonempty row or column to sum to one. They cannot both be \code{TRUE}.}
 \item{normalizeDistance}{Whether to rescale distances to a common unit.}
 
 \item{normalizeMethod}{How the reference distance is estimated when
-\code{normalizeDistance = TRUE}: \code{"spacing"} (median nearest-partner distance,
-combined across blocks by median) or \code{"percentile"} (pre-1.2.0 behavior).}
+\code{normalizeDistance = TRUE}: \code{"global"} (median nearest-neighbor distance
+over all cells, ignoring type labels), \code{"spacing"} (median nearest-partner
+distance per block, combined by median), or \code{"percentile"} (pre-1.2.0
+behavior). See \code{\link[=computeDistance]{computeDistance()}}.}
 
 \item{normalizeTarget}{Target low distance percentile after normalization.}
 

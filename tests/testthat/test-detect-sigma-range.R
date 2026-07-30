@@ -154,7 +154,7 @@ test_that("normalizeDistance now defaults to FALSE and is recorded", {
   out <- computeKernelMatrix(obj, sigmaValues = 40, verbose = FALSE)
   geom <- getDistanceGeometry(out)
   expect_false(geom$normalizeDistance)
-  expect_equal(geom$normalizeMethod, "spacing")
+  expect_equal(geom$normalizeMethod, "global")
 })
 
 test_that("spacing normalization resists a single much denser block", {
@@ -176,7 +176,7 @@ test_that("spacing normalization resists a single much denser block", {
 
 test_that("dense and sparse paths agree under both normalization methods", {
   obj <- .sigma_obj_single(n_per_type = 150, extent = 10)
-  for (method in c("spacing", "percentile")) {
+  for (method in c("global", "spacing", "percentile")) {
     d <- computeDistance(obj, distType = "Euclidean2D",
                          normalizeDistance = TRUE, normalizeMethod = method,
                          verbose = FALSE)
