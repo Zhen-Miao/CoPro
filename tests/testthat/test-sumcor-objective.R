@@ -1,7 +1,9 @@
 # Tests for the PCA-space SUMCOR objective (objective = "sumcor").
 #
 # The claims being pinned here, in order:
-#   1. With one slide, sumcor and sumcov are the same problem.
+#   1. With one slide, sumcor and sumcov are the same problem -- but only when
+#      the per-pair constants coincide (<=2 cell types, or equal cell counts);
+#      outside that runSkrCCA() still routes to sumcov and warns.
 #   2. SUMCOV is the sigma-weighted special case of the SUMCOR family.
 #   3. sumcor is invariant to per-slide score rescaling; sumcov is not.
 #   4. The iteration is an ascent method and never returns worse than its
@@ -10,6 +12,8 @@
 #   6. scalePCs stays a pure reparametrization.
 #   7. Thin slides are dropped under sumcor, reported under sumcov.
 #   8. Argument validation.
+#   9. getCCAObjective() provenance, including for gene-space fits, and
+#      space = "gene" forwarding rather than silently dropping arguments.
 
 # ---------------------------------------------------------------- fixtures ---
 
@@ -64,11 +68,16 @@
 
 # ------------------------------------------------- 1. single-slide identity ---
 
-.single_slide_fixture <- function(nct = 2L, nPCA = 8L, seed = 11L) {
+.single_slide_fixture <- function(nct = 2L, nPCA = 8L, seed = 11L,
+                                  counts = NULL) {
   obj <- create_test_copro_single(
-    n_cells = 210, n_genes = 40, n_cell_types = max(nct, 2L), seed = seed
+    n_cells = if (is.null(counts)) 210 else sum(counts), n_genes = 40,
+    n_cell_types = max(nct, 2L), seed = seed
   )
   cts <- paste0("CellType", LETTERS[seq_len(nct)])
+  # Deliberately unbalanced cell counts: that is what makes the per-pair
+  # constants differ and the one-slide reduction inexact.
+  if (!is.null(counts)) obj@cellTypes <- rep(cts, times = counts)
   obj <- subsetData(obj, cellTypesOfInterest = cts)
   obj <- computePCA(obj, nPCA = nPCA)
   obj <- computeDistance(obj, distType = "Euclidean2D",
@@ -77,13 +86,122 @@
                       normalizeDistance = TRUE)
 }
 
+# A one-slide operator set built directly, so the mathematics can be tested
+# without a CoPro object in the way. `G_i = (n_i - 1) I` is exactly what
+# whitened PCs give, which is the premise the reduction argument rests on.
+.synthetic_one_slide_ops <- function(counts, nPC = 3L, seed = 5L) {
+  set.seed(seed)
+  cts <- paste0("CellType", LETTERS[seq_along(counts)])
+  counts <- setNames(as.numeric(counts), cts)
+  s <- "Slide1"
+
+  G <- setNames(lapply(cts, function(ct) diag(counts[[ct]] - 1, nPC)), cts)
+  Y <- setNames(lapply(cts, function(a) {
+    setNames(lapply(cts, function(b) matrix(0, nPC, nPC)), cts)
+  }), cts)
+  for (i in seq_along(cts)) {
+    for (j in seq_along(cts)) {
+      if (i < j) {
+        M <- matrix(rnorm(nPC * nPC), nPC, nPC)
+        Y[[cts[i]]][[cts[j]]] <- M
+        Y[[cts[j]]][[cts[i]]] <- t(M)
+      }
+    }
+  }
+  list(Y = setNames(list(Y), s), G = setNames(list(G), s),
+       n = setNames(list(counts), s), slides = s, cell_types = cts)
+}
+
+test_that("the one-slide reduction to sumcov is exact only when the per-pair constants coincide", {
+  # The non-circular counterpart to the routing test below. sigma is a norm, so
+  # on ||w_i|| = 1 with whitened PCs the denominators are sqrt(n_i - 1), not 1,
+  # and the objective is SUMCOV reweighted by m_ij / sqrt((n_i-1)(n_j-1)). That
+  # per-pair constant leaves the argmax alone only when every pair gets the same
+  # one: at most one pair, or equal cell counts.
+  for (sw in c("equal", "size")) {
+    for (case in list(list(k = c(70, 70, 70), exact = TRUE),
+                      list(k = c(4000, 60, 40), exact = FALSE),
+                      list(k = c(150, 60), exact = TRUE))) {
+      ops <- .synthetic_one_slide_ops(case$k)
+      lbl <- sprintf("slideWeight=%s counts=%s", sw,
+                     paste(case$k, collapse = "/"))
+      expect_equal(CoPro:::.sumcorReducesToSumcov(ops, sw), case$exact,
+                   info = lbl)
+
+      # Check the prediction it encodes: warm-start from the SUMCOV solution and
+      # run the SUMCOR iteration. Exact => there is nothing left to gain.
+      cts <- ops$cell_types
+      warm <- CoPro:::.sumcorWarmStart(ops, cts, NULL, nCC = 1L)
+      w0 <- setNames(lapply(cts, function(ct) warm[[ct]][, 1L, drop = FALSE]),
+                     cts)
+      f0 <- CoPro:::.sumcorObjective(w0, ops, sw)
+      fit <- CoPro:::.sumcorIterate(w_init = w0, ops = ops, slideWeight = sw,
+                                    max_iter = 300, tol = 1e-10,
+                                    verbose = FALSE)
+      f1 <- CoPro:::.sumcorObjective(fit$w_list, ops, sw)
+
+      if (case$exact) {
+        expect_equal(f1, f0, tolerance = 1e-8,
+                     info = paste("exact case should not improve:", lbl))
+      } else {
+        # The iteration is an ascent method either way; the point of the inexact
+        # case is that the SUMCOV solution is not already optimal for SUMCOR.
+        expect_gte(f1, f0 - 1e-10)
+      }
+    }
+  }
+
+  # "covariance" is SUMCOV by construction, so it is always exact.
+  expect_true(CoPro:::.sumcorReducesToSumcov(
+    .synthetic_one_slide_ops(c(4000, 60, 40)), "covariance"
+  ))
+})
+
+test_that("runSkrCCA warns when it routes an inexact one-slide sumcor to sumcov", {
+  # Three cell types at unequal counts is the case where the criteria genuinely
+  # differ; the user asked for sumcor and gets sumcov, so it must not be silent.
+  obj <- .single_slide_fixture(nct = 3L, counts = c(150, 60, 40))
+  expect_warning(
+    suppressMessages(runSkrCCA(obj, nCC = 1, objective = "sumcor",
+                               slideWeight = "equal")),
+    "do not share a maximizer"
+  )
+
+  # Equal counts, and two cell types, are exact -- inform, do not warn.
+  for (fx in list(.single_slide_fixture(nct = 3L, counts = c(70, 70, 70)),
+                  .single_slide_fixture(nct = 2L))) {
+    expect_no_warning(
+      suppressMessages(runSkrCCA(fx, nCC = 1, objective = "sumcor",
+                                 slideWeight = "equal"))
+    )
+  }
+
+  # Real cell counts are essentially never exactly equal, so the default
+  # slideWeight = "size" must not warn on every such call -- there the
+  # cell-count factor nearly cancels the per-pair constant and the mismatch is
+  # 1 + O(1/n). It still says so, as a message.
+  uneven <- .single_slide_fixture(nct = 3L, counts = c(150, 60, 40))
+  expect_no_warning(
+    suppressMessages(runSkrCCA(uneven, nCC = 1, objective = "sumcor"))
+  )
+  expect_message(
+    runSkrCCA(uneven, nCC = 1, objective = "sumcor"),
+    "1 \\+ O\\(1/n\\)"
+  )
+})
+
 test_that("with one slide sumcor and sumcov give the same weights", {
-  # The norm constraint IS the unit-variance constraint for whitened PCs, and
-  # SUMCOR is scale invariant, so it attains its maximum on that constraint set
-  # where every denominator is 1 and it reduces to SUMCOV. Holds for >2 cell
-  # types and under both metrics. Checked on a genuine single-slide CoPro (the
-  # is_multi = FALSE branch) and on a one-slide CoProMulti (is_multi = TRUE with
-  # S = 1), which reach the short circuit by different routes.
+  # NOTE: this test pins the *routing*, not the mathematics. A single slide
+  # forces use_sumcor <- FALSE in .validateSkrCCAInputs(), so both calls below
+  # run the identical code path and the comparison cannot fail. It is kept as a
+  # guard against the routing being removed by accident. The mathematics -- when
+  # that routing is actually exact -- is tested separately in
+  # "the one-slide reduction to sumcov is exact only when the per-pair constants
+  # coincide" above, which is the non-circular version.
+  #
+  # Checked on a genuine single-slide CoPro (the is_multi = FALSE branch) and on
+  # a one-slide CoProMulti (is_multi = TRUE with S = 1), which reach the short
+  # circuit by different routes.
   for (kind in c("single", "multi")) {
     for (nct in c(1L, 2L, 3L)) {
       for (scale_pcs in c(TRUE, FALSE)) {
@@ -488,4 +606,95 @@ test_that("permutation tests refuse sumcor weights", {
     runSkrCCA(obj, nCC = 1, objective = "sumcov")
   ))
   expect_null(CoPro:::.rejectSumcorForPermutation(fit_cov))
+})
+
+# ------------------------------- 9. provenance and gene-space arg forwarding ---
+
+test_that("getCCAObjective() reports the criterion a gene-space fit used", {
+  # runGeneSpaceCCA() defaults to "sumcor". Before it recorded its own
+  # provenance, the reader's no-record fallback answered "sumcov" -- the
+  # opposite of the truth -- for exactly the call NEWS tells users to inspect.
+  obj <- .sumcor_fixture(nct = 2L, n_slides = 2L)
+  fit <- suppressMessages(suppressWarnings(
+    runGeneSpaceCCA(obj, sigma = 0.1, nCC = 1, max_iter = 100, tol = 1e-4,
+                    verbose = FALSE)
+  ))
+  rec <- getCCAObjective(fit)
+  expect_equal(rec$space, "gene")
+  expect_equal(rec$objective, "sumcor")
+  expect_equal(rec$sweep, "gauss-seidel")
+
+  fit_cov <- suppressMessages(suppressWarnings(
+    runGeneSpaceCCA(obj, sigma = 0.1, nCC = 1, max_iter = 100, tol = 1e-4,
+                    verbose = FALSE, objective = "sumcov")
+  ))
+  expect_equal(getCCAObjective(fit_cov)$objective, "sumcov")
+})
+
+test_that("a gene-space fit overwrites an earlier PCA-space provenance record", {
+  # Weights are merged into @skrCCAOut rather than replacing it, so without an
+  # explicit write the earlier PCA record would survive and describe a fit that
+  # is not the most recent one.
+  obj <- .sumcor_fixture(nct = 2L, n_slides = 2L)
+  pca_fit <- suppressMessages(suppressWarnings(
+    runSkrCCA(obj, nCC = 1, objective = "sumcor")
+  ))
+  expect_equal(getCCAObjective(pca_fit)$space, "pca")
+
+  both <- suppressMessages(suppressWarnings(
+    runGeneSpaceCCA(pca_fit, sigma = 0.1, nCC = 1, max_iter = 100, tol = 1e-4,
+                    verbose = FALSE)
+  ))
+  expect_equal(getCCAObjective(both)$space, "gene")
+})
+
+test_that("space = 'gene' rejects PC-space-only arguments instead of dropping them", {
+  # These are named formals of runSkrCCA(), so they never reach `...`; silently
+  # discarding one makes a dropped transfer look like a transfer that ran.
+  obj <- .sumcor_fixture(nct = 2L, n_slides = 2L)
+  for (arg in list(list(transferred_weight_1 = list(a = 1)),
+                   list(scalePCs = FALSE),
+                   list(step_size = 0.5),
+                   list(n_cores = 2),
+                   list(slideWeight = "equal"))) {
+    expect_error(
+      do.call(runSkrCCA, c(list(obj, space = "gene", nCC = 1,
+                                sigmaChoice = 0.1), arg)),
+      "does not use",
+      info = names(arg)
+    )
+  }
+})
+
+test_that("space = 'gene' forwards tol, maxIter and minCellsPerSlide", {
+  # Forwarded only when supplied: the two entry points have different defaults
+  # (tol 1e-5 vs 1e-6, maxIter 200 vs 3000), so forwarding a runSkrCCA default
+  # would silently change the gene-space result.
+  # Gene space initializes from rnorm(), so every comparison here fixes the seed
+  # first -- otherwise the axis signs alone would differ between runs.
+  obj <- .sumcor_fixture(nct = 2L, n_slides = 2L)
+  key <- "gscca_sigma_0.1"
+  run <- function(...) {
+    set.seed(404)
+    suppressMessages(suppressWarnings(runSkrCCA(obj, space = "gene", nCC = 1,
+                                                sigmaChoice = 0.1, ...)))
+  }
+  loose <- run(maxIter = 300, tol = 1e-1)
+  tight <- run(maxIter = 300, tol = 1e-12)
+  expect_false(identical(loose@skrCCAOut[[key]], tight@skrCCAOut[[key]]))
+
+  # Not supplying an argument must reproduce runGeneSpaceCCA()'s own defaults
+  # exactly, rather than quietly substituting runSkrCCA()'s -- tol 1e-5 vs 1e-6,
+  # maxIter 200 vs 3000, and (the one that changes the criterion, not just the
+  # precision) objective "sumcov" vs "sumcor".
+  via_skr <- run()
+  set.seed(404)
+  direct <- suppressMessages(suppressWarnings(
+    runGeneSpaceCCA(obj, sigma = 0.1, nCC = 1, verbose = FALSE)
+  ))
+  expect_equal(via_skr@skrCCAOut[[key]], direct@skrCCAOut[[key]])
+  expect_equal(getCCAObjective(via_skr)$objective, "sumcor")
+
+  # An explicit objective does travel.
+  expect_equal(getCCAObjective(run(objective = "sumcov"))$objective, "sumcov")
 })

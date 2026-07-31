@@ -9,25 +9,39 @@ The SUMCOV objective that \verb{optimize_bilinear*()} maximizes,
 to \eqn{\|w_i\| = 1}, factors exactly as a \emph{slide-weighted} SUMCOR:
 }
 \details{
-\deqn{f_{cov}(w) = \sum_{i<j} \sum_s \sqrt{n_i^{(s)} n_j^{(s)}}\,
+\deqn{f_{cov}(w) = \sum_{i<j} \sum_s
   \sigma_i^{(s)} \sigma_j^{(s)}\, \rho_{ij}^{(s)}}
 
 with \eqn{\rho_{ij}^{(s)} = u_i' K u_j / (\|u_i\| \|u_j\|)} and
-\eqn{u_i^{(s)} = X_i^{(s)} w_i}. The norm constraint pins the \emph{pooled}
-variance, so per-slide variances stay free and a slide with inflated variance
-along the canonical direction gets a proportionally larger vote. That is the
-batch-domination mode SUMCOR removes.
+\eqn{u_i^{(s)} = X_i^{(s)} w_i}. There is no \eqn{\sqrt{n_i n_j}} factor
+here: \eqn{\sigma} is the norm \eqn{\|X_i^{(s)} w_i\|}, not a
+root-mean-square, so \eqn{\sigma_i \sigma_j \rho_{ij} = w_i' Y_{ij} w_j} is
+the SUMCOV term already (see \code{.sumcorSigma()} and \code{.sumcorSlideWeight()}).
+The norm constraint pins the \emph{pooled} variance, so per-slide variances stay
+free and a slide with inflated variance along the canonical direction gets a
+proportionally larger vote. That is the batch-domination mode SUMCOR removes.
 
-Two consequences shape this file. First, the two "slide weight" factors are
-separable: keeping \eqn{\sqrt{n_i n_j}} preserves "larger slides count for
-more" while dropping \eqn{\sigma_i \sigma_j} removes the batch-scale
-sensitivity, which is what \code{slideWeight = "size"} does. Second, for a single
-slide the two objectives are the \emph{same problem}: with whitened PCs
-\eqn{X_i'X_i = (n_i-1) I}, so \eqn{\|w_i\| = 1} is \eqn{Var(X_i w_i) = 1},
-and SUMCOR -- being scale invariant in each \eqn{w_i} -- attains its maximum
-on that constraint set, where every denominator is 1 and it reduces to
-SUMCOV. \code{optimize_sumcor_pca()} therefore short-circuits to the exact
-SUMCOV solvers when there is one slide, rather than iterating to the same
-answer.
+Two consequences shape this file. First, the slide weight and the scale
+factor are separable: \code{slideWeight = "size"} reintroduces
+\eqn{\sqrt{n_i n_j}} so larger slides count for more, while dropping
+\eqn{\sigma_i \sigma_j} removes the batch-scale sensitivity. Second, for a
+single slide the two objectives often -- but not always -- pose the same
+problem. With whitened PCs \eqn{X_i'X_i = (n_i-1) I}, so on
+\eqn{\|w_i\| = 1} the denominators are \eqn{\sigma_i = \sqrt{n_i - 1}} and
+
+\deqn{f_{equal}(w) = \sum_{i<j} \frac{w_i' Y_{ij} w_j}{
+  \sqrt{(n_i-1)(n_j-1)}}}
+
+differs from \eqn{f_{cov}} by a \emph{per-pair} constant. A constant that varies
+by pair leaves the argmax alone only when there is a single pair, or when
+every \eqn{n_i} is equal. So the reduction to SUMCOV is exact for one or two
+cell types at any cell counts, and for three or more only when the counts
+are equal; \code{.sumcorReducesToSumcov()} is that test. Outside it the criteria
+have genuinely different maximizers, and \code{optimize_sumcor_pca()} runs the
+iteration rather than short-circuiting. (\code{runSkrCCA()} takes the more
+conservative route: it still uses the SUMCOV solvers there, and says so --
+see \code{.reportSingleSlideSumcor()}.) Under the default \code{slideWeight = "size"}
+the mismatch is \eqn{1 + O(1/n)} and immaterial in practice; it is
+\code{"equal"} -- strict Kettenring SUMCOR -- where it bites.
 }
 \keyword{internal}

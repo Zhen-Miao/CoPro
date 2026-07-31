@@ -4,26 +4,40 @@
 #' \eqn{\sum_{i<j} w_i' (\sum_s X_i^{(s)'} K_{ij}^{(s)} X_j^{(s)}) w_j} subject
 #' to \eqn{\|w_i\| = 1}, factors exactly as a *slide-weighted* SUMCOR:
 #'
-#' \deqn{f_{cov}(w) = \sum_{i<j} \sum_s \sqrt{n_i^{(s)} n_j^{(s)}}\,
+#' \deqn{f_{cov}(w) = \sum_{i<j} \sum_s
 #'   \sigma_i^{(s)} \sigma_j^{(s)}\, \rho_{ij}^{(s)}}
 #'
 #' with \eqn{\rho_{ij}^{(s)} = u_i' K u_j / (\|u_i\| \|u_j\|)} and
-#' \eqn{u_i^{(s)} = X_i^{(s)} w_i}. The norm constraint pins the *pooled*
-#' variance, so per-slide variances stay free and a slide with inflated variance
-#' along the canonical direction gets a proportionally larger vote. That is the
-#' batch-domination mode SUMCOR removes.
+#' \eqn{u_i^{(s)} = X_i^{(s)} w_i}. There is no \eqn{\sqrt{n_i n_j}} factor
+#' here: \eqn{\sigma} is the norm \eqn{\|X_i^{(s)} w_i\|}, not a
+#' root-mean-square, so \eqn{\sigma_i \sigma_j \rho_{ij} = w_i' Y_{ij} w_j} is
+#' the SUMCOV term already (see `.sumcorSigma()` and `.sumcorSlideWeight()`).
+#' The norm constraint pins the *pooled* variance, so per-slide variances stay
+#' free and a slide with inflated variance along the canonical direction gets a
+#' proportionally larger vote. That is the batch-domination mode SUMCOR removes.
 #'
-#' Two consequences shape this file. First, the two "slide weight" factors are
-#' separable: keeping \eqn{\sqrt{n_i n_j}} preserves "larger slides count for
-#' more" while dropping \eqn{\sigma_i \sigma_j} removes the batch-scale
-#' sensitivity, which is what `slideWeight = "size"` does. Second, for a single
-#' slide the two objectives are the *same problem*: with whitened PCs
-#' \eqn{X_i'X_i = (n_i-1) I}, so \eqn{\|w_i\| = 1} is \eqn{Var(X_i w_i) = 1},
-#' and SUMCOR -- being scale invariant in each \eqn{w_i} -- attains its maximum
-#' on that constraint set, where every denominator is 1 and it reduces to
-#' SUMCOV. `optimize_sumcor_pca()` therefore short-circuits to the exact
-#' SUMCOV solvers when there is one slide, rather than iterating to the same
-#' answer.
+#' Two consequences shape this file. First, the slide weight and the scale
+#' factor are separable: `slideWeight = "size"` reintroduces
+#' \eqn{\sqrt{n_i n_j}} so larger slides count for more, while dropping
+#' \eqn{\sigma_i \sigma_j} removes the batch-scale sensitivity. Second, for a
+#' single slide the two objectives often -- but not always -- pose the same
+#' problem. With whitened PCs \eqn{X_i'X_i = (n_i-1) I}, so on
+#' \eqn{\|w_i\| = 1} the denominators are \eqn{\sigma_i = \sqrt{n_i - 1}} and
+#'
+#' \deqn{f_{equal}(w) = \sum_{i<j} \frac{w_i' Y_{ij} w_j}{
+#'   \sqrt{(n_i-1)(n_j-1)}}}
+#'
+#' differs from \eqn{f_{cov}} by a *per-pair* constant. A constant that varies
+#' by pair leaves the argmax alone only when there is a single pair, or when
+#' every \eqn{n_i} is equal. So the reduction to SUMCOV is exact for one or two
+#' cell types at any cell counts, and for three or more only when the counts
+#' are equal; `.sumcorReducesToSumcov()` is that test. Outside it the criteria
+#' have genuinely different maximizers, and `optimize_sumcor_pca()` runs the
+#' iteration rather than short-circuiting. (`runSkrCCA()` takes the more
+#' conservative route: it still uses the SUMCOV solvers there, and says so --
+#' see `.reportSingleSlideSumcor()`.) Under the default `slideWeight = "size"`
+#' the mismatch is \eqn{1 + O(1/n)} and immaterial in practice; it is
+#' `"equal"` -- strict Kettenring SUMCOR -- where it bites.
 #'
 #' @name sumcor_optimization
 #' @keywords internal
@@ -178,6 +192,34 @@ NULL
 #' @noRd
 .sumcorWeightIsConstant <- function(slideWeight) {
   !identical(slideWeight, "covariance")
+}
+
+#' Does a one-slide SUMCOR problem have the same maximizer as SUMCOV?
+#'
+#' With whitened PCs \eqn{G_i = (n_i - 1) I}, so on \eqn{\|w_i\| = 1} the
+#' denominator is \eqn{\sigma_i = \sqrt{n_i - 1}} -- not 1, because
+#' `.sumcorSigma()` is a norm rather than a root-mean-square. The objective is
+#' then SUMCOV reweighted by the *per-pair* constant
+#' \eqn{m_{ij} / \sqrt{(n_i-1)(n_j-1)}}, and a per-pair constant leaves the
+#' argmax alone only when it is the same for every pair. That holds when there
+#' is at most one pair (one or two cell types), or when all cell counts are
+#' equal so the constants coincide. `"covariance"` cancels the denominator
+#' outright and is SUMCOV by construction.
+#'
+#' Outside those cases the two criteria genuinely differ, so the caller runs
+#' the iteration instead of short-circuiting. The gap is
+#' \eqn{1 + O(1/n)} under `"size"` and can be large under `"equal"`.
+#' @param ops Structure from `.computeSlideOperators()`, one slide.
+#' @param slideWeight One of `"equal"`, `"size"`, `"covariance"`.
+#' @return `TRUE` when the SUMCOV solvers give the SUMCOR maximizer exactly.
+#' @noRd
+.sumcorReducesToSumcov <- function(ops, slideWeight) {
+  if (identical(slideWeight, "covariance")) return(TRUE)
+  if (length(ops$cell_types) <= 2L) return(TRUE)
+  counts <- vapply(ops$cell_types, function(ct) {
+    as.numeric(ops$n[[ops$slides[[1L]]]][[ct]])
+  }, numeric(1))
+  isTRUE(all.equal(min(counts), max(counts)))
 }
 
 #' The SUMCOR objective value
@@ -521,9 +563,12 @@ optimize_sumcor_pca <- function(X_list_all, flat_kernels, sigma, slides,
   ops_w <- .whitenSlideOperators(ops, sdev2_list)
   warm <- .sumcorWarmStart(ops_w, cell_types, NULL, nCC = 1L)
 
-  # One slide: SUMCOR and SUMCOV are the same optimization problem, and the
-  # SUMCOV route solves it exactly. Iterating would only add tolerance error.
-  if (length(ops$slides) == 1L) {
+  # One slide, and the per-pair constants coincide: SUMCOR and SUMCOV are then
+  # the same optimization problem and the SUMCOV route solves it exactly, so
+  # iterating would only add tolerance error. When they do not coincide (three
+  # or more cell types with unequal counts) the criteria differ and the
+  # iteration below is run instead -- see `.sumcorReducesToSumcov()`.
+  if (length(ops$slides) == 1L && .sumcorReducesToSumcov(ops, slideWeight)) {
     obj_val <- .sumcorObjective(
       lapply(warm, function(m) m[, 1L, drop = FALSE]), ops_w, slideWeight
     )
@@ -586,9 +631,9 @@ optimize_sumcor_pca_n <- function(X_list_all, flat_kernels, sigma, slides,
 
   ops_w <- .whitenSlideOperators(ops, sdev2_list)
 
-  # One slide: all axes come from the exact SUMCOV solvers, for the same reason
-  # the first component does.
-  if (length(ops$slides) == 1L) {
+  # One slide with coinciding per-pair constants: all axes come from the exact
+  # SUMCOV solvers, for the same reason the first component does.
+  if (length(ops$slides) == 1L && .sumcorReducesToSumcov(ops, slideWeight)) {
     result <- .unwhitenWeights(
       .sumcorWarmStart(ops_w, cell_types, NULL, nCC = nCC), sdev2_list
     )

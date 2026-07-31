@@ -84,7 +84,17 @@ convergence, which can help with many cells or many CCs.}
 PC-space optimizer described here. \code{"gene"} forwards to
 \code{\link[=runGeneSpaceCCA]{runGeneSpaceCCA()}}, which needs a single \code{sigma} -- supply it through
 \code{sigmaChoice} -- and accepts its own arguments (\code{clip}, \code{min_prevalence},
-\code{streaming}, ...) through \code{...}.}
+\code{streaming}, ...) through \code{...}.
+
+Under \code{space = "gene"}, \code{objective}, \code{tol}, \code{maxIter} and
+\code{minCellsPerSlide} are forwarded \strong{only when you supply them}, because the
+two entry points have different defaults (\code{objective} \code{"sumcov"} vs
+\code{"sumcor"}, \code{tol} \code{1e-5} vs \code{1e-6}, \code{maxIter} \code{200} vs \code{3000},
+\code{minCellsPerSlide} \code{10} vs \code{20}). Forwarding a \code{runSkrCCA()} default would
+silently make this call differ from the \code{\link[=runGeneSpaceCCA]{runGeneSpaceCCA()}} call it claims
+to be, so an unset argument keeps gene space's own default. Arguments with
+no gene-space meaning (\code{scalePCs}, \code{transferred_weight_1}, \code{n_cores},
+\code{step_size}, \code{slideWeight}) are an error rather than silently dropped.}
 
 \item{objective}{Which canonical criterion to maximize.
 
@@ -95,20 +105,28 @@ PC-space optimizer described here. \code{"gene"} forwards to
 \code{"sumcor"} maximizes the per-slide self-normalized sum, dividing each
 slide's cross term by that slide's own score scales.
 
-\strong{With one slide these are the same problem}, and \code{"sumcor"} is routed to
-the exact \code{"sumcov"} solvers: whitened PCs give \eqn{X_i'X_i = (n_i-1) I},
-so \eqn{\|w_i\| = 1} is the unit-variance constraint, and the
-scale-invariant SUMCOR attains its maximum there, where every denominator
-is 1. Single-slide results -- including >2 cell types -- are therefore
-already Kettenring SUMCOR and are unaffected by this argument.
+\strong{With one slide these are usually the same problem}, and \code{"sumcor"} is
+routed to the exact \code{"sumcov"} solvers. Whitened PCs give
+\eqn{X_i'X_i = (n_i-1) I}, so on \eqn{\|w_i\| = 1} the denominators are
+\eqn{\sigma_i = \sqrt{n_i - 1}} -- note \eqn{\sigma} is a norm, not a
+root-mean-square -- and the objective is SUMCOV reweighted by the
+\emph{per-pair} constant \eqn{m_{ij} / \sqrt{(n_i-1)(n_j-1)}}. A per-pair
+constant leaves the maximizer alone only when every pair gets the same
+one, so the reduction is exact for \strong{one or two cell types at any cell
+counts}, and for \strong{three or more only when the counts are equal}.
+Outside that, one-slide \code{"sumcor"} still uses the \code{"sumcov"} solvers but
+warns: the mismatch is \eqn{1 + O(1/n)} under the default
+\code{slideWeight = "size"} and can be material under \code{"equal"}. Call
+\code{\link[=optimize_sumcor_pca]{optimize_sumcor_pca()}} directly to optimize the criterion itself.
 
-They differ only across slides. SUMCOV factors exactly as
-\eqn{\sum_s \sqrt{n_i^{(s)} n_j^{(s)}} \sigma_i^{(s)} \sigma_j^{(s)}
-  \rho_{ij}^{(s)}}, so it already sums per-slide correlations -- weighted by
-cell count \emph{and} by per-slide score scale. The scale factor is what lets a
-slide with inflated variance along the canonical direction dominate;
-\code{"sumcor"} removes it and keeps the cell-count factor under
-\code{slideWeight = "size"}.}
+Across slides they always differ. SUMCOV factors exactly as
+\eqn{\sum_s \sigma_i^{(s)} \sigma_j^{(s)} \rho_{ij}^{(s)}} -- with no
+\eqn{\sqrt{n_i n_j}} factor, since \eqn{\sigma_i \sigma_j \rho_{ij}} is
+the SUMCOV term already -- so it already sums per-slide correlations,
+weighted by per-slide score scale. That scale factor is what lets a slide
+with inflated variance along the canonical direction dominate; \code{"sumcor"}
+removes it, and \code{slideWeight = "size"} reintroduces the cell-count factor
+\eqn{\sqrt{n_i n_j}} on its own.}
 
 \item{slideWeight}{Per-slide weighting, only valid with
 \code{objective = "sumcor"} (an error otherwise, since under \code{"sumcov"} the

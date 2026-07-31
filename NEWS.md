@@ -8,26 +8,36 @@
   **every existing result is unchanged** unless you opt in.
 
   The reason this is a choice rather than a fix is that the two criteria are the
-  same problem more often than it looks. For a single slide they are
-  *identical*. With whitened PCs `X_i'X_i = (n_i - 1) I`, so the constraint
-  `||w_i|| = 1` **is** the unit-variance constraint; SUMCOR is scale invariant in
-  each `w_i`, so it attains its maximum on that constraint set, where every
-  denominator is 1 and it reduces to SUMCOV. Single-slide skrCCA — including
-  with more than two cell types — has therefore always been Kettenring SUMCOR,
-  and `objective = "sumcor"` is routed to the exact SUMCOV solvers there rather
-  than iterating to the same answer.
+  same problem more often than it looks. For a single slide they usually
+  coincide. Whitened PCs give `X_i'X_i = (n_i - 1) I`, so on `||w_i|| = 1` the
+  denominators are `sigma_i = sqrt(n_i - 1)` — `sigma` here is the norm
+  `||X_i w_i||`, not a root-mean-square — and the objective is SUMCOV reweighted
+  by the *per-pair* constant `m_ij / sqrt((n_i - 1)(n_j - 1))`. A per-pair
+  constant leaves the maximizer alone only when every pair gets the same one, so
+  the reduction to SUMCOV is exact for **one or two cell types at any cell
+  counts**, and for **three or more only when the cell counts are equal**.
+  `objective = "sumcor"` is routed to the exact SUMCOV solvers there rather than
+  iterating to the same answer.
 
-  They differ only across slides, and there SUMCOV factors exactly as
+  With three or more cell types at unequal counts the two criteria genuinely
+  differ on one slide. `runSkrCCA()` still uses the SUMCOV solvers but now warns;
+  the mismatch is `1 + O(1/n)` under the default `slideWeight = "size"` and can be
+  material under `"equal"`. Call `optimize_sumcor_pca()` directly to optimize the
+  SUMCOR criterion itself.
+
+  Across slides they always differ, and there SUMCOV factors exactly as
 
   ```
-  f_cov(w) = sum_{i<j} sum_s sqrt(n_i^(s) n_j^(s)) * sigma_i^(s) * sigma_j^(s) * rho_ij^(s)
+  f_cov(w) = sum_{i<j} sum_s sigma_i^(s) * sigma_j^(s) * rho_ij^(s)
   ```
 
-  so it already sums per-slide correlations — weighted by cell count *and* by
-  per-slide score scale, because the norm constraint pins only the *pooled*
-  variance. The scale factor is what lets a slide with inflated variance along
-  the canonical direction dominate. `objective = "sumcor"` drops it;
-  `slideWeight = "size"` (default) keeps the cell-count factor, and
+  with no `sqrt(n_i n_j)` factor: because `sigma` is a norm,
+  `sigma_i sigma_j rho_ij = w_i' Y_ij w_j` is the SUMCOV term already, and `rho`
+  is cell-count invariant on its own. So SUMCOV already sums per-slide
+  correlations weighted by per-slide score scale, and that scale factor is what
+  lets a slide with inflated variance along the canonical direction dominate.
+  `objective = "sumcor"` drops it; `slideWeight = "size"` (default)
+  *reintroduces* the cell-count factor `sqrt(n_i n_j)` on its own, and
   `slideWeight = "equal"` gives strict Kettenring SUMCOR, matching
   `runGeneSpaceCCA()`.
 
@@ -95,6 +105,24 @@
   neither dominates the other.
 
 ## Fixes
+
+* **`getCCAObjective()` now reports the criterion a gene-space fit actually
+  used.** `runGeneSpaceCCA()` did not record its own provenance, so the reader's
+  no-record fallback answered `"sumcov"` — the opposite of gene space's
+  `"sumcor"` default — for exactly the call this release tells you to inspect.
+  Because weights are merged into `@skrCCAOut` rather than replacing it, an
+  earlier `runSkrCCA()` record could also survive a later gene-space run and
+  describe the wrong fit. Both are fixed, and the record now carries `sweep`.
+
+* **`runSkrCCA(space = "gene", ...)` no longer silently discards arguments.**
+  `objective`, `tol`, `maxIter`, `minCellsPerSlide`, `scalePCs`,
+  `transferred_weight_1`, `n_cores`, `step_size` and `slideWeight` are named
+  formals, so none of them reached `...` and none were forwarded — a passed
+  `transferred_weight_1` looked exactly like a transfer that ran. The four with
+  a gene-space analogue are now forwarded **when supplied** (not when left at a
+  default, since the two entry points differ: `objective` `"sumcov"` vs
+  `"sumcor"`, `tol` `1e-5` vs `1e-6`, `maxIter` `200` vs `3000`,
+  `minCellsPerSlide` `10` vs `20`), and the rest are an error.
 
 * **A one-slide `CoProMulti` with three or more cell types no longer errors.**
   `optimize_bilinear_multi_slides()` delegated such objects to the single-slide

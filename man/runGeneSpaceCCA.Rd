@@ -102,7 +102,14 @@ over that block and rules out convergence to a negative objective. Jacobi
 reads only the previous iterate and can settle on the negative singular
 pair, which is why it needs a post-hoc sign repair -- valid for two cell
 types, not for three or more. Kept so results computed before
-\code{"gauss-seidel"} became the default reproduce exactly. See
+\code{"gauss-seidel"} became the default reproduce exactly.
+
+The guarantee is about the \strong{sign, not solution quality}. Under
+\code{objective = "sumcor"} the frozen-\code{sigma} sweep maximizes a
+surrogate rather than the objective itself, so which local optimum each
+sweep reaches is data-dependent and neither dominates the other.
+Gauss-Seidel is the default because it cannot produce the pathology the
+sign repair was covering for, not because it optimizes better. See
 \code{\link[=optimize_genespace_avg_corr]{optimize_genespace_avg_corr()}}.}
 
 \item{objective}{\code{"sumcor"} (default) normalizes each slide's cross
