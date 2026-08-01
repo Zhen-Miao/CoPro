@@ -176,6 +176,7 @@ Other spatial-pipeline:
 \code{\link{detectSigmaRange}()},
 \code{\link{runGeneSpaceCCA}()},
 \code{\link{runSkrCCA}()},
-\code{\link{runSlideLevelInference}()}
+\code{\link{runSlideLevelInference}()},
+\code{\link{selectSigmaByPermutation}()}
 }
 \concept{spatial-pipeline}

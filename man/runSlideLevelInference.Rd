@@ -72,6 +72,7 @@ Other spatial-pipeline:
 \code{\link{computeSparseKernelFloat32}()},
 \code{\link{detectSigmaRange}()},
 \code{\link{runGeneSpaceCCA}()},
-\code{\link{runSkrCCA}()}
+\code{\link{runSkrCCA}()},
+\code{\link{selectSigmaByPermutation}()}
 }
 \concept{spatial-pipeline}

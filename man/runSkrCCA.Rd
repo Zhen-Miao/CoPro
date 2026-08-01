@@ -230,6 +230,7 @@ Other spatial-pipeline:
 \code{\link{computeSparseKernelFloat32}()},
 \code{\link{detectSigmaRange}()},
 \code{\link{runGeneSpaceCCA}()},
-\code{\link{runSlideLevelInference}()}
+\code{\link{runSlideLevelInference}()},
+\code{\link{selectSigmaByPermutation}()}
 }
 \concept{spatial-pipeline}

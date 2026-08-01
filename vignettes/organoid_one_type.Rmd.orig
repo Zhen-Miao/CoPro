@@ -106,11 +106,10 @@ obj <- computeNormalizedCorrelation(obj, tol = 1e-3)
 obj <- computeGeneAndCellScores(obj)
 ```
 
-## Select optimal sigma
+## Select the bandwidth
 
-CoPro automatically selects the sigma that maximizes the CC1 normalized
-correlation. We visualize the normalized correlation across all sigma
-values and canonical components:
+The normalized correlation varies with sigma, and `obj@sigmaValueChoice`
+records where it is largest:
 
 ```{r plot-ncorr, fig.width=8, fig.height=3.5}
 ncorr <- getNormCorr(obj)
@@ -125,11 +124,79 @@ ggplot(ncorr, aes(x = sigmaValues, y = normalizedCorrelation)) +
   theme_minimal()
 ```
 
-```{r select-sigma}
-# Use the automatically selected sigma
-sigma_opt <- obj@sigmaValueChoice
-cat("Selected sigma:", sigma_opt, "\n")
+That curve is not a safe basis for choosing sigma, because the quantity it
+plots does not have the same meaning at every bandwidth. The normalized
+correlation divides the co-progression statistic by a norm of the kernel, and
+no available denominator holds the *null* level of that ratio constant across
+sigma: the shipped un-whitened norm ignores the cells' own spatial
+autocorrelation and drifts one way, whitened variants need a within-type
+correlation operator that the data do not pin down. Comparing the curve across
+sigma therefore compares numbers with different floors, and its peak is pulled
+toward whichever bandwidth has the highest floor rather than the strongest
+signal.
+
+This bites hardest in exactly the within-type setting of this vignette, where
+the natural whitening operator is the stored self-kernel --- which carries a
+zero diagonal, so it is not a correlation operator and its square root does not
+exist.
+
+`selectSigmaByPermutation()` measures the floor instead of modelling it. At each
+bandwidth it compares the observed statistic to its own permutation null, built
+by rigidly shifting the tissue against itself (a wrap-around shift preserves the
+cells' own spatial structure while destroying the alignment being tested), and
+selects the bandwidth maximizing the studentized statistic
+`z = T / sd_null`. Because one pass of draws evaluates every bandwidth, the same
+draws also give the null distribution of `max z`, so the reported p-value already
+accounts for having scanned the grid.
+
+```{r select-sigma, message=FALSE}
+set.seed(1)
+sel <- selectSigmaByPermutation(obj, nPermu = 199, maxCells = 2000,
+                                verbose = FALSE)
+sel
 ```
+
+```{r plot-sigma-scan, fig.width=6, fig.height=3.5}
+ggplot(sel$perSigma, aes(x = sigma, y = z)) +
+  geom_line() +
+  geom_point() +
+  geom_point(data = subset(sel$perSigma, sigma == sel$sigmaValueChoice),
+             color = "darkred", size = 3) +
+  xlab("Sigma") +
+  ylab(expression(z == T / sd[null])) +
+  ggtitle("Detectability across bandwidths (studentized)") +
+  theme_minimal()
+```
+
+```{r use-sigma}
+sigma_opt <- sel$sigmaValueChoice
+cat("Permutation-selected sigma:", sigma_opt, "\n")
+cat("Largest-normalized-correlation sigma:", obj@sigmaValueChoice, "\n")
+```
+
+Two things in that output are worth reading carefully.
+
+The scan does not cover the whole grid. Candidates below the median
+nearest-neighbour spacing are dropped by default (`minSigma = "spacing"`),
+because a Gaussian kernel narrower than one cell spacing has almost no mass off
+the diagonal: the statistic rests on a handful of pairs and the null understates
+its own floor, so `z` climbs as sigma shrinks and the argmax simply rails at
+whichever tiny bandwidth is on offer. Pass `minSigma = NULL` to see that
+behaviour.
+
+The warning is doing its job. `z` decreases monotonically across every retained
+bandwidth, so the selected value sits at the low end of the grid --- the scan
+found the edge, not an interior optimum. The selected 0.05 is about 1.3 cell
+spacings, which is a plausible scale for this tissue and matches what this
+fixed-direction statistic returns on other datasets, but the grid here is a
+hardcoded one, and a bandwidth chosen at a boundary should be widened and
+re-run before it is reported. `detectSigmaRange()` builds a grid from the data
+instead of by hand.
+
+Finally, `z` is typically flat-topped, so sigma is only weakly identified: read
+`sel$plateau` as the band of scales at which co-progression is detectable and
+treat the selected value as a representative point inside it, checking that the
+gene programs below are stable across the band rather than tied to one number.
 
 ## Correlation plot
 

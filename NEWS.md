@@ -274,6 +274,60 @@
 
 ## Choosing sigma from the data
 
+* **New `selectSigmaByPermutation()`.** Picks the bandwidth by comparing the
+  co-progression statistic at each candidate to *its own* permutation null,
+  instead of taking the largest normalized correlation.
+
+  The motivation is that no denominator makes the normalized correlation's null
+  level constant in sigma, so `obj@sigmaValueChoice` compares numbers with
+  different floors. The un-whitened `||K_c||_F` that ships today ignores
+  within-type spatial autocorrelation; whitened variants need a within-type
+  correlation operator that the data do not pin down, because the principal
+  components of one cell type do not share a single correlation length. On a
+  planted-signal simulation the null spread of the raw statistic moved 44x
+  across a 32x sigma grid, and even the normalized ratio's null moved 2.7x and
+  peaked mid-grid — so its argmax landed on the wrong bandwidth in 20 of 20
+  replicates, always biased high, while the studentized scan found the
+  most-detectable scale in 12 of 20 and the rest one grid step away.
+
+  Rather than model that floor, this measures it. At each sigma the observed
+  `T(sigma) = a' K(sigma) b` is divided by the standard deviation of its
+  toroidal-shift null, and the bandwidth maximizing `z = T / sd_null` is
+  selected. Because the denominator *is* the null spread, `z` has the same null
+  level at every bandwidth by construction and carries no tuning constant.
+
+  One pass of `nPermu` draws evaluates every bandwidth, so the draws are coupled
+  across the grid and the same draws give the null of `max_sigma z`. The
+  reported p-value is therefore already adjusted for having scanned the grid
+  (single-step Westfall–Young max-T) and is not circular — the selection is
+  replicated inside the null. Looping `runSkrCCAPermu()` over sigma does *not*
+  give this: it redraws permutations on every call and its default bin grid is
+  itself sigma-dependent, so the per-bandwidth nulls are neither coupled nor
+  comparable.
+
+  Two guards, both on by default. `minSigma = "spacing"` drops candidates below
+  the median nearest-partner distance, where the kernel is nearly diagonal and
+  the fixed-direction null understates its floor — without it the argmax rails
+  at whatever the smallest candidate happens to be. And a selection landing at
+  either end of the grid warns regardless of `verbose`, because that is a scan
+  running out of grid rather than finding an optimum.
+
+  This also covers the **within-type (single cell type) case**, which the
+  existing permutation route cannot: `runSkrCCAPermu()` returns, but the
+  `computeNormalizedCorrelationPermu()` that must follow it forms
+  `combn(cts, 2)` and fails with `n < m`. It is also the case where the
+  argmax-of-ratio rule is least trustworthy, since the stored self-kernel has a
+  zero diagonal and so is not a valid whitening operator.
+
+  Directions are held fixed inside each draw rather than re-optimized. That is
+  what keeps the *selection* level flat in sigma and what makes one `O(B)` pass
+  enough, but it inherits the mild anti-conservativeness of a fixed-direction
+  null at small sigma, which is what `minSigma` guards. For a re-optimizing test
+  at a chosen bandwidth use `runSkrCCAPermu()`, or `runSkrCCAPermu_FairSigma()`
+  for a re-optimizing max-over-sigma test.
+
+  The organoid vignette now selects its bandwidth this way.
+
 * **New `detectSigmaRange()`.** `sigma` is a distance, so no recommended value
   survives a change of units — microns, pixels and Visium coordinates all need
   different numbers for the same biology. What does transfer is how many
