@@ -216,17 +216,13 @@ test_that("selection runs on a cross-type object and reports a coherent result",
   expect_output(print(sel), "studentized max-T")
 })
 
-test_that("selection runs on a within-type object, where the permutation routes cannot", {
-  ## A single cell type is the case the existing permutation route cannot
-  ## serve. runSkrCCAPermu() itself returns, but the normalized-correlation
-  ## step that has to follow it forms combn(cts, 2) and dies on one type. It is
-  ## also the case the argmax-of-ratio rule is least trustworthy on, because
-  ## the stored self-kernel has a zero diagonal and so is not a valid whitening
-  ## operator. This selector needs neither.
+test_that("selection runs on a within-type object", {
+  ## The single-cell-type case, which the re-optimizing route now also serves
+  ## (see test-permutation-within-type.R). What is specific to this selector is
+  ## that it needs no whitening operator at all -- and within-type is exactly
+  ## where the shipped one is invalid, because the stored self-kernel has a zero
+  ## diagonal, so it is not a correlation operator and has no square root.
   obj <- .fit_selection_object("Epithelial")
-  permuted <- suppressWarnings(runSkrCCAPermu(obj, nPermu = 5L, verbose = FALSE))
-  expect_error(computeNormalizedCorrelationPermu(permuted), "n < m")
-
   sel <- selectSigmaByPermutation(obj, nPermu = 49L, seed = 1, verbose = FALSE)
   expect_true(sel$sigmaValueChoice %in% obj@sigmaValues)
   expect_equal(nrow(sel$perSigma), length(obj@sigmaValues))

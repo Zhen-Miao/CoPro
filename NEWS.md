@@ -184,6 +184,35 @@
   describes what 1.3.0 actually does: the null is built with whichever criterion
   the weights were fitted under.
 
+* **Within-type permutation testing worked on paper and not in fact.** With a
+  single cell type, `runSkrCCAPermu()` returned normally but
+  `computeNormalizedCorrelationPermu()` — which has to run next — formed
+  `combn(cts, 2)` and died with a bare `n < m`.
+  `runSkrCCAPermu_FairSigma()` had the same call.
+
+  The crash was hiding the real defect. `permu_which = "second_only"` (the
+  default) permutes every cell type *except the first*, implemented as
+  `ct_index > 1`. With one cell type that is never true, so the type was never
+  permuted: every draw was the identity, the null distribution equalled the
+  observed statistic, and the p-value was 1 by construction with nothing in the
+  output to indicate it. Fixing only the `combn` call would have turned a loud
+  crash into a silently meaningless p-value.
+
+  Both are fixed. `permu_which` has nothing to select between when there is one
+  cell type, so it is ignored and that type is permuted, giving the within-type
+  null: scores are relabelled against their own locations, breaking the
+  association between a cell's score and where it sits while leaving the spatial
+  configuration and the score distribution intact. Everything downstream was
+  already built for this — `.buildYPlan()` has a `self_pair` mode and the
+  permutation worker dispatches to `solve_one_type_eigen()` — so only the entry
+  points needed the fix. `runSkrCCAPermu_Conditional()` previously warned that
+  `"second_only"` gives the identity permutation; that warning described the bug
+  and is replaced by a note about the behaviour that now happens.
+
+  Multi-type semantics are unchanged: with two or more cell types
+  `"second_only"`, `"first_only"` and `"both"` still hold exactly the types they
+  always did, and there is a test pinning that.
+
 * **`getCCAObjective()` now reports the criterion a gene-space fit actually
   used.** `runGeneSpaceCCA()` did not record its own provenance, so the reader's
   no-record fallback answered `"sumcov"` — the opposite of gene space's

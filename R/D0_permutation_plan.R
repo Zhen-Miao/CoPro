@@ -160,6 +160,21 @@
 #' @return A list with `ops` (nested by cell-type pair), `pairs`, `cts` and
 #'   `fixed`, consumable by `.yResiFromPlan()`.
 #' @noRd
+#' Cell-type pairs a permutation statistic is evaluated over
+#'
+#' One cell type is the within-type (self) problem and pairs with itself;
+#' `combn()` cannot express that, it errors with `n < m`. Every consumer of a
+#' pair list must go through this, or the within-type path dies on entry --
+#' which is exactly what `computeNormalizedCorrelationPermu()` used to do.
+#' @noRd
+.permutationPairTypes <- function(cts) {
+  if (length(cts) == 1L) {
+    matrix(c(cts, cts), nrow = 2L, ncol = 1L)
+  } else {
+    utils::combn(cts, 2L)
+  }
+}
+
 .buildYPlan <- function(PCmats, flat_kernels, sigma, cts, fixed,
                         slide = NULL) {
   if (!isTRUE(getOption("CoPro.factorizePermutation", TRUE))) {
@@ -171,11 +186,7 @@
     ops[[ct]] <- stats::setNames(vector("list", length(cts)), cts)
   }
 
-  pairs <- if (length(cts) == 1L) {
-    matrix(c(cts, cts), nrow = 2L)
-  } else {
-    utils::combn(cts, 2L)
-  }
+  pairs <- .permutationPairTypes(cts)
 
   for (pp in seq_len(ncol(pairs))) {
     ct_i <- pairs[1L, pp]
