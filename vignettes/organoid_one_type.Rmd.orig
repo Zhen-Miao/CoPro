@@ -12,7 +12,7 @@ vignette: >
 knitr::opts_chunk$set(echo = TRUE, eval = TRUE,
                       fig.width = 6, fig.height = 5,
                       dpi = 192,
-                      fig.path = "organoid_one_type_files/")
+                      fig.path = "figures/organoid_one_type-")
 ```
 
 ## Overview

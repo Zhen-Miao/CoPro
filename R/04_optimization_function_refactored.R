@@ -1042,6 +1042,122 @@ compute_Y_multi_slide <- function(X_list_all, flat_kernels, sigma, slides, cell_
   return(Y_aggregate)
 }
 
+#' Per-slide PC-space operators, kept separate instead of summed
+#'
+#' `compute_Y_multi_slide()` collapses the slides with `Reduce("+")` because the
+#' SUMCOV objective only ever needs the sum. The SUMCOR objective divides each
+#' slide's cross term by that slide's own score scale, so it needs the slides
+#' kept apart, plus the per-slide Gram matrix `G_i = X_i' X_i` that supplies the
+#' scale and the per-slide cell counts that supply the size weights.
+#'
+#' Everything here is `nPC x nPC` (nPCA is 10-40 in practice) and is built once
+#' per sigma, which is what makes the SUMCOR iteration pure small-matrix algebra
+#' with no kernel products in the loop. The kernel work is the same as
+#' `compute_Y_multi_slide()` does; only the aggregation differs.
+#'
+#' This function is deliberately *not* used to rebuild the SUMCOV aggregate that
+#' `compute_Y_multi_slide()` returns. That route stays untouched so stored
+#' SUMCOV results reproduce bit-for-bit; see `.aggregateSlideOperators()` for
+#' the sum used to warm-start SUMCOR, whose last bits carry no such guarantee.
+#'
+#' @inheritParams compute_Y_multi_slide
+#' @return A list with `Y` (`Y[[slide]][[ct_i]][[ct_j]]`), `G`
+#'   (`G[[slide]][[ct]]`), `n` (`n[[slide]]`, a named integer vector),
+#'   `slides` and `cell_types`.
+#' @noRd
+.computeSlideOperators <- function(X_list_all, flat_kernels, sigma, slides,
+                                   cell_types, n_cores = 1) {
+  n_slides <- length(X_list_all)
+  n_mat <- length(cell_types)
+  is_within <- (n_mat == 1L)
+
+  Y <- setNames(vector("list", n_slides), slides)
+  G <- setNames(vector("list", n_slides), slides)
+  n_cells <- setNames(vector("list", n_slides), slides)
+
+  for (q in seq_len(n_slides)) {
+    Y[[q]] <- setNames(vector("list", n_mat), cell_types)
+    for (ct in cell_types) {
+      Y[[q]][[ct]] <- setNames(vector("list", n_mat), cell_types)
+    }
+    G[[q]] <- setNames(
+      lapply(cell_types, function(ct) crossprod(X_list_all[[q]][[ct]])),
+      cell_types
+    )
+    n_cells[[q]] <- setNames(
+      vapply(cell_types, function(ct) nrow(X_list_all[[q]][[ct]]), integer(1)),
+      cell_types
+    )
+  }
+
+  if (is_within) {
+    ct <- cell_types[[1L]]
+    Y_list <- mclapply(seq_len(n_slides), function(q) {
+      compute_Y_slide(X_list_all[[q]], flat_kernels, sigma, slides[q], ct, ct)
+    }, mc.cores = n_cores)
+    for (q in seq_len(n_slides)) {
+      Y[[q]][[ct]][[ct]] <- Y_list[[q]]
+    }
+  } else {
+    pair_cell_types <- combn(cell_types, 2)
+    for (pp in seq_len(ncol(pair_cell_types))) {
+      ct_i <- pair_cell_types[1, pp]
+      ct_j <- pair_cell_types[2, pp]
+
+      Y_ij_list <- mclapply(seq_len(n_slides), function(q) {
+        compute_Y_slide(X_list_all[[q]], flat_kernels, sigma, slides[q],
+                        ct_i, ct_j)
+      }, mc.cores = n_cores)
+
+      for (q in seq_len(n_slides)) {
+        Y[[q]][[ct_i]][[ct_j]] <- Y_ij_list[[q]]
+        Y[[q]][[ct_j]][[ct_i]] <- t(Y_ij_list[[q]])
+      }
+    }
+  }
+
+  list(Y = Y, G = G, n = n_cells, slides = slides, cell_types = cell_types)
+}
+
+#' Sum per-slide operators into the shape `compute_Y_multi_slide()` returns
+#'
+#' Used only to build the SUMCOV warm start for SUMCOR, so that the refinement
+#' starts from the answer the SUMCOV route would have given. The summation route
+#' differs from `compute_Y_multi_slide()`'s, so the two can disagree in the last
+#' bits; nothing downstream of the warm start depends on that.
+#'
+#' @param ops Structure returned by `.computeSlideOperators()`.
+#' @return A `Y_resi`-shaped nested list.
+#' @noRd
+.aggregateSlideOperators <- function(ops) {
+  cell_types <- ops$cell_types
+  n_mat <- length(cell_types)
+  Y_aggregate <- setNames(vector("list", n_mat), cell_types)
+  for (ct in cell_types) {
+    Y_aggregate[[ct]] <- setNames(vector("list", n_mat), cell_types)
+  }
+
+  if (n_mat == 1L) {
+    ct <- cell_types[[1L]]
+    Y_aggregate[[ct]][[ct]] <- Reduce(
+      "+", lapply(ops$slides, function(s) ops$Y[[s]][[ct]][[ct]])
+    )
+    return(Y_aggregate)
+  }
+
+  pair_cell_types <- combn(cell_types, 2)
+  for (pp in seq_len(ncol(pair_cell_types))) {
+    ct_i <- pair_cell_types[1, pp]
+    ct_j <- pair_cell_types[2, pp]
+    Y_ij <- Reduce(
+      "+", lapply(ops$slides, function(s) ops$Y[[s]][[ct_i]][[ct_j]])
+    )
+    Y_aggregate[[ct_i]][[ct_j]] <- Y_ij
+    Y_aggregate[[ct_j]][[ct_i]] <- t(Y_ij)
+  }
+  Y_aggregate
+}
+
 # ============================================================================
 # Main Optimization Functions
 # ============================================================================
@@ -1086,15 +1202,19 @@ optimize_bilinear_multi_slides <- function(X_list_all, flat_kernels, sigma, slid
   # Check if this is within-cell-type case
   is_within <- (n_cell_types == 1)
   
-  # For single slide, delegate to single-slide function
+  # A one-slide object used to be delegated to optimize_bilinear(), which looks
+  # its kernels up with slide = NULL. A CoProMulti keys them by slide ID, so that
+  # delegation could only ever fail ("Could not find kernel matrix for pair").
+  # It was unreachable for one or two cell types, where .runSingleSigmaOptimization()
+  # takes an earlier exact-solver shortcut, so the breakage showed up only for a
+  # one-slide CoProMulti with three or more cell types. The machinery below
+  # handles n_slides == 1 correctly on its own -- compute_Y_multi_slide() indexes
+  # by slides[q] -- so there is nothing to delegate.
   if (n_slides == 1) {
-    message("Single slide detected, using single-slide optimization")
-    return(optimize_bilinear(X_list_all[[1]], flat_kernels, sigma,
-                            max_iter = max_iter, tol = tol,
-                            step_size = step_size,
-                            sdev2_list = sdev2_list))
+    message("Single slide detected in a multi-slide object; ",
+            "the per-slide operators reduce to one term.")
   }
-  
+
   # Build the small PC-space operators once for all iterative first-CC updates.
   Y_aggregate <- compute_Y_multi_slide(
     X_list_all, flat_kernels, sigma, slides, cell_types, n_cores

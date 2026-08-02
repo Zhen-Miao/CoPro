@@ -18,7 +18,9 @@ runGeneSpaceCCA(
   streaming = FALSE,
   distanceArgs = list(),
   kernelArgs = list(),
-  verbose = TRUE
+  verbose = TRUE,
+  sweep = c("gauss-seidel", "jacobi"),
+  objective = c("sumcor", "sumcov")
 )
 
 \S4method{runGeneSpaceCCA}{CoPro}(
@@ -33,7 +35,9 @@ runGeneSpaceCCA(
   streaming = FALSE,
   distanceArgs = list(),
   kernelArgs = list(),
-  verbose = TRUE
+  verbose = TRUE,
+  sweep = c("gauss-seidel", "jacobi"),
+  objective = c("sumcor", "sumcov")
 )
 
 \S4method{runGeneSpaceCCA}{CoProMulti}(
@@ -48,7 +52,9 @@ runGeneSpaceCCA(
   streaming = FALSE,
   distanceArgs = list(),
   kernelArgs = list(),
-  verbose = TRUE
+  verbose = TRUE,
+  sweep = c("gauss-seidel", "jacobi"),
+  objective = c("sumcor", "sumcov")
 )
 }
 \arguments{
@@ -88,6 +94,29 @@ streaming path (e.g., \code{lowerLimit}, \code{upperQuantile},
 \code{normalizeKernel}). Ignored when \code{streaming = FALSE}.}
 
 \item{verbose}{Print progress messages (default TRUE).}
+
+\item{sweep}{Block sweep for the power iteration: \code{"gauss-seidel"}
+(default) or \code{"jacobi"}. Gauss-Seidel reads the blocks already updated
+in the current sweep, which makes each block update an exact maximization
+over that block and rules out convergence to a negative objective. Jacobi
+reads only the previous iterate and can settle on the negative singular
+pair, which is why it needs a post-hoc sign repair -- valid for two cell
+types, not for three or more. Kept so results computed before
+\code{"gauss-seidel"} became the default reproduce exactly.
+
+The guarantee is about the \strong{sign, not solution quality}. Under
+\code{objective = "sumcor"} the frozen-\code{sigma} sweep maximizes a
+surrogate rather than the objective itself, so which local optimum each
+sweep reaches is data-dependent and neither dominates the other.
+Gauss-Seidel is the default because it cannot produce the pathology the
+sign repair was covering for, not because it optimizes better. See
+\code{\link[=optimize_genespace_avg_corr]{optimize_genespace_avg_corr()}}.}
+
+\item{objective}{\code{"sumcor"} (default) normalizes each slide's cross
+term by that slide's own score scales. \code{"sumcov"} fixes every scale at
+1, giving the plain sum of kernel-smoothed cross-covariances -- the
+gene-space counterpart of \code{\link[=runSkrCCA]{runSkrCCA()}}'s default objective, provided so
+the space and the criterion can be varied independently.}
 }
 \value{
 The CoPro object with gene weights in \code{geneScores},

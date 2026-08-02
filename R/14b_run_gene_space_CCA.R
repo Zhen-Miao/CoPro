@@ -1,7 +1,5 @@
-# Per-slide minimum number of cells per cell type. Below this the
-# G x G covariance from the slide is too noisy to be useful (rank <= n-1).
-# Slides failing this for any requested cell type are dropped with a warning.
-.min_cells_per_slide <- 10
+# `.min_cells_per_slide` is defined in 02_helper_functions.R and shared with the
+# PCA-space sumcor route, so both spaces drop the same slides.
 
 #' Prepare standardized gene expression matrices per slide per cell type
 #'
@@ -525,7 +523,9 @@
 #' @return Updated CoPro object
 #' @noRd
 .storeGeneSpaceCCAResults <- function(object, w_list, Z_by_slide, sigma,
-                                      cts, nCC, genes, slides) {
+                                      cts, nCC, genes, slides,
+                                      objective = "sumcor",
+                                      sweep = "gauss-seidel") {
   sigma_name <- paste("sigma", sigma, sep = "_")
   # Gene-space CCA stores its weights in @skrCCAOut under a "gscca_"-prefixed
   # key so they cannot collide with runSkrCCA's "sigma_"-prefixed keys. The
@@ -542,6 +542,20 @@
   # Store raw weight vectors in skrCCAOut (merge, don't overwrite)
   cca_out <- object@skrCCAOut
   cca_out[[gscca_name]] <- w_list
+  # Record what was optimized, the same way runSkrCCA() does. Without this the
+  # reader's no-record fallback reports "sumcov", which is the wrong answer for
+  # gene space (it defaults to "sumcor"); and because the merge above keeps any
+  # earlier PCA-space keys, an earlier runSkrCCA() record would otherwise
+  # survive and describe a different fit than the one just stored.
+  attr(cca_out, "ccaObjective") <- list(
+    space = "gene",
+    objective = objective,
+    requested = objective,
+    slideWeight = "equal",
+    sweep = sweep,
+    slides = slides,
+    droppedSlides = character(0)
+  )
   object@skrCCAOut <- cca_out
   object@nCC <- nCC
 
@@ -640,6 +654,27 @@
 #'   streaming path (e.g., \code{lowerLimit}, \code{upperQuantile},
 #'   \code{normalizeKernel}). Ignored when \code{streaming = FALSE}.
 #' @param verbose Print progress messages (default TRUE).
+#' @param sweep Block sweep for the power iteration: \code{"gauss-seidel"}
+#'   (default) or \code{"jacobi"}. Gauss-Seidel reads the blocks already updated
+#'   in the current sweep, which makes each block update an exact maximization
+#'   over that block and rules out convergence to a negative objective. Jacobi
+#'   reads only the previous iterate and can settle on the negative singular
+#'   pair, which is why it needs a post-hoc sign repair -- valid for two cell
+#'   types, not for three or more. Kept so results computed before
+#'   \code{"gauss-seidel"} became the default reproduce exactly.
+#'
+#'   The guarantee is about the **sign, not solution quality**. Under
+#'   \code{objective = "sumcor"} the frozen-\code{sigma} sweep maximizes a
+#'   surrogate rather than the objective itself, so which local optimum each
+#'   sweep reaches is data-dependent and neither dominates the other.
+#'   Gauss-Seidel is the default because it cannot produce the pathology the
+#'   sign repair was covering for, not because it optimizes better. See
+#'   [optimize_genespace_avg_corr()].
+#' @param objective \code{"sumcor"} (default) normalizes each slide's cross
+#'   term by that slide's own score scales. \code{"sumcov"} fixes every scale at
+#'   1, giving the plain sum of kernel-smoothed cross-covariances -- the
+#'   gene-space counterpart of [runSkrCCA()]'s default objective, provided so
+#'   the space and the criterion can be varied independently.
 #'
 #' @return The CoPro object with gene weights in \code{geneScores},
 #'   cell scores in \code{cellScores}, and weight vectors in \code{skrCCAOut}.
@@ -704,7 +739,9 @@ setGeneric(
            streaming = FALSE,
            distanceArgs = list(),
            kernelArgs = list(),
-           verbose = TRUE) standardGeneric("runGeneSpaceCCA")
+           verbose = TRUE,
+           sweep = c("gauss-seidel", "jacobi"),
+           objective = c("sumcor", "sumcov")) standardGeneric("runGeneSpaceCCA")
 )
 
 #' @rdname runGeneSpaceCCA
@@ -718,7 +755,9 @@ setMethod(
            streaming = FALSE,
            distanceArgs = list(),
            kernelArgs = list(),
-           verbose = TRUE) {
+           verbose = TRUE,
+           sweep = c("gauss-seidel", "jacobi"),
+           objective = c("sumcor", "sumcov")) {
     stop("runGeneSpaceCCA requires a CoProMulti object (multi-slide data). ",
          "Got: ", class(object)[1])
   }
@@ -735,7 +774,9 @@ setMethod(
            streaming = FALSE,
            distanceArgs = list(),
            kernelArgs = list(),
-           verbose = TRUE) {
+           verbose = TRUE,
+           sweep = c("gauss-seidel", "jacobi"),
+           objective = c("sumcor", "sumcov")) {
 
     # Validate inputs
     if (!is.logical(streaming) || length(streaming) != 1 || is.na(streaming)) {
@@ -772,6 +813,8 @@ setMethod(
     if (!is.numeric(nCC) || length(nCC) != 1 || nCC < 1 || nCC != as.integer(nCC)) {
       stop("nCC must be a positive integer.")
     }
+    sweep <- match.arg(sweep)
+    objective <- match.arg(objective)
 
     cts <- if (length(object@cellTypesOfInterest) > 0) {
       object@cellTypesOfInterest
@@ -839,7 +882,9 @@ setMethod(
       cell_types = cts,
       max_iter = max_iter,
       tol = tol,
-      verbose = verbose
+      verbose = verbose,
+      sweep = sweep,
+      objective = objective
     )
 
     if (nCC > 1) {
@@ -852,7 +897,9 @@ setMethod(
         nCC = nCC,
         max_iter = max_iter,
         tol = tol,
-        verbose = verbose
+        verbose = verbose,
+        sweep = sweep,
+        objective = objective
       )
     }
 
@@ -860,7 +907,8 @@ setMethod(
     if (verbose) message("Step 4: Storing results...")
     object <- .storeGeneSpaceCCAResults(
       object, w_list, gsd$Z_by_slide, sigma,
-      cts, nCC, gsd$genes, gsd$slides
+      cts, nCC, gsd$genes, gsd$slides,
+      objective = objective, sweep = sweep
     )
 
     if (verbose) message("Done.")

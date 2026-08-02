@@ -1,3 +1,145 @@
+# CoPro 1.3.0
+
+## Choosing the canonical criterion
+
+* **New `objective` argument on `runSkrCCA()`**, with `slideWeight` to control
+  how slides are combined, and `space` to select the feature space. The default
+  is `objective = "sumcov"`, which is exactly what earlier versions computed, so
+  **every existing result is unchanged** unless you opt in.
+
+  The reason this is a choice rather than a fix is that the two criteria are the
+  same problem more often than it looks. For a single slide they usually
+  coincide. Whitened PCs give `X_i'X_i = (n_i - 1) I`, so on `||w_i|| = 1` the
+  denominators are `sigma_i = sqrt(n_i - 1)` — `sigma` here is the norm
+  `||X_i w_i||`, not a root-mean-square — and the objective is SUMCOV reweighted
+  by the *per-pair* constant `m_ij / sqrt((n_i - 1)(n_j - 1))`. A per-pair
+  constant leaves the maximizer alone only when every pair gets the same one, so
+  the reduction to SUMCOV is exact for **one or two cell types at any cell
+  counts**, and for **three or more only when the cell counts are equal**.
+  `objective = "sumcor"` is routed to the exact SUMCOV solvers there rather than
+  iterating to the same answer.
+
+  With three or more cell types at unequal counts the two criteria genuinely
+  differ on one slide. `runSkrCCA()` still uses the SUMCOV solvers but now warns;
+  the mismatch is `1 + O(1/n)` under the default `slideWeight = "size"` and can be
+  material under `"equal"`. Call `optimize_sumcor_pca()` directly to optimize the
+  SUMCOR criterion itself.
+
+  Across slides they always differ, and there SUMCOV factors exactly as
+
+  ```
+  f_cov(w) = sum_{i<j} sum_s sigma_i^(s) * sigma_j^(s) * rho_ij^(s)
+  ```
+
+  with no `sqrt(n_i n_j)` factor: because `sigma` is a norm,
+  `sigma_i sigma_j rho_ij = w_i' Y_ij w_j` is the SUMCOV term already, and `rho`
+  is cell-count invariant on its own. So SUMCOV already sums per-slide
+  correlations weighted by per-slide score scale, and that scale factor is what
+  lets a slide with inflated variance along the canonical direction dominate.
+  `objective = "sumcor"` drops it; `slideWeight = "size"` (default)
+  *reintroduces* the cell-count factor `sqrt(n_i n_j)` on its own, and
+  `slideWeight = "equal"` gives strict Kettenring SUMCOR, matching
+  `runGeneSpaceCCA()`.
+
+  Read back what was actually optimized with the new `getCCAObjective()`.
+
+* **`space = "gene"`** forwards `runSkrCCA()` to `runGeneSpaceCCA()` (pass the
+  bandwidth as `sigmaChoice`), and `runGeneSpaceCCA()` gained `objective`, so the
+  space and the criterion can now be varied independently in either direction.
+
+* The PC-space SUMCOR iteration is cheap: `Y_ij^(s)` and the per-slide Gram
+  matrices are `nPCA x nPCA` and are built once per sigma, so each sweep costs
+  `O(S * nPCA^2)` with no kernel products, against
+  `O(S * nnz(K) * nGenes)` per sweep in gene space. It warm-starts from the
+  deterministic SUMCOV solution — no RNG dependence — evaluates the true
+  objective every sweep, backtracks on a decrease, and returns the best iterate,
+  so it can never return something worse than its starting point.
+
+* **`minCellsPerSlide`** (default 10, shared with `runGeneSpaceCCA()`) drops
+  slides too thin to divide by under `sumcor`. Under `sumcov` such slides are
+  only *reported*, not dropped: a thin slide simply contributes little to the
+  summed operator, and dropping it would change results computed before this
+  rule existed.
+
+## Batch effects: the larger lever is centering, not the objective
+
+* `objective = "sumcor"` removes per-slide *scale* sensitivity but **not** a
+  per-slide *mean shift*, and the mean shift is the bigger problem. PC scores are
+  centered globally, so a shared technical shift leaves
+  `u_i^(s) ~ M_i^(s) 1 + eps` and the numerator picks up
+  `M_i M_j 1'K1`, positive whenever both cell types shift the same way — so
+  slides reinforce the batch axis instead of cancelling it. Dividing by `sigma`
+  does not rescue this: for a nonnegative kernel the leading singular pair is
+  close to the Perron vector, so a constant score reaches
+  `rho ~ sigma_max(K)` — near the maximum available — on every slide.
+
+  Pair multi-slide `sumcor` with `computePCA(..., center_per_slide = TRUE)`.
+  Gene space already gets this from its per-(slide, cell type)
+  z-standardization; PC space does not, and this applies to `sumcov` too.
+
+## Gene-space optimizer: sweep choice, and the sign repair
+
+* **New `sweep` argument on `runGeneSpaceCCA()`** and the gene-space optimizers,
+  defaulting to `"gauss-seidel"`. The previous behaviour is `sweep = "jacobi"`
+  and reproduces prior results exactly.
+
+  The gene-space power iteration updated every block from the *previous* iterate
+  (Jacobi), which is not coordinate ascent: it can settle on the negative
+  singular pair as a period-2 sign orbit that the sign-tolerant convergence test
+  accepts as converged. That is what the post-hoc sign flip existed to repair.
+  The flip is valid for two cell types, where flipping one block negates the
+  single pairwise term — but **not** for three or more, where flipping one block
+  negates only the pairs touching it and can lower the objective. (Flipping
+  *every* block is a no-op: each pairwise term takes two sign flips.) The
+  PC-space optimizer never had this problem because it already read
+  already-updated blocks.
+
+  Under `"gauss-seidel"` every block update forces `w_i' g_i = ||g_i|| >= 0`;
+  summing over blocks gives `f >= 0` at any fixed point, so a negative objective
+  is unreachable and no sign repair is needed. The flip is retained only on the
+  Jacobi path, and now warns when it fires with three or more cell types.
+
+  Note this guarantee is about the *sign*, not about solution quality: under
+  `sumcor` the frozen-`sigma` sweep maximizes a surrogate rather than the
+  objective, so which local optimum each sweep finds is data-dependent and
+  neither dominates the other.
+
+## Fixes
+
+* **`getCCAObjective()` now reports the criterion a gene-space fit actually
+  used.** `runGeneSpaceCCA()` did not record its own provenance, so the reader's
+  no-record fallback answered `"sumcov"` — the opposite of gene space's
+  `"sumcor"` default — for exactly the call this release tells you to inspect.
+  Because weights are merged into `@skrCCAOut` rather than replacing it, an
+  earlier `runSkrCCA()` record could also survive a later gene-space run and
+  describe the wrong fit. Both are fixed, and the record now carries `sweep`.
+
+* **`runSkrCCA(space = "gene", ...)` no longer silently discards arguments.**
+  `objective`, `tol`, `maxIter`, `minCellsPerSlide`, `scalePCs`,
+  `transferred_weight_1`, `n_cores`, `step_size` and `slideWeight` are named
+  formals, so none of them reached `...` and none were forwarded — a passed
+  `transferred_weight_1` looked exactly like a transfer that ran. The four with
+  a gene-space analogue are now forwarded **when supplied** (not when left at a
+  default, since the two entry points differ: `objective` `"sumcov"` vs
+  `"sumcor"`, `tol` `1e-5` vs `1e-6`, `maxIter` `200` vs `3000`,
+  `minCellsPerSlide` `10` vs `20`), and the rest are an error.
+
+* **A one-slide `CoProMulti` with three or more cell types no longer errors.**
+  `optimize_bilinear_multi_slides()` delegated such objects to the single-slide
+  routine, which looks its kernels up with `slide = NULL`; a `CoProMulti` keys
+  them by slide ID, so the lookup could only fail with "Could not find kernel
+  matrix for pair". One and two cell types took an earlier exact-solver shortcut
+  and were unaffected.
+
+* Permutation tests (`runSkrCCAPermu()` and the `FairSigma` / `Conditional`
+  variants) now refuse weights fitted under `objective = "sumcor"` rather than
+  compare an observed statistic from one criterion against a null built from
+  another.
+
+* `vignettes/large_datasets.Rmd` no longer breaks `R CMD check`. Its illustrative
+  chunks reference objects too large to ship, and `eval = FALSE` covers knitting
+  but not the tangle-and-source step, so `purl = FALSE` is now set on each chunk.
+
 # CoPro 1.2.0
 
 ## Choosing sigma from the data

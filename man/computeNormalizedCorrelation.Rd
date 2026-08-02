@@ -117,6 +117,7 @@ selected bandwidth matters.}
 
 Other scores-and-correlation: 
 \code{\link{computeGeneAndCellScores}()},
+\code{\link{getCCAObjective}()},
 \code{\link{getNormalizerInfo}()}
 }
 \concept{scores-and-correlation}

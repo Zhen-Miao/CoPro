@@ -12,6 +12,21 @@ vignette: >
 # This is a how-to guide: the code shows the recommended calls for
 # datasets that are too large to ship in a vignette, so chunks are not
 # executed. Every call below is a valid, current CoPro API call.
+#
+# Two separate options are needed, and each covers a step the other does not:
+#
+#   eval = FALSE (here)  -- stops the code running when the vignette is KNITTED.
+#   purl = FALSE (on every chunk header below)
+#                        -- stops the code being extracted into the tangled
+#                           large_datasets.R, which `R CMD check` sources in its
+#                           "running R code from vignettes" step.
+#
+# Without the per-chunk purl = FALSE, `R CMD check` fails with
+# "object 'sparse_expr' not found" even though nothing is evaluated at knit
+# time. Setting purl through opts_chunk$set() here does NOT work: this chunk is
+# not evaluated during tangling, so the option never takes effect. The same
+# applies to the YAML `knitr: opts_chunk:` route. It has to be on each chunk
+# header.
 knitr::opts_chunk$set(echo = TRUE, eval = FALSE)
 ```
 
@@ -45,7 +60,7 @@ The single most important change for large data is: **do not call
 - a **BPCells** `IterableMatrix`, which keeps the counts on disk and streams
   them (recommended when the matrix does not fit in RAM).
 
-```{r input-types}
+```{r input-types, purl=FALSE}
 library(CoPro)
 
 # Sparse in-memory matrix (genes are columns, cells are rows):
@@ -74,7 +89,7 @@ usually targets two (cross-type) or one (within-type). `subsetData()` drops
 all other cells, so every downstream step — PCA, kernels, skrCCA — works on a
 much smaller problem. Do it before `computePCA()`.
 
-```{r subset}
+```{r subset, purl=FALSE}
 obj <- subsetData(obj, cellTypesOfInterest = c("Tumor", "Fibroblast"))
 ```
 
@@ -89,7 +104,7 @@ The default `nPCA = 40` is intended for large panels; lower it for Xenium.
 When `normalizedData` is a BPCells `IterableMatrix`, `computePCA()`
 automatically runs `BPCells::svds()`, so the PCA step is itself out-of-core.
 
-```{r pca}
+```{r pca, purl=FALSE}
 obj <- computePCA(obj, nPCA = 15, center = TRUE, scale. = TRUE)
 ```
 
@@ -107,7 +122,7 @@ dense path (every entry beyond the radius is zero anyway).
 
 First pick sigma from the data with `detectSigmaRange()`, then build:
 
-```{r sparse-kernel}
+```{r sparse-kernel, purl=FALSE}
 # Step 1: choose sigma in this dataset's own coordinate units. sigma is a
 # distance, so no fixed value travels between microns, pixels and Visium units.
 # detectSigmaRange() reports the sigmas at which the median cell is coupled to
@@ -160,7 +175,7 @@ PC-space cross-operator (`nPCA x nPCA`). There is no power iteration to tune, so
 `maxIter`, `tol`, and `step_size` do not affect the two-type result — the cost
 is dominated by the kernel, not the optimization.
 
-```{r skrcca}
+```{r skrcca, purl=FALSE}
 obj <- runSkrCCA(obj, scalePCs = TRUE, nCC = 2)
 obj <- computeNormalizedCorrelation(obj)
 
@@ -180,7 +195,7 @@ materializes a block-diagonal `N x N` kernel across the whole cohort. Use
 `method = "auto"`/`"sparse"` exactly as above, and set `n_cores` to
 parallelize the per-slide kernel and skrCCA work.
 
-```{r multi-slide}
+```{r multi-slide, purl=FALSE}
 multi <- newCoProMulti(
   normalizedData = expr_list,   # named list of per-slide cells x genes matrices
   locationData   = loc_list,
@@ -198,7 +213,7 @@ multi <- computeRegressionGeneScores(multi)
 
 ## 7. A complete single-slide Xenium recipe
 
-```{r recipe}
+```{r recipe, purl=FALSE}
 library(CoPro)
 
 obj <- newCoProSingle(
@@ -243,7 +258,7 @@ On a dataset small enough to run both, you can confirm the sparse and dense
 paths agree. The stored kernels differ only in representation (`dgCMatrix` vs
 dense) and by floating-point rounding:
 
-```{r verify}
+```{r verify, purl=FALSE}
 # The dense path needs computeDistance() first; the sparse path does not.
 obj_dense  <- computeKernelMatrix(computeDistance(obj), sigmaValues = 0.1,
                                   method = "dense", dropDistances = FALSE)

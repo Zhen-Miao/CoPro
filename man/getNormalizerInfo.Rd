@@ -30,6 +30,7 @@ resolved choice on the object so a stored result can be interpreted later.
 
 Other scores-and-correlation: 
 \code{\link{computeGeneAndCellScores}()},
-\code{\link{computeNormalizedCorrelation}()}
+\code{\link{computeNormalizedCorrelation}()},
+\code{\link{getCCAObjective}()}
 }
 \concept{scores-and-correlation}
