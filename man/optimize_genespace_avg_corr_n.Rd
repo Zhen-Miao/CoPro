@@ -13,6 +13,7 @@ optimize_genespace_avg_corr_n(
   nCC = 2,
   max_iter = 3000,
   tol = 1e-06,
+  step_size = 1,
   verbose = TRUE,
   sweep = c("gauss-seidel", "jacobi"),
   objective = c("sumcor", "sumcov")
@@ -35,6 +36,9 @@ Each entry is a G x k matrix where k = number of components already computed.}
 \item{max_iter}{Maximum iterations per component.}
 
 \item{tol}{Convergence tolerance.}
+
+\item{step_size}{Step size for damped power iteration (default 1). See
+\code{\link{optimize_genespace_avg_corr}} for details.}
 
 \item{verbose}{Print progress.}
 

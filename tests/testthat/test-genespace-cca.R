@@ -298,6 +298,149 @@ test_that("P1b objective is sensitive to ASYMMETRIC per-slide perturbation", {
   expect_false(isTRUE(all.equal(obj_orig, obj_perturbed, tolerance = 1e-6)))
 })
 
+test_that("step_size validation rejects out-of-range and non-numeric values", {
+  dat <- make_synthetic_data(seed = 42)
+
+  args_base <- list(
+    C_self_slide = dat$C_self,
+    C_cross_slide = dat$C_cross,
+    slides = dat$slides,
+    cell_types = dat$cell_types,
+    max_iter = 10, tol = 1e-4, verbose = FALSE
+  )
+  expect_error(do.call(optimize_genespace_avg_corr,
+                       c(args_base, list(step_size = 0))),
+               "step_size must be a single numeric value in \\(0, 1\\]")
+  expect_error(do.call(optimize_genespace_avg_corr,
+                       c(args_base, list(step_size = -0.1))),
+               "step_size must be a single numeric value in \\(0, 1\\]")
+  expect_error(do.call(optimize_genespace_avg_corr,
+                       c(args_base, list(step_size = 1.5))),
+               "step_size must be a single numeric value in \\(0, 1\\]")
+  expect_error(do.call(optimize_genespace_avg_corr,
+                       c(args_base, list(step_size = "0.5"))),
+               "step_size must be a single numeric value in \\(0, 1\\]")
+  expect_error(do.call(optimize_genespace_avg_corr,
+                       c(args_base, list(step_size = c(0.5, 0.5)))),
+               "step_size must be a single numeric value in \\(0, 1\\]")
+})
+
+test_that("mildly damped power iteration converges to the same fixed point as undamped", {
+  # On a problem where the undamped power iteration already converges,
+  # mild damping (step_size near 1) should converge to the same
+  # canonical direction. Aggressive damping (e.g., step_size = 0.5)
+  # CAN introduce 2-cycle oscillation on small problems and is therefore
+  # not tested for equivalence — it should only be used when undamped
+  # power iteration diverges or oscillates.
+  dat <- make_synthetic_data(seed = 42)
+
+  set.seed(1L)
+  w_undamped <- optimize_genespace_avg_corr(
+    C_self_slide = dat$C_self,
+    C_cross_slide = dat$C_cross,
+    slides = dat$slides,
+    cell_types = dat$cell_types,
+    max_iter = 3000, tol = 1e-8, step_size = 1,
+    verbose = FALSE
+  )
+
+  set.seed(1L)
+  w_damped <- optimize_genespace_avg_corr(
+    C_self_slide = dat$C_self,
+    C_cross_slide = dat$C_cross,
+    slides = dat$slides,
+    cell_types = dat$cell_types,
+    max_iter = 6000, tol = 1e-8, step_size = 0.9,
+    verbose = FALSE
+  )
+
+  # Per cell type: cosine similarity between damped and undamped weight
+  # vectors should be ~1 in absolute value.
+  for (ct in dat$cell_types) {
+    a <- as.numeric(w_undamped[[ct]][, 1])
+    b <- as.numeric(w_damped[[ct]][, 1])
+    cos_sim <- abs(sum(a * b)) / (sqrt(sum(a^2)) * sqrt(sum(b^2)))
+    expect_gt(cos_sim, 0.999)
+  }
+
+  # |objective| should agree (sign indeterminate by symmetry of CCA).
+  obj_undamped <- CoPro:::.compute_p1b_objective(
+    w_undamped, dat$C_self, dat$C_cross, dat$slides, dat$cell_types
+  )
+  obj_damped <- CoPro:::.compute_p1b_objective(
+    w_damped, dat$C_self, dat$C_cross, dat$slides, dat$cell_types
+  )
+  expect_equal(abs(obj_damped), abs(obj_undamped), tolerance = 1e-3)
+})
+
+test_that("mildly damped iteration with deflation matches undamped CC2", {
+  dat <- make_synthetic_data(seed = 42)
+
+  set.seed(2L)
+  w1 <- optimize_genespace_avg_corr(
+    C_self_slide = dat$C_self, C_cross_slide = dat$C_cross,
+    slides = dat$slides, cell_types = dat$cell_types,
+    max_iter = 3000, tol = 1e-8, step_size = 1, verbose = FALSE
+  )
+
+  set.seed(3L)
+  w_undamped <- optimize_genespace_avg_corr_n(
+    C_self_slide = dat$C_self, C_cross_slide = dat$C_cross,
+    slides = dat$slides, cell_types = dat$cell_types,
+    w_list = w1, nCC = 2,
+    max_iter = 3000, tol = 1e-8, step_size = 1, verbose = FALSE
+  )
+
+  set.seed(3L)
+  w_damped <- optimize_genespace_avg_corr_n(
+    C_self_slide = dat$C_self, C_cross_slide = dat$C_cross,
+    slides = dat$slides, cell_types = dat$cell_types,
+    w_list = w1, nCC = 2,
+    max_iter = 6000, tol = 1e-8, step_size = 0.9, verbose = FALSE
+  )
+
+  # CC2 should match (up to sign) between undamped and mildly damped.
+  for (ct in dat$cell_types) {
+    a <- as.numeric(w_undamped[[ct]][, 2])
+    b <- as.numeric(w_damped[[ct]][, 2])
+    cos_sim <- abs(sum(a * b)) / (sqrt(sum(a^2)) * sqrt(sum(b^2)))
+    expect_gt(cos_sim, 0.999)
+  }
+})
+
+test_that("damping reaches the same fixed point under either sweep", {
+  # The two tests above exercise the default "gauss-seidel" sweep, where the
+  # damped weight also has to feed .refresh_slide_sigma(). Under "jacobi" no
+  # refresh happens, so cover that path too: damping must not change WHERE the
+  # iteration lands under either sweep, only how it gets there.
+  dat <- make_synthetic_data(seed = 42)
+
+  for (sweep in c("gauss-seidel", "jacobi")) {
+    set.seed(1L)
+    w_undamped <- optimize_genespace_avg_corr(
+      C_self_slide = dat$C_self, C_cross_slide = dat$C_cross,
+      slides = dat$slides, cell_types = dat$cell_types,
+      max_iter = 3000, tol = 1e-8, step_size = 1,
+      verbose = FALSE, sweep = sweep
+    )
+
+    set.seed(1L)
+    w_damped <- optimize_genespace_avg_corr(
+      C_self_slide = dat$C_self, C_cross_slide = dat$C_cross,
+      slides = dat$slides, cell_types = dat$cell_types,
+      max_iter = 6000, tol = 1e-8, step_size = 0.9,
+      verbose = FALSE, sweep = sweep
+    )
+
+    for (ct in dat$cell_types) {
+      a <- as.numeric(w_undamped[[ct]][, 1])
+      b <- as.numeric(w_damped[[ct]][, 1])
+      cos_sim <- abs(sum(a * b)) / (sqrt(sum(a^2)) * sqrt(sum(b^2)))
+      expect_gt(cos_sim, 0.999)
+    }
+  }
+})
+
 test_that("nCC validation works", {
   dat <- make_synthetic_data()
 

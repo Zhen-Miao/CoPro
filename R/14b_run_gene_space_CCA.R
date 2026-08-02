@@ -641,6 +641,9 @@
 #' @param min_cells Minimum number of cells expressing a gene (default 20).
 #' @param max_iter Maximum iterations per component (default 3000).
 #' @param tol Convergence tolerance (default 1e-6).
+#' @param step_size Step size for damped power iteration (default 1).
+#'   Must be in (0, 1]; 1 is pure power iteration (the default behavior).
+#'   Set lower (e.g. 0.5) if optimization oscillates without converging.
 #' @param streaming Logical. If \code{TRUE}, fuse distance + kernel +
 #'   covariance reduction into a per-slide loop and free the n x n matrices
 #'   between slides. Bypasses \code{\link{computeDistance}} and
@@ -735,7 +738,7 @@ setGeneric(
   "runGeneSpaceCCA",
   function(object, sigma, nCC = 2, clip = "quantile",
            min_prevalence = 0.008, min_cells = 20,
-           max_iter = 3000, tol = 1e-6,
+           max_iter = 3000, tol = 1e-6, step_size = 1,
            streaming = FALSE,
            distanceArgs = list(),
            kernelArgs = list(),
@@ -751,7 +754,7 @@ setMethod(
   "runGeneSpaceCCA", "CoPro",
   function(object, sigma, nCC = 2, clip = "quantile",
            min_prevalence = 0.008, min_cells = 20,
-           max_iter = 3000, tol = 1e-6,
+           max_iter = 3000, tol = 1e-6, step_size = 1,
            streaming = FALSE,
            distanceArgs = list(),
            kernelArgs = list(),
@@ -770,7 +773,7 @@ setMethod(
   "runGeneSpaceCCA", "CoProMulti",
   function(object, sigma, nCC = 2, clip = "quantile",
            min_prevalence = 0.008, min_cells = 20,
-           max_iter = 3000, tol = 1e-6,
+           max_iter = 3000, tol = 1e-6, step_size = 1,
            streaming = FALSE,
            distanceArgs = list(),
            kernelArgs = list(),
@@ -882,6 +885,7 @@ setMethod(
       cell_types = cts,
       max_iter = max_iter,
       tol = tol,
+      step_size = step_size,
       verbose = verbose,
       sweep = sweep,
       objective = objective
@@ -897,6 +901,7 @@ setMethod(
         nCC = nCC,
         max_iter = max_iter,
         tol = tol,
+        step_size = step_size,
         verbose = verbose,
         sweep = sweep,
         objective = objective

@@ -11,6 +11,7 @@ optimize_genespace_avg_corr(
   cell_types,
   max_iter = 3000,
   tol = 1e-06,
+  step_size = 1,
   verbose = TRUE,
   sweep = c("gauss-seidel", "jacobi"),
   objective = c("sumcor", "sumcov")
@@ -30,6 +31,11 @@ matrix-free operators.}
 \item{max_iter}{Maximum iterations (default 3000). Must be >= 1.}
 
 \item{tol}{Convergence tolerance on max weight change (default 1e-6).}
+
+\item{step_size}{Step size for damped power iteration (default 1). Must be
+in (0, 1]. Lower values blend the new iterate with the previous one:
+\code{w_new = normalize((1 - step_size) * w_old + step_size * w_update)},
+which damps oscillation when pure power iteration fails to converge.}
 
 \item{verbose}{Print progress every 500 iterations (default TRUE).}
 

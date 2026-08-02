@@ -199,6 +199,10 @@ NULL
 #' @param cell_types Character vector of cell type names.
 #' @param max_iter Maximum iterations (default 3000). Must be >= 1.
 #' @param tol Convergence tolerance on max weight change (default 1e-6).
+#' @param step_size Step size for damped power iteration (default 1). Must be
+#'   in (0, 1]. Lower values blend the new iterate with the previous one:
+#'   \code{w_new = normalize((1 - step_size) * w_old + step_size * w_update)},
+#'   which damps oscillation when pure power iteration fails to converge.
 #' @param verbose Print progress every 500 iterations (default TRUE).
 #' @param sweep Which block sweep to use.
 #'
@@ -238,6 +242,7 @@ NULL
 optimize_genespace_avg_corr <- function(C_self_slide, C_cross_slide,
                                         slides, cell_types,
                                         max_iter = 3000, tol = 1e-6,
+                                        step_size = 1,
                                         verbose = TRUE,
                                         sweep = c("gauss-seidel", "jacobi"),
                                         objective = c("sumcor", "sumcov")) {
@@ -249,6 +254,10 @@ optimize_genespace_avg_corr <- function(C_self_slide, C_cross_slide,
   }
   if (!is.numeric(max_iter) || length(max_iter) != 1 || max_iter < 1) {
     stop("max_iter must be a positive integer.")
+  }
+  if (!is.numeric(step_size) || length(step_size) != 1 ||
+      step_size <= 0 || step_size > 1) {
+    stop("step_size must be a single numeric value in (0, 1]")
   }
 
   S <- length(slides)
@@ -306,7 +315,25 @@ optimize_genespace_avg_corr <- function(C_self_slide, C_cross_slide,
       # rather than overwriting with random noise; we warn so the user knows.
       norm_val <- sqrt(sum(update^2))
       if (norm_val > 0) {
-        w_list[[ct_i]] <- update / norm_val
+        # Damped update: blend the new direction with the previous iterate.
+        # step_size = 1 is pure power iteration (the historical behavior).
+        # w_list[[ct_i]] has not been reassigned yet this sweep, so
+        # w_list_old[[ct_i]] is the previous iterate under both sweeps.
+        if (step_size < 1) {
+          blended <- (1 - step_size) * w_list_old[[ct_i]] +
+                     step_size * (update / norm_val)
+          blended_norm <- sqrt(sum(blended^2))
+          # Defensive: if the blend cancels to zero (impossible for
+          # step_size in (0, 1] with a non-degenerate update, but guard
+          # anyway), fall back to the un-damped direction.
+          if (blended_norm > 0) {
+            w_list[[ct_i]] <- blended / blended_norm
+          } else {
+            w_list[[ct_i]] <- update / norm_val
+          }
+        } else {
+          w_list[[ct_i]] <- update / norm_val
+        }
         if (identical(sweep, "gauss-seidel")) {
           sigma_all <- .refresh_slide_sigma(sigma_all, w_list, C_self_slide,
                                             slides, ct_i, objective)
@@ -385,6 +412,8 @@ optimize_genespace_avg_corr <- function(C_self_slide, C_cross_slide,
 #' @param nCC Total number of components desired (must be > existing components).
 #' @param max_iter Maximum iterations per component.
 #' @param tol Convergence tolerance.
+#' @param step_size Step size for damped power iteration (default 1). See
+#'   \code{\link{optimize_genespace_avg_corr}} for details.
 #' @param verbose Print progress.
 #' @inheritParams optimize_genespace_avg_corr
 #'
@@ -395,11 +424,16 @@ optimize_genespace_avg_corr_n <- function(C_self_slide, C_cross_slide,
                                           slides, cell_types,
                                           w_list, nCC = 2,
                                           max_iter = 3000, tol = 1e-6,
+                                          step_size = 1,
                                           verbose = TRUE,
                                           sweep = c("gauss-seidel", "jacobi"),
                                           objective = c("sumcor", "sumcov")) {
   sweep <- match.arg(sweep)
   objective <- match.arg(objective)
+  if (!is.numeric(step_size) || length(step_size) != 1 ||
+      step_size <= 0 || step_size > 1) {
+    stop("step_size must be a single numeric value in (0, 1]")
+  }
   if (!is.numeric(max_iter) || length(max_iter) != 1 || max_iter < 1) {
     stop("max_iter must be a positive integer.")
   }
@@ -468,7 +502,33 @@ optimize_genespace_avg_corr_n <- function(C_self_slide, C_cross_slide,
         # caller can detect the degenerate component (weight is all-zero).
         norm_val <- sqrt(sum(update^2))
         if (norm_val > 0) {
-          w_current[[ct_i]] <- update / norm_val
+          # Damped update: blend the new direction with the previous iterate.
+          if (step_size < 1) {
+            blended <- (1 - step_size) * w_current_old[[ct_i]] +
+                       step_size * (update / norm_val)
+            blended_norm <- sqrt(sum(blended^2))
+            if (blended_norm > 0) {
+              # Re-project against previous CCs. The blend can reintroduce
+              # components we just deflated, since w_current_old is also a
+              # post-deflation iterate, but Gram-Schmidt is idempotent so
+              # this only matters numerically.
+              for (prev_cc in seq_len(cc - 1)) {
+                prev_w <- w_list[[ct_i]][, prev_cc, drop = FALSE]
+                proj <- as.numeric(t(blended) %*% prev_w)
+                blended <- blended - proj * prev_w
+              }
+              blended_norm <- sqrt(sum(blended^2))
+              if (blended_norm > 0) {
+                w_current[[ct_i]] <- blended / blended_norm
+              } else {
+                w_current[[ct_i]] <- update / norm_val
+              }
+            } else {
+              w_current[[ct_i]] <- update / norm_val
+            }
+          } else {
+            w_current[[ct_i]] <- update / norm_val
+          }
           if (identical(sweep, "gauss-seidel")) {
             sigma_all <- .refresh_slide_sigma(sigma_all, w_current, C_self_slide,
                                               slides, ct_i, objective)

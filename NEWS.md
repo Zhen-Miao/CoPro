@@ -140,6 +140,33 @@
   chunks reference objects too large to ship, and `eval = FALSE` covers knitting
   but not the tangle-and-source step, so `purl = FALSE` is now set on each chunk.
 
+## Damped power iteration in gene space
+
+* **`runGeneSpaceCCA()` gains `step_size`.** The PC-space optimizer
+  (`runSkrCCA()` / `optimize_bilinear*()`) has offered damped power iteration
+  for some time; the gene-space optimizer did not, so a gene-space fit that
+  oscillated had no recourse other than raising `max_iter` and watching it
+  fail again. `optimize_genespace_avg_corr()`,
+  `optimize_genespace_avg_corr_n()` and `runGeneSpaceCCA()` now accept
+  `step_size` in (0, 1], blending each new iterate with the previous one:
+
+  ```
+  w_new = normalize((1 - step_size) * w_old + step_size * w_update)
+  ```
+
+  The default is `step_size = 1`, which is exactly the previous pure power
+  iteration — existing results do not move. In the deflation path the blended
+  iterate is re-projected against the previous components, since blending can
+  reintroduce directions that were just deflated out.
+
+  Damping composes with `sweep`: the blend is always taken against the previous
+  outer iterate, and under `"gauss-seidel"` the per-slide scales are refreshed
+  from the damped weight, so later blocks in the sweep divide by the scales
+  that were actually adopted.
+
+  Damping trades iterations for stability: reach for it when a fit oscillates
+  rather than converges, not as a routine setting.
+
 # CoPro 1.2.0
 
 ## Choosing sigma from the data

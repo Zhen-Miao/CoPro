@@ -15,6 +15,7 @@ runGeneSpaceCCA(
   min_cells = 20,
   max_iter = 3000,
   tol = 1e-06,
+  step_size = 1,
   streaming = FALSE,
   distanceArgs = list(),
   kernelArgs = list(),
@@ -32,6 +33,7 @@ runGeneSpaceCCA(
   min_cells = 20,
   max_iter = 3000,
   tol = 1e-06,
+  step_size = 1,
   streaming = FALSE,
   distanceArgs = list(),
   kernelArgs = list(),
@@ -49,6 +51,7 @@ runGeneSpaceCCA(
   min_cells = 20,
   max_iter = 3000,
   tol = 1e-06,
+  step_size = 1,
   streaming = FALSE,
   distanceArgs = list(),
   kernelArgs = list(),
@@ -77,6 +80,10 @@ for which kernels were computed.}
 \item{max_iter}{Maximum iterations per component (default 3000).}
 
 \item{tol}{Convergence tolerance (default 1e-6).}
+
+\item{step_size}{Step size for damped power iteration (default 1).
+Must be in (0, 1]; 1 is pure power iteration (the default behavior).
+Set lower (e.g. 0.5) if optimization oscillates without converging.}
 
 \item{streaming}{Logical. If \code{TRUE}, fuse distance + kernel +
 covariance reduction into a per-slide loop and free the n x n matrices
