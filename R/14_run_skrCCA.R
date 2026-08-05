@@ -1,8 +1,9 @@
 #' Record a per-slide view of the global PC scores
 #'
-#' `pcaResults[[slide]][[ct]]` is, except when `center_per_slide = TRUE`,
-#' exactly a set of rows of `pcaGlobal[[ct]]$x`. Storing the values again
-#' doubles the memory the PC scores occupy for no new information. Store the
+#' `pcaResults[[slide]][[ct]]` is a set of rows of
+#' `pcaGlobal[[ct]]$x`. Under the recommended within-slide preprocessing those
+#' rows are already centered because centering happened before projection.
+#' Storing the values again doubles the memory occupied by PC scores, so store
 #' row indices and rebuild the slice on demand in `.resolvePCSlice()`.
 #' @noRd
 .newPCSlice <- function(rows) {
@@ -18,9 +19,8 @@
 #' Materialize one `pcaResults` entry
 #'
 #' Accepts either representation. A matrix is returned untouched, which covers
-#' both the `center_per_slide = TRUE` case -- where the slice is re-centered
-#' and so is genuinely different data -- and objects saved before slices became
-#' views.
+#' objects saved before slices became views, including the former post-PCA
+#' per-slide-centering representation.
 #' @param entry One `pcaResults[[slide]][[ct]]` element.
 #' @param scores The cell-by-PC matrix the indices refer to, normally
 #'   `pca_global[[ct]]$x` or a scaled copy of it.
@@ -115,8 +115,8 @@
 
         # Scale the global scores once per cell type, then take slide views of
         # the result, instead of calling scale() once per (slide, cell type).
-        # Slices that are stored as matrices -- center_per_slide, or a legacy
-        # object -- are scaled individually as before.
+        # Slices stored as matrices by a legacy object are scaled individually
+        # as before.
         scaled_global <- scale(pca_ct_obj$x, center = FALSE, scale = pca_A_sd)
 
         for (sID in slides) {
@@ -190,7 +190,7 @@
   }
   if (identical(objective, "sumcor")) {
     slideWeight <- match.arg(
-      if (is.null(slideWeight)) "size" else slideWeight,
+      if (is.null(slideWeight)) "equal" else slideWeight,
       c("size", "equal")
     )
   }
@@ -217,9 +217,8 @@
     stop("n_cores must be a positive integer")
   }
 
-  if (!is.numeric(step_size) || length(step_size) != 1 || step_size <= 0 || step_size > 1) {
-    stop("step_size must be a single numeric value in (0, 1]")
-  }
+  # Same admissible range under both objectives; see .validateStepSize().
+  .validateStepSize(step_size)
 
   # Check kernel matrices
   if (length(object@kernelMatrices) == 0) {
@@ -260,15 +259,10 @@
       sigmas_to_run <- sigmaChoice
     }
     
-    # Across slides the criteria genuinely differ. With a single slide they
-    # usually do not -- see `.sumcorSingleSlideIsExact()` for exactly when --
-    # so one-slide objects go down the exact SUMCOV solvers rather than
-    # iterating to the same answer.
-    n_slides <- length(getSlideList(object))
-    use_sumcor <- identical(objective, "sumcor") && n_slides > 1
-    if (identical(objective, "sumcor") && n_slides <= 1) {
-      .reportSingleSlideSumcor(object, cts, slideWeight, "Only one slide present")
-    }
+    # An explicit SUMCOR request always enters the SUMCOR solver. The solver
+    # itself detects the one-slide cases whose Gram matrices make SUMCOR and
+    # SUMCOV exactly equivalent and uses the direct decomposition there.
+    use_sumcor <- identical(objective, "sumcor")
 
     return(list(
       cts = cts,
@@ -290,12 +284,6 @@
       warning("n_cores parameter is ignored for single-slide CoPro objects")
     }
     
-    # Single-slide object: see the multi-slide branch for when sumcor reduces
-    # to sumcov here, and when it only approximately does.
-    if (identical(objective, "sumcor")) {
-      .reportSingleSlideSumcor(object, cts, slideWeight, "Single-slide object")
-    }
-
     return(list(
       cts = cts,
       sigmaValues = object@sigmaValues,
@@ -305,66 +293,9 @@
       objective = objective,
       slideWeight = slideWeight,
       minCellsPerSlide = minCellsPerSlide,
-      use_sumcor = FALSE
+      use_sumcor = identical(objective, "sumcor")
     ))
   }
-}
-
-#' Does one-slide `sumcor` reduce to `sumcov` exactly?
-#'
-#' `.sumcorSigma()` is the norm \eqn{\|X_i w_i\|}, not a root-mean-square, so
-#' with whitened PCs and \eqn{\|w_i\| = 1} the denominators are
-#' \eqn{\sqrt{n_i - 1}} rather than 1. A one-slide SUMCOR objective is
-#' therefore SUMCOV reweighted by the per-pair constant
-#' \eqn{m_{ij} / \sqrt{(n_i-1)(n_j-1)}}, and a per-pair constant leaves the
-#' argmax alone only when every pair gets the same one -- so with at most one
-#' pair (one or two cell types), or with equal cell counts.
-#'
-#' Only ever called with a single slide, so the flat `cellTypesSub` vector is
-#' that slide's labels for both object classes.
-#' @noRd
-.sumcorSingleSlideIsExact <- function(object, cts, slideWeight) {
-  if (identical(slideWeight, "covariance")) return(TRUE)
-  if (length(cts) <= 2L) return(TRUE)
-  counts <- as.numeric(table(factor(object@cellTypesSub, levels = cts)))
-  isTRUE(all.equal(min(counts), max(counts)))
-}
-
-#' Say what a one-slide `sumcor` request is actually going to compute
-#'
-#' Exact in the common cases; an approximation with three or more cell types at
-#' unequal counts, which is nearly every real dataset. How loudly to say so
-#' depends on the weighting, because that is what sets the size of the gap. The
-#' per-pair constant is \eqn{m_{ij} / \sqrt{(n_i-1)(n_j-1)}}: under `"size"`,
-#' \eqn{m_{ij} = \sqrt{n_i n_j}} nearly cancels it and the mismatch is
-#' \eqn{1 + O(1/n)} -- immaterial, so a message. Under `"equal"` nothing cancels
-#' and the gap can be large, so that one warns.
-#' @noRd
-.reportSingleSlideSumcor <- function(object, cts, slideWeight, prefix) {
-  if (.sumcorSingleSlideIsExact(object, cts, slideWeight)) {
-    message(prefix, ": sumcor and sumcov are the same optimization problem ",
-            "here, so the exact sumcov solvers are used.")
-    return(invisible(NULL))
-  }
-
-  detail <- paste0(
-    "with ", length(cts), " cell types at unequal cell counts, sumcor and ",
-    "sumcov do not share a maximizer on one slide -- the denominators are ",
-    "sqrt(n_i - 1), not 1, so the criteria differ by a per-pair constant. ",
-    "The exact sumcov solvers are used anyway."
-  )
-
-  if (identical(slideWeight, "equal")) {
-    warning(prefix, ": ", detail, " Under slideWeight = \"equal\" nothing ",
-            "cancels that constant and the difference can be material; call ",
-            "optimize_sumcor_pca() directly to optimize the sumcor criterion ",
-            "itself, or use slideWeight = \"size\".", call. = FALSE)
-  } else {
-    message(prefix, ": ", detail, " Under slideWeight = \"size\" the ",
-            "cell-count factor nearly cancels it, so the mismatch is ",
-            "1 + O(1/n) and immaterial in practice.")
-  }
-  invisible(NULL)
 }
 
 #' Apply the per-slide adequacy rule, or report it
@@ -380,8 +311,7 @@
 #' @param cts Cell types of interest.
 #' @param validation Structure from `.validateSkrCCAInputs()`.
 #' @param nPCA Feature count, used for the rank-deficiency warning.
-#' @return `data_matrices`, with slides filtered when `use_sumcor` is `TRUE`,
-#'   and `use_sumcor` possibly downgraded if fewer than two slides survive.
+#' @return `data_matrices`, with slides filtered when `use_sumcor` is `TRUE`.
 #' @noRd
 .applySlideAdequacy <- function(data_matrices, cts, validation, nPCA) {
   if (!isTRUE(validation$is_multi)) return(data_matrices)
@@ -420,13 +350,6 @@
   data_matrices$slides <- kept$slides
   data_matrices$droppedSlides <- kept$dropped
 
-  if (length(kept$slides) < 2L) {
-    warning("runSkrCCA (sumcor): only ", length(kept$slides),
-            " slide(s) survived the per-slide cell threshold, and with one ",
-            "slide sumcor and sumcov are the same problem. Falling back to the ",
-            "exact sumcov solvers.", call. = FALSE)
-    data_matrices$use_sumcor <- FALSE
-  }
   data_matrices
 }
 
@@ -512,14 +435,14 @@
 #' @param maxIter Maximum iterations
 #' @param tol Tolerance
 #' @param n_cores Number of cores
-#' @param step_size Step size for damped power iteration
+#' @param step_size Damping factor, honored under both objectives
 #' @return Optimization result or NULL if failed
 #' @noRd
 .runSingleSigmaOptimization <- function(object, sig_val, sig_name, data_matrices,
                                        transferred_weight_1, is_multi, cts, nCC,
                                        maxIter, tol, n_cores, step_size = 1,
                                        use_sumcor = FALSE,
-                                       slideWeight = "size") {
+                                       slideWeight = "equal") {
 
   tryCatch({
     # SUMCOR route. The per-slide operators are built once per sigma and reused
@@ -531,18 +454,30 @@
     # decompose. That is also why the algebraic identity "stacking slides equals
     # summing their operators" stops holding under SUMCOR.
     if (isTRUE(use_sumcor)) {
-      ops <- .computeSlideOperators(
-        data_matrices$X_list_all, object@kernelMatrices, sig_val,
-        data_matrices$slides, cts, n_cores
-      )
+      if (is_multi) {
+        X_list_all <- data_matrices$X_list_all
+        slides <- data_matrices$slides
+        ops <- .computeSlideOperators(
+          X_list_all, object@kernelMatrices, sig_val, slides, cts, n_cores
+        )
+      } else {
+        # Single-slide flat kernel names have no slide token. Wrap their
+        # ordinary PC matrices in the same operator structure used above.
+        slides <- .SINGLE_SLIDE_TOKEN
+        X_list_all <- setNames(list(data_matrices$PCmats), slides)
+        ops <- .computeSingleSlideOperators(
+          data_matrices$PCmats, object@kernelMatrices, sig_val, cts
+        )
+      }
 
       if (is.null(transferred_weight_1)) {
         w_first <- optimize_sumcor_pca(
-          X_list_all = data_matrices$X_list_all,
+          X_list_all = X_list_all,
           flat_kernels = object@kernelMatrices, sigma = sig_val,
-          slides = data_matrices$slides, cell_types = cts,
+          slides = slides, cell_types = cts,
           slideWeight = slideWeight, sdev2_list = data_matrices$sdev2_list,
-          max_iter = maxIter, tol = tol, n_cores = n_cores, ops = ops
+          max_iter = maxIter, tol = tol, step_size = step_size,
+          n_cores = n_cores, ops = ops
         )
       } else {
         w_first <- transferred_weight_1
@@ -556,12 +491,13 @@
       if (nCC == 1L) return(w_first)
 
       return(optimize_sumcor_pca_n(
-        X_list_all = data_matrices$X_list_all,
+        X_list_all = X_list_all,
         flat_kernels = object@kernelMatrices, sigma = sig_val,
-        slides = data_matrices$slides, cell_types = cts,
+        slides = slides, cell_types = cts,
         w_list = w_first, nCC = nCC, slideWeight = slideWeight,
         sdev2_list = data_matrices$sdev2_list,
-        max_iter = maxIter, tol = tol, n_cores = n_cores, ops = ops
+        max_iter = maxIter, tol = tol, step_size = step_size,
+        n_cores = n_cores, ops = ops
       ))
     }
 
@@ -806,16 +742,16 @@
   data_matrices <- .applySlideAdequacy(
     data_matrices, cts, validation_result, object@nPCA
   )
-  use_sumcor <- if (!is.null(data_matrices$use_sumcor)) {
-    isTRUE(data_matrices$use_sumcor)
-  } else {
-    isTRUE(validation_result$use_sumcor)
-  }
+  # `.applySlideAdequacy()` used to be able to downgrade this when too few
+  # slides survived filtering; that is now decided by
+  # `.sumcorReducesToSumcov()` inside the solver, so validation is the only
+  # source.
+  use_sumcor <- isTRUE(validation_result$use_sumcor)
   slideWeight <- validation_result$slideWeight
   if (use_sumcor) {
     message(sprintf(
       "Objective: sumcor (per-slide self-normalized), slideWeight = \"%s\", %d slides.",
-      slideWeight, length(data_matrices$slides)
+      slideWeight, if (is_multi) length(data_matrices$slides) else 1L
     ))
   }
 
@@ -926,15 +862,30 @@ getCCAObjective <- function(object) {
 #' @param scalePCs Whether to scale each PCs to a uniform variance before
 #' running the program
 #' @param nCC Number of canonical vectors to compute, default = 2
-#' @param tol Tolerance for termination, default = 1e-5
+#' @param tol Tolerance for termination, default = 1e-5. Under SUMCOR this is
+#'   the projected-gradient norm; under SUMCOV it is the weight-update change.
 #' @param transferred_weight_1 If we use cross-slide weight transfer function,
 #'  the transferred weight on each PC. Otherwise, the value should be set to NULL.
-#' @param maxIter Maximum iterations
+#' @param maxIter Maximum optimization iterations.
 #' @param sigmaChoice Specific sigma value to use (CoProMulti only, ignored for CoPro)
 #' @param n_cores Number of cores for parallel processing (CoProMulti only, ignored for CoPro)
-#' @param step_size Step size for damped power iteration. Default 1 (standard
-#'   power iteration). Values in (0,1) blend old and new weights for smoother
-#'   convergence, which can help with many cells or many CCs.
+#' @param step_size Damping factor in (0, 1]. Default 1 (undamped). **Honored
+#'   under both objectives**, so a value chosen for stability keeps its effect
+#'   when the objective changes.
+#'
+#'   Under `"sumcov"` this is the damped power iteration: values below 1 blend
+#'   old and new weights, `w \leftarrow \mathrm{normalize}((1-\alpha)w_{old} +
+#'   \alpha w_{new})`, which can help with many cells or many CCs.
+#'
+#'   Under `"sumcor"` it shortens every trial step of the projected-gradient
+#'   line search. These are the same operation: because both the current iterate
+#'   and the retracted candidate lie on the geodesic through `w` in the search
+#'   direction, blending them and renormalizing *is* a retraction, so damping by
+#'   \eqn{\alpha} equals taking a step
+#'   \eqn{\tau = \alpha t / ((1-\alpha)\sqrt{1 + t^2\|g\|^2} + \alpha)}
+#'   along the same arc. Applying it to the trial step rather than after the
+#'   fact keeps the Armijo test on the point actually returned, so a damped
+#'   SUMCOR run stays monotone. It also damps the SUMCOV warm start.
 #' @param space Which feature space to optimize in. `"pca"` (default) runs the
 #'   PC-space optimizer described here. `"gene"` forwards to
 #'   [runGeneSpaceCCA()], which needs a single `sigma` -- supply it through
@@ -943,8 +894,9 @@ getCCAObjective <- function(object) {
 #'
 #'   Under `space = "gene"`, `objective`, `tol`, `maxIter` and
 #'   `minCellsPerSlide` are forwarded **only when you supply them**, because the
-#'   two entry points have different defaults (`objective` `"sumcov"` vs
-#'   `"sumcor"`, `tol` `1e-5` vs `1e-6`, `maxIter` `200` vs `3000`,
+#'   two entry points have different defaults (`objective` is `"sumcov"` for
+#'   single-slide PCA space and `"sumcor"` for multi-slide PCA and gene space;
+#'   `tol` is `1e-5` vs `1e-6`; `maxIter` is `200` vs `3000`; and
 #'   `minCellsPerSlide` `10` vs `20`). Forwarding a `runSkrCCA()` default would
 #'   silently make this call differ from the [runGeneSpaceCCA()] call it claims
 #'   to be, so an unset argument keeps gene space's own default. Arguments with
@@ -952,15 +904,15 @@ getCCAObjective <- function(object) {
 #'   `step_size`, `slideWeight`) are an error rather than silently dropped.
 #' @param objective Which canonical criterion to maximize.
 #'
-#'   `"sumcov"` (default) maximizes the sum of kernel-smoothed cross-covariances
+#'   `"sumcov"` maximizes the sum of kernel-smoothed cross-covariances
 #'   \eqn{\sum_{i<j} w_i' (\sum_s X_i^{(s)'} K_{ij}^{(s)} X_j^{(s)}) w_j} under
 #'   \eqn{\|w_i\| = 1}.
 #'
 #'   `"sumcor"` maximizes the per-slide self-normalized sum, dividing each
 #'   slide's cross term by that slide's own score scales.
 #'
-#'   **With one slide these are usually the same problem**, and `"sumcor"` is
-#'   routed to the exact `"sumcov"` solvers. Whitened PCs give
+#'   **With one slide these are often the same problem.** When PCA was fit to
+#'   that slide, whitened PCs give
 #'   \eqn{X_i'X_i = (n_i-1) I}, so on \eqn{\|w_i\| = 1} the denominators are
 #'   \eqn{\sigma_i = \sqrt{n_i - 1}} -- note \eqn{\sigma} is a norm, not a
 #'   root-mean-square -- and the objective is SUMCOV reweighted by the
@@ -968,10 +920,11 @@ getCCAObjective <- function(object) {
 #'   constant leaves the maximizer alone only when every pair gets the same
 #'   one, so the reduction is exact for **one or two cell types at any cell
 #'   counts**, and for **three or more only when the counts are equal**.
-#'   Outside that, one-slide `"sumcor"` still uses the `"sumcov"` solvers but
-#'   warns: the mismatch is \eqn{1 + O(1/n)} under the default
-#'   `slideWeight = "size"` and can be material under `"equal"`. Call
-#'   [optimize_sumcor_pca()] directly to optimize the criterion itself.
+#'   In exactly those cases CoPro uses the existing SUMCOV solver. Outside
+#'   them it runs the full-gradient SUMCOR optimizer, so an explicit
+#'   `objective = "sumcor"` always optimizes the requested criterion. The
+#'   matrix condition is checked directly; this matters when several slides
+#'   informed the PCA but filtering leaves only one slide for CCA.
 #'
 #'   Across slides they always differ. SUMCOV factors exactly as
 #'   \eqn{\sum_s \sigma_i^{(s)} \sigma_j^{(s)} \rho_{ij}^{(s)}} -- with no
@@ -981,12 +934,19 @@ getCCAObjective <- function(object) {
 #'   with inflated variance along the canonical direction dominate; `"sumcor"`
 #'   removes it, and `slideWeight = "size"` reintroduces the cell-count factor
 #'   \eqn{\sqrt{n_i n_j}} on its own.
+#'   The default is `"sumcov"` for single-slide objects and `"sumcor"` for
+#'   multi-slide objects. The latter is paired with the within-slide PCA
+#'   preprocessing that [computePCA()] now uses by default.
+#'
+#'   The current cell-level permutation routines refit the SUMCOV criterion and
+#'   therefore reject weights fitted with SUMCOR rather than mix objectives.
+#'   To use those routines, fit explicitly with `objective = "sumcov"`.
 #' @param slideWeight Per-slide weighting, only valid with
 #'   `objective = "sumcor"` (an error otherwise, since under `"sumcov"` the
-#'   weighting is fixed by the objective). `"size"` (default) weights slide `s`
+#'   weighting is fixed by the objective). `"equal"` (default) gives every
+#'   slide the same vote, matching [runGeneSpaceCCA()]. `"size"` weights slide `s`
 #'   by \eqn{\sqrt{n_i^{(s)} n_j^{(s)}}}, so larger slides count for more
-#'   without per-slide variance re-entering. `"equal"` weights every slide the
-#'   same -- strict Kettenring SUMCOR, matching [runGeneSpaceCCA()].
+#'   without per-slide variance re-entering.
 #' @param minCellsPerSlide Minimum cells per (slide, cell type). Slides below
 #'   this are **dropped** under `objective = "sumcor"`, which divides by a
 #'   per-slide scale that a near-empty slide drives to its floor. Under
@@ -997,18 +957,20 @@ getCCAObjective <- function(object) {
 #'   otherwise.
 #'
 #' @section Batch effects:
-#' `objective = "sumcor"` removes the per-slide *scale* sensitivity but not a
-#' per-slide *mean shift*. PC scores are centered globally
-#' (`computePCA(center_per_slide = FALSE)`), so a shared technical shift leaves
+#' `objective = "sumcor"` removes per-slide score-scale sensitivity but not a
+#' per-slide *mean shift* on its own. The multi-slide default
+#' `computePCA(center_per_slide = TRUE)` centers and scales each
+#' (slide, cell type) expression block before the shared PCA, so a technical
+#' shift is excluded from both the PC scores and the covariance that chooses
+#' the retained loading space. With the legacy
+#' `computePCA(center_per_slide = FALSE)`, a shared technical shift leaves
 #' \eqn{u_i^{(s)} \approx M_i^{(s)} \mathbf{1} + \epsilon} and the numerator
 #' picks up \eqn{M_i M_j \mathbf{1}'K\mathbf{1}}, positive whenever both cell
 #' types shift the same way. Dividing by `sigma` does not rescue this: for a
 #' nonnegative kernel the leading singular pair is close to the Perron vector,
 #' so a constant score reaches \eqn{\rho \approx \sigma_{max}(K)} on every
-#' slide. Pair multi-slide `"sumcor"` with
-#' `computePCA(..., center_per_slide = TRUE)`, which is the half of the fix that
-#' addresses the mean shift. This applies to `"sumcov"` too and is independent
-#' of the objective choice.
+#' slide. Thus batch-robust multi-slide analysis needs both defaults: within-slide
+#' preprocessing before PCA and the per-slide self-normalized objective.
 #'
 #' @return CoPro object with skrCCA results computed. The objective actually
 #'   used is recorded on `@skrCCAOut` and readable with [getCCAObjective()].
@@ -1039,7 +1001,7 @@ setGeneric(
            transferred_weight_1 = NULL,
            maxIter = 200, sigmaChoice = NULL, n_cores = 1,
            step_size = 1, space = c("pca", "gene"),
-           objective = c("sumcov", "sumcor"), slideWeight = NULL,
+           objective = NULL, slideWeight = NULL,
            minCellsPerSlide = 10, ...) standardGeneric("runSkrCCA"))
 
 #' Forward a `space = "gene"` request to the gene-space implementation
@@ -1089,8 +1051,9 @@ setGeneric(
   if ("maxIter" %in% given) fwd$max_iter <- maxIter
   if ("minCellsPerSlide" %in% given) fwd$min_cells <- minCellsPerSlide
 
-  # `objective` is the same trap: runSkrCCA() defaults to "sumcov" and
-  # runGeneSpaceCCA() to "sumcor", so forwarding the resolved default would make
+  # `objective` is the same trap: the PCA-space method resolves its default
+  # from object type while runGeneSpaceCCA() defaults to "sumcor", so
+  # forwarding a resolved but unrequested value would make
   # runSkrCCA(space = "gene") optimize a different criterion than the
   # runGeneSpaceCCA() call it claims to forward to. Only an explicit choice
   # travels; otherwise gene space keeps its own default.
@@ -1111,11 +1074,15 @@ setMethod(
            transferred_weight_1 = NULL,
            maxIter = 200, sigmaChoice = NULL, n_cores = 1,
            step_size = 1, space = c("pca", "gene"),
-           objective = c("sumcov", "sumcor"), slideWeight = NULL,
+           objective = NULL, slideWeight = NULL,
            minCellsPerSlide = 10, ...) {
 
     space <- match.arg(space)
-    objective <- match.arg(objective)
+    objective <- if (is.null(objective)) {
+      "sumcov"
+    } else {
+      match.arg(objective, c("sumcov", "sumcor"))
+    }
     if (identical(space, "gene")) {
       return(.dispatchGeneSpace(
         object, sigmaChoice, nCC, objective,
@@ -1153,11 +1120,15 @@ setMethod(
           transferred_weight_1 = NULL,
            maxIter = 200, sigmaChoice = NULL, n_cores = 1,
            step_size = 1, space = c("pca", "gene"),
-           objective = c("sumcov", "sumcor"), slideWeight = NULL,
+           objective = NULL, slideWeight = NULL,
            minCellsPerSlide = 10, ...) {
 
     space <- match.arg(space)
-    objective <- match.arg(objective)
+    objective <- if (is.null(objective)) {
+      "sumcor"
+    } else {
+      match.arg(objective, c("sumcov", "sumcor"))
+    }
     if (identical(space, "gene")) {
       return(.dispatchGeneSpace(
         object, sigmaChoice, nCC, objective,

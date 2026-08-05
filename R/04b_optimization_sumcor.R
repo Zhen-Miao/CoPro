@@ -32,12 +32,10 @@
 #' every \eqn{n_i} is equal. So the reduction to SUMCOV is exact for one or two
 #' cell types at any cell counts, and for three or more only when the counts
 #' are equal; `.sumcorReducesToSumcov()` is that test. Outside it the criteria
-#' have genuinely different maximizers, and `optimize_sumcor_pca()` runs the
-#' iteration rather than short-circuiting. (`runSkrCCA()` takes the more
-#' conservative route: it still uses the SUMCOV solvers there, and says so --
-#' see `.reportSingleSlideSumcor()`.) Under the default `slideWeight = "size"`
-#' the mismatch is \eqn{1 + O(1/n)} and immaterial in practice; it is
-#' `"equal"` -- strict Kettenring SUMCOR -- where it bites.
+#' have genuinely different maximizers, and the full-gradient optimizer runs
+#' rather than short-circuiting. Under `slideWeight = "size"` the mismatch is
+#' \eqn{1 + O(1/n)} and usually immaterial; it is `"equal"` -- strict
+#' Kettenring SUMCOR and the multi-slide default -- where it can be material.
 #'
 #' @name sumcor_optimization
 #' @keywords internal
@@ -53,6 +51,39 @@ NULL
 #' @noRd
 .resolveSlideWeight <- function(slideWeight) {
   match.arg(slideWeight, c("size", "equal", "covariance"))
+}
+
+#' The slide token that single-slide operator structures are keyed by
+#'
+#' Single-slide kernels carry no slide name, so the operator structures invent
+#' one. Shared so the two builders cannot drift apart.
+#' @noRd
+.SINGLE_SLIDE_TOKEN <- ".single_slide"
+
+#' Enumerate the (i, j) terms the objective sums over
+#'
+#' One cell type gives the within-type term `(i, i)`; otherwise every unordered
+#' cross-type pair. Shared by the objective, its gradient, and the reduction
+#' test so the three cannot disagree about what is being summed.
+#' @noRd
+.sumcorPairs <- function(cell_types) {
+  if (length(cell_types) == 1L) {
+    return(list(c(cell_types[[1L]], cell_types[[1L]])))
+  }
+  combn(cell_types, 2L, simplify = FALSE)
+}
+
+#' Validate the damping factor
+#'
+#' Same admissible range as the SUMCOV power iteration, so a `step_size` that
+#' is valid for one objective is valid for the other.
+#' @noRd
+.validateStepSize <- function(step_size) {
+  if (!is.numeric(step_size) || length(step_size) != 1L ||
+      is.na(step_size) || step_size <= 0 || step_size > 1) {
+    stop("step_size must be a single numeric value in (0, 1]")
+  }
+  invisible(step_size)
 }
 
 #' Move the per-slide operators into whitened coordinates
@@ -196,30 +227,51 @@ NULL
 
 #' Does a one-slide SUMCOR problem have the same maximizer as SUMCOV?
 #'
-#' With whitened PCs \eqn{G_i = (n_i - 1) I}, so on \eqn{\|w_i\| = 1} the
-#' denominator is \eqn{\sigma_i = \sqrt{n_i - 1}} -- not 1, because
-#' `.sumcorSigma()` is a norm rather than a root-mean-square. The objective is
-#' then SUMCOV reweighted by the *per-pair* constant
-#' \eqn{m_{ij} / \sqrt{(n_i-1)(n_j-1)}}, and a per-pair constant leaves the
-#' argmax alone only when it is the same for every pair. That holds when there
-#' is at most one pair (one or two cell types), or when all cell counts are
-#' equal so the constants coincide. `"covariance"` cancels the denominator
-#' outright and is SUMCOV by construction.
+#' The reduction requires more than merely having one remaining slide: every
+#' per-type Gram matrix must be a scalar identity, \eqn{G_i = c_i I}, so its
+#' denominator is constant on \eqn{\|w_i\|=1}. This is true when PCA was fit to
+#' that one slide, but is generally false when a multi-slide PCA was fit first
+#' and all but one slide were later filtered. Checking the matrices prevents
+#' that latter case from taking an invalid shortcut.
 #'
-#' Outside those cases the two criteria genuinely differ, so the caller runs
-#' the iteration instead of short-circuiting. The gap is
-#' \eqn{1 + O(1/n)} under `"size"` and can be large under `"equal"`.
+#' Once the denominators are constant, SUMCOR is SUMCOV with per-pair weight
+#' \eqn{m_{ij}/\sqrt{c_i c_j}}. The maximizers coincide for arbitrary data only
+#' when there is at most one pair or all those constants agree.
 #' @param ops Structure from `.computeSlideOperators()`, one slide.
 #' @param slideWeight One of `"equal"`, `"size"`, `"covariance"`.
 #' @return `TRUE` when the SUMCOV solvers give the SUMCOR maximizer exactly.
 #' @noRd
 .sumcorReducesToSumcov <- function(ops, slideWeight) {
   if (identical(slideWeight, "covariance")) return(TRUE)
-  if (length(ops$cell_types) <= 2L) return(TRUE)
-  counts <- vapply(ops$cell_types, function(ct) {
-    as.numeric(ops$n[[ops$slides[[1L]]]][[ct]])
+  if (length(ops$slides) != 1L) return(FALSE)
+
+  s <- ops$slides[[1L]]
+  gram_constants <- vapply(ops$cell_types, function(ct) {
+    G <- ops$G[[s]][[ct]]
+    c_i <- mean(diag(G))
+    target <- diag(c_i, nrow(G))
+    scale <- max(1, max(abs(G)), abs(c_i))
+    if (max(abs(G - target)) > 1e-8 * scale) return(NA_real_)
+    c_i
   }, numeric(1))
-  isTRUE(all.equal(min(counts), max(counts)))
+  if (anyNA(gram_constants) || any(gram_constants <= 0)) return(FALSE)
+
+  pairs <- .sumcorPairs(ops$cell_types)
+  if (length(pairs) <= 1L) return(TRUE)
+
+  pair_constants <- vapply(pairs, function(pair) {
+    ct_i <- pair[[1L]]
+    ct_j <- pair[[2L]]
+    m <- switch(
+      slideWeight,
+      equal = 1,
+      size = sqrt(as.numeric(ops$n[[s]][[ct_i]]) *
+                    as.numeric(ops$n[[s]][[ct_j]]))
+    )
+    m / sqrt(gram_constants[[ct_i]] * gram_constants[[ct_j]])
+  }, numeric(1))
+  max(pair_constants) - min(pair_constants) <=
+    1e-8 * max(1, max(abs(pair_constants)))
 }
 
 #' The SUMCOR objective value
@@ -241,13 +293,7 @@ NULL
 .sumcorObjective <- function(w_list, ops, slideWeight, sigma_all = NULL) {
   if (is.null(sigma_all)) sigma_all <- .sumcorSigma(w_list, ops)
   cell_types <- ops$cell_types
-  within <- length(cell_types) == 1L
-
-  pairs <- if (within) {
-    list(c(cell_types[[1L]], cell_types[[1L]]))
-  } else {
-    combn(cell_types, 2, simplify = FALSE)
-  }
+  pairs <- .sumcorPairs(cell_types)
 
   total <- 0
   weight_total <- 0
@@ -267,6 +313,34 @@ NULL
   if (!.sumcorWeightIsConstant(slideWeight)) return(total)
   if (weight_total <= 0) return(0)
   total / weight_total
+}
+
+#' Wrap a single-slide PC problem in the per-slide operator structure
+#'
+#' Single-slide kernels omit a slide token from their flat names, so they
+#' cannot be passed through `.computeSlideOperators()`, which always performs
+#' a slide-keyed lookup. This small adapter lets an explicit one-slide SUMCOR
+#' request use the same exact optimizer as a multi-slide request.
+#' @noRd
+.computeSingleSlideOperators <- function(X_list, flat_kernels, sigma,
+                                         cell_types) {
+  slide <- .SINGLE_SLIDE_TOKEN
+  Y <- compute_Y_resi(
+    X_list, flat_kernels, sigma, cell_types, slide = NULL
+  )
+  G <- setNames(lapply(cell_types, function(ct) {
+    crossprod(X_list[[ct]])
+  }), cell_types)
+  n <- setNames(vapply(cell_types, function(ct) {
+    nrow(X_list[[ct]])
+  }, integer(1)), cell_types)
+  list(
+    Y = setNames(list(Y), slide),
+    G = setNames(list(G), slide),
+    n = setNames(list(n), slide),
+    slides = slide,
+    cell_types = cell_types
+  )
 }
 
 #' Metric-aware Gram-Schmidt against previously computed axes
@@ -303,217 +377,330 @@ NULL
   matrix(v, ncol = 1L)
 }
 
-#' One Gauss-Seidel sweep of the frozen-sigma SUMCOR iteration
+#' Exact Euclidean gradient of the PCA-space SUMCOR objective
 #'
-#' Blocks are updated in place and later blocks in the same sweep read the
-#' already-updated earlier ones -- Gauss-Seidel, not Jacobi. For SUMCOV this
-#' makes each block update an exact coordinate maximization (the objective is
-#' linear in `w_i` with the other blocks fixed), so the objective cannot
-#' decrease and the iteration cannot rest at a negative-objective point. That
-#' is why no sign-repair step appears anywhere in this file. Under SUMCOR the
-#' same sweep maximizes a frozen-`sigma` surrogate rather than the objective
-#' itself, so the caller additionally guards on the true objective.
+#' For one cross-cell-type term
+#' \deqn{\rho_{ij}^{(s)} = \frac{w_i'Y_{ij}^{(s)}w_j}{
+#'   \sigma_i^{(s)}\sigma_j^{(s)}}}
+#' the derivative with respect to \eqn{w_i} is
+#' \deqn{\frac{Y_{ij}^{(s)}w_j}{\sigma_i^{(s)}\sigma_j^{(s)}} -
+#'   \rho_{ij}^{(s)}\frac{G_i^{(s)}w_i}{(\sigma_i^{(s)})^2}.}
+#' The second term is the derivative of the denominator. Omitting it gives the
+#' old frozen-scale heuristic, whose fixed points need not be stationary points
+#' of SUMCOR. This routine differentiates exactly the value returned by
+#' `.sumcorObjective()`, including its constant slide-weight normalization.
 #'
-#' `sigma` for the block just updated is refreshed immediately, so subsequent
-#' blocks in the same sweep divide by current scales.
+#' At the numerical sigma floor the denominator is locally constant, so its
+#' derivative is omitted. Adequacy filtering normally keeps the optimizer away
+#' from that non-differentiable boundary.
 #'
-#' @param w_list Weights at the start of the sweep; updated and returned.
+#' `slideWeight = "covariance"` is handled algebraically: the denominators
+#' cancel, leaving the exact SUMCOV gradient.
+#'
+#' @param w_list Named list of single-column weights.
 #' @param ops Structure from `.computeSlideOperators()`.
 #' @param slideWeight Slide-weight choice.
-#' @param sdev2_list Optional diagonal CCA metrics per cell type.
-#' @param prev_axes Optional named list of previously accepted axis matrices,
-#'   for Gram-Schmidt deflation.
-#' @return The updated `w_list`.
+#' @param sigma_all Optional precomputed scales.
+#' @return Named list of gradient columns.
 #' @noRd
-.sumcorSweep <- function(w_list, ops, slideWeight, sdev2_list = NULL,
-                         prev_axes = NULL) {
+.sumcorGradient <- function(w_list, ops, slideWeight, sigma_all = NULL) {
   cell_types <- ops$cell_types
   within <- length(cell_types) == 1L
-  sigma_all <- .sumcorSigma(w_list, ops)
+  covariance <- identical(slideWeight, "covariance")
+  if (is.null(sigma_all) && !covariance) {
+    sigma_all <- .sumcorSigma(w_list, ops)
+  }
 
-  for (ct_i in cell_types) {
-    update <- matrix(0, nrow = nrow(w_list[[ct_i]]), ncol = 1L)
+  gradient <- setNames(lapply(cell_types, function(ct) {
+    matrix(0, nrow = nrow(w_list[[ct]]), ncol = 1L)
+  }), cell_types)
+  weight_total <- 0
 
-    for (s in ops$slides) {
-      sig_i <- sigma_all[[s]][[ct_i]]
+  pairs <- .sumcorPairs(cell_types)
 
-      if (within) {
-        m <- .sumcorSlideWeight(slideWeight, ops, s, ct_i, ct_i, sigma_all[[s]])
-        update <- update +
-          (m / (sig_i * sig_i)) * (ops$Y[[s]][[ct_i]][[ct_i]] %*% w_list[[ct_i]])
+  for (s in ops$slides) {
+    for (pair in pairs) {
+      ct_i <- pair[[1L]]
+      ct_j <- pair[[2L]]
+      w_i <- w_list[[ct_i]]
+      w_j <- w_list[[ct_j]]
+      Y <- ops$Y[[s]][[ct_i]][[ct_j]]
+
+      if (covariance) {
+        if (within) {
+          gradient[[ct_i]] <- gradient[[ct_i]] + (Y + t(Y)) %*% w_i
+        } else {
+          gradient[[ct_i]] <- gradient[[ct_i]] + Y %*% w_j
+          gradient[[ct_j]] <- gradient[[ct_j]] + t(Y) %*% w_i
+        }
         next
       }
 
-      for (ct_j in cell_types) {
-        if (ct_j == ct_i) next
-        m <- .sumcorSlideWeight(slideWeight, ops, s, ct_i, ct_j, sigma_all[[s]])
-        update <- update + (m / sig_i) *
-          (ops$Y[[s]][[ct_i]][[ct_j]] %*% (w_list[[ct_j]] / sigma_all[[s]][[ct_j]]))
+      sigma_s <- sigma_all[[s]]
+      sig_i <- sigma_s[[ct_i]]
+      sig_j <- sigma_s[[ct_j]]
+      m <- .sumcorSlideWeight(slideWeight, ops, s, ct_i, ct_j, sigma_s)
+      weight_total <- weight_total + m
+
+      G_i_w <- ops$G[[s]][[ct_i]] %*% w_i
+      q_i <- max(as.numeric(crossprod(w_i, G_i_w)), 0)
+      num <- as.numeric(crossprod(w_i, Y %*% w_j))
+
+      if (within) {
+        term <- m * (Y + t(Y)) %*% w_i / (sig_i * sig_i)
+        if (q_i > .SUMCOR_SIGMA_FLOOR^2) {
+          term <- term - m * 2 * num * G_i_w / (sig_i^4)
+        }
+        gradient[[ct_i]] <- gradient[[ct_i]] + term
+        next
       }
-    }
 
-    d_i <- if (is.null(sdev2_list)) NULL else sdev2_list[[ct_i]]
+      rho <- num / (sig_i * sig_j)
+      term_i <- m * (Y %*% w_j) / (sig_i * sig_j)
+      if (q_i > .SUMCOR_SIGMA_FLOOR^2) {
+        term_i <- term_i - m * rho * G_i_w / (sig_i * sig_i)
+      }
+      gradient[[ct_i]] <- gradient[[ct_i]] + term_i
 
-    # Deflate before normalizing: the axis must be free of earlier directions
-    # under the same metric the normalization uses.
-    if (!is.null(prev_axes) && !is.null(prev_axes[[ct_i]])) {
-      update <- .sumcorOrthogonalize(update, prev_axes[[ct_i]], d_i)
-    }
-
-    if (sqrt(sum(as.numeric(update)^2)) <= 0) {
-      # Every cross term vanished for this block, or deflation exhausted the
-      # subspace. Keep the previous iterate rather than injecting a direction
-      # the objective did not choose; the caller reports non-convergence.
-      next
-    }
-
-    w_list[[ct_i]] <- normalize_gradient_weighted(update, d_i)
-    if (!is.null(prev_axes) && !is.null(prev_axes[[ct_i]])) {
-      # Normalization can reintroduce a component along the deflated span when
-      # the metric is non-identity, so re-project and re-normalize.
-      w_list[[ct_i]] <- normalize_vec_weighted(
-        .sumcorOrthogonalize(w_list[[ct_i]], prev_axes[[ct_i]], d_i), d_i
-      )
-    }
-    # Refresh only the block just updated -- the others are untouched, so a
-    # full .sumcorSigma() recompute would repeat work for every block.
-    for (s in ops$slides) {
-      val <- as.numeric(
-        crossprod(w_list[[ct_i]], ops$G[[s]][[ct_i]] %*% w_list[[ct_i]])
-      )
-      sigma_all[[s]][[ct_i]] <- max(sqrt(max(val, 0)), .SUMCOR_SIGMA_FLOOR)
+      G_j_w <- ops$G[[s]][[ct_j]] %*% w_j
+      q_j <- max(as.numeric(crossprod(w_j, G_j_w)), 0)
+      term_j <- m * (t(Y) %*% w_i) / (sig_i * sig_j)
+      if (q_j > .SUMCOR_SIGMA_FLOOR^2) {
+        term_j <- term_j - m * rho * G_j_w / (sig_j * sig_j)
+      }
+      gradient[[ct_j]] <- gradient[[ct_j]] + term_j
     }
   }
 
-  w_list
+  if (!covariance && weight_total > 0) {
+    gradient <- lapply(gradient, `/`, weight_total)
+  }
+  gradient
 }
 
-#' Run the SUMCOR iteration for one axis
+#' Project an objective gradient onto the feasible tangent space
 #'
-#' Gauss-Seidel sweeps with three guarantees standing in for the sign-repair
-#' step the gene-space Jacobi iteration needs:
+#' The optimizer itself always runs in whitened coordinates. The feasible set
+#' for each block is therefore the unit sphere intersected with the orthogonal
+#' complement of the previously accepted axes.
+#' @noRd
+.sumcorTangentGradient <- function(gradient, w_list, prev_axes = NULL) {
+  setNames(lapply(names(w_list), function(ct) {
+    g <- gradient[[ct]]
+    if (!is.null(prev_axes) && !is.null(prev_axes[[ct]])) {
+      g <- .sumcorOrthogonalize(g, prev_axes[[ct]], NULL)
+    }
+    w <- w_list[[ct]]
+    g <- g - w * as.numeric(crossprod(w, g))
+    # The two projections commute when `w` and the previous axes are
+    # orthogonal. Repeating the first one suppresses accumulated roundoff.
+    if (!is.null(prev_axes) && !is.null(prev_axes[[ct]])) {
+      g <- .sumcorOrthogonalize(g, prev_axes[[ct]], NULL)
+    }
+    matrix(as.numeric(g), ncol = 1L)
+  }), names(w_list))
+}
+
+#' Retract a tangent step back to the feasible product of spheres
+#' @noRd
+.sumcorRetract <- function(w_list, direction, step, prev_axes = NULL) {
+  setNames(lapply(names(w_list), function(ct) {
+    candidate <- w_list[[ct]] + step * direction[[ct]]
+    if (!is.null(prev_axes) && !is.null(prev_axes[[ct]])) {
+      candidate <- .sumcorOrthogonalize(candidate, prev_axes[[ct]], NULL)
+    }
+    norm <- sqrt(sum(as.numeric(candidate)^2))
+    if (!is.finite(norm) || norm <= .SUMCOR_SIGMA_FLOOR) return(NULL)
+    matrix(as.numeric(candidate) / norm, ncol = 1L)
+  }), names(w_list))
+}
+
+#' Run exact projected-gradient SUMCOR optimization for one axis
 #'
-#' * the caller supplies a deterministic warm start (the SUMCOV solution), so
-#'   there is no RNG dependence and no random initial direction;
-#' * the best-objective iterate seen is tracked and returned, so the result can
-#'   never be worse on the SUMCOR objective than the warm start;
-#' * a sweep that lowers the objective is retried blended back toward the
-#'   previous iterate, halving the step until it improves or the step underflows.
+#' The SUMCOV solution supplies a deterministic warm start. At every iteration
+#' the full SUMCOR gradient is projected onto the feasible tangent space and a
+#' backtracking Armijo search chooses a step on the product of spheres. Accepted
+#' steps are therefore monotone in the *actual* objective, and convergence is
+#' based on the norm of its projected gradient (the constrained first-order
+#' stationarity condition), not on a frozen-denominator fixed point.
+#'
+#' Damping (`step_size < 1`) is the same knob the SUMCOV power iteration
+#' exposes, expressed in this geometry. There, a damped update is
+#' \eqn{\mathrm{normalize}((1-\alpha) w + \alpha w^{+})}. Here \eqn{w} and the
+#' retracted candidate \eqn{w^{+} = R_w(t g)} both lie on the great circle
+#' through \eqn{w} in direction \eqn{g}, so that blend is *itself* a retraction:
+#' \deqn{\mathrm{normalize}\bigl((1-\alpha)w + \alpha R_w(tg)\bigr) = R_w(\tau g),
+#'   \qquad \tau = \frac{\alpha t}{(1-\alpha)c + \alpha},
+#'   \qquad c = \sqrt{1 + t^2\|g\|^2}.}
+#' Damping toward the previous iterate is therefore exactly a shorter step along
+#' the same arc, which is why `step_size` is expressed as a step length here
+#' rather than as a blend applied after the fact. Applying it to the *trial*
+#' step keeps the Armijo test on the point actually returned; blending after a
+#' certified step would move off it and forfeit monotonicity.
+#'
+#' A damped run proposes `step_size` every iteration instead of the adaptive
+#' hint, rather than scaling that hint. Scaling would accomplish nothing: the
+#' hint is rebuilt from the accepted step each iteration, so a constant factor
+#' cancels out of the next proposal and the damping would silently apply to the
+#' first iteration only. Replacing the adaptivity with a fixed step is also the
+#' closer analogue of the power iteration's fixed \eqn{\alpha}. `step_size = 1`
+#' leaves the adaptive iteration bit-for-bit unchanged.
 #'
 #' @param w_init Named list of single-column starting weights.
 #' @param ops Structure from `.computeSlideOperators()`.
 #' @param slideWeight Slide-weight choice.
 #' @param sdev2_list Optional diagonal CCA metrics.
 #' @param prev_axes Optional previously accepted axes for deflation.
-#' @param max_iter,tol Iteration controls. `tol` applies to both the sign-strict
-#'   maximum weight change and the relative objective change.
+#' @param max_iter,tol Iteration controls. `tol` is the maximum projected
+#'   gradient norm allowed at convergence.
+#' @param step_size Damping factor in (0, 1]. Below 1, every iteration proposes
+#'   this fixed step in place of the adaptive hint; at 1 the adaptive iteration
+#'   is unchanged. Armijo still runs either way, so damped runs stay monotone.
 #' @param verbose Report convergence.
 #' @param label Text used in messages.
-#' @return A list with `w_list` and `objective`.
+#' @return A list with `w_list`, `objective`, `gradient_norm`, `iterations`,
+#'   and the monotone `objective_trace`.
 #' @noRd
 .sumcorIterate <- function(w_init, ops, slideWeight, sdev2_list = NULL,
                            prev_axes = NULL, max_iter = 200, tol = 1e-6,
-                           verbose = FALSE, label = "CC") {
+                           step_size = 1, verbose = FALSE, label = "CC") {
   cell_types <- ops$cell_types
 
-  # A deflated axis must start inside the deflated subspace, or the first sweep
-  # measures an objective that includes directions already claimed.
-  w_list <- w_init
-  if (!is.null(prev_axes)) {
-    for (ct in cell_types) {
-      if (is.null(prev_axes[[ct]])) next
-      d_ct <- if (is.null(sdev2_list)) NULL else sdev2_list[[ct]]
-      w_list[[ct]] <- normalize_vec_weighted(
-        .sumcorOrthogonalize(w_list[[ct]], prev_axes[[ct]], d_ct), d_ct
-      )
-    }
+  # Carry a non-identity CCA metric only through this change of coordinates.
+  # The recursion then optimizes and projects in ordinary Euclidean geometry.
+  if (!is.null(sdev2_list)) {
+    fit <- .sumcorIterate(
+      w_init = .whitenWeights(w_init, sdev2_list),
+      ops = .whitenSlideOperators(ops, sdev2_list),
+      slideWeight = slideWeight,
+      sdev2_list = NULL,
+      prev_axes = if (is.null(prev_axes)) NULL else {
+        .whitenWeights(prev_axes, sdev2_list)
+      },
+      max_iter = max_iter, tol = tol, step_size = step_size,
+      verbose = verbose, label = label
+    )
+    fit$w_list <- .unwhitenWeights(fit$w_list, sdev2_list)
+    return(fit)
   }
 
+  # Put an arbitrary supplied start exactly on the feasible manifold.
+  w_list <- setNames(lapply(cell_types, function(ct) {
+    w <- w_init[[ct]]
+    if (!is.null(prev_axes) && !is.null(prev_axes[[ct]])) {
+      w <- .sumcorOrthogonalize(w, prev_axes[[ct]], NULL)
+    }
+    norm <- sqrt(sum(as.numeric(w)^2))
+    if (!is.finite(norm) || norm <= .SUMCOR_SIGMA_FLOOR) {
+      stop("SUMCOR ", label, " has no nonzero feasible warm start for ", ct,
+           "; reduce nCC or increase nPCA.")
+    }
+    matrix(as.numeric(w) / norm, ncol = 1L)
+  }), cell_types)
+
   obj <- .sumcorObjective(w_list, ops, slideWeight)
-  best_w <- w_list
-  best_obj <- obj
+  objective_trace <- obj
   converged <- FALSE
   iter <- 0L
+  gradient_norm <- Inf
+  step_hint <- 1
+  damped <- step_size < 1
+  stalled <- FALSE
 
   while (iter < max_iter) {
-    iter <- iter + 1L
-    w_old <- w_list
-    obj_old <- obj
+    gradient <- .sumcorGradient(w_list, ops, slideWeight)
+    tangent <- .sumcorTangentGradient(gradient, w_list, prev_axes)
+    block_norms <- vapply(tangent, function(g) {
+      sqrt(sum(as.numeric(g)^2))
+    }, numeric(1))
+    gradient_norm <- max(block_norms)
 
-    candidate <- .sumcorSweep(w_list, ops, slideWeight, sdev2_list, prev_axes)
-    obj_new <- .sumcorObjective(candidate, ops, slideWeight)
-
-    # Backtrack when the frozen-sigma sweep overshot. Blending toward the
-    # previous iterate is the same convex-blend device `step_size` provides in
-    # bilinear_w_from_Y_resi(); here it is applied only on a decrease.
-    step <- 1
-    while (obj_new < obj_old && step > 1e-4) {
-      step <- step / 2
-      blended <- setNames(lapply(cell_types, function(ct) {
-        d_ct <- if (is.null(sdev2_list)) NULL else sdev2_list[[ct]]
-        mixed <- (1 - step) * w_old[[ct]] + step * candidate[[ct]]
-        if (!is.null(prev_axes) && !is.null(prev_axes[[ct]])) {
-          mixed <- .sumcorOrthogonalize(mixed, prev_axes[[ct]], d_ct)
-        }
-        normalize_vec_weighted(mixed, d_ct)
-      }), cell_types)
-      candidate <- blended
-      obj_new <- .sumcorObjective(candidate, ops, slideWeight)
+    if (!is.finite(gradient_norm)) {
+      stop("Non-finite projected gradient in SUMCOR ", label, ".")
+    }
+    if (gradient_norm <= tol) {
+      converged <- TRUE
+      break
     }
 
-    if (obj_new < obj_old) {
-      # Even a tiny step fails to improve: we are at a fixed point of the
-      # surrogate that the true objective disagrees with. Stop and keep the
-      # best iterate.
-      converged <- TRUE
+    slope <- sum(block_norms^2)
+    # Damped runs propose a fixed step every iteration; undamped runs propose
+    # the adaptive hint. A constant multiplier on an adaptive hint would be
+    # absorbed by the hint's own growth within one iteration, so damping has to
+    # replace the adaptivity rather than scale it.
+    step <- if (damped) step_size else step_hint
+    accepted <- FALSE
+    candidate <- NULL
+    obj_new <- NA_real_
+    for (line_search in seq_len(60L)) {
+      candidate <- .sumcorRetract(w_list, tangent, step, prev_axes)
+      if (!any(vapply(candidate, is.null, logical(1)))) {
+        obj_new <- .sumcorObjective(candidate, ops, slideWeight)
+        armijo_rhs <- obj + 1e-4 * step * slope
+        numerical_slack <- 100 * .Machine$double.eps * max(1, abs(obj))
+        if (is.finite(obj_new) && obj_new + numerical_slack >= armijo_rhs) {
+          accepted <- TRUE
+          break
+        }
+      }
+      step <- step / 2
+    }
+
+    if (!accepted) {
+      stalled <- TRUE
       break
     }
 
     w_list <- candidate
     obj <- obj_new
-
-    if (obj > best_obj) {
-      best_obj <- obj
-      best_w <- w_list
-    }
-
-    # Sign-strict weight change: unlike the SUMCOV path, a sign flip here is a
-    # genuine change of solution, not a harmless power-iteration ambiguity, so
-    # check_convergence()'s flip tolerance must not be used.
-    weight_diff <- max(vapply(cell_types, function(ct) {
-      max(abs(w_list[[ct]] - w_old[[ct]]))
-    }, numeric(1)))
-    obj_diff <- abs(obj - obj_old) / max(abs(obj_old), 1e-12)
-
-    if (weight_diff <= tol || obj_diff <= tol) {
-      converged <- TRUE
-      if (verbose) {
-        message(sprintf(
-          "  %s converged at sweep %d (max weight change = %.2e, objective = %.6f)",
-          label, iter, weight_diff, obj
-        ))
-      }
-      break
-    }
+    objective_trace <- c(objective_trace, obj)
+    iter <- iter + 1L
+    # Reuse successful curvature information without committing to a fixed
+    # learning rate; an oversize proposal is harmless because it is searched.
+    # Under damping the step is fixed by request, so there is no hint to grow.
+    if (!damped) step_hint <- min(step * 1.5, 1e6)
   }
 
+  # Report stationarity at the returned point, not at the previous iterate.
+  final_gradient <- .sumcorTangentGradient(
+    .sumcorGradient(w_list, ops, slideWeight), w_list, prev_axes
+  )
+  gradient_norm <- max(vapply(final_gradient, function(g) {
+    sqrt(sum(as.numeric(g)^2))
+  }, numeric(1)))
+  converged <- converged || gradient_norm <= tol
+
+  if (converged && verbose) {
+    message(sprintf(
+      "  %s converged after %d iteration(s) (projected gradient = %.2e, objective = %.6f)",
+      label, iter, gradient_norm, obj
+    ))
+  }
   if (!converged) {
     warning(sprintf(
-      "SUMCOR %s did not converge in %d sweeps; returning the best iterate (objective = %.6f).",
-      label, max_iter, best_obj
+      paste0("SUMCOR %s %s after %d iteration(s); returning the last monotone ",
+             "iterate (objective = %.6f, projected gradient = %.2e)."),
+      label, if (stalled) "line search stalled" else "did not converge",
+      iter, obj, gradient_norm
     ), call. = FALSE)
   }
 
-  if (best_obj < 0) {
+  if (obj < 0) {
     warning(sprintf(
       paste0("SUMCOR %s converged to a negative objective (%.6f). The cell ",
              "types are anti-associated at this sigma, or the axes above it ",
              "have exhausted the positively associated subspace."),
-      label, best_obj
+      label, obj
     ), call. = FALSE)
   }
 
-  list(w_list = best_w, objective = best_obj)
+  list(
+    w_list = w_list,
+    objective = obj,
+    gradient_norm = gradient_norm,
+    iterations = iter,
+    objective_trace = objective_trace
+  )
 }
 
 #' PCA-space SUMCOR optimization -- first component
@@ -525,20 +712,23 @@ NULL
 #' \eqn{m_{ij}^{(s)}} is 1 for `slideWeight = "equal"` or
 #' \eqn{\sqrt{n_i^{(s)} n_j^{(s)}}} for `"size"`.
 #'
-#' With one slide this is the same problem as SUMCOV (see the file header), so
-#' the exact SUMCOV solvers are used directly and no iteration is run.
+#' When one slide has coinciding per-pair constants (see the file header), the
+#' existing SUMCOV result is used directly and no SUMCOR iteration is run.
 #'
 #' @param X_list_all `X_list_all[[slide]][[cellType]]` cell-by-PC matrices.
 #' @param flat_kernels Flat list of kernel matrices.
 #' @param sigma Kernel bandwidth (numeric scalar).
 #' @param slides Slide IDs.
 #' @param cell_types Cell types to optimize over.
-#' @param slideWeight Per-slide weighting: `"size"` (default) or `"equal"`.
+#' @param slideWeight Per-slide weighting: `"equal"` (default) or `"size"`.
 #' @param sdev2_list Optional named list of squared standard deviations per cell
 #'   type, supplied when `scalePCs = FALSE`.
-#' @param max_iter Maximum Gauss-Seidel sweeps.
-#' @param tol Convergence tolerance on weight change and relative objective
-#'   change.
+#' @param max_iter Maximum projected-gradient iterations.
+#' @param tol Convergence tolerance on the projected-gradient norm.
+#' @param step_size Damping factor in (0, 1]. Default 1 (undamped). Values below
+#'   1 shorten every trial step, the same stabilization the SUMCOV damped power
+#'   iteration provides; the Armijo test still runs at the damped step, so the
+#'   iteration stays monotone. Also damps the SUMCOV warm start.
 #' @param n_cores Cores for the per-slide kernel products.
 #' @param verbose Report progress.
 #' @param ops Optional precomputed `.computeSlideOperators()` structure.
@@ -547,11 +737,12 @@ NULL
 #' @keywords internal
 #' @export
 optimize_sumcor_pca <- function(X_list_all, flat_kernels, sigma, slides,
-                                cell_types, slideWeight = "size",
+                                cell_types, slideWeight = "equal",
                                 sdev2_list = NULL, max_iter = 200,
-                                tol = 1e-6, n_cores = 1, verbose = FALSE,
-                                ops = NULL) {
+                                tol = 1e-6, step_size = 1, n_cores = 1,
+                                verbose = FALSE, ops = NULL) {
   slideWeight <- .resolveSlideWeight(slideWeight)
+  .validateStepSize(step_size)
 
   if (is.null(ops)) {
     ops <- .computeSlideOperators(X_list_all, flat_kernels, sigma, slides,
@@ -561,14 +752,15 @@ optimize_sumcor_pca <- function(X_list_all, flat_kernels, sigma, slides,
   # Everything below runs metric-free in whitened coordinates; see
   # .whitenSlideOperators() for why this is required and not merely tidier.
   ops_w <- .whitenSlideOperators(ops, sdev2_list)
-  warm <- .sumcorWarmStart(ops_w, cell_types, NULL, nCC = 1L)
+  warm <- .sumcorWarmStart(ops_w, cell_types, NULL, nCC = 1L,
+                           step_size = step_size)
 
   # One slide, and the per-pair constants coincide: SUMCOR and SUMCOV are then
-  # the same optimization problem and the SUMCOV route solves it exactly, so
-  # iterating would only add tolerance error. When they do not coincide (three
+  # the same optimization problem, so the SUMCOV route already targets the
+  # requested maximizer. When they do not coincide (three
   # or more cell types with unequal counts) the criteria differ and the
   # iteration below is run instead -- see `.sumcorReducesToSumcov()`.
-  if (length(ops$slides) == 1L && .sumcorReducesToSumcov(ops, slideWeight)) {
+  if (length(ops$slides) == 1L && .sumcorReducesToSumcov(ops_w, slideWeight)) {
     obj_val <- .sumcorObjective(
       lapply(warm, function(m) m[, 1L, drop = FALSE]), ops_w, slideWeight
     )
@@ -583,7 +775,8 @@ optimize_sumcor_pca <- function(X_list_all, flat_kernels, sigma, slides,
       warm[[ct]][, 1L, drop = FALSE]
     }), cell_types),
     ops = ops_w, slideWeight = slideWeight, sdev2_list = NULL,
-    max_iter = max_iter, tol = tol, verbose = verbose, label = "CC 1"
+    max_iter = max_iter, tol = tol, step_size = step_size,
+    verbose = verbose, label = "CC 1"
   )
 
   result <- .unwhitenWeights(fit$w_list, sdev2_list)
@@ -607,10 +800,11 @@ optimize_sumcor_pca <- function(X_list_all, flat_kernels, sigma, slides,
 #' @export
 optimize_sumcor_pca_n <- function(X_list_all, flat_kernels, sigma, slides,
                                   cell_types, w_list, nCC = 2,
-                                  slideWeight = "size", sdev2_list = NULL,
-                                  max_iter = 200, tol = 1e-6, n_cores = 1,
-                                  verbose = FALSE, ops = NULL) {
+                                  slideWeight = "equal", sdev2_list = NULL,
+                                  max_iter = 200, tol = 1e-6, step_size = 1,
+                                  n_cores = 1, verbose = FALSE, ops = NULL) {
   slideWeight <- .resolveSlideWeight(slideWeight)
+  .validateStepSize(step_size)
 
   if (is.null(ops)) {
     ops <- .computeSlideOperators(X_list_all, flat_kernels, sigma, slides,
@@ -633,9 +827,11 @@ optimize_sumcor_pca_n <- function(X_list_all, flat_kernels, sigma, slides,
 
   # One slide with coinciding per-pair constants: all axes come from the exact
   # SUMCOV solvers, for the same reason the first component does.
-  if (length(ops$slides) == 1L && .sumcorReducesToSumcov(ops, slideWeight)) {
+  if (length(ops$slides) == 1L && .sumcorReducesToSumcov(ops_w, slideWeight)) {
     result <- .unwhitenWeights(
-      .sumcorWarmStart(ops_w, cell_types, NULL, nCC = nCC), sdev2_list
+      .sumcorWarmStart(ops_w, cell_types, NULL, nCC = nCC,
+                       step_size = step_size),
+      sdev2_list
     )
     attr(result, "slideWeight") <- slideWeight
     return(result)
@@ -653,7 +849,8 @@ optimize_sumcor_pca_n <- function(X_list_all, flat_kernels, sigma, slides,
 
     # Warm-start each deflated axis from the corresponding SUMCOV axis, keeping
     # the whole routine deterministic.
-    warm_all <- .sumcorWarmStart(ops_w, cell_types, NULL, nCC = cc)
+    warm_all <- .sumcorWarmStart(ops_w, cell_types, NULL, nCC = cc,
+                                 step_size = step_size)
     w_init <- setNames(lapply(cell_types, function(ct) {
       warm_all[[ct]][, cc, drop = FALSE]
     }), cell_types)
@@ -661,8 +858,8 @@ optimize_sumcor_pca_n <- function(X_list_all, flat_kernels, sigma, slides,
     fit <- .sumcorIterate(
       w_init = w_init, ops = ops_w, slideWeight = slideWeight,
       sdev2_list = NULL, prev_axes = prev_axes,
-      max_iter = max_iter, tol = tol, verbose = verbose,
-      label = sprintf("CC %d", cc)
+      max_iter = max_iter, tol = tol, step_size = step_size,
+      verbose = verbose, label = sprintf("CC %d", cc)
     )
     objectives[cc] <- fit$objective
 
@@ -687,9 +884,11 @@ optimize_sumcor_pca_n <- function(X_list_all, flat_kernels, sigma, slides,
 #' @param cell_types Cell types being optimized.
 #' @param sdev2_list Optional diagonal CCA metrics.
 #' @param nCC Number of axes wanted.
+#' @param step_size Damping for the >2-type SUMCOV power iteration. The one- and
+#'   two-type routes are exact decompositions, so damping does not apply there.
 #' @return Named list of `nPC x nCC` weight matrices.
 #' @noRd
-.sumcorWarmStart <- function(ops, cell_types, sdev2_list, nCC) {
+.sumcorWarmStart <- function(ops, cell_types, sdev2_list, nCC, step_size = 1) {
   Y_aggregate <- .aggregateSlideOperators(ops)
 
   if (length(cell_types) == 1L) {
@@ -713,7 +912,7 @@ optimize_sumcor_pca_n <- function(X_list_all, flat_kernels, sigma, slides,
   w1 <- suppressWarnings(bilinear_w_from_Y_resi(
     w_list_new = initialize_next_component(Y_aggregate, cell_types),
     Y_resi = Y_aggregate, n_features = feature_counts,
-    max_iter = 200, tol = 1e-6, step_size = 1, sdev2_list = sdev2_list
+    max_iter = 200, tol = 1e-6, step_size = step_size, sdev2_list = sdev2_list
   ))
   if (nCC == 1L) return(w1)
 

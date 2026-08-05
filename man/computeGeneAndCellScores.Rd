@@ -22,9 +22,24 @@ A \code{CoPro} or \code{CoProMulti} object with gene and cell scores computed
 \description{
 computeGeneAndCellScores
 }
+\details{
+Gene scores are the PCA back-projection
+\eqn{R\,\mathrm{diag}(1/\mathrm{sdev})\,w}, so they carry the units of the
+loading matrix \eqn{R}: \strong{weights per standardized gene}, not per unit of
+raw expression. That was already true under pooled preprocessing. Under the
+\code{CoProMulti} default (\code{computePCA(center_per_slide = TRUE)}) the
+standardization is per (slide, cell type), so when the stored slide scales
+differ there is no single equivalent coefficient vector in raw units; the
+per-slide maps are kept on \code{pcaGlobal[[ct]]$slideCenter} and \verb{$slideScale}.
+
+For gene weights that do not depend on the PCA coordinate system, prefer
+\code{\link[=computeRegressionGeneScores]{computeRegressionGeneScores()}}, which regresses cell scores on expression
+directly. Those are also more robust to \code{nPCA} and reproduce better across
+replicates.
+}
 \seealso{
 \code{\link[=runSkrCCA]{runSkrCCA()}}, \code{\link[=computeNormalizedCorrelation]{computeNormalizedCorrelation()}},
-\code{\link[=getCellScores]{getCellScores()}}, \code{\link[=getCellScoresInSitu]{getCellScoresInSitu()}}
+\code{\link[=computeRegressionGeneScores]{computeRegressionGeneScores()}}, \code{\link[=getCellScores]{getCellScores()}}, \code{\link[=getCellScoresInSitu]{getCellScoresInSitu()}}
 
 Other scores-and-correlation: 
 \code{\link{computeNormalizedCorrelation}()},

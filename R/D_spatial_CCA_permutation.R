@@ -219,28 +219,161 @@
   invisible(NULL)
 }
 
-# The permutation machinery re-optimizes each draw with the SUMCOV solvers and
-# the factorized PC-space operators. Running it against weights that were fitted
-# under `objective = "sumcor"` would compare an observed statistic from one
-# criterion to a null built from another, so refuse rather than silently mix.
-#
-# Extending this is not hard when wanted: a within-slide label permutation
-# permutes the rows of X_i^(s), which leaves G_i^(s) = X_i^(s)' X_i^(s)
-# unchanged, so the per-slide scales that SUMCOR divides by are
-# permutation-invariant and the existing operator-reuse factorization still
-# applies. Only the optimizer call would need swapping.
-.rejectSumcorForPermutation <- function(object, what = "This permutation test") {
+#' Decide which criterion the permutation null must be built with
+#'
+#' A permutation p-value is only meaningful when the null draws are optimized by
+#' the same criterion as the observed statistic. Every caller of this function
+#' has already passed `.rejectCellPermutationForMulti()`, so the object has a
+#' single slide and the SUMCOR reduction test applies in full:
+#'
+#' * Recorded as `sumcov` (or unrecorded, which pre-dates the attribute) --
+#'   nothing to do.
+#' * Recorded as `sumcor` where `.sumcorReducesToSumcov()` holds -- the fitted
+#'   weights *are* the SUMCOV maximizer, so the existing SUMCOV null is already
+#'   the matching null. This covers one or two cell types at any counts, and
+#'   three or more at equal counts, i.e. nearly every real call.
+#' * Recorded as `sumcor` where it does not hold -- three or more cell types at
+#'   unequal counts. Here the criteria genuinely differ and the null draws are
+#'   re-optimized under SUMCOR.
+#'
+#' A within-slide label permutation permutes the rows of \eqn{X_i}, which leaves
+#' \eqn{G_i = X_i' X_i} unchanged. The per-slide scales SUMCOR divides by are
+#' therefore permutation-invariant: they can be built once and reused for every
+#' draw, and the existing `Y` operator-reuse factorization is untouched.
+#'
+#' @param object A single-slide `CoPro` object with `@skrCCAOut` populated.
+#' @param cts Cell types of interest.
+#' @param scalePCs Whether the PC scores are whitened, matching the caller.
+#' @param supports_sumcor Whether the calling test can re-optimize its draws
+#'   under SUMCOR. `FALSE` for the fair-sigma and conditional tests, which are
+#'   restricted to at most two cell types and so can only ever reach the
+#'   reducible case; the check is defensive against that restriction being
+#'   relaxed without revisiting how their null is built.
+#' @return `list(objective, slideWeight, grams, n_cells)`. `grams`/`n_cells` are
+#'   `NULL` unless a SUMCOR null is actually required.
+#' @noRd
+.resolvePermutationObjective <- function(object, cts, scalePCs = TRUE,
+                                         supports_sumcor = TRUE) {
+  sumcov <- list(objective = "sumcov", slideWeight = NULL,
+                 grams = NULL, n_cells = NULL)
   record <- attr(object@skrCCAOut, "ccaObjective")
-  if (is.null(record) || !identical(record$objective, "sumcor")) {
-    return(invisible(NULL))
-  }
-  stop(
-    what, " builds its null with the sumcov solvers, but these weights were ",
-    "fitted under objective = \"sumcor\" (slideWeight = \"",
-    record$slideWeight, "\"). Comparing the two mixes criteria. Re-run ",
-    "runSkrCCA(objective = \"sumcov\") before testing, or use ",
-    "runSlideLevelInference() for replicate-level inference."
+  if (is.null(record) || !identical(record$objective, "sumcor")) return(sumcov)
+
+  slideWeight <- record$slideWeight
+  if (is.null(slideWeight)) slideWeight <- "equal"
+
+  PCmats <- .getAllPCMats(allPCs = object@pcaGlobal, scalePCs = scalePCs)[cts]
+  grams <- stats::setNames(lapply(cts, function(ct) {
+    crossprod(PCmats[[ct]])
+  }), cts)
+  n_cells <- stats::setNames(
+    vapply(cts, function(ct) nrow(PCmats[[ct]]), integer(1)), cts
   )
+  ops <- .singleSlidePermutationOps(NULL, grams, n_cells, cts)
+
+  # The reduction is a property of the whitened operators, so test the same
+  # matrices the optimizer would see under this object's scalePCs setting.
+  ops_w <- .whitenSlideOperators(ops, .permutationSdev2(object, cts))
+  if (.sumcorReducesToSumcov(ops_w, slideWeight)) {
+    message(
+      "Weights were fitted under objective = \"sumcor\", but with ",
+      length(cts), " cell type(s) on one slide that is the same optimization ",
+      "problem as \"sumcov\". The existing null is the matching null."
+    )
+    return(sumcov)
+  }
+
+  if (!supports_sumcor) {
+    stop(
+      "These weights were fitted under objective = \"sumcor\" with ",
+      length(cts), " cell types at unequal counts, where sumcor and sumcov ",
+      "have different maximizers. This test builds its null with the sumcov ",
+      "solvers, and comparing the two would mix criteria. Re-fit with ",
+      "runSkrCCA(objective = \"sumcov\"), or use runSkrCCAPermu(), whose null ",
+      "is re-optimized under sumcor."
+    )
+  }
+
+  list(objective = "sumcor", slideWeight = slideWeight,
+       grams = grams, n_cells = n_cells)
+}
+
+#' Wrap a permuted PC-space operator in the one-slide SUMCOR operator structure
+#'
+#' `Y_resi` already has the `[[ct_i]][[ct_j]]` shape the SUMCOR routines expect;
+#' only the slide level and the permutation-invariant Gram matrices need adding.
+#' @noRd
+.singleSlidePermutationOps <- function(Y_resi, grams, n_cells, cts) {
+  slide <- .SINGLE_SLIDE_TOKEN
+  if (is.null(Y_resi)) {
+    Y_resi <- stats::setNames(lapply(cts, function(i) {
+      stats::setNames(vector("list", length(cts)), cts)
+    }), cts)
+  }
+  list(
+    Y = stats::setNames(list(Y_resi), slide),
+    G = stats::setNames(list(grams), slide),
+    n = stats::setNames(list(n_cells), slide),
+    slides = slide,
+    cell_types = cts
+  )
+}
+
+#' Optimize one permuted draw under SUMCOR
+#'
+#' Only ever reached with three or more cell types, because fewer than that
+#' reduces to SUMCOV and never gets here. `prev_axes` carries the conditional
+#' test's fixed lower directions: SUMCOR's operator depends on `w` through
+#' `sigma`, so there is no operator to deflate and orthogonality is imposed in
+#' weight space, exactly as `optimize_sumcor_pca_n()` does.
+#' @noRd
+.fitSumcorPermutedAxes <- function(Y_resi, grams, n_cells, cts, nCC,
+                                   sdev2_list, slideWeight, prev_axes = NULL,
+                                   maxIter = 200, tol = 1e-6, step_size = 1) {
+  ops <- .singleSlidePermutationOps(Y_resi, grams, n_cells, cts)
+  ops_w <- .whitenSlideOperators(ops, sdev2_list)
+  prev_w <- if (is.null(prev_axes)) NULL else {
+    .whitenWeights(prev_axes, sdev2_list)
+  }
+
+  warm <- .sumcorWarmStart(ops_w, cts, NULL, nCC = 1L, step_size = step_size)
+  fit <- suppressWarnings(.sumcorIterate(
+    w_init = stats::setNames(lapply(cts, function(ct) {
+      warm[[ct]][, 1L, drop = FALSE]
+    }), cts),
+    ops = ops_w, slideWeight = slideWeight, sdev2_list = NULL,
+    prev_axes = prev_w, max_iter = maxIter, tol = tol,
+    step_size = step_size, label = "permutation CC 1"
+  ))
+  w_list <- fit$w_list
+
+  if (nCC > 1L) {
+    for (cc in seq(2L, nCC)) {
+      axes <- stats::setNames(lapply(cts, function(ct) {
+        w_list[[ct]][, seq_len(cc - 1L), drop = FALSE]
+      }), cts)
+      if (!is.null(prev_w)) {
+        axes <- stats::setNames(lapply(cts, function(ct) {
+          cbind(prev_w[[ct]], axes[[ct]])
+        }), cts)
+      }
+      warm_cc <- .sumcorWarmStart(ops_w, cts, NULL, nCC = cc,
+                                  step_size = step_size)
+      fit_cc <- suppressWarnings(.sumcorIterate(
+        w_init = stats::setNames(lapply(cts, function(ct) {
+          warm_cc[[ct]][, cc, drop = FALSE]
+        }), cts),
+        ops = ops_w, slideWeight = slideWeight, sdev2_list = NULL,
+        prev_axes = axes, max_iter = maxIter, tol = tol,
+        step_size = step_size, label = sprintf("permutation CC %d", cc)
+      ))
+      for (ct in cts) {
+        w_list[[ct]] <- cbind(w_list[[ct]], fit_cc$w_list[[ct]])
+      }
+    }
+  }
+
+  .unwhitenWeights(w_list, sdev2_list)
 }
 
 # Resolve the library directory that holds an *installed* CoPro, or NULL when
@@ -441,7 +574,6 @@ runSkrCCAPermu <- function(object, tol = 1e-5, nPermu = 999,
     stop("Input object must be a CoPro object")
   }
   .rejectCellPermutationForMulti(object)
-  .rejectSumcorForPermutation(object, "runSkrCCAPermu()")
 
   ## Apply conservative settings if requested
   ## Conservative = better preserve spatial autocorrelation = lower FPR
@@ -487,6 +619,9 @@ runSkrCCAPermu <- function(object, tol = 1e-5, nPermu = 999,
     warning("No cell types of interest specified, using all cell types.")
     cts <- unique(object@cellTypesSub)
   }
+
+  ## The null must be optimized by the same criterion as the observed weights.
+  permu_objective <- .resolvePermutationObjective(object, cts, scalePCs)
 
   ## Get sigma value
   sigma_predeclared <- !is.null(sigma)
@@ -601,7 +736,8 @@ runSkrCCAPermu <- function(object, tol = 1e-5, nPermu = 999,
 
   worker <- .makeSkrCCAPermuWorker(
     PCmats = PCmats, plan = plan, cts = cts, nCC = nCC,
-    sdev2_list = sdev2_list, maxIter = maxIter, tol = tol
+    sdev2_list = sdev2_list, maxIter = maxIter, tol = tol,
+    permu_objective = permu_objective
   )
 
   cca_permu_out <- .runPermutationDraws(
@@ -1277,7 +1413,6 @@ runSkrCCAPermu_FairSigma <- function(object,
     stop("Input must be a CoPro object")
   }
   .rejectCellPermutationForMulti(object)
-  .rejectSumcorForPermutation(object, "runSkrCCAPermu_FairSigma()")
 
   if (length(object@skrCCAOut) == 0) {
     stop("Please run runSkrCCA() first")
@@ -1326,6 +1461,9 @@ runSkrCCAPermu_FairSigma <- function(object,
   scalePCs <- object@scalePCs
   nCC <- object@nCC
   sdev2_list <- .permutationSdev2(object, cts)
+  ## Restricted to at most two cell types above, where sumcor and sumcov are
+  ## the same problem. Verified rather than assumed.
+  .resolvePermutationObjective(object, cts, scalePCs, supports_sumcor = FALSE)
 
   if (nCC > 1) {
     warning("Fair sigma permutation tests only the first canonical axis (CC1). ",
@@ -1749,7 +1887,6 @@ runSkrCCAPermu_Conditional <- function(object,
     stop("Input must be a CoPro object")
   }
   .rejectCellPermutationForMulti(object)
-  .rejectSumcorForPermutation(object, "runSkrCCAPermu_Conditional()")
   if (length(object@skrCCAOut) == 0) {
     stop("Please run runSkrCCA() first")
   }
@@ -1775,6 +1912,9 @@ runSkrCCAPermu_Conditional <- function(object,
   scalePCs <- object@scalePCs
   nCC <- object@nCC
   sdev2_list <- .permutationSdev2(object, cts)
+  ## Restricted to at most two cell types above, where sumcor and sumcov are
+  ## the same problem. Verified rather than assumed.
+  .resolvePermutationObjective(object, cts, scalePCs, supports_sumcor = FALSE)
   if (length(nCC) == 0 || nCC < 1) {
     stop("nCC must be >= 1; run runSkrCCA() with the desired number of axes.")
   }

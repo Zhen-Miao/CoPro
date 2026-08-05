@@ -2,10 +2,17 @@
 
 ## Choosing the canonical criterion
 
+* **New recommended defaults for multi-slide CoPro.** `computePCA()` now
+  centers and scales genes within each `(slide, cell type)` block and then fits
+  one joint PCA per cell type, so all slides share one loading matrix while
+  slide-level location and scale cannot choose the retained PC subspace.
+  `runSkrCCA()` then defaults to `objective = "sumcor"` with
+  `slideWeight = "equal"` for `CoProMulti`. Single-slide objects continue to
+  default to `"sumcov"`. Use `center_per_slide = FALSE` and
+  `objective = "sumcov"` to reproduce the legacy multi-slide workflow.
+
 * **New `objective` argument on `runSkrCCA()`**, with `slideWeight` to control
-  how slides are combined, and `space` to select the feature space. The default
-  is `objective = "sumcov"`, which is exactly what earlier versions computed, so
-  **every existing result is unchanged** unless you opt in.
+  how slides are combined, and `space` to select the feature space.
 
   The reason this is a choice rather than a fix is that the two criteria are the
   same problem more often than it looks. For a single slide they usually
@@ -16,14 +23,14 @@
   constant leaves the maximizer alone only when every pair gets the same one, so
   the reduction to SUMCOV is exact for **one or two cell types at any cell
   counts**, and for **three or more only when the cell counts are equal**.
-  `objective = "sumcor"` is routed to the exact SUMCOV solvers there rather than
-  iterating to the same answer.
+  In those cases the SUMCOR implementation uses the direct SUMCOV
+  decomposition as an exact computational shortcut.
 
-  With three or more cell types at unequal counts the two criteria genuinely
-  differ on one slide. `runSkrCCA()` still uses the SUMCOV solvers but now warns;
-  the mismatch is `1 + O(1/n)` under the default `slideWeight = "size"` and can be
-  material under `"equal"`. Call `optimize_sumcor_pca()` directly to optimize the
-  SUMCOR criterion itself.
+  With three or more cell types at unequal counts the criteria genuinely
+  differ even on one slide. An explicit SUMCOR request now optimizes SUMCOR in
+  that case. The implementation checks the one-slide Gram matrices directly,
+  so filtering a joint multi-slide PCA down to one slide cannot trigger an
+  invalid shortcut.
 
   Across slides they always differ, and there SUMCOV factors exactly as
 
@@ -36,10 +43,10 @@
   is cell-count invariant on its own. So SUMCOV already sums per-slide
   correlations weighted by per-slide score scale, and that scale factor is what
   lets a slide with inflated variance along the canonical direction dominate.
-  `objective = "sumcor"` drops it; `slideWeight = "size"` (default)
-  *reintroduces* the cell-count factor `sqrt(n_i n_j)` on its own, and
-  `slideWeight = "equal"` gives strict Kettenring SUMCOR, matching
-  `runGeneSpaceCCA()`.
+  `objective = "sumcor"` drops it. `slideWeight = "equal"` (the multi-slide
+  default) gives strict Kettenring SUMCOR and matches `runGeneSpaceCCA()`;
+  `slideWeight = "size"` optionally *reintroduces* the cell-count factor
+  `sqrt(n_i n_j)` on its own.
 
   Read back what was actually optimized with the new `getCCAObjective()`.
 
@@ -47,13 +54,38 @@
   bandwidth as `sigmaChoice`), and `runGeneSpaceCCA()` gained `objective`, so the
   space and the criterion can now be varied independently in either direction.
 
-* The PC-space SUMCOR iteration is cheap: `Y_ij^(s)` and the per-slide Gram
-  matrices are `nPCA x nPCA` and are built once per sigma, so each sweep costs
-  `O(S * nPCA^2)` with no kernel products, against
-  `O(S * nnz(K) * nGenes)` per sweep in gene space. It warm-starts from the
-  deterministic SUMCOV solution — no RNG dependence — evaluates the true
-  objective every sweep, backtracks on a decrease, and returns the best iterate,
-  so it can never return something worse than its starting point.
+* The PC-space SUMCOR optimizer is cheap: `Y_ij^(s)` and the per-slide Gram
+  matrices are `nPCA x nPCA` and are built once per sigma, so each iteration
+  costs `O(S * nPCA^2)` with no kernel products. It now differentiates the
+  denominator exactly, including the
+  `-rho * G_i w_i / sigma_i^2` term that the former frozen-scale heuristic
+  omitted. Projected-gradient ascent on the product of spheres uses a monotone
+  Armijo line search and stops on the constrained gradient norm. It remains
+  deterministic through its SUMCOV warm start and applies the same projection
+  against earlier axes for later components.
+
+* **`step_size` is honored under both objectives.** It previously did nothing
+  under `sumcor` (it was never forwarded to the optimizer), so a value chosen
+  for stability was silently lost whenever the objective changed — which the
+  new multi-slide `sumcor` default would have made the common case. Under
+  `sumcov` it remains the damped power iteration. Under `sumcor` a value below
+  1 replaces the adaptive step with that fixed step, and damps the SUMCOV warm
+  start too.
+
+  The two are the same operation. Both the current iterate and the retracted
+  candidate lie on the geodesic through `w` in the search direction, so
+  blending them and renormalizing *is* a retraction:
+
+  ```
+  normalize((1 - a) * w + a * R_w(t g)) = R_w(tau * g)
+  tau = a * t / ((1 - a) * sqrt(1 + t^2 * |g|^2) + a)
+  ```
+
+  Damping is therefore a shorter step along the same arc. Applying it to the
+  trial step rather than after the line search keeps the Armijo test on the
+  point actually returned, so damped SUMCOR runs stay monotone; expect more
+  iterations, which is the trade being requested. `step_size = 1` leaves the
+  adaptive iteration bit-for-bit unchanged.
 
 * **`minCellsPerSlide`** (default 10, shared with `runGeneSpaceCCA()`) drops
   slides too thin to divide by under `sumcor`. Under `sumcov` such slides are
@@ -64,8 +96,8 @@
 ## Batch effects: the larger lever is centering, not the objective
 
 * `objective = "sumcor"` removes per-slide *scale* sensitivity but **not** a
-  per-slide *mean shift*, and the mean shift is the bigger problem. PC scores are
-  centered globally, so a shared technical shift leaves
+  per-slide *mean shift*, and the mean shift is the bigger problem. Under the
+  legacy pooled PCA, PC scores are centered globally, so a shared technical shift leaves
   `u_i^(s) ~ M_i^(s) 1 + eps` and the numerator picks up
   `M_i M_j 1'K1`, positive whenever both cell types shift the same way — so
   slides reinforce the batch axis instead of cancelling it. Dividing by `sigma`
@@ -73,9 +105,12 @@
   close to the Perron vector, so a constant score reaches
   `rho ~ sigma_max(K)` — near the maximum available — on every slide.
 
-  Pair multi-slide `sumcor` with `computePCA(..., center_per_slide = TRUE)`.
-  Gene space already gets this from its per-(slide, cell type)
-  z-standardization; PC space does not, and this applies to `sumcov` too.
+  The multi-slide default `computePCA(..., center_per_slide = TRUE)` applies
+  that per-(slide, cell type) standardization **before** PCA and then stacks the
+  blocks for one shared loading matrix. Consequently each slide's PC block is
+  centered without a second PC-space normalization, and the covariance used to
+  select the truncated PC space is batch-shift invariant. Gene space already
+  uses the same preprocessing principle.
 
 ## Gene-space optimizer: sweep choice, and the sign repair
 
@@ -91,8 +126,9 @@
   single pairwise term — but **not** for three or more, where flipping one block
   negates only the pairs touching it and can lower the objective. (Flipping
   *every* block is a no-op: each pairwise term takes two sign flips.) The
-  PC-space optimizer never had this problem because it already read
-  already-updated blocks.
+  former PC-space heuristic avoided that particular orbit by reading
+  already-updated blocks; the new full-gradient PC optimizer does not use a
+  block power sweep at all.
 
   Under `"gauss-seidel"` every block update forces `w_i' g_i = ||g_i|| >= 0`;
   summing over blocks gives `f >= 0` at any fixed point, so a negative objective
@@ -120,8 +156,9 @@
   formals, so none of them reached `...` and none were forwarded — a passed
   `transferred_weight_1` looked exactly like a transfer that ran. The four with
   a gene-space analogue are now forwarded **when supplied** (not when left at a
-  default, since the two entry points differ: `objective` `"sumcov"` vs
-  `"sumcor"`, `tol` `1e-5` vs `1e-6`, `maxIter` `200` vs `3000`,
+  default, since the two entry points differ: single-slide PCA defaults to
+  objective `"sumcov"` while multi-slide PCA and gene space default to
+  `"sumcor"`; `tol` is `1e-5` vs `1e-6`; `maxIter` is `200` vs `3000`;
   `minCellsPerSlide` `10` vs `20`), and the rest are an error.
 
 * **A one-slide `CoProMulti` with three or more cell types no longer errors.**
@@ -131,10 +168,34 @@
   matrix for pair". One and two cell types took an earlier exact-solver shortcut
   and were unaffected.
 
-* Permutation tests (`runSkrCCAPermu()` and the `FairSigma` / `Conditional`
-  variants) now refuse weights fitted under `objective = "sumcor"` rather than
-  compare an observed statistic from one criterion against a null built from
-  another.
+* **Behavior change for an explicit single-slide `objective = "sumcor"`.** The
+  default for single-slide objects is still `"sumcov"`, so a default call is
+  unchanged. But an *explicit* one-slide `"sumcor"` request used to be routed to
+  the SUMCOV solvers unconditionally (with a warning when that was only an
+  approximation); it now runs the full-gradient optimizer whenever the
+  reduction does not hold, i.e. three or more cell types at unequal counts.
+  Those calls return different weights than in 1.2.x. One and two cell types,
+  and equal counts, are unaffected because the criteria coincide there.
+
+* **Permutation tests match the criterion the weights were fitted with**, rather
+  than refusing every `objective = "sumcor"` fit. Cell-level permutation is
+  single-slide only (`CoProMulti` is directed to `runSlideLevelInference()`
+  first, as before), so the SUMCOR reduction test decides:
+
+  * one or two cell types at any counts, or three or more at equal counts --
+    the fitted weights *are* the SUMCOV maximizer, so the existing SUMCOV null
+    is already the matching null and the test proceeds;
+  * three or more at unequal counts -- the criteria genuinely differ, and
+    `runSkrCCAPermu()` re-optimizes every draw under SUMCOR.
+
+  A within-slide label permutation permutes the rows of `X_i`, which leaves
+  `G_i = X_i'X_i` unchanged, so the per-slide scales SUMCOR divides by are
+  permutation-invariant: they are built once and reused across draws, and the
+  existing `Y` operator-reuse factorization is untouched.
+
+  `runSkrCCAPermu_FairSigma()` and `runSkrCCAPermu_Conditional()` are restricted
+  to at most two cell types, where the reduction always holds, so they are
+  unaffected; they carry a guard in case that restriction is relaxed.
 
 * `vignettes/large_datasets.Rmd` no longer breaks `R CMD check`. Its illustrative
   chunks reference objects too large to ship, and `eval = FALSE` covers knitting
@@ -412,10 +473,11 @@
   occupy: 72x smaller for the slot itself, and total PC-score memory drops from
   ~128 MB to ~64 MB at 200,000 cells and 40 PCs. `.preparePCMatrices()` also
   whitens the global score matrix once per cell type instead of once per
-  (slide, cell type). Slices are still materialized when
-  `center_per_slide = TRUE`, where re-centering makes them genuinely different
-  data, and objects saved with materialized slices continue to work. The slot's
-  shape -- one entry per slide, keyed by slide name -- is unchanged.
+  (slide, cell type). The recommended within-slide centering now happens before
+  the shared PCA, so those score blocks also remain views; no post-PCA copy is
+  needed. Objects saved with the former materialized, re-centered slices remain
+  readable. The slot's shape -- one entry per slide, keyed by slide name -- is
+  unchanged.
 * The whitened-Frobenius normalizer no longer materializes `(Rx %*% K) %*% Ry`.
   Those two chained sparse products fill in heavily -- 7x then 11x on a
   40k-cell kernel, extrapolating to roughly 1.5 GB at 200k cells -- to produce

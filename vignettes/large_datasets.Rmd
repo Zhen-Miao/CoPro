@@ -169,11 +169,11 @@ Notes:
 
 ## 5. skrCCA is already exact and fast for two cell types
 
-For the ordinary two-cell-type (or single within-type) problem, `runSkrCCA()`
-now solves **all** requested canonical axes with one exact SVD of the small
-PC-space cross-operator (`nPCA x nPCA`). There is no power iteration to tune, so
-`maxIter`, `tol`, and `step_size` do not affect the two-type result — the cost
-is dominated by the kernel, not the optimization.
+For the ordinary two-cell-type (or single within-type) problem under
+`objective = "sumcov"`, `runSkrCCA()` solves **all** requested canonical axes
+with one exact SVD of the small PC-space cross-operator (`nPCA x nPCA`). There
+is no power iteration to tune, so `maxIter`, `tol`, and `step_size` do not
+affect that result — the cost is dominated by the kernel, not the optimization.
 
 ```{r skrcca, purl=FALSE}
 obj <- runSkrCCA(obj, scalePCs = TRUE, nCC = 2)
@@ -183,17 +183,22 @@ obj <- computeNormalizedCorrelation(obj)
 obj <- computeRegressionGeneScores(obj)
 ```
 
-(`maxIter` / `step_size` still matter only when analyzing **three or more**
-cell types jointly, or when supplying a transferred first axis, where the
-sequential deflation path is used.)
+(`maxIter` / `step_size` still matter when analyzing **three or more** cell
+types jointly, when supplying a transferred first axis — both of which use the
+sequential deflation path — and for **any** number of cell types under
+`objective = "sumcor"`, the multi-slide default, whose operator depends on the
+weights and so has no fixed matrix to decompose.)
 
 ## 6. Multi-slide at scale
 
-`newCoProMulti()` shares one set of weight vectors across slides. Kernels are
-built **per slide** and their small PC-space operators are summed — CoPro never
-materializes a block-diagonal `N x N` kernel across the whole cohort. Use
-`method = "auto"`/`"sparse"` exactly as above, and set `n_cores` to
-parallelize the per-slide kernel and skrCCA work.
+`newCoProMulti()` shares one PCA loading matrix and one set of CCA weight
+vectors across slides. By default, `computePCA()` centers and scales each
+`(slide, cell type)` gene matrix before stacking the blocks for that shared
+PCA. `runSkrCCA()` then uses equal-slide SUMCOR, keeping the small per-slide
+PC-space operators separate so each cross term is divided by its own score
+scales. CoPro never materializes a block-diagonal `N x N` kernel across the
+cohort. Use `method = "auto"`/`"sparse"` exactly as above, and set `n_cores`
+to parallelize the per-slide kernel work.
 
 ```{r multi-slide, purl=FALSE}
 multi <- newCoProMulti(

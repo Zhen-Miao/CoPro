@@ -88,7 +88,7 @@
 #' @noRd
 center_scale_matrix_opt <- function(input_matrix,
                                     zero_sd_threshold = 1e-3,
-                                    nz_propion_threshold = 0.01) {
+                                    nz_proportion_threshold = 0.01) {
 
   if (!.is_bpcells(input_matrix)) {
     # Original behavior for base matrix / Matrix::dgCMatrix
@@ -96,7 +96,7 @@ center_scale_matrix_opt <- function(input_matrix,
     col_sds <- .columnSds(input_matrix)
     col_nz <- .columnNonzeroFraction(input_matrix)
 
-    zero_sd_cols <- which(col_sds < zero_sd_threshold | col_nz < nz_propion_threshold)
+    zero_sd_cols <- which(col_sds < zero_sd_threshold | col_nz < nz_proportion_threshold)
     col_sds_safe <- col_sds
     if (length(zero_sd_cols) > 0) col_sds_safe[zero_sd_cols] <- 1.0
 
@@ -108,7 +108,7 @@ center_scale_matrix_opt <- function(input_matrix,
   col_means <- colMeans(input_matrix)
   col_sds <- sqrt(BPCells::colVars(input_matrix))
   col_nz <- colSums(BPCells::binarize(input_matrix)) / nrow(input_matrix)
-  zero_sd_cols <- which(col_sds < zero_sd_threshold | col_nz < nz_propion_threshold)
+  zero_sd_cols <- which(col_sds < zero_sd_threshold | col_nz < nz_proportion_threshold)
   col_sds_safe <- col_sds
   if (length(zero_sd_cols) > 0) col_sds_safe[zero_sd_cols] <- 1.0
 

@@ -12,10 +12,11 @@ optimize_sumcor_pca_n(
   cell_types,
   w_list,
   nCC = 2,
-  slideWeight = "size",
+  slideWeight = "equal",
   sdev2_list = NULL,
   max_iter = 200,
   tol = 1e-06,
+  step_size = 1,
   n_cores = 1,
   verbose = FALSE,
   ops = NULL
@@ -36,15 +37,19 @@ optimize_sumcor_pca_n(
 
 \item{nCC}{Total number of components wanted.}
 
-\item{slideWeight}{Per-slide weighting: \code{"size"} (default) or \code{"equal"}.}
+\item{slideWeight}{Per-slide weighting: \code{"equal"} (default) or \code{"size"}.}
 
 \item{sdev2_list}{Optional named list of squared standard deviations per cell
 type, supplied when \code{scalePCs = FALSE}.}
 
-\item{max_iter}{Maximum Gauss-Seidel sweeps.}
+\item{max_iter}{Maximum projected-gradient iterations.}
 
-\item{tol}{Convergence tolerance on weight change and relative objective
-change.}
+\item{tol}{Convergence tolerance on the projected-gradient norm.}
+
+\item{step_size}{Damping factor in (0, 1]. Default 1 (undamped). Values below
+1 shorten every trial step, the same stabilization the SUMCOV damped power
+iteration provides; the Armijo test still runs at the damped step, so the
+iteration stays monotone. Also damps the SUMCOV warm start.}
 
 \item{n_cores}{Cores for the per-slide kernel products.}
 

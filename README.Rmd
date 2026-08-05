@@ -62,6 +62,12 @@ obj <- computeGeneAndCellScores(obj)
 cell_scores <- getCellScores(obj, sigma = obj@sigmaValueChoice, cellType = "TypeA")
 ```
 
+For `CoProMulti`, these same calls use the batch-robust defaults: genes are
+centered and scaled within each `(slide, cell type)` block before one shared
+PCA is fit, and `runSkrCCA()` optimizes equal-slide SUMCOR. Pass
+`center_per_slide = FALSE` and `objective = "sumcov"` only when reproducing the
+legacy pooled workflow.
+
 See the **[Getting Started vignettes](https://zhen-miao.github.io/CoPro/articles/)** for complete walkthroughs with real spatial transcriptomics datasets, including within-cell-type analysis, cross-cell-type co-progression, and multi-slide experiments.
 
 ## Citation

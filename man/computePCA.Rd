@@ -13,7 +13,7 @@ computePCA(
   scale. = TRUE,
   scalePCs = TRUE,
   dataUse = "raw",
-  center_per_slide = FALSE
+  center_per_slide = TRUE
 )
 
 \S4method{computePCA}{CoProSingle}(object, nPCA = 40, center = TRUE, scale. = TRUE, scalePCs = TRUE)
@@ -25,11 +25,11 @@ computePCA(
   scale. = TRUE,
   scalePCs = TRUE,
   dataUse = "raw",
-  center_per_slide = FALSE
+  center_per_slide = TRUE
 )
 }
 \arguments{
-\item{object}{A \code{CoProMulti} object with the \code{normalizedData} slot populated.}
+\item{object}{A \code{CoProSingle} or \code{CoProMulti} object.}
 
 \item{nPCA}{Number of principal components to compute for each cell type.}
 
@@ -43,17 +43,46 @@ before downstream CCA optimization. Default \code{TRUE} (recommended).}
 \item{dataUse}{What data to use, choices between "raw" and "integrated".
 Default is "raw". For single slide, this argument is ignored.}
 
-\item{center_per_slide}{After the global PCA, do we do center per slide
-again? By default this is set to FALSE}
+\item{center_per_slide}{Apply \code{center} and \code{scale.} within each
+(slide, cell type) block before fitting one shared PCA. Default \code{TRUE}.}
 }
 \value{
-A \code{CoProMulti} object with the \code{pcaResults} slot populated.
-\code{pcaResults} structure: \code{list(slideID = list(cellType = pc_matrix))}.
+The input object with \code{pcaGlobal} populated. For \code{CoProMulti},
+\code{pcaResults} has structure
+\verb{list(slideID = list(cellType = score-row view))}.
 }
 \description{
 Performs PCA on the normalized data stored within a \code{CoProSingle} or
-\code{CoProMulti} object. For multi-slide objects, the data is assumed to have
-already been integrated into a common space across slides.
+\code{CoProMulti} object. Multi-slide data must share the same gene columns; the
+default preprocessing removes slide-level location and scale internally.
+}
+\details{
+For cell type \eqn{i} and slide \eqn{s}, the recommended multi-slide
+path forms
+\deqn{Z_i^{(s)} = (X_i^{(s)} - 1\mu_i^{(s)'})D_i^{(s)-1},}
+stacks the \eqn{Z_i^{(s)}} by rows, and computes one truncated SVD
+\eqn{Z_i = U_i\Delta_i V_i'}. Every slide therefore uses the same loading
+matrix \eqn{V_i}, with score block \eqn{Z_i^{(s)}V_i}. Because each
+standardized gene column has zero mean within its block, those PC scores are
+also centered within slide automatically; no post-PCA recentering is needed.
+
+The shared loading is in \strong{within-slide standardized gene coordinates}. If
+the stored slide scales differ, there is intentionally no single equivalent
+coefficient vector in raw expression units.
+
+Consequently the retained subspace is invariant to any per-slide, gene-wise
+affine map with positive multipliers -- the batch-effect family this is meant
+to absorb -- provided \code{center} and \code{scale.} are both \code{TRUE} and no gene trips
+the degeneracy guard. That guard pins \eqn{d = 1} for genes whose standard
+deviation is below \code{1e-3} or whose nonzero fraction is below 1\%, so that
+dividing by a near-zero scale cannot amplify noise. It is evaluated on the
+\strong{raw} block, so exact affine invariance does not extend to guarded genes:
+an additive shift makes every entry nonzero and can suppress a guard that
+the unshifted data would trip. A gene guarded on any one slide is guarded on
+all of them, which keeps slides mutually comparable; the alternative -- a
+per-block decision -- would leave a gene standardized on one slide and raw on
+another, reintroducing a per-slide scale difference in precisely the
+low-detection genes whose detection rate is often itself the batch effect.
 }
 \examples{
 toy <- readRDS(system.file("extdata", "toy_copro_data.rds", package = "CoPro"))
