@@ -69,6 +69,20 @@ also centered within slide automatically; no post-PCA recentering is needed.
 The shared loading is in \strong{within-slide standardized gene coordinates}. If
 the stored slide scales differ, there is intentionally no single equivalent
 coefficient vector in raw expression units.
+
+Consequently the retained subspace is invariant to any per-slide, gene-wise
+affine map with positive multipliers -- the batch-effect family this is meant
+to absorb -- provided \code{center} and \code{scale.} are both \code{TRUE} and no gene trips
+the degeneracy guard. That guard pins \eqn{d = 1} for genes whose standard
+deviation is below \code{1e-3} or whose nonzero fraction is below 1\%, so that
+dividing by a near-zero scale cannot amplify noise. It is evaluated on the
+\strong{raw} block, so exact affine invariance does not extend to guarded genes:
+an additive shift makes every entry nonzero and can suppress a guard that
+the unshifted data would trip. A gene guarded on any one slide is guarded on
+all of them, which keeps slides mutually comparable; the alternative -- a
+per-block decision -- would leave a gene standardized on one slide and raw on
+another, reintroducing a per-slide scale difference in precisely the
+low-detection genes whose detection rate is often itself the batch effect.
 }
 \examples{
 toy <- readRDS(system.file("extdata", "toy_copro_data.rds", package = "CoPro"))

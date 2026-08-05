@@ -217,13 +217,8 @@
     stop("n_cores must be a positive integer")
   }
 
-  if (!is.numeric(step_size) || length(step_size) != 1 || step_size <= 0 || step_size > 1) {
-    stop("step_size must be a single numeric value in (0, 1]")
-  }
-  if (identical(objective, "sumcor") && !isTRUE(all.equal(step_size, 1))) {
-    stop("step_size applies only to objective = \"sumcov\". SUMCOR uses an ",
-         "adaptive monotone line search, so it has no fixed damping step.")
-  }
+  # Same admissible range under both objectives; see .validateStepSize().
+  .validateStepSize(step_size)
 
   # Check kernel matrices
   if (length(object@kernelMatrices) == 0) {
@@ -440,7 +435,7 @@
 #' @param maxIter Maximum iterations
 #' @param tol Tolerance
 #' @param n_cores Number of cores
-#' @param step_size Step size for damped power iteration
+#' @param step_size Damping factor, honored under both objectives
 #' @return Optimization result or NULL if failed
 #' @noRd
 .runSingleSigmaOptimization <- function(object, sig_val, sig_name, data_matrices,
@@ -468,7 +463,7 @@
       } else {
         # Single-slide flat kernel names have no slide token. Wrap their
         # ordinary PC matrices in the same operator structure used above.
-        slides <- ".single_slide"
+        slides <- .SINGLE_SLIDE_TOKEN
         X_list_all <- setNames(list(data_matrices$PCmats), slides)
         ops <- .computeSingleSlideOperators(
           data_matrices$PCmats, object@kernelMatrices, sig_val, cts
@@ -481,7 +476,8 @@
           flat_kernels = object@kernelMatrices, sigma = sig_val,
           slides = slides, cell_types = cts,
           slideWeight = slideWeight, sdev2_list = data_matrices$sdev2_list,
-          max_iter = maxIter, tol = tol, n_cores = n_cores, ops = ops
+          max_iter = maxIter, tol = tol, step_size = step_size,
+          n_cores = n_cores, ops = ops
         )
       } else {
         w_first <- transferred_weight_1
@@ -500,7 +496,8 @@
         slides = slides, cell_types = cts,
         w_list = w_first, nCC = nCC, slideWeight = slideWeight,
         sdev2_list = data_matrices$sdev2_list,
-        max_iter = maxIter, tol = tol, n_cores = n_cores, ops = ops
+        max_iter = maxIter, tol = tol, step_size = step_size,
+        n_cores = n_cores, ops = ops
       ))
     }
 
@@ -745,11 +742,11 @@
   data_matrices <- .applySlideAdequacy(
     data_matrices, cts, validation_result, object@nPCA
   )
-  use_sumcor <- if (!is.null(data_matrices$use_sumcor)) {
-    isTRUE(data_matrices$use_sumcor)
-  } else {
-    isTRUE(validation_result$use_sumcor)
-  }
+  # `.applySlideAdequacy()` used to be able to downgrade this when too few
+  # slides survived filtering; that is now decided by
+  # `.sumcorReducesToSumcov()` inside the solver, so validation is the only
+  # source.
+  use_sumcor <- isTRUE(validation_result$use_sumcor)
   slideWeight <- validation_result$slideWeight
   if (use_sumcor) {
     message(sprintf(
@@ -872,10 +869,23 @@ getCCAObjective <- function(object) {
 #' @param maxIter Maximum optimization iterations.
 #' @param sigmaChoice Specific sigma value to use (CoProMulti only, ignored for CoPro)
 #' @param n_cores Number of cores for parallel processing (CoProMulti only, ignored for CoPro)
-#' @param step_size Step size for the `objective = "sumcov"` damped power
-#'   iteration. Default 1 (standard power iteration). Values in (0,1) blend old
-#'   and new weights for smoother convergence. SUMCOR uses an adaptive monotone
-#'   line search instead and requires this argument to remain 1.
+#' @param step_size Damping factor in (0, 1]. Default 1 (undamped). **Honored
+#'   under both objectives**, so a value chosen for stability keeps its effect
+#'   when the objective changes.
+#'
+#'   Under `"sumcov"` this is the damped power iteration: values below 1 blend
+#'   old and new weights, `w \leftarrow \mathrm{normalize}((1-\alpha)w_{old} +
+#'   \alpha w_{new})`, which can help with many cells or many CCs.
+#'
+#'   Under `"sumcor"` it shortens every trial step of the projected-gradient
+#'   line search. These are the same operation: because both the current iterate
+#'   and the retracted candidate lie on the geodesic through `w` in the search
+#'   direction, blending them and renormalizing *is* a retraction, so damping by
+#'   \eqn{\alpha} equals taking a step
+#'   \eqn{\tau = \alpha t / ((1-\alpha)\sqrt{1 + t^2\|g\|^2} + \alpha)}
+#'   along the same arc. Applying it to the trial step rather than after the
+#'   fact keeps the Armijo test on the point actually returned, so a damped
+#'   SUMCOR run stays monotone. It also damps the SUMCOV warm start.
 #' @param space Which feature space to optimize in. `"pca"` (default) runs the
 #'   PC-space optimizer described here. `"gene"` forwards to
 #'   [runGeneSpaceCCA()], which needs a single `sigma` -- supply it through

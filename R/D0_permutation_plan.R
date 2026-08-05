@@ -373,13 +373,26 @@
 #' CoPro object, kernels included.
 #' @noRd
 .makeSkrCCAPermuWorker <- function(PCmats, plan, cts, nCC, sdev2_list,
-                                   maxIter, tol) {
+                                   maxIter, tol, permu_objective = NULL) {
   force(PCmats); force(plan); force(cts); force(nCC)
-  force(sdev2_list); force(maxIter); force(tol)
+  force(sdev2_list); force(maxIter); force(tol); force(permu_objective)
+  sumcor <- identical(permu_objective$objective, "sumcor")
 
   function(spec) {
     PCmats_local <- .applyPermutationSpec(PCmats, spec)[cts]
     Y_resi <- .yResiFromPlan(plan, PCmats_local)
+
+    # Only reached with three or more cell types: fewer than that makes SUMCOR
+    # and SUMCOV the same problem, which .resolvePermutationObjective() detects
+    # and routes down the exact decompositions below.
+    if (sumcor) {
+      return(.fitSumcorPermutedAxes(
+        Y_resi = Y_resi, grams = permu_objective$grams,
+        n_cells = permu_objective$n_cells, cts = cts, nCC = nCC,
+        sdev2_list = sdev2_list, slideWeight = permu_objective$slideWeight,
+        maxIter = maxIter, tol = tol
+      ))
+    }
 
     # One and two cell types have exact decompositions; every requested axis
     # comes from a single factorization of the small operator.

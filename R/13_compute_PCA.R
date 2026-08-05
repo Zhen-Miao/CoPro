@@ -35,6 +35,20 @@
 #' the stored slide scales differ, there is intentionally no single equivalent
 #' coefficient vector in raw expression units.
 #'
+#' Consequently the retained subspace is invariant to any per-slide, gene-wise
+#' affine map with positive multipliers -- the batch-effect family this is meant
+#' to absorb -- provided `center` and `scale.` are both `TRUE` and no gene trips
+#' the degeneracy guard. That guard pins \eqn{d = 1} for genes whose standard
+#' deviation is below `1e-3` or whose nonzero fraction is below 1%, so that
+#' dividing by a near-zero scale cannot amplify noise. It is evaluated on the
+#' **raw** block, so exact affine invariance does not extend to guarded genes:
+#' an additive shift makes every entry nonzero and can suppress a guard that
+#' the unshifted data would trip. A gene guarded on any one slide is guarded on
+#' all of them, which keeps slides mutually comparable; the alternative -- a
+#' per-block decision -- would leave a gene standardized on one slide and raw on
+#' another, reintroducing a per-slide scale difference in precisely the
+#' low-detection genes whose detection rate is often itself the batch effect.
+#'
 #' @return The input object with `pcaGlobal` populated. For `CoProMulti`,
 #'   `pcaResults` has structure
 #'   `list(slideID = list(cellType = score-row view))`.
@@ -164,7 +178,7 @@ setGeneric("computePCA",
 # matrix. irlba applies these vectors inside its matrix products.
 .sparse_pca_parameters <- function(mat, center, scale.,
                                    zero_sd_threshold = 1e-3,
-                                   nz_propion_threshold = 0.01) {
+                                   nz_proportion_threshold = 0.01) {
   n <- nrow(mat)
   means <- as.numeric(Matrix::colMeans(mat))
   sumsq <- as.numeric(Matrix::colSums(mat ^ 2))
@@ -181,7 +195,7 @@ setGeneric("computePCA",
     nz_prop <- as.numeric(Matrix::colSums(mat != 0)) / n
     unsafe <- !is.finite(scale_values) |
       scale_values < zero_sd_threshold |
-      nz_prop < nz_propion_threshold
+      nz_prop < nz_proportion_threshold
     scale_values[unsafe] <- 1
     scale_arg <- scale_values
   }
@@ -293,13 +307,19 @@ methods::setMethod(
 
 .withinSlidePCAParameters <- function(mat, slide_ids, slides, center, scale.,
                                       zero_sd_threshold = 1e-3,
-                                      nz_propion_threshold = 0.01) {
+                                      nz_proportion_threshold = 0.01) {
   p <- ncol(mat)
   rows <- stats::setNames(lapply(slides, function(s) which(slide_ids == s)), slides)
   centers <- matrix(0, nrow = length(slides), ncol = p,
                     dimnames = list(slides, colnames(mat)))
   scales <- matrix(1, nrow = length(slides), ncol = p,
                    dimnames = list(slides, colnames(mat)))
+  # A gene is guarded on *every* slide as soon as it is degenerate on any one
+  # of them. Deciding per block instead would let a gene be standardized on one
+  # slide and left raw on another, which puts a per-slide scale difference back
+  # into exactly the low-detection genes whose detection rate is itself often
+  # the batch effect. See the note in ?computePCA on what this costs.
+  unsafe_any <- rep(FALSE, p)
 
   for (k in seq_along(slides)) {
     idx <- rows[[k]]
@@ -319,15 +339,21 @@ methods::setMethod(
         sqrt(as.numeric(colSums(block ^ 2)) / max(1, nrow(block) - 1L))
       }
       nz_prop <- .columnNonzeroFraction(block)
-      unsafe <- !is.finite(block_scale) |
+      unsafe_any <- unsafe_any |
+        !is.finite(block_scale) |
         block_scale < zero_sd_threshold |
-        nz_prop < nz_propion_threshold
-      block_scale[unsafe] <- 1
+        nz_prop < nz_proportion_threshold
       scales[k, ] <- block_scale
     }
   }
 
-  list(rows = rows, centers = centers, scales = scales)
+  if (scale. && any(unsafe_any)) scales[, unsafe_any] <- 1
+  # A block with no cells keeps scale 1 regardless; guard against a stray NA
+  # from an empty-block sd reaching the divisor.
+  scales[!is.finite(scales) | scales <= 0] <- 1
+
+  list(rows = rows, centers = centers, scales = scales,
+       guarded = unsafe_any)
 }
 
 .materializeWithinSlideMatrix <- function(mat, params) {

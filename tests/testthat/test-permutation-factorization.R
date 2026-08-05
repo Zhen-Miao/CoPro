@@ -378,9 +378,14 @@ test_that("the permutation worker does not capture the kernels", {
   # The closure's environment is the factory frame and nothing else, so what a
   # worker receives is exactly this list.
   captured <- environment(worker)
+  # `permu_objective` carries the criterion the null must be built with, plus
+  # the permutation-invariant Gram matrices when that criterion is sumcor.
+  # Those are nPCA x nPCA per cell type, so they do not change the character of
+  # what is shipped to a worker; the size assertions below still apply.
   expect_setequal(
     ls(captured),
-    c("PCmats", "plan", "cts", "nCC", "sdev2_list", "maxIter", "tol")
+    c("PCmats", "plan", "cts", "nCC", "sdev2_list", "maxIter", "tol",
+      "permu_objective", "sumcor")
   )
   expect_false(any(vapply(ls(captured), function(nm)
     methods::is(get(nm, envir = captured), "CoPro"), logical(1))))

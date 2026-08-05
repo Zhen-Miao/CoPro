@@ -169,11 +169,11 @@ Notes:
 
 ## 5. skrCCA is already exact and fast for two cell types
 
-For the ordinary two-cell-type (or single within-type) problem, `runSkrCCA()`
-now solves **all** requested canonical axes with one exact SVD of the small
-PC-space cross-operator (`nPCA x nPCA`). There is no power iteration to tune, so
-`maxIter`, `tol`, and `step_size` do not affect the two-type result — the cost
-is dominated by the kernel, not the optimization.
+For the ordinary two-cell-type (or single within-type) problem under
+`objective = "sumcov"`, `runSkrCCA()` solves **all** requested canonical axes
+with one exact SVD of the small PC-space cross-operator (`nPCA x nPCA`). There
+is no power iteration to tune, so `maxIter`, `tol`, and `step_size` do not
+affect that result — the cost is dominated by the kernel, not the optimization.
 
 ```{r skrcca, purl=FALSE}
 obj <- runSkrCCA(obj, scalePCs = TRUE, nCC = 2)
@@ -183,9 +183,11 @@ obj <- computeNormalizedCorrelation(obj)
 obj <- computeRegressionGeneScores(obj)
 ```
 
-(`maxIter` / `step_size` still matter only when analyzing **three or more**
-cell types jointly, or when supplying a transferred first axis, where the
-sequential deflation path is used.)
+(`maxIter` / `step_size` still matter when analyzing **three or more** cell
+types jointly, when supplying a transferred first axis — both of which use the
+sequential deflation path — and for **any** number of cell types under
+`objective = "sumcor"`, the multi-slide default, whose operator depends on the
+weights and so has no fixed matrix to decompose.)
 
 ## 6. Multi-slide at scale
 

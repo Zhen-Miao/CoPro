@@ -64,6 +64,29 @@
   deterministic through its SUMCOV warm start and applies the same projection
   against earlier axes for later components.
 
+* **`step_size` is honored under both objectives.** It previously did nothing
+  under `sumcor` (it was never forwarded to the optimizer), so a value chosen
+  for stability was silently lost whenever the objective changed — which the
+  new multi-slide `sumcor` default would have made the common case. Under
+  `sumcov` it remains the damped power iteration. Under `sumcor` a value below
+  1 replaces the adaptive step with that fixed step, and damps the SUMCOV warm
+  start too.
+
+  The two are the same operation. Both the current iterate and the retracted
+  candidate lie on the geodesic through `w` in the search direction, so
+  blending them and renormalizing *is* a retraction:
+
+  ```
+  normalize((1 - a) * w + a * R_w(t g)) = R_w(tau * g)
+  tau = a * t / ((1 - a) * sqrt(1 + t^2 * |g|^2) + a)
+  ```
+
+  Damping is therefore a shorter step along the same arc. Applying it to the
+  trial step rather than after the line search keeps the Armijo test on the
+  point actually returned, so damped SUMCOR runs stay monotone; expect more
+  iterations, which is the trade being requested. `step_size = 1` leaves the
+  adaptive iteration bit-for-bit unchanged.
+
 * **`minCellsPerSlide`** (default 10, shared with `runGeneSpaceCCA()`) drops
   slides too thin to divide by under `sumcor`. Under `sumcov` such slides are
   only *reported*, not dropped: a thin slide simply contributes little to the
@@ -145,10 +168,34 @@
   matrix for pair". One and two cell types took an earlier exact-solver shortcut
   and were unaffected.
 
-* Permutation tests (`runSkrCCAPermu()` and the `FairSigma` / `Conditional`
-  variants) now refuse weights fitted under `objective = "sumcor"` rather than
-  compare an observed statistic from one criterion against a null built from
-  another.
+* **Behavior change for an explicit single-slide `objective = "sumcor"`.** The
+  default for single-slide objects is still `"sumcov"`, so a default call is
+  unchanged. But an *explicit* one-slide `"sumcor"` request used to be routed to
+  the SUMCOV solvers unconditionally (with a warning when that was only an
+  approximation); it now runs the full-gradient optimizer whenever the
+  reduction does not hold, i.e. three or more cell types at unequal counts.
+  Those calls return different weights than in 1.2.x. One and two cell types,
+  and equal counts, are unaffected because the criteria coincide there.
+
+* **Permutation tests match the criterion the weights were fitted with**, rather
+  than refusing every `objective = "sumcor"` fit. Cell-level permutation is
+  single-slide only (`CoProMulti` is directed to `runSlideLevelInference()`
+  first, as before), so the SUMCOR reduction test decides:
+
+  * one or two cell types at any counts, or three or more at equal counts --
+    the fitted weights *are* the SUMCOV maximizer, so the existing SUMCOV null
+    is already the matching null and the test proceeds;
+  * three or more at unequal counts -- the criteria genuinely differ, and
+    `runSkrCCAPermu()` re-optimizes every draw under SUMCOR.
+
+  A within-slide label permutation permutes the rows of `X_i`, which leaves
+  `G_i = X_i'X_i` unchanged, so the per-slide scales SUMCOR divides by are
+  permutation-invariant: they are built once and reused across draws, and the
+  existing `Y` operator-reuse factorization is untouched.
+
+  `runSkrCCAPermu_FairSigma()` and `runSkrCCAPermu_Conditional()` are restricted
+  to at most two cell types, where the reduction always holds, so they are
+  unaffected; they carry a guard in case that restriction is relaxed.
 
 * `vignettes/large_datasets.Rmd` no longer breaks `R CMD check`. Its illustrative
   chunks reference objects too large to ship, and `eval = FALSE` covers knitting

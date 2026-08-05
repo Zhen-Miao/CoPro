@@ -738,3 +738,77 @@ test_that("matrix-free sparse within-slide PCA matches dense preprocessing", {
     expect_equal(a$x[, pc], sign * b$x[, pc], tolerance = 2e-5)
   }
 })
+
+test_that("matrix-free BPCells within-slide PCA matches dense preprocessing", {
+  # BPCells is Suggests and CI installs hard dependencies only, so this cannot
+  # run everywhere. It is still the only coverage of the IterableMatrix branch
+  # of .run_within_slide_pca(), which the multi-slide default now routes
+  # out-of-core input through.
+  skip_if_not_installed("BPCells")
+  set.seed(4242)
+  dense <- matrix(rpois(3600, lambda = 0.7), nrow = 90, ncol = 40,
+                  dimnames = list(paste0("c", seq_len(90)),
+                                  paste0("g", seq_len(40))))
+  bp <- BPCells::write_matrix_memory(
+    methods::as(Matrix::Matrix(dense, sparse = TRUE), "dgCMatrix"),
+    compress = FALSE
+  )
+  slides <- rep(c("s1", "s2", "s3"), each = 30)
+
+  set.seed(19)
+  a <- CoPro:::.run_within_slide_pca(
+    dense, slides, unique(slides), 6, center = TRUE, scale. = TRUE
+  )
+  set.seed(19)
+  b <- suppressMessages(CoPro:::.run_within_slide_pca(
+    bp, slides, unique(slides), 6, center = TRUE, scale. = TRUE
+  ))
+
+  expect_equal(a$sdev, b$sdev, tolerance = 1e-6)
+  for (pc in seq_len(6L)) {
+    sign <- if (sum(a$rotation[, pc] * b$rotation[, pc]) < 0) -1 else 1
+    expect_equal(a$rotation[, pc], sign * b$rotation[, pc], tolerance = 2e-4)
+    expect_equal(a$x[, pc], sign * b$x[, pc], tolerance = 2e-4)
+  }
+})
+
+test_that("the legacy multi-slide combination still runs the legacy path", {
+  # NEWS and ?runSkrCCA both promise center_per_slide = FALSE plus
+  # objective = "sumcov" reproduces the pre-1.3.0 workflow. Nothing else
+  # exercises the two together, and the shared .runSkrCCAUnified() /
+  # .applySlideAdequacy() path was substantially refactored around them.
+  obj <- suppressWarnings(create_test_copro_multi(
+    n_cells_per_slide = 60, n_slides = 2, n_genes = 30, n_cell_types = 2,
+    seed = 808
+  ))
+  cts <- c("CellTypeA", "CellTypeB")
+  obj <- subsetData(obj, cellTypesOfInterest = cts)
+
+  legacy <- suppressMessages(computePCA(obj, nPCA = 5,
+                                        center_per_slide = FALSE))
+  expect_identical(legacy@pcaGlobal[[cts[1]]]$preprocessing, "pooled")
+  # Pooled preprocessing keeps the raw-unit affine map on the prcomp object and
+  # records no per-slide maps.
+  expect_null(legacy@pcaGlobal[[cts[1]]]$slideCenter)
+  expect_null(legacy@pcaGlobal[[cts[1]]]$slideScale)
+
+  legacy <- suppressMessages(computeDistance(
+    legacy, distType = "Euclidean2D", normalizeDistance = TRUE, verbose = FALSE
+  ))
+  legacy <- suppressMessages(computeKernelMatrix(
+    legacy, sigmaValues = 0.1, verbose = FALSE, normalizeDistance = TRUE
+  ))
+  legacy <- suppressMessages(suppressWarnings(
+    runSkrCCA(legacy, nCC = 1, objective = "sumcov")
+  ))
+
+  expect_equal(getCCAObjective(legacy)$objective, "sumcov")
+  # sumcov fixes the slide weighting by construction, so the recorded
+  # slideWeight is a missing value rather than one of the sumcor choices.
+  expect_true(is.na(getCCAObjective(legacy)$slideWeight))
+  for (ct in cts) {
+    w <- legacy@skrCCAOut[["sigma_0.1"]][[ct]]
+    expect_equal(nrow(w), 5L)
+    expect_equal(sqrt(sum(w[, 1]^2)), 1, tolerance = 1e-8)
+  }
+})

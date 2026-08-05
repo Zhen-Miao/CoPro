@@ -145,9 +145,10 @@ test_that("the one-slide reduction to sumcov is exact only when the per-pair con
         expect_equal(f1, f0, tolerance = 1e-8,
                      info = paste("exact case should not improve:", lbl))
       } else {
-        # The iteration is an ascent method either way; the point of the inexact
-        # case is that the SUMCOV solution is not already optimal for SUMCOR.
-        expect_gte(f1, f0 - 1e-10)
+        # Strict: the whole point of the inexact case is that the SUMCOV
+        # solution is *not* already optimal for SUMCOR, so a run that silently
+        # fell back to the shortcut would give f1 == f0 and must fail here.
+        expect_gt(f1, f0 + 1e-9)
       }
     }
   }
@@ -180,7 +181,10 @@ test_that("an inexact one-slide sumcor request optimizes sumcor itself", {
   f_cor <- CoPro:::.sumcorObjective(weights(fit_cor), ops, "equal")
   f_cov <- CoPro:::.sumcorObjective(weights(fit_cov), ops, "equal")
 
-  expect_gte(f_cor, f_cov - 1e-10)
+  # Strict, for the same reason as above: `getCCAObjective()` records "sumcor"
+  # on the shortcut path too, so only a genuine improvement distinguishes a run
+  # that optimized SUMCOR from one that returned the SUMCOV maximizer.
+  expect_gt(f_cor, f_cov + 1e-9)
   expect_equal(getCCAObjective(fit_cor)$objective, "sumcor")
   expect_equal(getCCAObjective(fit_cor)$slideWeight, "equal")
 })
@@ -551,12 +555,72 @@ test_that("an unknown objective or slideWeight is rejected", {
   )
 })
 
-test_that("SUMCOR rejects the SUMCOV-only fixed step size", {
+test_that("step_size is accepted under sumcor and 1 stays a no-op", {
+  obj <- .sumcor_fixture(nct = 2L, n_slides = 3L)
+  cts <- c("CellTypeA", "CellTypeB")
+  w <- function(fit) {
+    setNames(lapply(cts, function(ct) {
+      fit@skrCCAOut[["sigma_0.1"]][[ct]][, 1L]
+    }), cts)
+  }
+  fit <- function(...) suppressMessages(suppressWarnings(
+    runSkrCCA(obj, nCC = 1, objective = "sumcor", ...)
+  ))
+
+  default <- fit()
+  undamped <- fit(step_size = 1)
+  damped <- fit(step_size = 0.5)
+
+  # Passing the default explicitly must not perturb the iteration at all.
+  expect_identical(w(undamped), w(default))
+
+  # Damping trades iterations for stability; it must not move the maximizer.
+  for (ct in cts) {
+    cosine <- abs(sum(w(damped)[[ct]] * w(default)[[ct]])) /
+      sqrt(sum(w(damped)[[ct]]^2) * sum(w(default)[[ct]]^2))
+    expect_equal(cosine, 1, tolerance = 1e-5, info = ct)
+  }
+  expect_equal(getCCAObjective(damped)$objective, "sumcor")
+})
+
+test_that("damping changes the SUMCOR trajectory rather than being ignored", {
+  # The guard against a silent plumbing regression: if step_size were dropped
+  # anywhere between runSkrCCA() and the line search, or were absorbed by the
+  # adaptive step hint, both runs would take the same number of iterations.
+  obj <- .sumcor_fixture(nct = 3L, n_slides = 3L)
+  cts <- paste0("CellType", LETTERS[seq_len(3L)])
+  parts <- .sumcor_parts(obj, cts)
+
+  npc <- ncol(parts$ops$G[[parts$slides[[1L]]]][[cts[[1L]]]])
+  w0 <- setNames(lapply(cts, function(ct) {
+    matrix(1 / sqrt(npc), nrow = npc, ncol = 1L)
+  }), cts)
+  run <- function(ss) suppressWarnings(CoPro:::.sumcorIterate(
+    w0, parts$ops, "equal", step_size = ss, max_iter = 5000, tol = 1e-7
+  ))
+
+  undamped <- run(1)
+  damped <- run(0.1)
+
+  expect_gt(damped$iterations, undamped$iterations)
+  # Both must actually converge, or the iteration counts compare two caps.
+  expect_lte(undamped$gradient_norm, 1e-7)
+  expect_lte(damped$gradient_norm, 1e-7)
+  # Same stationary point, and monotone getting there.
+  expect_equal(damped$objective, undamped$objective, tolerance = 1e-6)
+  expect_true(all(diff(damped$objective_trace) >= -1e-12))
+})
+
+test_that("out-of-range step_size is still rejected under sumcor", {
   obj <- .sumcor_fixture(nct = 2L)
-  expect_error(
-    runSkrCCA(obj, nCC = 1, objective = "sumcor", step_size = 0.5),
-    "adaptive monotone line search"
-  )
+  for (bad in list(0, -0.1, 1.5, "0.5", c(0.5, 0.5), NA_real_)) {
+    expect_error(
+      suppressMessages(runSkrCCA(obj, nCC = 1, objective = "sumcor",
+                                 step_size = bad)),
+      "step_size must be a single numeric value",
+      info = paste(utils::capture.output(str(bad)), collapse = " ")
+    )
+  }
 })
 
 test_that("minCellsPerSlide must be a single non-negative number", {
@@ -620,21 +684,77 @@ test_that("CoProMulti defaults to equal-slide sumcor and records provenance", {
   expect_equal(getCCAObjective(stripped)$objective, "sumcov")
 })
 
-test_that("permutation tests refuse sumcor weights", {
-  obj <- .sumcor_fixture(nct = 2L)
+test_that("a permutation null matches the criterion the weights were fitted with", {
+  # Cell-level permutation is single-slide only (CoProMulti is rejected before
+  # this runs), so the SUMCOR reduction test applies in full.
+  fit <- function(obj, objective) {
+    suppressMessages(suppressWarnings(
+      runSkrCCA(obj, nCC = 1, objective = objective)
+    ))
+  }
+  resolve <- function(f, cts) {
+    suppressMessages(CoPro:::.resolvePermutationObjective(f, cts, TRUE))
+  }
+
+  # Two cell types: one pair, so the per-pair constant is uniform and SUMCOR's
+  # maximizer *is* SUMCOV's. The existing SUMCOV null is already the matching
+  # null, and refusing here would be refusing a valid test.
+  two <- .single_slide_fixture(nct = 2L, counts = c(120, 80))
+  cts2 <- c("CellTypeA", "CellTypeB")
+  expect_equal(resolve(fit(two, "sumcor"), cts2)$objective, "sumcov")
+  expect_equal(resolve(fit(two, "sumcov"), cts2)$objective, "sumcov")
+
+  # Three cell types at equal counts: still reducible.
+  eq <- .single_slide_fixture(nct = 3L, counts = c(80, 80, 80))
+  cts3 <- c("CellTypeA", "CellTypeB", "CellTypeC")
+  expect_equal(resolve(fit(eq, "sumcor"), cts3)$objective, "sumcov")
+
+  # Three at unequal counts: the criteria genuinely differ, so the null has to
+  # be re-optimized under SUMCOR, and it needs the permutation-invariant Gram
+  # matrices to do it.
+  un <- .single_slide_fixture(nct = 3L, counts = c(150, 60, 40))
+  resolved <- resolve(fit(un, "sumcor"), cts3)
+  expect_equal(resolved$objective, "sumcor")
+  expect_equal(resolved$slideWeight, "equal")
+  expect_named(resolved$grams, cts3)
+  expect_equal(as.integer(resolved$n_cells), c(150L, 60L, 40L))
+
+  # Tests restricted to at most two cell types can only meet the reducible
+  # case; the guard is there in case that restriction is ever relaxed.
+  expect_equal(
+    suppressMessages(CoPro:::.resolvePermutationObjective(
+      fit(two, "sumcor"), cts2, TRUE, supports_sumcor = FALSE
+    ))$objective,
+    "sumcov"
+  )
+  expect_error(
+    CoPro:::.resolvePermutationObjective(
+      fit(un, "sumcor"), cts3, TRUE, supports_sumcor = FALSE
+    ),
+    "different maximizers"
+  )
+})
+
+test_that("the SUMCOR permutation null is only used where it is needed", {
+  # The permutation-invariance argument: a within-slide label permutation
+  # permutes rows of X_i, leaving G_i = X_i'X_i untouched, so the SUMCOR
+  # denominators can be built once and reused for every draw.
+  obj <- .single_slide_fixture(nct = 3L, counts = c(150, 60, 40))
   fit <- suppressMessages(suppressWarnings(
     runSkrCCA(obj, nCC = 1, objective = "sumcor")
   ))
-  # CoProMulti is rejected earlier for cell-level permutation, so exercise the
-  # guard directly -- it is the piece that must not silently mix criteria.
-  expect_error(
-    CoPro:::.rejectSumcorForPermutation(fit, "runSkrCCAPermu()"),
-    "mixes criteria"
+  cts <- c("CellTypeA", "CellTypeB", "CellTypeC")
+  resolved <- suppressMessages(
+    CoPro:::.resolvePermutationObjective(fit, cts, TRUE)
   )
-  fit_cov <- suppressMessages(suppressWarnings(
-    runSkrCCA(obj, nCC = 1, objective = "sumcov")
-  ))
-  expect_null(CoPro:::.rejectSumcorForPermutation(fit_cov))
+
+  X <- CoPro:::.getAllPCMats(allPCs = fit@pcaGlobal, scalePCs = TRUE)[cts]
+  set.seed(4)
+  for (ct in cts) {
+    shuffled <- X[[ct]][sample(nrow(X[[ct]])), , drop = FALSE]
+    expect_equal(crossprod(shuffled), resolved$grams[[ct]], tolerance = 1e-10,
+                 info = ct)
+  }
 })
 
 # ------------------------------- 9. provenance and gene-space arg forwarding ---

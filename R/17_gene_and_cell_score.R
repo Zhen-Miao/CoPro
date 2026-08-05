@@ -1,4 +1,19 @@
 #' computeGeneAndCellScores
+#'
+#' @details Gene scores are the PCA back-projection
+#' \eqn{R\,\mathrm{diag}(1/\mathrm{sdev})\,w}, so they carry the units of the
+#' loading matrix \eqn{R}: **weights per standardized gene**, not per unit of
+#' raw expression. That was already true under pooled preprocessing. Under the
+#' `CoProMulti` default (`computePCA(center_per_slide = TRUE)`) the
+#' standardization is per (slide, cell type), so when the stored slide scales
+#' differ there is no single equivalent coefficient vector in raw units; the
+#' per-slide maps are kept on `pcaGlobal[[ct]]$slideCenter` and `$slideScale`.
+#'
+#' For gene weights that do not depend on the PCA coordinate system, prefer
+#' [computeRegressionGeneScores()], which regresses cell scores on expression
+#' directly. Those are also more robust to `nPCA` and reproduce better across
+#' replicates.
+#'
 #' @importFrom stats setNames
 #' @importFrom methods slotNames
 #' @param object A `CoPro` or `CoProMulti` object containing CCA results
@@ -7,7 +22,7 @@
 #' @return A `CoPro` or `CoProMulti` object with gene and cell scores computed
 #' @family scores-and-correlation
 #' @seealso [runSkrCCA()], [computeNormalizedCorrelation()],
-#'   [getCellScores()], [getCellScoresInSitu()]
+#'   [computeRegressionGeneScores()], [getCellScores()], [getCellScoresInSitu()]
 #' @export
 #'
 setGeneric(

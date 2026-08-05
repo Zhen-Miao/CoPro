@@ -77,10 +77,22 @@ the transferred weight on each PC. Otherwise, the value should be set to NULL.}
 
 \item{n_cores}{Number of cores for parallel processing (CoProMulti only, ignored for CoPro)}
 
-\item{step_size}{Step size for the \code{objective = "sumcov"} damped power
-iteration. Default 1 (standard power iteration). Values in (0,1) blend old
-and new weights for smoother convergence. SUMCOR uses an adaptive monotone
-line search instead and requires this argument to remain 1.}
+\item{step_size}{Damping factor in (0, 1]. Default 1 (undamped). \strong{Honored
+under both objectives}, so a value chosen for stability keeps its effect
+when the objective changes.
+
+Under \code{"sumcov"} this is the damped power iteration: values below 1 blend
+old and new weights, \verb{w \\leftarrow \\mathrm\{normalize\}((1-\\alpha)w_\{old\} + \\alpha w_\{new\})}, which can help with many cells or many CCs.
+
+Under \code{"sumcor"} it shortens every trial step of the projected-gradient
+line search. These are the same operation: because both the current iterate
+and the retracted candidate lie on the geodesic through \code{w} in the search
+direction, blending them and renormalizing \emph{is} a retraction, so damping by
+\eqn{\alpha} equals taking a step
+\eqn{\tau = \alpha t / ((1-\alpha)\sqrt{1 + t^2\|g\|^2} + \alpha)}
+along the same arc. Applying it to the trial step rather than after the
+fact keeps the Armijo test on the point actually returned, so a damped
+SUMCOR run stays monotone. It also damps the SUMCOV warm start.}
 
 \item{space}{Which feature space to optimize in. \code{"pca"} (default) runs the
 PC-space optimizer described here. \code{"gene"} forwards to
