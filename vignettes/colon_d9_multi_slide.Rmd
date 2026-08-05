@@ -630,6 +630,12 @@ pattern learned from the reference generalizes well to independent slides.
 
 For joint analysis across all slides simultaneously, use `newCoProMulti`:
 
+The multi-slide defaults remove gene means and scales within each
+`(slide, cell type)` block before fitting one shared PCA loading matrix, then
+combine slides with equal-slide SUMCOR. Thus the low-dimensional coordinates
+are shared without letting between-slide offsets or variances choose the PC
+subspace or dominate the CoPro objective.
+
 
 ``` r
 multi_obj <- newCoProMulti(

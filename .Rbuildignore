@@ -18,6 +18,7 @@
 ^data-raw$
 ^scripts$
 ^\.claude$
+^\.workbuddy$
 vignettes/.*\.Rmd\.orig$
 vignettes/precompute\.R$
 ^reports$

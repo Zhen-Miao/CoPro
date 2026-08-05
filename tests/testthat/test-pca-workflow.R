@@ -599,7 +599,7 @@ test_that("per-slide PC scores are stored as views of the global scores", {
   }
 })
 
-test_that("center_per_slide keeps materialized slices, and legacy slices still resolve", {
+test_that("within-slide preprocessing keeps shared score views, and legacy matrices still resolve", {
   make <- function(center_per_slide) {
     obj <- create_test_copro_multi(n_cells_per_slide = 120, n_slides = 2,
                                    n_cell_types = 2, seed = 91)
@@ -608,14 +608,40 @@ test_that("center_per_slide keeps materialized slices, and legacy slices still r
                                 center_per_slide = center_per_slide))
   }
 
-  # Re-centering makes the slice something other than a view, so it must stay
-  # a matrix -- otherwise the centering would be silently discarded.
+  # Centering now happens in gene space before the shared projection. Every
+  # slide therefore remains a view of one global PC matrix, while its score
+  # block is centered without a second, post-PCA transformation.
   centered <- make(TRUE)
   entry <- centered@pcaResults[["Slide1"]][["CellTypeA"]]
-  expect_false(CoPro:::.isPCSlice(entry))
-  expect_true(is.matrix(entry))
-  expect_equal(colMeans(entry), rep(0, ncol(entry)), tolerance = 1e-12,
+  expect_true(CoPro:::.isPCSlice(entry))
+  centered_scores <- CoPro:::.resolvePCSlice(
+    entry, centered@pcaGlobal[["CellTypeA"]]$x
+  )
+  expect_equal(colMeans(centered_scores), rep(0, ncol(centered_scores)),
+               tolerance = 1e-12,
                ignore_attr = TRUE)
+  expect_identical(centered@pcaGlobal[["CellTypeA"]]$preprocessing,
+                   "within_slide")
+
+  # The stored shared loading must reproduce every score block after applying
+  # that block's stored gene-space affine map.
+  ct <- "CellTypeA"
+  ct_rows <- centered@cellTypesSub == ct
+  X_ct <- centered@normalizedDataSub[ct_rows, , drop = FALSE]
+  slide_ct <- getSlideID(centered)[ct_rows]
+  pca <- centered@pcaGlobal[[ct]]
+  for (sID in getSlideList(centered)) {
+    rows <- which(slide_ct == sID)
+    Z <- sweep(X_ct[rows, , drop = FALSE], 2L,
+               pca$slideCenter[sID, ], "-")
+    Z <- sweep(Z, 2L, pca$slideScale[sID, ], "/")
+    expect_equal(
+      unname(Z %*% pca$rotation),
+      unname(pca$x[rows, , drop = FALSE]),
+      tolerance = 1e-8,
+      info = sID
+    )
+  }
 
   # An object saved before slices became views holds matrices. Both
   # representations must prepare to the same thing, for both scalePCs settings.
@@ -645,5 +671,70 @@ test_that("center_per_slide keeps materialized slices, and legacy slices still r
                      info = paste(sID, ct, "scalePCs", scale_pcs))
       }
     }
+  }
+})
+
+test_that("multi-slide PCA default is invariant to per-slide positive affine batch effects", {
+  base <- create_test_copro_multi(
+    n_cells_per_slide = 140, n_slides = 3, n_genes = 35,
+    n_cell_types = 2, seed = 771
+  )
+  base <- subsetData(base, cellTypesOfInterest = c("CellTypeA", "CellTypeB"))
+  shifted <- base
+
+  slide_id <- getSlideID(shifted)
+  p <- ncol(shifted@normalizedDataSub)
+  for (k in seq_along(getSlideList(shifted))) {
+    rows <- slide_id == getSlideList(shifted)[k]
+    multiplier <- seq(0.55, 1.85, length.out = p) * (0.8 + 0.25 * k)
+    offset <- seq(-3, 4, length.out = p) + 7 * k
+    block <- sweep(shifted@normalizedDataSub[rows, , drop = FALSE],
+                   2L, multiplier, "*")
+    shifted@normalizedDataSub[rows, ] <- sweep(block, 2L, offset, "+")
+  }
+
+  set.seed(91)
+  fit_base <- suppressMessages(computePCA(base, nPCA = 8))
+  set.seed(91)
+  fit_shifted <- suppressMessages(computePCA(shifted, nPCA = 8))
+
+  for (ct in c("CellTypeA", "CellTypeB")) {
+    A <- fit_base@pcaGlobal[[ct]]
+    B <- fit_shifted@pcaGlobal[[ct]]
+    expect_identical(A$preprocessing, "within_slide")
+    expect_identical(B$preprocessing, "within_slide")
+    expect_equal(A$sdev, B$sdev, tolerance = 1e-9)
+    for (pc in seq_len(8L)) {
+      sign <- if (sum(A$rotation[, pc] * B$rotation[, pc]) < 0) -1 else 1
+      expect_equal(A$rotation[, pc], sign * B$rotation[, pc],
+                   tolerance = 1e-8, info = paste(ct, "loading", pc))
+      expect_equal(A$x[, pc], sign * B$x[, pc],
+                   tolerance = 1e-8, info = paste(ct, "score", pc))
+    }
+  }
+})
+
+test_that("matrix-free sparse within-slide PCA matches dense preprocessing", {
+  set.seed(992)
+  dense <- matrix(rpois(3600, lambda = 0.7), nrow = 90, ncol = 40,
+                  dimnames = list(paste0("c", seq_len(90)),
+                                  paste0("g", seq_len(40))))
+  sparse <- methods::as(Matrix::Matrix(dense, sparse = TRUE), "dgCMatrix")
+  slides <- rep(c("s1", "s2", "s3"), each = 30)
+
+  set.seed(19)
+  a <- CoPro:::.run_within_slide_pca(
+    dense, slides, unique(slides), 6, center = TRUE, scale. = TRUE
+  )
+  set.seed(19)
+  b <- CoPro:::.run_within_slide_pca(
+    sparse, slides, unique(slides), 6, center = TRUE, scale. = TRUE
+  )
+
+  expect_equal(a$sdev, b$sdev, tolerance = 1e-8)
+  for (pc in seq_len(6L)) {
+    sign <- if (sum(a$rotation[, pc] * b$rotation[, pc]) < 0) -1 else 1
+    expect_equal(a$rotation[, pc], sign * b$rotation[, pc], tolerance = 2e-5)
+    expect_equal(a$x[, pc], sign * b$x[, pc], tolerance = 2e-5)
   }
 })

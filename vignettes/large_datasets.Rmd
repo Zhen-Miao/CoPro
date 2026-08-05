@@ -189,11 +189,14 @@ sequential deflation path is used.)
 
 ## 6. Multi-slide at scale
 
-`newCoProMulti()` shares one set of weight vectors across slides. Kernels are
-built **per slide** and their small PC-space operators are summed — CoPro never
-materializes a block-diagonal `N x N` kernel across the whole cohort. Use
-`method = "auto"`/`"sparse"` exactly as above, and set `n_cores` to
-parallelize the per-slide kernel and skrCCA work.
+`newCoProMulti()` shares one PCA loading matrix and one set of CCA weight
+vectors across slides. By default, `computePCA()` centers and scales each
+`(slide, cell type)` gene matrix before stacking the blocks for that shared
+PCA. `runSkrCCA()` then uses equal-slide SUMCOR, keeping the small per-slide
+PC-space operators separate so each cross term is divided by its own score
+scales. CoPro never materializes a block-diagonal `N x N` kernel across the
+cohort. Use `method = "auto"`/`"sparse"` exactly as above, and set `n_cores`
+to parallelize the per-slide kernel work.
 
 ```{r multi-slide, purl=FALSE}
 multi <- newCoProMulti(

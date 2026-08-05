@@ -12,7 +12,7 @@ optimize_sumcor_pca_n(
   cell_types,
   w_list,
   nCC = 2,
-  slideWeight = "size",
+  slideWeight = "equal",
   sdev2_list = NULL,
   max_iter = 200,
   tol = 1e-06,
@@ -36,15 +36,14 @@ optimize_sumcor_pca_n(
 
 \item{nCC}{Total number of components wanted.}
 
-\item{slideWeight}{Per-slide weighting: \code{"size"} (default) or \code{"equal"}.}
+\item{slideWeight}{Per-slide weighting: \code{"equal"} (default) or \code{"size"}.}
 
 \item{sdev2_list}{Optional named list of squared standard deviations per cell
 type, supplied when \code{scalePCs = FALSE}.}
 
-\item{max_iter}{Maximum Gauss-Seidel sweeps.}
+\item{max_iter}{Maximum projected-gradient iterations.}
 
-\item{tol}{Convergence tolerance on weight change and relative objective
-change.}
+\item{tol}{Convergence tolerance on the projected-gradient norm.}
 
 \item{n_cores}{Cores for the per-slide kernel products.}
 

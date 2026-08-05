@@ -37,11 +37,9 @@ by pair leaves the argmax alone only when there is a single pair, or when
 every \eqn{n_i} is equal. So the reduction to SUMCOV is exact for one or two
 cell types at any cell counts, and for three or more only when the counts
 are equal; \code{.sumcorReducesToSumcov()} is that test. Outside it the criteria
-have genuinely different maximizers, and \code{optimize_sumcor_pca()} runs the
-iteration rather than short-circuiting. (\code{runSkrCCA()} takes the more
-conservative route: it still uses the SUMCOV solvers there, and says so --
-see \code{.reportSingleSlideSumcor()}.) Under the default \code{slideWeight = "size"}
-the mismatch is \eqn{1 + O(1/n)} and immaterial in practice; it is
-\code{"equal"} -- strict Kettenring SUMCOR -- where it bites.
+have genuinely different maximizers, and the full-gradient optimizer runs
+rather than short-circuiting. Under \code{slideWeight = "size"} the mismatch is
+\eqn{1 + O(1/n)} and usually immaterial; it is \code{"equal"} -- strict
+Kettenring SUMCOR and the multi-slide default -- where it can be material.
 }
 \keyword{internal}

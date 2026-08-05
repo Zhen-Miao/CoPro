@@ -1,13 +1,13 @@
 # Tests for the PCA-space SUMCOR objective (objective = "sumcor").
 #
 # The claims being pinned here, in order:
-#   1. With one slide, sumcor and sumcov are the same problem -- but only when
-#      the per-pair constants coincide (<=2 cell types, or equal cell counts);
-#      outside that runSkrCCA() still routes to sumcov and warns.
+#   1. With one slide, sumcor and sumcov are the same problem only when the
+#      per-slide Gram matrices and per-pair constants permit the reduction;
+#      otherwise runSkrCCA() optimizes SUMCOR itself.
 #   2. SUMCOV is the sigma-weighted special case of the SUMCOR family.
 #   3. sumcor is invariant to per-slide score rescaling; sumcov is not.
-#   4. The iteration is an ascent method and never returns worse than its
-#      sumcov warm start.
+#   4. The full analytical gradient matches finite differences, and projected
+#      gradient ascent is monotone and reaches a constrained stationary point.
 #   5. It is deterministic (no RNG).
 #   6. scalePCs stays a pure reparametrization.
 #   7. Thin slides are dropped under sumcor, reported under sumcov.
@@ -135,9 +135,10 @@ test_that("the one-slide reduction to sumcov is exact only when the per-pair con
       w0 <- setNames(lapply(cts, function(ct) warm[[ct]][, 1L, drop = FALSE]),
                      cts)
       f0 <- CoPro:::.sumcorObjective(w0, ops, sw)
-      fit <- CoPro:::.sumcorIterate(w_init = w0, ops = ops, slideWeight = sw,
-                                    max_iter = 300, tol = 1e-10,
-                                    verbose = FALSE)
+      fit <- suppressWarnings(CoPro:::.sumcorIterate(
+        w_init = w0, ops = ops, slideWeight = sw,
+        max_iter = 300, tol = 1e-8, verbose = FALSE
+      ))
       f1 <- CoPro:::.sumcorObjective(fit$w_list, ops, sw)
 
       if (case$exact) {
@@ -157,53 +158,39 @@ test_that("the one-slide reduction to sumcov is exact only when the per-pair con
   ))
 })
 
-test_that("runSkrCCA warns when it routes an inexact one-slide sumcor to sumcov", {
-  # Three cell types at unequal counts is the case where the criteria genuinely
-  # differ; the user asked for sumcor and gets sumcov, so it must not be silent.
+test_that("an inexact one-slide sumcor request optimizes sumcor itself", {
   obj <- .single_slide_fixture(nct = 3L, counts = c(150, 60, 40))
-  expect_warning(
-    suppressMessages(runSkrCCA(obj, nCC = 1, objective = "sumcor",
-                               slideWeight = "equal")),
-    "do not share a maximizer"
-  )
+  fit_cor <- suppressMessages(suppressWarnings(
+    runSkrCCA(obj, nCC = 1, objective = "sumcor", slideWeight = "equal")
+  ))
+  fit_cov <- suppressMessages(suppressWarnings(
+    runSkrCCA(obj, nCC = 1, objective = "sumcov")
+  ))
 
-  # Equal counts, and two cell types, are exact -- inform, do not warn.
-  for (fx in list(.single_slide_fixture(nct = 3L, counts = c(70, 70, 70)),
-                  .single_slide_fixture(nct = 2L))) {
-    expect_no_warning(
-      suppressMessages(runSkrCCA(fx, nCC = 1, objective = "sumcor",
-                                 slideWeight = "equal"))
-    )
-  }
+  cts <- c("CellTypeA", "CellTypeB", "CellTypeC")
+  X <- CoPro:::.preparePCMatrices(
+    pca_global = obj@pcaGlobal, scalePCs = TRUE, cts = cts
+  )
+  ops <- CoPro:::.computeSingleSlideOperators(
+    X, obj@kernelMatrices, 0.1, cts
+  )
+  weights <- function(fit) setNames(lapply(cts, function(ct) {
+    fit@skrCCAOut[["sigma_0.1"]][[ct]][, 1L, drop = FALSE]
+  }), cts)
+  f_cor <- CoPro:::.sumcorObjective(weights(fit_cor), ops, "equal")
+  f_cov <- CoPro:::.sumcorObjective(weights(fit_cov), ops, "equal")
 
-  # Real cell counts are essentially never exactly equal, so the default
-  # slideWeight = "size" must not warn on every such call -- there the
-  # cell-count factor nearly cancels the per-pair constant and the mismatch is
-  # 1 + O(1/n). It still says so, as a message.
-  uneven <- .single_slide_fixture(nct = 3L, counts = c(150, 60, 40))
-  expect_no_warning(
-    suppressMessages(runSkrCCA(uneven, nCC = 1, objective = "sumcor"))
-  )
-  expect_message(
-    runSkrCCA(uneven, nCC = 1, objective = "sumcor"),
-    "1 \\+ O\\(1/n\\)"
-  )
+  expect_gte(f_cor, f_cov - 1e-10)
+  expect_equal(getCCAObjective(fit_cor)$objective, "sumcor")
+  expect_equal(getCCAObjective(fit_cor)$slideWeight, "equal")
 })
 
-test_that("with one slide sumcor and sumcov give the same weights", {
-  # NOTE: this test pins the *routing*, not the mathematics. A single slide
-  # forces use_sumcor <- FALSE in .validateSkrCCAInputs(), so both calls below
-  # run the identical code path and the comparison cannot fail. It is kept as a
-  # guard against the routing being removed by accident. The mathematics -- when
-  # that routing is actually exact -- is tested separately in
-  # "the one-slide reduction to sumcov is exact only when the per-pair constants
-  # coincide" above, which is the non-circular version.
-  #
-  # Checked on a genuine single-slide CoPro (the is_multi = FALSE branch) and on
-  # a one-slide CoProMulti (is_multi = TRUE with S = 1), which reach the short
-  # circuit by different routes.
+test_that("one-slide sumcor and sumcov weights agree in exact reduction cases", {
+  # One and two cell types have at most one term, so once the one-slide PC Gram
+  # matrices are scalar identities, the two criteria differ only by a constant.
+  # Check both object classes and both PC parametrizations.
   for (kind in c("single", "multi")) {
-    for (nct in c(1L, 2L, 3L)) {
+    for (nct in c(1L, 2L)) {
       for (scale_pcs in c(TRUE, FALSE)) {
         obj <- if (kind == "single") {
           .single_slide_fixture(nct = nct)
@@ -235,18 +222,27 @@ test_that("with one slide sumcor and sumcov give the same weights", {
       }
     }
   }
+
+  # Three types are also exact when their cell counts (and hence pair
+  # constants) are equal.
+  obj <- .single_slide_fixture(nct = 3L, counts = c(70, 70, 70))
+  fit_cov <- suppressMessages(runSkrCCA(obj, nCC = 1, objective = "sumcov"))
+  fit_cor <- suppressMessages(runSkrCCA(obj, nCC = 1, objective = "sumcor"))
+  for (ct in paste0("CellType", LETTERS[1:3])) {
+    a <- fit_cov@skrCCAOut[["sigma_0.1"]][[ct]][, 1L]
+    b <- fit_cor@skrCCAOut[["sigma_0.1"]][[ct]][, 1L]
+    expect_equal(a, .align_sign(a, b), tolerance = 1e-5)
+  }
 })
 
-test_that("a single-slide object reports that sumcor reduced to sumcov", {
+test_that("an exact one-slide shortcut still records the requested sumcor criterion", {
   obj <- .single_slide_fixture(nct = 2L)
-  fit <- NULL
-  suppressWarnings(expect_message(
-    fit <- runSkrCCA(obj, nCC = 1, objective = "sumcor"),
-    "same optimization problem"
-  ))
-  # The record must say what was actually run, and also what was asked for.
-  expect_equal(getCCAObjective(fit)$objective, "sumcov")
+  fit <- suppressMessages(runSkrCCA(obj, nCC = 1, objective = "sumcor"))
+  # The decomposition is a computational shortcut for this criterion, not a
+  # change to the objective the result solves.
+  expect_equal(getCCAObjective(fit)$objective, "sumcor")
   expect_equal(getCCAObjective(fit)$requested, "sumcor")
+  expect_equal(getCCAObjective(fit)$slideWeight, "equal")
 })
 
 # ------------------------------------------ 2. sumcov as a special case ------
@@ -275,6 +271,34 @@ test_that("the covariance slide weight reproduces the sumcov objective", {
         direct, tolerance = 1e-10,
         info = sprintf("nct=%d scalePCs=%s", nct, scale_pcs)
       )
+    }
+  }
+})
+
+test_that("the analytical SUMCOR gradient matches finite differences", {
+  for (nct in c(1L, 3L)) {
+    obj <- .sumcor_fixture(nct = nct, nPCA = 5L)
+    cts <- paste0("CellType", LETTERS[seq_len(nct)])
+    parts <- .sumcor_parts(obj, cts)
+    w <- .unit_weights(parts, seed = 818)
+
+    for (weighting in c("equal", "size", "covariance")) {
+      gradient <- CoPro:::.sumcorGradient(w, parts$ops, weighting)
+      errors <- numeric(0)
+      eps <- 1e-6
+      for (ct in cts) {
+        for (j in seq_len(nrow(w[[ct]]))) {
+          plus <- minus <- w
+          plus[[ct]][j, 1L] <- plus[[ct]][j, 1L] + eps
+          minus[[ct]][j, 1L] <- minus[[ct]][j, 1L] - eps
+          numerical <- (
+            CoPro:::.sumcorObjective(plus, parts$ops, weighting) -
+              CoPro:::.sumcorObjective(minus, parts$ops, weighting)
+          ) / (2 * eps)
+          errors <- c(errors, abs(numerical - gradient[[ct]][j, 1L]))
+        }
+      }
+      expect_lt(max(errors), 1e-6)
     }
   }
 })
@@ -355,23 +379,20 @@ test_that("sumcor never returns worse than its sumcov warm start", {
   }
 })
 
-test_that("the sumcor objective is non-decreasing across sweeps", {
+test_that("projected-gradient SUMCOR is monotone and reaches stationarity", {
   obj <- .sumcor_fixture(nct = 3L)
   cts <- c("CellTypeA", "CellTypeB", "CellTypeC")
   parts <- .sumcor_parts(obj, cts)
   warm <- CoPro:::.sumcorWarmStart(parts$ops, cts, parts$sdev2, 1L)
   w <- setNames(lapply(cts, function(ct) warm[[ct]][, 1, drop = FALSE]), cts)
 
-  trajectory <- numeric(0)
-  for (k in seq_len(12)) {
-    fit <- suppressWarnings(CoPro:::.sumcorIterate(
-      w_init = w, ops = parts$ops, slideWeight = "size",
-      sdev2_list = parts$sdev2, max_iter = k, tol = 1e-14
-    ))
-    trajectory <- c(trajectory, fit$objective)
-  }
-  expect_true(all(diff(trajectory) >= -1e-12),
-              info = paste(sprintf("%.10f", trajectory), collapse = " "))
+  fit <- suppressWarnings(CoPro:::.sumcorIterate(
+    w_init = w, ops = parts$ops, slideWeight = "equal",
+    sdev2_list = parts$sdev2, max_iter = 1000, tol = 1e-6
+  ))
+  expect_true(all(diff(fit$objective_trace) >= -1e-12),
+              info = paste(sprintf("%.10f", fit$objective_trace), collapse = " "))
+  expect_lte(fit$gradient_norm, 1e-6)
 })
 
 test_that("sumcor weights satisfy the CCA constraint on every block", {
@@ -530,6 +551,14 @@ test_that("an unknown objective or slideWeight is rejected", {
   )
 })
 
+test_that("SUMCOR rejects the SUMCOV-only fixed step size", {
+  obj <- .sumcor_fixture(nct = 2L)
+  expect_error(
+    runSkrCCA(obj, nCC = 1, objective = "sumcor", step_size = 0.5),
+    "adaptive monotone line search"
+  )
+})
+
 test_that("minCellsPerSlide must be a single non-negative number", {
   obj <- .sumcor_fixture(nct = 2L)
   expect_error(
@@ -572,11 +601,11 @@ test_that("space = gene needs an unambiguous bandwidth", {
 
 # --------------------------------------------------------- provenance -------
 
-test_that("getCCAObjective records what was run and defaults to sumcov", {
+test_that("CoProMulti defaults to equal-slide sumcor and records provenance", {
   obj <- .sumcor_fixture(nct = 2L)
 
   fit <- suppressMessages(suppressWarnings(
-    runSkrCCA(obj, nCC = 1, objective = "sumcor", slideWeight = "equal")
+    runSkrCCA(obj, nCC = 1)
   ))
   record <- getCCAObjective(fit)
   expect_equal(record$space, "pca")
@@ -584,8 +613,8 @@ test_that("getCCAObjective records what was run and defaults to sumcov", {
   expect_equal(record$slideWeight, "equal")
   expect_equal(length(record$slides), length(getSlideList(obj)))
 
-  # An object predating the provenance attribute must read back as sumcov,
-  # which is what such objects were computed under.
+  # An object predating the provenance attribute still reads back as sumcov,
+  # which is what legacy objects were computed under.
   stripped <- fit
   attr(stripped@skrCCAOut, "ccaObjective") <- NULL
   expect_equal(getCCAObjective(stripped)$objective, "sumcov")

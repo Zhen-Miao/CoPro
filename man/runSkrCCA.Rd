@@ -17,7 +17,7 @@ runSkrCCA(
   n_cores = 1,
   step_size = 1,
   space = c("pca", "gene"),
-  objective = c("sumcov", "sumcor"),
+  objective = NULL,
   slideWeight = NULL,
   minCellsPerSlide = 10,
   ...
@@ -34,7 +34,7 @@ runSkrCCA(
   n_cores = 1,
   step_size = 1,
   space = c("pca", "gene"),
-  objective = c("sumcov", "sumcor"),
+  objective = NULL,
   slideWeight = NULL,
   minCellsPerSlide = 10,
   ...
@@ -51,7 +51,7 @@ runSkrCCA(
   n_cores = 1,
   step_size = 1,
   space = c("pca", "gene"),
-  objective = c("sumcov", "sumcor"),
+  objective = NULL,
   slideWeight = NULL,
   minCellsPerSlide = 10,
   ...
@@ -65,20 +65,22 @@ running the program}
 
 \item{nCC}{Number of canonical vectors to compute, default = 2}
 
-\item{tol}{Tolerance for termination, default = 1e-5}
+\item{tol}{Tolerance for termination, default = 1e-5. Under SUMCOR this is
+the projected-gradient norm; under SUMCOV it is the weight-update change.}
 
 \item{transferred_weight_1}{If we use cross-slide weight transfer function,
 the transferred weight on each PC. Otherwise, the value should be set to NULL.}
 
-\item{maxIter}{Maximum iterations}
+\item{maxIter}{Maximum optimization iterations.}
 
 \item{sigmaChoice}{Specific sigma value to use (CoProMulti only, ignored for CoPro)}
 
 \item{n_cores}{Number of cores for parallel processing (CoProMulti only, ignored for CoPro)}
 
-\item{step_size}{Step size for damped power iteration. Default 1 (standard
-power iteration). Values in (0,1) blend old and new weights for smoother
-convergence, which can help with many cells or many CCs.}
+\item{step_size}{Step size for the \code{objective = "sumcov"} damped power
+iteration. Default 1 (standard power iteration). Values in (0,1) blend old
+and new weights for smoother convergence. SUMCOR uses an adaptive monotone
+line search instead and requires this argument to remain 1.}
 
 \item{space}{Which feature space to optimize in. \code{"pca"} (default) runs the
 PC-space optimizer described here. \code{"gene"} forwards to
@@ -88,8 +90,9 @@ PC-space optimizer described here. \code{"gene"} forwards to
 
 Under \code{space = "gene"}, \code{objective}, \code{tol}, \code{maxIter} and
 \code{minCellsPerSlide} are forwarded \strong{only when you supply them}, because the
-two entry points have different defaults (\code{objective} \code{"sumcov"} vs
-\code{"sumcor"}, \code{tol} \code{1e-5} vs \code{1e-6}, \code{maxIter} \code{200} vs \code{3000},
+two entry points have different defaults (\code{objective} is \code{"sumcov"} for
+single-slide PCA space and \code{"sumcor"} for multi-slide PCA and gene space;
+\code{tol} is \code{1e-5} vs \code{1e-6}; \code{maxIter} is \code{200} vs \code{3000}; and
 \code{minCellsPerSlide} \code{10} vs \code{20}). Forwarding a \code{runSkrCCA()} default would
 silently make this call differ from the \code{\link[=runGeneSpaceCCA]{runGeneSpaceCCA()}} call it claims
 to be, so an unset argument keeps gene space's own default. Arguments with
@@ -98,15 +101,15 @@ no gene-space meaning (\code{scalePCs}, \code{transferred_weight_1}, \code{n_cor
 
 \item{objective}{Which canonical criterion to maximize.
 
-\code{"sumcov"} (default) maximizes the sum of kernel-smoothed cross-covariances
+\code{"sumcov"} maximizes the sum of kernel-smoothed cross-covariances
 \eqn{\sum_{i<j} w_i' (\sum_s X_i^{(s)'} K_{ij}^{(s)} X_j^{(s)}) w_j} under
 \eqn{\|w_i\| = 1}.
 
 \code{"sumcor"} maximizes the per-slide self-normalized sum, dividing each
 slide's cross term by that slide's own score scales.
 
-\strong{With one slide these are usually the same problem}, and \code{"sumcor"} is
-routed to the exact \code{"sumcov"} solvers. Whitened PCs give
+\strong{With one slide these are often the same problem.} When PCA was fit to
+that slide, whitened PCs give
 \eqn{X_i'X_i = (n_i-1) I}, so on \eqn{\|w_i\| = 1} the denominators are
 \eqn{\sigma_i = \sqrt{n_i - 1}} -- note \eqn{\sigma} is a norm, not a
 root-mean-square -- and the objective is SUMCOV reweighted by the
@@ -114,10 +117,11 @@ root-mean-square -- and the objective is SUMCOV reweighted by the
 constant leaves the maximizer alone only when every pair gets the same
 one, so the reduction is exact for \strong{one or two cell types at any cell
 counts}, and for \strong{three or more only when the counts are equal}.
-Outside that, one-slide \code{"sumcor"} still uses the \code{"sumcov"} solvers but
-warns: the mismatch is \eqn{1 + O(1/n)} under the default
-\code{slideWeight = "size"} and can be material under \code{"equal"}. Call
-\code{\link[=optimize_sumcor_pca]{optimize_sumcor_pca()}} directly to optimize the criterion itself.
+In exactly those cases CoPro uses the existing SUMCOV solver. Outside
+them it runs the full-gradient SUMCOR optimizer, so an explicit
+\code{objective = "sumcor"} always optimizes the requested criterion. The
+matrix condition is checked directly; this matters when several slides
+informed the PCA but filtering leaves only one slide for CCA.
 
 Across slides they always differ. SUMCOV factors exactly as
 \eqn{\sum_s \sigma_i^{(s)} \sigma_j^{(s)} \rho_{ij}^{(s)}} -- with no
@@ -126,14 +130,21 @@ the SUMCOV term already -- so it already sums per-slide correlations,
 weighted by per-slide score scale. That scale factor is what lets a slide
 with inflated variance along the canonical direction dominate; \code{"sumcor"}
 removes it, and \code{slideWeight = "size"} reintroduces the cell-count factor
-\eqn{\sqrt{n_i n_j}} on its own.}
+\eqn{\sqrt{n_i n_j}} on its own.
+The default is \code{"sumcov"} for single-slide objects and \code{"sumcor"} for
+multi-slide objects. The latter is paired with the within-slide PCA
+preprocessing that \code{\link[=computePCA]{computePCA()}} now uses by default.
+
+The current cell-level permutation routines refit the SUMCOV criterion and
+therefore reject weights fitted with SUMCOR rather than mix objectives.
+To use those routines, fit explicitly with \code{objective = "sumcov"}.}
 
 \item{slideWeight}{Per-slide weighting, only valid with
 \code{objective = "sumcor"} (an error otherwise, since under \code{"sumcov"} the
-weighting is fixed by the objective). \code{"size"} (default) weights slide \code{s}
+weighting is fixed by the objective). \code{"equal"} (default) gives every
+slide the same vote, matching \code{\link[=runGeneSpaceCCA]{runGeneSpaceCCA()}}. \code{"size"} weights slide \code{s}
 by \eqn{\sqrt{n_i^{(s)} n_j^{(s)}}}, so larger slides count for more
-without per-slide variance re-entering. \code{"equal"} weights every slide the
-same -- strict Kettenring SUMCOR, matching \code{\link[=runGeneSpaceCCA]{runGeneSpaceCCA()}}.}
+without per-slide variance re-entering.}
 
 \item{minCellsPerSlide}{Minimum cells per (slide, cell type). Slides below
 this are \strong{dropped} under \code{objective = "sumcor"}, which divides by a
@@ -154,18 +165,20 @@ runSkrCCA
 }
 \section{Batch effects}{
 
-\code{objective = "sumcor"} removes the per-slide \emph{scale} sensitivity but not a
-per-slide \emph{mean shift}. PC scores are centered globally
-(\code{computePCA(center_per_slide = FALSE)}), so a shared technical shift leaves
+\code{objective = "sumcor"} removes per-slide score-scale sensitivity but not a
+per-slide \emph{mean shift} on its own. The multi-slide default
+\code{computePCA(center_per_slide = TRUE)} centers and scales each
+(slide, cell type) expression block before the shared PCA, so a technical
+shift is excluded from both the PC scores and the covariance that chooses
+the retained loading space. With the legacy
+\code{computePCA(center_per_slide = FALSE)}, a shared technical shift leaves
 \eqn{u_i^{(s)} \approx M_i^{(s)} \mathbf{1} + \epsilon} and the numerator
 picks up \eqn{M_i M_j \mathbf{1}'K\mathbf{1}}, positive whenever both cell
 types shift the same way. Dividing by \code{sigma} does not rescue this: for a
 nonnegative kernel the leading singular pair is close to the Perron vector,
 so a constant score reaches \eqn{\rho \approx \sigma_{max}(K)} on every
-slide. Pair multi-slide \code{"sumcor"} with
-\code{computePCA(..., center_per_slide = TRUE)}, which is the half of the fix that
-addresses the mean shift. This applies to \code{"sumcov"} too and is independent
-of the objective choice.
+slide. Thus batch-robust multi-slide analysis needs both defaults: within-slide
+preprocessing before PCA and the per-slide self-normalized objective.
 }
 
 \examples{

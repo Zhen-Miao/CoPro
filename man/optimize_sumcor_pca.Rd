@@ -10,7 +10,7 @@ optimize_sumcor_pca(
   sigma,
   slides,
   cell_types,
-  slideWeight = "size",
+  slideWeight = "equal",
   sdev2_list = NULL,
   max_iter = 200,
   tol = 1e-06,
@@ -30,15 +30,14 @@ optimize_sumcor_pca(
 
 \item{cell_types}{Cell types to optimize over.}
 
-\item{slideWeight}{Per-slide weighting: \code{"size"} (default) or \code{"equal"}.}
+\item{slideWeight}{Per-slide weighting: \code{"equal"} (default) or \code{"size"}.}
 
 \item{sdev2_list}{Optional named list of squared standard deviations per cell
 type, supplied when \code{scalePCs = FALSE}.}
 
-\item{max_iter}{Maximum Gauss-Seidel sweeps.}
+\item{max_iter}{Maximum projected-gradient iterations.}
 
-\item{tol}{Convergence tolerance on weight change and relative objective
-change.}
+\item{tol}{Convergence tolerance on the projected-gradient norm.}
 
 \item{n_cores}{Cores for the per-slide kernel products.}
 
@@ -59,7 +58,7 @@ where \eqn{\sigma_i^{(s)} = \sqrt{w_i' X_i^{(s)'} X_i^{(s)} w_i}} and
 \eqn{\sqrt{n_i^{(s)} n_j^{(s)}}} for \code{"size"}.
 }
 \details{
-With one slide this is the same problem as SUMCOV (see the file header), so
-the exact SUMCOV solvers are used directly and no iteration is run.
+When one slide has coinciding per-pair constants (see the file header), the
+existing SUMCOV result is used directly and no SUMCOR iteration is run.
 }
 \keyword{internal}
