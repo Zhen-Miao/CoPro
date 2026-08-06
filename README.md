@@ -1,7 +1,7 @@
 
 <!-- README.md is generated from README.Rmd. Please edit that file and re-knit. -->
 
-# CoPro <img src="man/figures/copro-refined-logo-final.jpg" align="right" width="150" />
+# CoPro <img src="man/figures/copro-refined-logo-final.jpg" align="right" width="150" alt="CoPro logo" />
 
 <!-- badges: start -->
 

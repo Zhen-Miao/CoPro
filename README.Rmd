@@ -13,7 +13,7 @@ knitr::opts_chunk$set(
 )
 ```
 
-# CoPro <img src="man/figures/copro-refined-logo-final.jpg" align="right" width="150" />
+# CoPro <img src="man/figures/copro-refined-logo-final.jpg" align="right" width="150" alt="CoPro logo" />
 
 <!-- badges: start -->
 [![R-CMD-check](https://github.com/Zhen-Miao/CoPro/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/Zhen-Miao/CoPro/actions/workflows/R-CMD-check.yaml)

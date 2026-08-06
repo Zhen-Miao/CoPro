@@ -50,6 +50,8 @@ reference:
       - getKernelMatrix
       - getSelfKernelMatrix
       - getDistanceGeometry
+      - getCCAObjective
+      - getNormalizerInfo
       - getColocScores
       - getSlideID
       - getSlideList
@@ -87,6 +89,7 @@ reference:
       - runSkrCCAPermu_FairSigma
       - runSkrCCAPermu_Conditional
       - runSlideLevelInference
+      - selectSigmaByPermutation
       - computeNormalizedCorrelationPermu
       - resample_spatial
       - generate_toroidal_permutations
