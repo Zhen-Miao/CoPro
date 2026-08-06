@@ -265,6 +265,32 @@
   }), cts)
 }
 
+#' Fill in the Gram matrices a single draw could not inherit
+#'
+#' `.permutationGrams()` leaves a `NULL` wherever the null is not a bijection on
+#' cells, meaning `X' X` genuinely changed for that cell type and the cached
+#' value does not describe this draw. The SUMCOR optimizer divides by
+#' \eqn{\sigma_i = \sqrt{w_i' G_i w_i}}, so it needs a real matrix for every
+#' type: recompute exactly the entries that moved, from the draw's own permuted
+#' PC matrix, and reuse the cached one everywhere else.
+#'
+#' Recomputing is the whole cost of a `"bin"` or `"pc"` SUMCOR null, and it is
+#' `nPC^2 n` per affected type per draw -- the same order as the `Y` operator
+#' the draw already builds.
+#'
+#' @param grams Per-type Gram matrices from `.permutationGrams()`, with `NULL`
+#'   where the draw invalidates the cached value.
+#' @param PCmats_local This draw's permuted PC matrices.
+#' @param cts Cell types of interest.
+#' @return A named list with a Gram matrix for every entry of `cts`.
+#' @noRd
+.drawGrams <- function(grams, PCmats_local, cts) {
+  stats::setNames(lapply(cts, function(ct) {
+    if (!is.null(grams[[ct]])) return(grams[[ct]])
+    crossprod(PCmats_local[[ct]])
+  }), cts)
+}
+
 #' Drop the kernel from a scoring-info list before sending it to a worker
 #'
 #' `.compute_ncorr_quick()` only touches `kernel_info$K` when no precomputed
@@ -371,11 +397,17 @@
 #' environment is exactly this frame, so a PSOCK worker receives the plan and
 #' the PC matrices and nothing else. An inline closure would carry the whole
 #' CoPro object, kernels included.
+#'
+#' @param permu_grams Per-type Gram matrices for the SUMCOR denominators, with a
+#'   `NULL` wherever this null changes `X' X` and the draw must recompute its
+#'   own. Ignored unless `permu_objective` asks for a SUMCOR null.
 #' @noRd
 .makeSkrCCAPermuWorker <- function(PCmats, plan, cts, nCC, sdev2_list,
-                                   maxIter, tol, permu_objective = NULL) {
+                                   maxIter, tol, permu_objective = NULL,
+                                   permu_grams = NULL) {
   force(PCmats); force(plan); force(cts); force(nCC)
   force(sdev2_list); force(maxIter); force(tol); force(permu_objective)
+  force(permu_grams)
   sumcor <- identical(permu_objective$objective, "sumcor")
 
   function(spec) {
@@ -386,8 +418,12 @@
     # and SUMCOV the same problem, which .resolvePermutationObjective() detects
     # and routes down the exact decompositions below.
     if (sumcor) {
+      # The numerator Y is built from this draw's permuted PCs, so the
+      # denominator has to be as well. Only a bijection on cells leaves X' X
+      # alone; the default "bin" null resamples and "pc" shuffles each column
+      # independently, and both move it.
       return(.fitSumcorPermutedAxes(
-        Y_resi = Y_resi, grams = permu_objective$grams,
+        Y_resi = Y_resi, grams = .drawGrams(permu_grams, PCmats_local, cts),
         n_cells = permu_objective$n_cells, cts = cts, nCC = nCC,
         sdev2_list = sdev2_list, slideWeight = permu_objective$slideWeight,
         maxIter = maxIter, tol = tol

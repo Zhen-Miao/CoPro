@@ -147,9 +147,17 @@ The default is \code{"sumcov"} for single-slide objects and \code{"sumcor"} for
 multi-slide objects. The latter is paired with the within-slide PCA
 preprocessing that \code{\link[=computePCA]{computePCA()}} now uses by default.
 
-The current cell-level permutation routines refit the SUMCOV criterion and
-therefore reject weights fitted with SUMCOR rather than mix objectives.
-To use those routines, fit explicitly with \code{objective = "sumcov"}.}
+The cell-level permutation routines build their null with whichever
+criterion the weights were fitted under, so SUMCOR weights no longer have
+to be re-fit before testing. They remain single-slide only: \code{CoProMulti} is
+directed to \code{\link[=runSlideLevelInference]{runSlideLevelInference()}} whatever the objective. On one
+slide, where the SUMCOR reduction holds (one or two cell types at any
+counts, three or more at equal counts) the fitted weights \emph{are} the SUMCOV
+maximizer and the existing SUMCOV null already matches; otherwise
+\code{\link[=runSkrCCAPermu]{runSkrCCAPermu()}} re-optimizes each draw under SUMCOR.
+\code{\link[=runSkrCCAPermu_FairSigma]{runSkrCCAPermu_FairSigma()}} and \code{\link[=runSkrCCAPermu_Conditional]{runSkrCCAPermu_Conditional()}} are
+restricted to at most two cell types, where only the reducible case can
+arise, and error rather than mix criteria if that is ever relaxed.}
 
 \item{slideWeight}{Per-slide weighting, only valid with
 \code{objective = "sumcor"} (an error otherwise, since under \code{"sumcov"} the

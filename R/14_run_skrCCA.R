@@ -938,9 +938,17 @@ getCCAObjective <- function(object) {
 #'   multi-slide objects. The latter is paired with the within-slide PCA
 #'   preprocessing that [computePCA()] now uses by default.
 #'
-#'   The current cell-level permutation routines refit the SUMCOV criterion and
-#'   therefore reject weights fitted with SUMCOR rather than mix objectives.
-#'   To use those routines, fit explicitly with `objective = "sumcov"`.
+#'   The cell-level permutation routines build their null with whichever
+#'   criterion the weights were fitted under, so SUMCOR weights no longer have
+#'   to be re-fit before testing. They remain single-slide only: `CoProMulti` is
+#'   directed to [runSlideLevelInference()] whatever the objective. On one
+#'   slide, where the SUMCOR reduction holds (one or two cell types at any
+#'   counts, three or more at equal counts) the fitted weights *are* the SUMCOV
+#'   maximizer and the existing SUMCOV null already matches; otherwise
+#'   [runSkrCCAPermu()] re-optimizes each draw under SUMCOR.
+#'   [runSkrCCAPermu_FairSigma()] and [runSkrCCAPermu_Conditional()] are
+#'   restricted to at most two cell types, where only the reducible case can
+#'   arise, and error rather than mix criteria if that is ever relaxed.
 #' @param slideWeight Per-slide weighting, only valid with
 #'   `objective = "sumcor"` (an error otherwise, since under `"sumcov"` the
 #'   weighting is fixed by the objective). `"equal"` (default) gives every

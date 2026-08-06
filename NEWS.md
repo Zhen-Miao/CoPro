@@ -142,6 +142,48 @@
 
 ## Fixes
 
+* **The SUMCOR permutation null now refits each draw with that draw's own Gram
+  matrices.** SUMCOR divides by `sigma_i = sqrt(w_i' G_i w_i)`, and reordering
+  rows leaves `G_i = X_i'X_i` alone — which is why a bijective null may build
+  the Grams once and reuse them. The default `"bin"` null is not a bijection: it
+  *resamples* cells, so duplicates and omissions move `G_i`. `"pc"` shuffles each
+  PC column independently and moves it too. Reusing the observed Grams there
+  fitted every draw with a numerator from the permuted data and a denominator
+  from the observed data, so the null weights did not maximize the criterion the
+  observed statistic was measured under, and the resulting p-values were not
+  valid. The package already drew this distinction for the score norms
+  (`.permutationGrams()`); the SUMCOR optimizer now uses the same test and
+  recomputes exactly the Grams a draw invalidates. `"global"` and `"toroidal"`
+  are bijections and are unchanged, as is every `objective = "sumcov"` run.
+  Reachable since 1.3.0 with three or more cell types at unequal counts on one
+  slide under an explicit `objective = "sumcor"`.
+
+* **`transferred_weight_1` survives `objective = "sumcor"`.** With one slide,
+  where SUMCOR reduces to SUMCOV, `optimize_sumcor_pca_n()` took an exact
+  all-axis shortcut that ignored the supplied `w_list` and recomputed every
+  component. A transferred first axis was therefore replaced by the solver's
+  own, silently, and the later axes were conditioned on the wrong direction.
+  The shortcut is now taken only when the supplied axes are the ones those
+  solvers would have produced; otherwise the run falls through to the
+  sequential path that conditions on what was given, matching what the SUMCOV
+  route has always done.
+
+* **`step_size` reaches every axis of the SUMCOV warm start, not just the
+  first.** In the one-slide reducible shortcut that warm start *is* the returned
+  result, so CC2 and beyond ran undamped however small a `step_size` was asked
+  for — the axes a user reaching for damping is usually trying to stabilize.
+
+* **Cell-level permutation refuses a gene-space fit explicitly.** The resolver
+  reads `@pcaGlobal` and re-optimizes with the PC-space solvers, which is the
+  wrong feature space for gene-space weights whatever criterion they were fitted
+  under. Not reachable through the public API — `runGeneSpaceCCA()` requires
+  `CoProMulti` and every permutation entry point refuses `CoProMulti` first —
+  but the two guards are independent and this one no longer leans on the other.
+
+* **`?runSkrCCA` no longer says permutation rejects every SUMCOR fit.** It now
+  describes what 1.3.0 actually does: the null is built with whichever criterion
+  the weights were fitted under.
+
 * **`getCCAObjective()` now reports the criterion a gene-space fit actually
   used.** `runGeneSpaceCCA()` did not record its own provenance, so the reader's
   no-record fallback answered `"sumcov"` — the opposite of gene space's
