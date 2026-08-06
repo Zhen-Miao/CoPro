@@ -30,7 +30,8 @@ sigma values from the original analysis (object@sigmaValues)}
 
 \item{permu_method}{Method of permutation: "bin", "global", "pc", or "toroidal"}
 
-\item{permu_which}{Which cell types to permute: "second_only", "both", "first_only"}
+\item{permu_which}{Which cell types to permute: "second_only", "both",
+"first_only". Ignored with a single cell type, which is always permuted.}
 
 \item{num_bins_x}{Number of bins in x for bin-wise permutation. Default \code{NULL}
 sizes the grid from the observed best bandwidth (\code{sigmaValueChoice}) via

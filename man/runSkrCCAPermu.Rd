@@ -46,7 +46,9 @@ spatial autocorrelation by shifting coordinates in a wrap-around manner
 \item "second_only" (default): Keep first cell type fixed, permute others
 \item "both": Permute all cell types independently (more conservative)
 \item "first_only": Keep others fixed, permute only the first cell type
-}}
+}
+Ignored when the object has a single cell type: there is nothing to hold
+fixed, so that type is permuted and the null is the within-type one.}
 
 \item{num_bins_x}{Number of bins in x direction for bin-wise permutation.
 Default \code{NULL} sizes the grid automatically from the kernel bandwidth so
@@ -139,6 +141,13 @@ lead to higher FPR. Use "second_only" for better FPR control.
 
 \strong{"first_only"}: Keep second+ cell types FIXED, permute only the first.
 Useful if you want to test from the opposite direction.
+
+With a \strong{single} cell type none of these apply -- there is no other type to
+hold fixed -- so \code{permu_which} is ignored and that type is permuted. The
+resulting null is the within-type one: scores are relabelled against their
+own locations, breaking the association between a cell's score and where it
+sits while leaving the spatial configuration and the score distribution
+intact.
 }
 
 \subsection{Controlling False Positive Rate}{

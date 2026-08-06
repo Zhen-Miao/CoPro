@@ -40,6 +40,15 @@
 
   # Determine which cell types should be permuted
   should_permute <- function(ct_name, ct_index) {
+    # With one cell type there is no other type to hold fixed, so `permu_which`
+    # has nothing to choose between and the only meaningful null relabels that
+    # type's scores against its own locations. The literal "second_only" rule
+    # (`ct_index > 1`) returns FALSE here, which makes every draw the identity:
+    # the null then equals the observed statistic and the p-value is 1 by
+    # construction, with nothing in the output to say so.
+    if (length(cts) == 1L) {
+      return(TRUE)
+    }
     if (permu_which == "second_only") {
       return(ct_index > 1)  # Permute all except first
     } else if (permu_which == "first_only") {
@@ -468,6 +477,13 @@
 #' **"first_only"**: Keep second+ cell types FIXED, permute only the first.
 #' Useful if you want to test from the opposite direction.
 #'
+#' With a **single** cell type none of these apply -- there is no other type to
+#' hold fixed -- so `permu_which` is ignored and that type is permuted. The
+#' resulting null is the within-type one: scores are relabelled against their
+#' own locations, breaking the association between a cell's score and where it
+#' sits while leaving the spatial configuration and the score distribution
+#' intact.
+#'
 #' ## Controlling False Positive Rate
 #'
 #' High FPR under null simulations typically means the permutation is **breaking
@@ -513,6 +529,8 @@
 #'     \item "both": Permute all cell types independently (more conservative)
 #'     \item "first_only": Keep others fixed, permute only the first cell type
 #'   }
+#'   Ignored when the object has a single cell type: there is nothing to hold
+#'   fixed, so that type is permuted and the null is the within-type one.
 #' @param num_bins_x Number of bins in x direction for bin-wise permutation.
 #'   Default `NULL` sizes the grid automatically from the kernel bandwidth so
 #'   each patch is ~2*sigma wide on the normalized distance scale (see
@@ -643,6 +661,12 @@ runSkrCCAPermu <- function(object, tol = 1e-5, nPermu = 999,
 
   ## The null must be optimized by the same criterion as the observed weights.
   permu_objective <- .resolvePermutationObjective(object, cts, scalePCs)
+
+  if (length(cts) == 1L && verbose) {
+    message("Single cell type: permu_which is ignored and the one type is ",
+            "permuted, giving a within-type null that relabels scores against ",
+            "their own locations.")
+  }
 
   ## Get sigma value
   sigma_predeclared <- !is.null(sigma)
@@ -867,7 +891,7 @@ computeNormalizedCorrelationPermu <- function(object, tol = 1e-4) {
   PCmats <- .getAllPCMats(allPCs = object@pcaGlobal, scalePCs = scalePCs)
   nCC <- object@nCC
 
-  pair_cell_types <- combn(cts, 2)
+  pair_cell_types <- .permutationPairTypes(cts)
 
   ## Initialize output
   correlation_value <- vector("list", length = nPermu)
@@ -1389,7 +1413,8 @@ calculate_pvalue <- function(object, cc_index = 1, alternative = "greater") {
 #' @param sigma_values Vector of sigma values to test. If NULL, uses all
 #'   sigma values from the original analysis (object@@sigmaValues)
 #' @param permu_method Method of permutation: "bin", "global", "pc", or "toroidal"
-#' @param permu_which Which cell types to permute: "second_only", "both", "first_only"
+#' @param permu_which Which cell types to permute: "second_only", "both",
+#'   "first_only". Ignored with a single cell type, which is always permuted.
 #' @param num_bins_x Number of bins in x for bin-wise permutation. Default `NULL`
 #'   sizes the grid from the observed best bandwidth (`sigmaValueChoice`) via
 #'   [.sigmaAwareBins()]; the same grid (and hence the same permutation) is
@@ -1490,6 +1515,12 @@ runSkrCCAPermu_FairSigma <- function(object,
          "pair. Subset to two cell types and adjust the resulting pair-level ",
          "p-values across the declared family.")
   }
+  if (length(cts) == 1L && verbose) {
+    message("Single cell type: permu_which is ignored and the one type is ",
+            "permuted, giving a within-type null that relabels scores against ",
+            "their own locations.")
+  }
+
   scalePCs <- object@scalePCs
   nCC <- object@nCC
   sdev2_list <- .permutationSdev2(object, cts)
@@ -1584,7 +1615,7 @@ runSkrCCAPermu_FairSigma <- function(object,
   names(object@skrCCAPermuOut) <- paste0("permu_", seq_len(nPermu))
 
   # Create normalized correlation results structure
-  pair_cell_types <- combn(cts, 2)
+  pair_cell_types <- .permutationPairTypes(cts)
   correlation_value <- vector("list", nPermu)
   for (tt in seq_len(nPermu)) {
     correlation_value[[tt]] <- data.frame(
@@ -1950,10 +1981,10 @@ runSkrCCAPermu_Conditional <- function(object,
   if (length(nCC) == 0 || nCC < 1) {
     stop("nCC must be >= 1; run runSkrCCA() with the desired number of axes.")
   }
-  if (length(cts) == 1 && permu_which == "second_only") {
-    warning("With a single cell type, permu_which = 'second_only' gives the ",
-            "identity permutation (no shuffling). Use 'both' or 'first_only' ",
-            "for a within-type permutation test.")
+  if (length(cts) == 1 && verbose) {
+    message("Single cell type: permu_which is ignored and the one type is ",
+            "permuted, giving a within-type null that relabels scores against ",
+            "their own locations.")
   }
 
   ## ---- candidate sigma values (fair-sigma sweep) ----

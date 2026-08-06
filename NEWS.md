@@ -140,6 +140,81 @@
   objective, so which local optimum each sweep finds is data-dependent and
   neither dominates the other.
 
+## Choosing sigma from the data
+
+* **New `selectSigmaByPermutation()`.** Picks the bandwidth by comparing the
+  co-progression statistic at each candidate to *its own* permutation null,
+  instead of taking the largest normalized correlation.
+
+  The motivation is that no denominator makes the normalized correlation's null
+  level constant in sigma, so `obj@sigmaValueChoice` compares numbers with
+  different floors. The un-whitened `||K_c||_F` that ships today ignores
+  within-type spatial autocorrelation; whitened variants need a within-type
+  correlation operator that the data do not pin down, because the principal
+  components of one cell type do not share a single correlation length. On a
+  planted-signal simulation the null spread of the raw statistic moved 44x
+  across a 32x sigma grid, and even the normalized ratio's null moved 2.7x and
+  peaked mid-grid — so its argmax landed on the wrong bandwidth in 20 of 20
+  replicates, always biased high, while the studentized scan found the
+  most-detectable scale in 12 of 20 and the rest one grid step away.
+
+  Rather than model that floor, this measures it. At each sigma the observed
+  `T(sigma) = a' K(sigma) b` is compared to the mean and standard deviation of
+  its own toroidal-shift null, and the bandwidth maximizing
+  `z = (T - mean_null) / sd_null` is selected. Because both the location and the
+  scale are read off the null itself, `z` has the same null level at every
+  bandwidth by construction and carries no tuning constant.
+
+  Centering matters most within a single cell type, where the `w_ii = 0`
+  convention takes `sum_i a_i^2 k(x_i, x_i + delta)` off every draw and leaves
+  the null a negative mean that grows with sigma — on the package's toy object,
+  from `-0.06 sd_null` at sigma 0.05 to `-0.36 sd_null` at sigma 0.2. Across two
+  cell types the null mean is zero in expectation and subtracting the estimate
+  costs only Monte-Carlo noise.
+
+  One pass of `nPermu` draws evaluates every bandwidth, so the draws are coupled
+  across the grid and the same draws give the null of `max_sigma z`. A draw is
+  one wrap offset *per cell type*, held across every pair that type appears in,
+  so each row of the null is the scan statistic of one realizable configuration
+  — with three or more cell types a type sits in several pairs at once, and an
+  offset redrawn per pair would put the same cells in two places within a single
+  draw. The reported p-value is therefore already adjusted for having scanned
+  the grid (single-step Westfall–Young max-T) and is not circular — the
+  selection is replicated inside the null. Looping `runSkrCCAPermu()` over sigma
+  does *not* give this: it redraws permutations on every call and its default
+  bin grid is itself sigma-dependent, so the per-bandwidth nulls are neither
+  coupled nor comparable.
+
+  Two guards, both on by default. `minSigma = "spacing"` drops candidates below
+  the median nearest-partner distance, where the kernel is nearly diagonal and
+  the fixed-direction null understates its floor — without it the argmax rails
+  at whatever the smallest candidate happens to be. And a selection landing at
+  either end of the grid warns regardless of `verbose`, because that is a scan
+  running out of grid rather than finding an optimum.
+
+  It covers the **within-type (single cell type) case**, which is where the
+  argmax-of-ratio rule is least trustworthy: the stored self-kernel has a zero
+  diagonal and so is not a valid whitening operator. (The re-optimizing route
+  reaches that case too, but only as of the `runSkrCCAPermu()` fix below — it
+  was unusable before.)
+
+  Directions are held fixed inside each draw rather than re-optimized. That is
+  what keeps the *selection* level flat in sigma and what makes one `O(B)` pass
+  enough, but it inherits the mild anti-conservativeness of a fixed-direction
+  null at small sigma, which is what `minSigma` guards. For a re-optimizing test
+  at a chosen bandwidth use `runSkrCCAPermu()`, or `runSkrCCAPermu_FairSigma()`
+  for a re-optimizing max-over-sigma test.
+
+  It requires a **Euclidean** geometry and refuses a `"Morphology-Aware"` object
+  rather than rescoring it. The selector rebuilds the kernel from coordinates at
+  every candidate bandwidth and under every shifted configuration, and a
+  morphology-aware distance is not a function of the coordinates alone — its
+  geodesic filter is fitted on a k-NN graph of the tissue as observed, which a
+  shift invalidates. `runSkrCCAPermu_FairSigma()` reuses the stored kernels and
+  so still serves those objects.
+
+  The organoid vignette now selects its bandwidth this way.
+
 ## Fixes
 
 * **The SUMCOR permutation null now refits each draw with that draw's own Gram
@@ -183,6 +258,35 @@
 * **`?runSkrCCA` no longer says permutation rejects every SUMCOR fit.** It now
   describes what 1.3.0 actually does: the null is built with whichever criterion
   the weights were fitted under.
+
+* **Within-type permutation testing worked on paper and not in fact.** With a
+  single cell type, `runSkrCCAPermu()` returned normally but
+  `computeNormalizedCorrelationPermu()` — which has to run next — formed
+  `combn(cts, 2)` and died with a bare `n < m`.
+  `runSkrCCAPermu_FairSigma()` had the same call.
+
+  The crash was hiding the real defect. `permu_which = "second_only"` (the
+  default) permutes every cell type *except the first*, implemented as
+  `ct_index > 1`. With one cell type that is never true, so the type was never
+  permuted: every draw was the identity, the null distribution equalled the
+  observed statistic, and the p-value was 1 by construction with nothing in the
+  output to indicate it. Fixing only the `combn` call would have turned a loud
+  crash into a silently meaningless p-value.
+
+  Both are fixed. `permu_which` has nothing to select between when there is one
+  cell type, so it is ignored and that type is permuted, giving the within-type
+  null: scores are relabelled against their own locations, breaking the
+  association between a cell's score and where it sits while leaving the spatial
+  configuration and the score distribution intact. Everything downstream was
+  already built for this — `.buildYPlan()` has a `self_pair` mode and the
+  permutation worker dispatches to `solve_one_type_eigen()` — so only the entry
+  points needed the fix. `runSkrCCAPermu_Conditional()` previously warned that
+  `"second_only"` gives the identity permutation; that warning described the bug
+  and is replaced by a note about the behaviour that now happens.
+
+  Multi-type semantics are unchanged: with two or more cell types
+  `"second_only"`, `"first_only"` and `"both"` still hold exactly the types they
+  always did, and there is a test pinning that.
 
 * **`getCCAObjective()` now reports the criterion a gene-space fit actually
   used.** `runGeneSpaceCCA()` did not record its own provenance, so the reader's
