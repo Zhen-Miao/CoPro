@@ -847,3 +847,149 @@ test_that("space = 'gene' forwards tol, maxIter and minCellsPerSlide", {
   # An explicit objective does travel.
   expect_equal(getCCAObjective(run(objective = "sumcov"))$objective, "sumcov")
 })
+
+# --------------- 10. transferred axes, damping, and the permutation Grams ---
+
+test_that("the one-slide SUMCOR shortcut keeps a transferred first axis", {
+  # runSkrCCA(transferred_weight_1 = ...) supplies CC1 from somewhere else --
+  # another slide, another study -- and the later axes are only interpretable
+  # conditioned on it. The reducible one-slide shortcut used to run the exact
+  # SUMCOV solvers over every axis and hand back its own CC1 instead, which is
+  # a different component silently wearing the transferred one's label.
+  obj <- .single_slide_fixture(nct = 2L, nPCA = 6L)
+  cts <- c("CellTypeA", "CellTypeB")
+  transferred <- setNames(lapply(cts, function(ct) {
+    v <- matrix(0, nrow = 6L, ncol = 1L)
+    v[2L, 1L] <- 1                       # a direction the solver would not pick
+    v
+  }), cts)
+
+  for (objective in c("sumcov", "sumcor")) {
+    fit <- suppressMessages(suppressWarnings(runSkrCCA(
+      obj, nCC = 2, objective = objective,
+      transferred_weight_1 = transferred
+    )))
+    w <- fit@skrCCAOut[[1L]]
+    for (ct in cts) {
+      expect_equal(abs(as.numeric(w[[ct]][, 1L])),
+                   abs(as.numeric(transferred[[ct]][, 1L])),
+                   tolerance = 1e-8,
+                   info = paste(objective, ct))
+    }
+    # CC2 still has to be a genuine second axis, not a copy of what was given.
+    expect_gt(max(vapply(cts, function(ct) {
+      min(abs(as.numeric(w[[ct]][, 2L]) - as.numeric(transferred[[ct]][, 1L])))
+    }, numeric(1))), 0)
+  }
+})
+
+test_that("step_size reaches every axis of the SUMCOV warm start", {
+  # In the one-slide reducible shortcut the warm start *is* the returned
+  # result, so damping that only touched CC1 left CC2+ undamped -- exactly the
+  # axes a user reaching for step_size is usually trying to stabilize.
+  ops <- .synthetic_one_slide_ops(counts = c(80, 80, 80), nPC = 4L, seed = 21L)
+  ops_w <- CoPro:::.whitenSlideOperators(ops, NULL)
+
+  iters <- function(step_size) {
+    msg <- capture.output(invisible(suppressWarnings(
+      CoPro:::.sumcorWarmStart(ops_w, ops$cell_types, NULL, nCC = 3L,
+                               step_size = step_size)
+    )))
+    as.integer(sub(" iterations", "", regmatches(
+      msg, regexpr("[0-9]+ iterations", msg)
+    )))
+  }
+
+  undamped <- iters(1)
+  damped <- iters(0.2)
+  expect_length(undamped, 3L)
+  expect_length(damped, 3L)
+  # A shorter step is a slower walk to the same fixed point. Every axis must
+  # show it, not just the first.
+  expect_true(all(damped > undamped))
+})
+
+test_that("a SUMCOR null refits each draw with that draw's own Gram matrices", {
+  # SUMCOR divides by sigma_i = sqrt(w_i' G_i w_i). Reordering rows leaves
+  # G_i = X_i'X_i alone, so a bijective null may reuse it -- but the default
+  # "bin" null resamples cells and "pc" shuffles each PC column independently,
+  # and both move G_i. Reusing the unpermuted one there fits the null draws
+  # with a numerator from the permuted data and a denominator from the
+  # observed data.
+  obj <- .single_slide_fixture(nct = 3L, nPCA = 5L, counts = c(150, 60, 40))
+  cts <- c("CellTypeA", "CellTypeB", "CellTypeC")
+  fit <- suppressMessages(suppressWarnings(
+    runSkrCCA(obj, nCC = 1, objective = "sumcor")
+  ))
+  fit <- suppressMessages(computeNormalizedCorrelation(fit))
+  expect_equal(
+    suppressMessages(CoPro:::.resolvePermutationObjective(fit, cts, TRUE))$objective,
+    "sumcor"
+  )
+
+  # Rebuild draw 1 by hand and fit it both ways, then ask which one the
+  # package actually produced.
+  refit <- function(res, grams_from) {
+    PCmats <- CoPro:::.getAllPCMats(allPCs = res@pcaGlobal,
+                                    scalePCs = res@scalePCs)
+    spec <- CoPro:::.permutationDrawSpec(res@cellPermu, cts, 1L)
+    PC_draw <- CoPro:::.applyPermutationSpec(PCmats, spec)[cts]
+    plan <- CoPro:::.buildYPlan(
+      PCmats = PCmats, flat_kernels = res@kernelMatrices,
+      sigma = res@sigmaValueChoice, cts = cts,
+      fixed = CoPro:::.fixedPermutationTypes(res@cellPermu, cts)
+    )
+    src <- if (identical(grams_from, "draw")) PC_draw else PCmats
+    suppressMessages(suppressWarnings(CoPro:::.fitSumcorPermutedAxes(
+      Y_resi = CoPro:::.yResiFromPlan(plan, PC_draw),
+      grams = setNames(lapply(cts, function(ct) crossprod(src[[ct]])), cts),
+      n_cells = setNames(vapply(cts, function(ct) nrow(PC_draw[[ct]]),
+                                integer(1)), cts),
+      cts = cts, nCC = 1L,
+      sdev2_list = CoPro:::.permutationSdev2(res, cts),
+      slideWeight = "equal"
+    )))
+  }
+  axis_gap <- function(a, b) {
+    max(vapply(cts, function(ct) {
+      max(abs(abs(as.numeric(a[[ct]][, 1L])) - abs(as.numeric(b[[ct]][, 1L]))))
+    }, numeric(1)))
+  }
+
+  for (method in c("bin", "pc")) {
+    res <- suppressMessages(suppressWarnings(
+      runSkrCCAPermu(fit, nPermu = 3, permu_method = method, verbose = FALSE)
+    ))
+    got <- res@skrCCAPermuOut[[1L]]
+    expect_lt(axis_gap(got, refit(res, "draw")), 1e-4)
+    # And the two really are different fits here, so the check has teeth.
+    expect_gt(axis_gap(refit(res, "draw"), refit(res, "observed")), 1e-3)
+  }
+
+  # A bijective null is genuinely invariant, so nothing changes for "global".
+  res <- suppressMessages(suppressWarnings(
+    runSkrCCAPermu(fit, nPermu = 3, permu_method = "global", verbose = FALSE)
+  ))
+  expect_lt(axis_gap(refit(res, "draw"), refit(res, "observed")), 1e-4)
+  expect_lt(axis_gap(res@skrCCAPermuOut[[1L]], refit(res, "draw")), 1e-4)
+})
+
+test_that("cell-level permutation refuses a gene-space fit outright", {
+  # Unreachable through the public API today: runGeneSpaceCCA() requires
+  # CoProMulti, and every permutation entry point refuses CoProMulti first.
+  # The two guards are independent, though, and this one must not lean on the
+  # other -- the resolver reads @pcaGlobal and re-optimizes with the PC-space
+  # solvers, which is the wrong feature space for gene-space weights whatever
+  # criterion they were fitted under.
+  obj <- .single_slide_fixture(nct = 2L, nPCA = 6L)
+  fit <- suppressMessages(suppressWarnings(runSkrCCA(obj, nCC = 1)))
+  attr(fit@skrCCAOut, "ccaObjective") <- list(
+    space = "gene", objective = "sumcor", requested = "sumcor",
+    slideWeight = "equal", sweep = NA_character_, slides = NA_character_,
+    droppedSlides = character(0)
+  )
+  expect_error(
+    CoPro:::.resolvePermutationObjective(fit, c("CellTypeA", "CellTypeB"), TRUE),
+    "gene space"
+  )
+})

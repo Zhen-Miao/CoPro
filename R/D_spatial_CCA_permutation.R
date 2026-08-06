@@ -236,10 +236,15 @@
 #'   unequal counts. Here the criteria genuinely differ and the null draws are
 #'   re-optimized under SUMCOR.
 #'
-#' A within-slide label permutation permutes the rows of \eqn{X_i}, which leaves
-#' \eqn{G_i = X_i' X_i} unchanged. The per-slide scales SUMCOR divides by are
-#' therefore permutation-invariant: they can be built once and reused for every
-#' draw, and the existing `Y` operator-reuse factorization is untouched.
+#' A *bijective* within-slide label permutation permutes the rows of \eqn{X_i},
+#' which leaves \eqn{G_i = X_i' X_i} unchanged, so the per-slide scales SUMCOR
+#' divides by can be built once and reused. That covers `"global"` and
+#' `"toroidal"` but **not** the default `"bin"` null, which resamples cells
+#' rather than permuting them, nor `"pc"`, which shuffles each PC column
+#' independently. The Grams returned here are therefore the unpermuted baseline;
+#' `runSkrCCAPermu()` runs them through `.permutationGrams()` to find out which
+#' a draw may inherit, and `.drawGrams()` recomputes the rest per draw. The `Y`
+#' operator-reuse factorization is untouched either way.
 #'
 #' @param object A single-slide `CoPro` object with `@skrCCAOut` populated.
 #' @param cts Cell types of interest.
@@ -258,6 +263,22 @@
                  grams = NULL, n_cells = NULL)
   record <- attr(object@skrCCAOut, "ccaObjective")
   if (is.null(record) || !identical(record$objective, "sumcor")) return(sumcov)
+
+  # Everything below reads @pcaGlobal and re-optimizes with the PC-space
+  # solvers. A gene-space fit lives in a different feature space entirely, so
+  # its weights cannot be tested here whatever criterion they were fitted
+  # under. Unreachable today -- runGeneSpaceCCA() requires CoProMulti and every
+  # caller has already refused CoProMulti -- but the two guards are independent
+  # and this one should not depend on that.
+  if (identical(record$space, "gene")) {
+    stop(
+      "These weights were fitted in gene space (space = \"gene\"), but the ",
+      "cell-level permutation routines build their null from the PCA-space ",
+      "operators. Comparing the two would mix feature spaces. Use ",
+      "runSlideLevelInference() for replicate-level inference, or re-fit with ",
+      "runSkrCCA(space = \"pca\") before testing."
+    )
+  }
 
   slideWeight <- record$slideWeight
   if (is.null(slideWeight)) slideWeight <- "equal"
@@ -734,10 +755,21 @@ runSkrCCAPermu <- function(object, tol = 1e-5, nPermu = 999,
     fixed = .fixedPermutationTypes(cell_permu, cts)
   )
 
+  # A SUMCOR null divides by per-type score scales, so it needs the Gram
+  # matrices of the data each draw actually fits. Only a bijection on cells
+  # leaves them where they were; the same test that decides which score norms
+  # can be factorized decides which Grams a draw may inherit, and the worker
+  # recomputes the rest.
+  permu_grams <- if (identical(permu_objective$objective, "sumcor")) {
+    .permutationGrams(PCmats[cts], cell_permu, cts)
+  } else {
+    NULL
+  }
+
   worker <- .makeSkrCCAPermuWorker(
     PCmats = PCmats, plan = plan, cts = cts, nCC = nCC,
     sdev2_list = sdev2_list, maxIter = maxIter, tol = tol,
-    permu_objective = permu_objective
+    permu_objective = permu_objective, permu_grams = permu_grams
   )
 
   cca_permu_out <- .runPermutationDraws(

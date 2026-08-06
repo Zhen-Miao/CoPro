@@ -159,6 +159,37 @@ NULL
   w_list
 }
 
+#' Do two weight sets share their first `k` axes?
+#'
+#' Compared by direction only: an axis is defined up to sign, and the two sets
+#' can carry different norms because one may have been supplied by the caller
+#' rather than produced by a normalizing solver. A zero column can never agree,
+#' so it reports `FALSE` rather than dividing by zero.
+#'
+#' @param a,b Named lists of weight matrices in the same parametrization.
+#' @param k Number of leading columns to compare.
+#' @param cell_types Cell types to compare over.
+#' @param tol Tolerance on `1 - |cos angle|`.
+#' @return `TRUE` when every compared column is collinear.
+#' @noRd
+.axesAgree <- function(a, b, k, cell_types, tol = 1e-8) {
+  if (k < 1L) return(TRUE)
+  for (ct in cell_types) {
+    if (is.null(a[[ct]]) || is.null(b[[ct]])) return(FALSE)
+    if (ncol(a[[ct]]) < k || ncol(b[[ct]]) < k) return(FALSE)
+    if (nrow(a[[ct]]) != nrow(b[[ct]])) return(FALSE)
+    for (j in seq_len(k)) {
+      u <- a[[ct]][, j]
+      v <- b[[ct]][, j]
+      nu <- sqrt(sum(u^2))
+      nv <- sqrt(sum(v^2))
+      if (nu <= 0 || nv <= 0) return(FALSE)
+      if (abs(abs(sum(u * v)) / (nu * nv) - 1) > tol) return(FALSE)
+    }
+  }
+  TRUE
+}
+
 #' Per-slide, per-cell-type score scales for one weight set
 #'
 #' \eqn{\sigma_i^{(s)} = \sqrt{w_i' G_i^{(s)} w_i} = \|X_i^{(s)} w_i\|} with
@@ -825,21 +856,29 @@ optimize_sumcor_pca_n <- function(X_list_all, flat_kernels, sigma, slides,
 
   ops_w <- .whitenSlideOperators(ops, sdev2_list)
 
-  # One slide with coinciding per-pair constants: all axes come from the exact
-  # SUMCOV solvers, for the same reason the first component does.
-  if (length(ops$slides) == 1L && .sumcorReducesToSumcov(ops_w, slideWeight)) {
-    result <- .unwhitenWeights(
-      .sumcorWarmStart(ops_w, cell_types, NULL, nCC = nCC,
-                       step_size = step_size),
-      sdev2_list
-    )
-    attr(result, "slideWeight") <- slideWeight
-    return(result)
-  }
-
   # The supplied axes arrive in the caller's parametrization; deflation happens
   # in whitened coordinates alongside everything else.
   w_list_w <- .whitenWeights(w_list, sdev2_list)
+
+  # One slide with coinciding per-pair constants: all axes come from the exact
+  # SUMCOV solvers, for the same reason the first component does.
+  #
+  # Only when the supplied axes are the ones those solvers would themselves
+  # have produced. `runSkrCCA(transferred_weight_1 = ...)` hands in a first
+  # axis that came from somewhere else entirely, and the later axes are then
+  # only meaningful conditioned on it; returning the solver's own axes would
+  # silently discard the transferred direction. The SUMCOV route already keeps
+  # the sequential path in exactly that case.
+  if (length(ops$slides) == 1L && .sumcorReducesToSumcov(ops_w, slideWeight)) {
+    warm <- .sumcorWarmStart(ops_w, cell_types, NULL, nCC = nCC,
+                             step_size = step_size)
+    if (.axesAgree(warm, w_list_w, k_start, cell_types)) {
+      result <- .unwhitenWeights(warm, sdev2_list)
+      attr(result, "slideWeight") <- slideWeight
+      return(result)
+    }
+  }
+
   objectives <- rep(NA_real_, nCC)
 
   for (cc in seq(k_start + 1L, nCC)) {
@@ -884,8 +923,12 @@ optimize_sumcor_pca_n <- function(X_list_all, flat_kernels, sigma, slides,
 #' @param cell_types Cell types being optimized.
 #' @param sdev2_list Optional diagonal CCA metrics.
 #' @param nCC Number of axes wanted.
-#' @param step_size Damping for the >2-type SUMCOV power iteration. The one- and
-#'   two-type routes are exact decompositions, so damping does not apply there.
+#' @param step_size Damping for the >2-type SUMCOV power iteration, applied to
+#'   every axis and not only the first: in the one-slide reducible shortcut this
+#'   warm start *is* the returned result, so CC2+ have to honor the requested
+#'   damping too, exactly as `optimize_bilinear_n()` does under SUMCOV. The one-
+#'   and two-type routes are exact decompositions, so damping does not apply
+#'   there.
 #' @return Named list of `nPC x nCC` weight matrices.
 #' @noRd
 .sumcorWarmStart <- function(ops, cell_types, sdev2_list, nCC, step_size = 1) {
@@ -926,7 +969,8 @@ optimize_sumcor_pca_n <- function(X_list_all, flat_kernels, sigma, slides,
     w_next <- suppressWarnings(bilinear_w_from_Y_resi(
       w_list_new = initialize_next_component(Y_resi, cell_types),
       Y_resi = Y_resi, n_features = feature_counts,
-      max_iter = 200, tol = 1e-6, step_size = 1, sdev2_list = sdev2_list
+      max_iter = 200, tol = 1e-6, step_size = step_size,
+      sdev2_list = sdev2_list
     ))
     for (ct in cell_types) {
       w_list[[ct]] <- cbind(w_list[[ct]], w_next[[ct]])
