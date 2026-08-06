@@ -145,9 +145,13 @@ bandwidth it compares the observed statistic to its own permutation null, built
 by rigidly shifting the tissue against itself (a wrap-around shift preserves the
 cells' own spatial structure while destroying the alignment being tested), and
 selects the bandwidth maximizing the studentized statistic
-`z = T / sd_null`. Because one pass of draws evaluates every bandwidth, the same
-draws also give the null distribution of `max z`, so the reported p-value already
-accounts for having scanned the grid.
+`z = (T - mean_null) / sd_null`. Both the location and the scale come from the
+null itself, which is what makes the values comparable across the grid; within a
+single cell type the location term is not decorative, because the convention that
+a cell is not its own neighbour gives the null a sigma-dependent mean of its own.
+Because one pass of draws evaluates every bandwidth, the same draws also give the
+null distribution of `max z`, so the reported p-value already accounts for having
+scanned the grid.
 
 ```{r select-sigma, message=FALSE}
 set.seed(1)
@@ -163,7 +167,7 @@ ggplot(sel$perSigma, aes(x = sigma, y = z)) +
   geom_point(data = subset(sel$perSigma, sigma == sel$sigmaValueChoice),
              color = "darkred", size = 3) +
   xlab("Sigma") +
-  ylab(expression(z == T / sd[null])) +
+  ylab(expression(z == (T - mean[null]) / sd[null])) +
   ggtitle("Detectability across bandwidths (studentized)") +
   theme_minimal()
 ```

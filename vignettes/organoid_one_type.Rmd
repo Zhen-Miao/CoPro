@@ -1,7 +1,7 @@
 ---
 title: "Within-cell-type spatial patterns (Organoid)"
 output: rmarkdown::html_vignette
-date: "2026-08-01"
+date: "2026-08-06"
 vignette: >
   %\VignetteIndexEntry{Within-cell-type spatial patterns (Organoid)}
   %\VignetteEngine{knitr::rmarkdown}
@@ -181,9 +181,13 @@ bandwidth it compares the observed statistic to its own permutation null, built
 by rigidly shifting the tissue against itself (a wrap-around shift preserves the
 cells' own spatial structure while destroying the alignment being tested), and
 selects the bandwidth maximizing the studentized statistic
-`z = T / sd_null`. Because one pass of draws evaluates every bandwidth, the same
-draws also give the null distribution of `max z`, so the reported p-value already
-accounts for having scanned the grid.
+`z = (T - mean_null) / sd_null`. Both the location and the scale come from the
+null itself, which is what makes the values comparable across the grid; within a
+single cell type the location term is not decorative, because the convention that
+a cell is not its own neighbour gives the null a sigma-dependent mean of its own.
+Because one pass of draws evaluates every bandwidth, the same draws also give the
+null distribution of `max z`, so the reported p-value already accounts for having
+scanned the grid.
 
 
 ``` r
@@ -206,13 +210,18 @@ sel
 ## CoPro bandwidth selection (studentized max-T permutation)
 ##   selected sigma : 0.05
 ##   max-T p-value  : 0.005  (B = 199, floor 0.005, greater)
-##   z at optimum   : 18.251
+##   z at optimum   : 18.213
 ##   plateau        : 0.05, 0.10, 0.15, 0.20  (pAdjusted <= 0.05)
-##   sigma  cellType1  cellType2 statistic    nullSD         z pAdjusted
-## 1  0.05 Epithelial Epithelial  1547.507   84.7925 18.250518     0.005
-## 2  0.10 Epithelial Epithelial  4239.722  376.6358 11.256821     0.005
-## 3  0.15 Epithelial Epithelial  7128.146  847.9161  8.406664     0.005
-## 4  0.20 Epithelial Epithelial 10151.623 1458.7440  6.959153     0.005
+##   sigma  cellType1  cellType2 statistic   nullMean     nullSD         z
+## 1  0.05 Epithelial Epithelial  1547.508   3.199195   84.79253 18.212795
+## 2  0.10 Epithelial Epithelial  4239.725  22.182222  376.63623 11.197921
+## 3  0.15 Epithelial Epithelial  7128.151  57.428122  847.91764  8.338926
+## 4  0.20 Epithelial Epithelial 10151.631 111.748307 1458.74715  6.882538
+##   pAdjusted
+## 1     0.005
+## 2     0.005
+## 3     0.005
+## 4     0.005
 ```
 
 
@@ -223,7 +232,7 @@ ggplot(sel$perSigma, aes(x = sigma, y = z)) +
   geom_point(data = subset(sel$perSigma, sigma == sel$sigmaValueChoice),
              color = "darkred", size = 3) +
   xlab("Sigma") +
-  ylab(expression(z == T / sd[null])) +
+  ylab(expression(z == (T - mean[null]) / sd[null])) +
   ggtitle("Detectability across bandwidths (studentized)") +
   theme_minimal()
 ```

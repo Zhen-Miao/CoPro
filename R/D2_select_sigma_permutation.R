@@ -23,24 +23,52 @@
 #'
 #' It measures the floor rather than modelling it. For each \eqn{\sigma} on the
 #' grid it computes the observed statistic \eqn{T(\sigma)} at the cell scores
-#' CoPro already fitted at that \eqn{\sigma}, then estimates the standard
-#' deviation \eqn{s(\sigma)} of \eqn{T(\sigma)} under a spatial null and selects
+#' CoPro already fitted at that \eqn{\sigma}, then estimates the mean
+#' \eqn{m(\sigma)} and the standard deviation \eqn{s(\sigma)} of
+#' \eqn{T(\sigma)} under a spatial null and selects
 #'
-#' \deqn{\hat\sigma = \arg\max_\sigma\; T(\sigma) / s(\sigma).}
+#' \deqn{\hat\sigma = \arg\max_\sigma\; \frac{T(\sigma) - m(\sigma)}{s(\sigma)}.}
 #'
-#' Because the denominator *is* the null spread, the studentized statistic
-#' \eqn{z(\sigma)} has the same null level at every bandwidth by construction,
-#' and it carries no tuning constant.
+#' Because both the location and the scale are read off the null itself, the
+#' studentized statistic \eqn{z(\sigma)} has the same null level at every
+#' bandwidth by construction, and it carries no tuning constant.
+#'
+#' Centering is not cosmetic. Across two cell types \eqn{m(\sigma)} is zero in
+#' expectation --- a wrap-around shift leaves every shifted cell equally likely
+#' to land anywhere in the box, so each column of the kernel has the same mean
+#' and a centered score vector annihilates it --- and subtracting the estimate
+#' costs only Monte-Carlo noise. *Within* one cell type it is not zero: the
+#' \eqn{w_{ii} = 0} convention takes \eqn{\sum_i a_i^2\,k(x_i, x_i + \delta)}
+#' off every draw, and that term has a negative expectation which grows with
+#' \eqn{\sigma}. On the package's toy object (\eqn{B = 4000}) the null mean ran
+#' from \eqn{-0.06\,s(\sigma)} at \eqn{\sigma = 0.05} to \eqn{-0.36\,s(\sigma)}
+#' at \eqn{\sigma = 0.2} --- a \eqn{\sigma}-dependent floor of exactly the kind
+#' this function exists to remove, and one that dividing by \eqn{s(\sigma)}
+#' alone leaves in place.
 #'
 #' ## The null, and why the same draws serve selection and inference
 #'
-#' The null is a toroidal (rigid wrap-around) shift of one side's coordinates.
-#' A rigid shift preserves each cell type's own spatial autocorrelation --- the
+#' The null is a toroidal (rigid wrap-around) shift of the coordinates. A rigid
+#' shift preserves each cell type's own spatial autocorrelation --- the
 #' structure that a plain label shuffle destroys, and whose destruction is what
 #' makes shuffle-based nulls anti-conservative --- while removing the alignment
-#' between the two score fields. It assumes spatial stationarity and wrap-around,
+#' between the score fields. It assumes spatial stationarity and wrap-around,
 #' which is false at tissue edges; see [runSkrCCAPermu()] for the bin-wise
 #' alternative.
+#'
+#' One draw is one offset *per cell type*, reused everywhere that type appears.
+#' With three or more cell types a type sits in several pairs at once, so
+#' drawing its offset afresh per pair would put the same cells in two places
+#' inside one draw: that row of statistics would come from no single
+#' configuration, and a max-T reference built from such rows is not a null for
+#' the scan. The first cell type anchors the frame, which costs no randomization
+#' --- the offset *between* any two types is still uniform over the box --- and
+#' leaves one fewer cloud cut by the wrap seam. The observed configuration is
+#' the zero offset, so it is itself an admissible draw, which is what the
+#' \eqn{+1} in the p-value below refers to. With a single cell type that type is
+#' its own partner, so the shift is applied to one copy while the other is held:
+#' a common offset would move both sides together and leave the statistic where
+#' it started.
 #'
 #' One pass of \eqn{B} draws evaluates the null at *every* bandwidth on the
 #' grid, so the draws are coupled across \eqn{\sigma}. That coupling is what
@@ -83,8 +111,14 @@
 #' function warns: the scan found the edge, not an optimum.
 #'
 #' The kernel used here is the plain Gaussian
-#' \eqn{\exp(-\tfrac{1}{2}(d/\sigma)^2)} on the same distance scale
-#' `computeKernelMatrix()` used. Three shaping steps that pipeline applies are
+#' \eqn{\exp(-\tfrac{1}{2}(d/\sigma)^2)} on the same *Euclidean* distance scale
+#' `computeKernelMatrix()` used. Euclidean is a requirement, not a default: the
+#' kernel is rebuilt from coordinates at every candidate bandwidth and under
+#' every shifted configuration, and a `"Morphology-Aware"` metric is not a
+#' function of the coordinates alone --- its geodesic filter rests on a k-NN
+#' graph of the unshifted tissue, which a shift invalidates. Such objects are
+#' refused rather than silently rescored with a Euclidean kernel. Three shaping
+#' steps that the kernel pipeline applies are
 #' deliberately *not* replicated: the `upperQuantile` cap, the `lowerLimit`
 #' truncation, and `computeDistance(truncateLowDist = TRUE)`'s floor on the
 #' bottom ~0.1% of distances. The cap is a data-dependent quantile, so it would
@@ -114,7 +148,8 @@
 #'   Every value must have stored cell scores.
 #' @param ccIndex Which canonical component to select on. Default 1.
 #' @param nPermu Number of toroidal draws \eqn{B}. Default 199, giving a
-#'   Monte-Carlo floor of 0.005 under the Phipson--Smyth correction.
+#'   Monte-Carlo floor of 0.005 under the Phipson--Smyth correction. Must be at
+#'   least 2, since a single draw has no spread to studentize by.
 #' @param alternative `"greater"` (default, matching the sign the optimizer
 #'   fixes) or `"two.sided"`.
 #' @param minSigma Floor for the scanned grid. `"spacing"` (default) drops
@@ -141,8 +176,8 @@
 #'     \item `zMax` --- the observed \eqn{\max z}.
 #'     \item `plateau` --- bandwidths with `pAdjusted <= alpha`.
 #'     \item `perSigma` --- a `data.frame` with `sigma`, `cellType1`,
-#'       `cellType2`, `statistic` (\eqn{T}), `nullSD` (\eqn{s}), `z`, and
-#'       `pAdjusted`.
+#'       `cellType2`, `statistic` (\eqn{T}), `nullMean` (\eqn{m}), `nullSD`
+#'       (\eqn{s}), `z`, and `pAdjusted`.
 #'     \item `nullMax` --- the length-`nPermu` null distribution of the maximum.
 #'     \item `cells` --- the sampled cell indices per cell type.
 #'     \item `spacing` --- the median nearest-partner distance per pair.
@@ -214,6 +249,14 @@ selectSigmaByPermutation <- function(object,
   if (!is.null(maxCells)) {
     maxCells <- .checkPositiveScalarInt(maxCells, "maxCells")
   }
+  if (nPermu < 2L) {
+    ## One draw has no spread, so every column studentizes to NA and the
+    ## function would return the first candidate with pValue = NA and
+    ## zMax = -Inf -- a result shaped like an answer that is not one.
+    stop("nPermu must be at least 2: the null spread is estimated from the ",
+         "draws themselves, and a single draw has none. Use nPermu >= 199 for ",
+         "a usable p-value.")
+  }
   if (nPermu < 19L) {
     warning("nPermu = ", nPermu, " gives a Monte-Carlo floor of ",
             format(1 / (nPermu + 1), digits = 3),
@@ -271,15 +314,21 @@ selectSigmaByPermutation <- function(object,
   }
 
   ## One O(B) pass: every draw is evaluated at every bandwidth, so the null is
-  ## coupled across the grid and max_sigma z has a null distribution.
+  ## coupled across the grid and max_sigma z has a null distribution. The offset
+  ## is drawn once per cell type per draw and reused across every pair that type
+  ## appears in, so a row of statNull comes from one configuration -- which is
+  ## what makes its maximum a draw from the null of the scan statistic.
   statNull <- matrix(0, nrow = nPermu, ncol = nSigma * nPair)
   report_every <- max(1L, nPermu %/% 5L)
   for (bb in seq_len(nPermu)) {
+    shifted <- .drawSelectionShift(coords, domain)
     for (pp in seq_len(nPair)) {
       pr <- pairs[[pp]]
-      shifted <- .toroidalShift(coords[[pr$ct2]], domain)
       statNull[bb, .selectionCols(pp, nSigma)] <- .bilinearOverSigma(
-        coordsA = coords[[pr$ct1]], coordsB = shifted,
+        ## Self pair: the type is on both sides, so one copy is held at the
+        ## observed positions and only the other moves.
+        coordsA = if (pr$self) coords[[pr$ct1]] else shifted[[pr$ct1]],
+        coordsB = shifted[[pr$ct2]],
         a = scores[[pr$ct1]], b = scores[[pr$ct2]],
         sigmaValues = sigmaValues, selfPair = pr$self, blockSize = blockSize
       )
@@ -296,6 +345,7 @@ selectSigmaByPermutation <- function(object,
     cellType1 = rep(vapply(pairs, `[[`, character(1), "ct1"), each = nSigma),
     cellType2 = rep(vapply(pairs, `[[`, character(1), "ct2"), each = nSigma),
     statistic = statObs,
+    nullMean = st$nullMean,
     nullSD = st$nullSD,
     z = st$z,
     pAdjusted = st$pAdjusted,
@@ -418,12 +468,36 @@ print.CoProSigmaSelection <- function(x, ...) {
 #' per-axis factor, then apply the raw -> normalized factor it recorded in
 #' `@distanceScaleFactor`. A bandwidth is a distance, so getting this wrong
 #' would silently scan the wrong physical scales.
+#'
+#' Only a Euclidean geometry can be rebuilt this way. A "Morphology-Aware"
+#' object records distances that are *not* a function of the coordinates alone
+#' -- the geodesic filter is fitted on a k-NN graph of the tissue as observed --
+#' so there is nothing to reconstruct, and a shift would invalidate the graph
+#' the filter was fitted on even if there were. Rebuilding plain Euclidean
+#' coordinates from such an object would quietly score a different metric than
+#' the one the weights were fitted under, so it is refused instead.
 #' @noRd
 .selectionCoords <- function(object, cts) {
   loc <- object@locationDataSub
   geom <- .getDistanceGeometry(object)
+  distType <- if (is.null(geom$distType)) {
+    "Euclidean2D"
+  } else {
+    as.character(geom$distType)
+  }
+  if (!distType %in% c("Euclidean2D", "Euclidean3D")) {
+    stop("selectSigmaByPermutation() needs a Euclidean geometry, but this ",
+         "object records distType = '", distType, "'. The selector rebuilds ",
+         "the kernel from coordinates at every candidate bandwidth and under ",
+         "every shifted configuration, and a morphology-aware distance is not ",
+         "a function of the coordinates alone -- its geodesic filter is fitted ",
+         "on a k-NN graph of the unshifted tissue. Rebuild distances with ",
+         "distType = 'Euclidean2D' or 'Euclidean3D' to select a bandwidth this ",
+         "way, or choose one with runSkrCCAPermu_FairSigma(), which reuses the ",
+         "stored kernels instead of rebuilding them.")
+  }
   axes <- .geometryAxisScales(geom)
-  use3d <- identical(geom$distType, "Euclidean3D")
+  use3d <- identical(distType, "Euclidean3D")
 
   needed <- if (use3d) c("x", "y", "z") else c("x", "y")
   if (!all(needed %in% colnames(loc))) {
@@ -578,9 +652,40 @@ print.CoProSigmaSelection <- function(x, ...) {
 .toroidalShift <- function(coords, domain) {
   extent <- domain$upper - domain$lower
   for (j in seq_len(ncol(coords))) {
+    ## A constant axis has zero extent -- planar data recorded with a z column,
+    ## say -- and `x %% 0` is NaN, which would turn the whole axis, and then
+    ## every statistic computed from it, into NaN. There is nothing to wrap
+    ## along an axis of zero width, so leave it where it is.
+    if (!is.finite(extent[j]) || extent[j] <= 0) next
     shift <- stats::runif(1, 0, extent[j])
     coords[, j] <- (coords[, j] - domain$lower[j] + shift) %% extent[j] +
       domain$lower[j]
+  }
+  coords
+}
+
+#' One draw of the null: a single wrap offset per cell type.
+#'
+#' Returns the whole coordinate list, shifted. Drawing per cell type rather than
+#' per pair is what makes a draw a *configuration*: with three or more types a
+#' type appears in several pairs, and an independent offset in each would put
+#' the same cells in two places at once, so the row of statistics it produces
+#' would not be jointly realizable and the row maximum would not be a draw from
+#' the null of the scan.
+#'
+#' The first cell type is held at its observed positions. That costs no
+#' randomization -- the offset between any two types is still uniform over the
+#' box -- and leaves one fewer point cloud cut by the wrap seam. With a single
+#' cell type there is no partner to be relative to, so that type is the one that
+#' moves; the caller pairs the shifted copy against the held one.
+#' @noRd
+.drawSelectionShift <- function(coords, domain) {
+  if (length(coords) == 1L) {
+    coords[[1L]] <- .toroidalShift(coords[[1L]], domain)
+    return(coords)
+  }
+  for (k in seq_along(coords)[-1L]) {
+    coords[[k]] <- .toroidalShift(coords[[k]], domain)
   }
   coords
 }
@@ -619,15 +724,30 @@ print.CoProSigmaSelection <- function(x, ...) {
   out
 }
 
-#' Studentize by the per-column permutation SD, then take the max-T reference.
+#' Center and scale by the per-column permutation moments, then take the max-T
+#' reference.
 #'
 #' `statNull` is `nPermu x (nSigma * nPair)`; because one draw fills a whole
 #' row, the row maxima are draws from the null of the scan statistic.
+#'
+#' Both moments come from the null, and both are subtracted from the observed
+#' statistic and from the null itself, so the comparison stays like-for-like.
+#' Centering matters most within a cell type, where the `w_ii = 0` convention
+#' gives the null a negative, sigma-dependent mean: scaling alone would leave
+#' that tilt in the scan and bias the argmax toward wide bandwidths.
 #' @noRd
 .studentizeSelectMaxT <- function(statObs, statNull, alternative) {
   nPermu <- nrow(statNull)
+  nullMean <- colMeans(statNull)
   nullSD <- apply(statNull, 2, stats::sd)
   degenerate <- !is.finite(nullSD) | nullSD <= 0
+  if (all(degenerate)) {
+    stop("Every bandwidth-pair combination had a null spread of zero, so ",
+         "nothing can be studentized and no bandwidth can be compared to ",
+         "another. Check that the scanned bandwidths put mass off the kernel ",
+         "diagonal (see detectSigmaRange()), that the coordinates are not all ",
+         "identical, and that the cell scores are not constant.")
+  }
   if (any(degenerate)) {
     warning(sum(degenerate), " of ", length(nullSD), " bandwidth-pair ",
             "combinations had a null spread of zero and were dropped from the ",
@@ -635,8 +755,8 @@ print.CoProSigmaSelection <- function(x, ...) {
             call. = FALSE)
     nullSD[degenerate] <- Inf
   }
-  z <- statObs / nullSD
-  zNull <- sweep(statNull, 2, nullSD, "/")
+  z <- (statObs - nullMean) / nullSD
+  zNull <- sweep(sweep(statNull, 2, nullMean, "-"), 2, nullSD, "/")
 
   if (alternative == "two.sided") {
     zSelect <- abs(z)
@@ -651,7 +771,8 @@ print.CoProSigmaSelection <- function(x, ...) {
     (1 + sum(nullMax >= zi)) / (1 + nPermu)
   }, numeric(1))
 
-  list(nullSD = ifelse(degenerate, NA_real_, nullSD),
+  list(nullMean = nullMean,
+       nullSD = ifelse(degenerate, NA_real_, nullSD),
        z = ifelse(degenerate, NA_real_, z),
        zSelect = ifelse(degenerate, -Inf, zSelect),
        zMax = max(zSelect[!degenerate]),

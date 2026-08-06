@@ -29,7 +29,8 @@ Every value must have stored cell scores.}
 \item{ccIndex}{Which canonical component to select on. Default 1.}
 
 \item{nPermu}{Number of toroidal draws \eqn{B}. Default 199, giving a
-Monte-Carlo floor of 0.005 under the Phipson--Smyth correction.}
+Monte-Carlo floor of 0.005 under the Phipson--Smyth correction. Must be at
+least 2, since a single draw has no spread to studentize by.}
 
 \item{alternative}{\code{"greater"} (default, matching the sign the optimizer
 fixes) or \code{"two.sided"}.}
@@ -65,8 +66,8 @@ An object of class \code{CoProSigmaSelection}: a list with
 \item \code{zMax} --- the observed \eqn{\max z}.
 \item \code{plateau} --- bandwidths with \code{pAdjusted <= alpha}.
 \item \code{perSigma} --- a \code{data.frame} with \code{sigma}, \code{cellType1},
-\code{cellType2}, \code{statistic} (\eqn{T}), \code{nullSD} (\eqn{s}), \code{z}, and
-\code{pAdjusted}.
+\code{cellType2}, \code{statistic} (\eqn{T}), \code{nullMean} (\eqn{m}), \code{nullSD}
+(\eqn{s}), \code{z}, and \code{pAdjusted}.
 \item \code{nullMax} --- the length-\code{nPermu} null distribution of the maximum.
 \item \code{cells} --- the sampled cell indices per cell type.
 \item \code{spacing} --- the median nearest-partner distance per pair.
@@ -99,25 +100,53 @@ bandwidth happens to have the highest floor.
 
 It measures the floor rather than modelling it. For each \eqn{\sigma} on the
 grid it computes the observed statistic \eqn{T(\sigma)} at the cell scores
-CoPro already fitted at that \eqn{\sigma}, then estimates the standard
-deviation \eqn{s(\sigma)} of \eqn{T(\sigma)} under a spatial null and selects
+CoPro already fitted at that \eqn{\sigma}, then estimates the mean
+\eqn{m(\sigma)} and the standard deviation \eqn{s(\sigma)} of
+\eqn{T(\sigma)} under a spatial null and selects
 
-\deqn{\hat\sigma = \arg\max_\sigma\; T(\sigma) / s(\sigma).}
+\deqn{\hat\sigma = \arg\max_\sigma\; \frac{T(\sigma) - m(\sigma)}{s(\sigma)}.}
 
-Because the denominator \emph{is} the null spread, the studentized statistic
-\eqn{z(\sigma)} has the same null level at every bandwidth by construction,
-and it carries no tuning constant.
+Because both the location and the scale are read off the null itself, the
+studentized statistic \eqn{z(\sigma)} has the same null level at every
+bandwidth by construction, and it carries no tuning constant.
+
+Centering is not cosmetic. Across two cell types \eqn{m(\sigma)} is zero in
+expectation --- a wrap-around shift leaves every shifted cell equally likely
+to land anywhere in the box, so each column of the kernel has the same mean
+and a centered score vector annihilates it --- and subtracting the estimate
+costs only Monte-Carlo noise. \emph{Within} one cell type it is not zero: the
+\eqn{w_{ii} = 0} convention takes \eqn{\sum_i a_i^2\,k(x_i, x_i + \delta)}
+off every draw, and that term has a negative expectation which grows with
+\eqn{\sigma}. On the package's toy object (\eqn{B = 4000}) the null mean ran
+from \eqn{-0.06\,s(\sigma)} at \eqn{\sigma = 0.05} to \eqn{-0.36\,s(\sigma)}
+at \eqn{\sigma = 0.2} --- a \eqn{\sigma}-dependent floor of exactly the kind
+this function exists to remove, and one that dividing by \eqn{s(\sigma)}
+alone leaves in place.
 }
 
 \subsection{The null, and why the same draws serve selection and inference}{
 
-The null is a toroidal (rigid wrap-around) shift of one side's coordinates.
-A rigid shift preserves each cell type's own spatial autocorrelation --- the
+The null is a toroidal (rigid wrap-around) shift of the coordinates. A rigid
+shift preserves each cell type's own spatial autocorrelation --- the
 structure that a plain label shuffle destroys, and whose destruction is what
 makes shuffle-based nulls anti-conservative --- while removing the alignment
-between the two score fields. It assumes spatial stationarity and wrap-around,
+between the score fields. It assumes spatial stationarity and wrap-around,
 which is false at tissue edges; see \code{\link[=runSkrCCAPermu]{runSkrCCAPermu()}} for the bin-wise
 alternative.
+
+One draw is one offset \emph{per cell type}, reused everywhere that type appears.
+With three or more cell types a type sits in several pairs at once, so
+drawing its offset afresh per pair would put the same cells in two places
+inside one draw: that row of statistics would come from no single
+configuration, and a max-T reference built from such rows is not a null for
+the scan. The first cell type anchors the frame, which costs no randomization
+--- the offset \emph{between} any two types is still uniform over the box --- and
+leaves one fewer cloud cut by the wrap seam. The observed configuration is
+the zero offset, so it is itself an admissible draw, which is what the
+\eqn{+1} in the p-value below refers to. With a single cell type that type is
+its own partner, so the shift is applied to one copy while the other is held:
+a common offset would move both sides together and leave the statistic where
+it started.
 
 One pass of \eqn{B} draws evaluates the null at \emph{every} bandwidth on the
 grid, so the draws are coupled across \eqn{\sigma}. That coupling is what
@@ -161,8 +190,14 @@ regime. If the selected bandwidth still lands at an end of the grid the
 function warns: the scan found the edge, not an optimum.
 
 The kernel used here is the plain Gaussian
-\eqn{\exp(-\tfrac{1}{2}(d/\sigma)^2)} on the same distance scale
-\code{computeKernelMatrix()} used. Three shaping steps that pipeline applies are
+\eqn{\exp(-\tfrac{1}{2}(d/\sigma)^2)} on the same \emph{Euclidean} distance scale
+\code{computeKernelMatrix()} used. Euclidean is a requirement, not a default: the
+kernel is rebuilt from coordinates at every candidate bandwidth and under
+every shifted configuration, and a \code{"Morphology-Aware"} metric is not a
+function of the coordinates alone --- its geodesic filter rests on a k-NN
+graph of the unshifted tissue, which a shift invalidates. Such objects are
+refused rather than silently rescored with a Euclidean kernel. Three shaping
+steps that the kernel pipeline applies are
 deliberately \emph{not} replicated: the \code{upperQuantile} cap, the \code{lowerLimit}
 truncation, and \code{computeDistance(truncateLowDist = TRUE)}'s floor on the
 bottom ~0.1\% of distances. The cap is a data-dependent quantile, so it would

@@ -103,21 +103,77 @@ test_that("the toroidal shift stays inside the wrap box and moves every cell tog
   }
 })
 
+test_that("a constant coordinate axis is left where it is, not turned into NaN", {
+  ## Planar data recorded with a z column has zero extent on that axis, and
+  ## `x %% 0` is NaN -- which propagated into every statistic computed from the
+  ## shifted coordinates.
+  set.seed(31)
+  coords <- cbind(runif(50), runif(50), rep(3, 50))
+  domain <- CoPro:::.resolveSelectionDomain(NULL, list(coords))
+  expect_equal(domain$upper[3] - domain$lower[3], 0)
+
+  shifted <- CoPro:::.toroidalShift(coords, domain)
+  expect_false(anyNA(shifted))
+  expect_identical(shifted[, 3], coords[, 3])
+  ## and the axes that do have width still move
+  expect_false(isTRUE(all.equal(shifted[, 1], coords[, 1])))
+})
+
+test_that("one draw is one offset per cell type, reused everywhere that type appears", {
+  ## With three cell types a type sits in more than one pair. An offset drawn
+  ## per pair would put the same cells in two places inside a single draw, so
+  ## the row of statistics would not come from any one configuration.
+  set.seed(21)
+  coords <- list(A = cbind(runif(40), runif(40)),
+                 B = cbind(runif(30), runif(30)),
+                 C = cbind(runif(25), runif(25)))
+  domain <- CoPro:::.resolveSelectionDomain(NULL, coords)
+  shifted <- CoPro:::.drawSelectionShift(coords, domain)
+
+  expect_identical(names(shifted), names(coords))
+  ## The first type anchors the frame; the rest each move rigidly.
+  expect_identical(shifted$A, coords$A)
+  for (ct in c("B", "C")) {
+    for (j in 1:2) {
+      expect_lte(
+        length(unique(round(shifted[[ct]][, j] - coords[[ct]][, j], 8))), 2L)
+    }
+  }
+  ## and they move independently of one another
+  expect_false(isTRUE(all.equal(shifted$B[1, ] - coords$B[1, ],
+                                shifted$C[1, ] - coords$C[1, ])))
+
+  ## A lone cell type has no partner to be relative to, so it is the one that
+  ## moves -- otherwise the self statistic would not change at all.
+  solo <- list(A = coords$A)
+  moved <- CoPro:::.drawSelectionShift(solo, domain)
+  expect_false(isTRUE(all.equal(moved$A, solo$A)))
+})
+
 test_that("the studentized null is flat across bandwidths and the p-value is Phipson-Smyth max-T", {
   set.seed(5)
   B <- 200L
-  ## Three columns with deliberately different null scales.
-  nullMat <- cbind(rnorm(B, sd = 1), rnorm(B, sd = 50), rnorm(B, sd = 1000))
+  ## Three columns with deliberately different null scales, and a middle column
+  ## with a null mean far from zero -- the within-type case, where the w_ii = 0
+  ## convention tilts the floor.
+  nullMat <- cbind(rnorm(B, sd = 1), rnorm(B, mean = -400, sd = 50),
+                   rnorm(B, sd = 1000))
   obs <- c(2, 100, 2000)
 
   st <- CoPro:::.studentizeSelectMaxT(obs, nullMat, "greater")
 
+  expect_equal(st$nullMean, colMeans(nullMat))
   expect_equal(st$nullSD, apply(nullMat, 2, sd))
-  expect_equal(st$z, obs / apply(nullMat, 2, sd))
-  ## After studentizing, every column's null has unit spread. That flatness is
-  ## the whole reason the argmax is comparable across bandwidths.
-  zNull <- sweep(nullMat, 2, st$nullSD, "/")
+  expect_equal(st$z, (obs - colMeans(nullMat)) / apply(nullMat, 2, sd))
+  ## Scaling alone would leave the tilted column reading off a floor of its own.
+  expect_false(isTRUE(all.equal(st$z, obs / apply(nullMat, 2, sd))))
+
+  ## After studentizing, every column's null has zero mean and unit spread.
+  ## Flat in both is the whole reason the argmax is comparable across
+  ## bandwidths; flat in scale alone is not enough.
+  zNull <- sweep(sweep(nullMat, 2, st$nullMean, "-"), 2, st$nullSD, "/")
   expect_equal(unname(apply(zNull, 2, sd)), rep(1, 3), tolerance = 1e-12)
+  expect_equal(unname(colMeans(zNull)), rep(0, 3), tolerance = 1e-12)
 
   expect_equal(st$nullMax, apply(zNull, 1, max))
   expect_equal(st$zMax, max(st$z))
@@ -133,7 +189,7 @@ test_that("two.sided uses the null of the maximum absolute studentized statistic
   nullMat <- cbind(rnorm(100), rnorm(100, sd = 10))
   obs <- c(-3, 1)
   st <- CoPro:::.studentizeSelectMaxT(obs, nullMat, "two.sided")
-  zNull <- sweep(nullMat, 2, st$nullSD, "/")
+  zNull <- sweep(sweep(nullMat, 2, st$nullMean, "-"), 2, st$nullSD, "/")
   expect_equal(st$nullMax, apply(abs(zNull), 1, max))
   ## A strong negative statistic must be able to win under two.sided.
   expect_equal(which.max(st$zSelect), 1L)
@@ -148,6 +204,17 @@ test_that("a degenerate bandwidth is dropped rather than dividing by zero", {
   expect_true(is.na(st$z[2]))
   expect_true(is.na(st$pAdjusted[2]))
   expect_true(is.finite(st$zMax))
+})
+
+test_that("a scan with no null spread anywhere stops instead of reporting -Inf", {
+  ## Every column degenerate used to fall through: nullSD = Inf everywhere, so
+  ## zSelect was -Inf everywhere, which.max() took the first candidate, and the
+  ## function returned that bandwidth with pValue = NA and zMax = -Inf.
+  expect_error(
+    CoPro:::.studentizeSelectMaxT(c(1, 2, 3), matrix(0, nrow = 20, ncol = 3),
+                                  "greater"),
+    "Every bandwidth-pair combination"
+  )
 })
 
 ## ---------------------------------------------------------------------------
@@ -230,6 +297,92 @@ test_that("selection runs on a within-type object", {
   expect_true(all(sel$perSigma$cellType2 == "Epithelial"))
 })
 
+test_that("with three cell types every null row comes from a single configuration", {
+  ## The max-T reference is the row maximum of statNull, so a row has to be the
+  ## scan statistic of one realizable arrangement of the tissue. With three
+  ## types, CellTypeC is the second member of two different pairs; drawing its
+  ## offset separately in each would have it in two places within one draw.
+  ## Rebuild the whole null here from one offset per type per draw and require
+  ## the shipped result to match it exactly.
+  obj <- create_test_copro_single(n_cells = 120, n_genes = 30, n_cell_types = 3)
+  obj <- subsetData(obj, cellTypesOfInterest = paste0("CellType", LETTERS[1:3]))
+  obj <- computePCA(obj, nPCA = 5)
+  obj <- computeDistance(obj, distType = "Euclidean2D",
+                         normalizeDistance = FALSE, verbose = FALSE)
+  sigmas <- c(1, 2)
+  obj <- computeKernelMatrix(obj, sigmaValues = sigmas, verbose = FALSE)
+  obj <- runSkrCCA(obj, scalePCs = TRUE, nCC = 1)
+  obj <- suppressWarnings(computeNormalizedCorrelation(obj))
+  obj <- computeGeneAndCellScores(obj)
+
+  B <- 5L
+  sel <- suppressWarnings(
+    selectSigmaByPermutation(obj, nPermu = B, seed = 77, minSigma = NULL,
+                             verbose = FALSE)
+  )
+
+  cts <- CoPro:::.resolveSelectionCellTypes(obj)
+  coords <- CoPro:::.selectionCoords(obj, cts)
+  cells <- CoPro:::.sampleSelectionCells(coords, 2000L)
+  scores <- CoPro:::.selectionScores(obj, cts, sigmas, 1L, cells)
+  domain <- CoPro:::.resolveSelectionDomain(NULL, coords)
+  pairs <- CoPro:::.selectionPairs(cts)
+  expect_equal(length(pairs), 3L)
+
+  ## One shift per cell type per draw, held across the three pairs.
+  set.seed(77)
+  statNull <- t(vapply(seq_len(B), function(b) {
+    shifted <- coords
+    for (k in seq_along(cts)[-1L]) {
+      shifted[[k]] <- CoPro:::.toroidalShift(coords[[k]], domain)
+    }
+    unlist(lapply(pairs, function(pr) {
+      CoPro:::.bilinearOverSigma(shifted[[pr$ct1]], shifted[[pr$ct2]],
+                                 scores[[pr$ct1]], scores[[pr$ct2]], sigmas,
+                                 selfPair = FALSE, blockSize = 1024L)
+    }))
+  }, numeric(length(sigmas) * length(pairs))))
+
+  reference <- CoPro:::.studentizeSelectMaxT(sel$perSigma$statistic, statNull,
+                                             "greater")
+  expect_equal(sel$nullMax, reference$nullMax)
+  expect_equal(sel$perSigma$nullMean, reference$nullMean)
+  expect_equal(sel$perSigma$z, reference$z)
+  expect_equal(sel$perSigma$pAdjusted, reference$pAdjusted)
+
+  ## and the scan really did cover both pairs that share CellTypeC
+  expect_true(all(c("CellTypeB", "CellTypeC") %in% sel$perSigma$cellType2))
+})
+
+test_that("the within-type null is centred, not just scaled", {
+  ## Removing K[i, i] after the shift leaves the self null with a negative mean
+  ## that grows with sigma, so dividing by the SD alone would still compare
+  ## bandwidths across a moving floor.
+  obj <- .fit_selection_object("Epithelial")
+  sel <- selectSigmaByPermutation(obj, nPermu = 199L, seed = 8, verbose = FALSE)
+
+  expect_true(all(is.finite(sel$perSigma$nullMean)))
+  expect_equal(sel$perSigma$z,
+               (sel$perSigma$statistic - sel$perSigma$nullMean) /
+                 sel$perSigma$nullSD)
+
+  ## The tilt is real and sigma-dependent: at the widest bandwidth the null mean
+  ## is a sizeable fraction of the null SD, and larger than at the narrowest.
+  tilt <- sel$perSigma$nullMean / sel$perSigma$nullSD
+  widest <- which.max(sel$perSigma$sigma)
+  narrowest <- which.min(sel$perSigma$sigma)
+  expect_lt(tilt[widest], -0.15)
+  expect_lt(tilt[widest], tilt[narrowest])
+
+  ## A cross-type null has no such term, so its mean sits near zero.
+  cross <- .fit_selection_object(c("Epithelial", "Fibroblast"))
+  selCross <- suppressWarnings(
+    selectSigmaByPermutation(cross, nPermu = 199L, seed = 8, verbose = FALSE)
+  )
+  expect_true(all(abs(selCross$perSigma$nullMean) <
+                    0.3 * selCross$perSigma$nullSD))
+})
+
 test_that("the same seed reproduces the selection exactly", {
   obj <- .fit_selection_object(c("Epithelial", "Fibroblast"))
   a <- selectSigmaByPermutation(obj, nPermu = 25L, seed = 99, verbose = FALSE)
@@ -293,6 +446,10 @@ test_that("selection refuses inputs it cannot serve, with a reason", {
                "positive integer")
   expect_error(selectSigmaByPermutation(obj, alpha = 1, verbose = FALSE),
                "alpha must be")
+  ## One draw has no spread to studentize by; it used to return the first
+  ## bandwidth with pValue = NA and zMax = -Inf.
+  expect_error(selectSigmaByPermutation(obj, nPermu = 1L, verbose = FALSE),
+               "nPermu must be at least 2")
 
   bare <- newCoProSingle(
     normalizedData = matrix(rnorm(200), 20, 10,
@@ -309,6 +466,77 @@ test_that("selection refuses inputs it cannot serve, with a reason", {
   multi <- create_test_copro_multi(n_cells_per_slide = 20, n_slides = 2)
   expect_error(selectSigmaByPermutation(multi, verbose = FALSE),
                "CoProSingle")
+})
+
+test_that("a morphology-aware object is refused, not silently rescored as Euclidean", {
+  ## The selector rebuilds the kernel from coordinates at every bandwidth and
+  ## under every shift. A morphology-aware distance is not a function of the
+  ## coordinates -- its geodesic filter is fitted on a k-NN graph of the tissue
+  ## as observed -- so rebuilding one would score a different metric than the
+  ## weights were fitted under.
+  skip_if_not_installed("igraph")
+  toy <- readRDS(system.file("extdata", "toy_copro_data.rds", package = "CoPro"))
+  obj <- newCoProSingle(
+    normalizedData = toy$normalizedData, locationData = toy$locationData,
+    metaData = toy$metaData, cellTypes = toy$cellTypes
+  )
+  obj <- subsetData(obj, cellTypesOfInterest = c("Epithelial", "Fibroblast"))
+  obj <- computePCA(obj, nPCA = 5)
+  obj <- suppressWarnings(
+    computeDistance(obj, distType = "Morphology-Aware", verbose = FALSE)
+  )
+  expect_identical(CoPro:::.getDistanceGeometry(obj)$distType, "Morphology-Aware")
+
+  ## The metric really is not reproducible from the coordinates: the filter cuts
+  ## pairs that a plain Euclidean rebuild would keep.
+  stored <- as.matrix(obj@distances[[
+    CoPro:::.createDistMatrixName("Epithelial", "Fibroblast", slide = NULL)]])
+  euclid <- as.matrix(fields::rdist(
+    as.matrix(obj@locationDataSub[obj@cellTypesSub == "Epithelial", c("x", "y")]),
+    as.matrix(obj@locationDataSub[obj@cellTypesSub == "Fibroblast", c("x", "y")])
+  ))
+  expect_gt(sum(abs(euclid - stored) > 1e-8), 0)
+
+  expect_error(CoPro:::.selectionCoords(obj, c("Epithelial", "Fibroblast")),
+               "Euclidean geometry")
+
+  ## and the refusal is reached through the public entry point, on an object
+  ## carrying everything the selector otherwise needs
+  obj <- computeKernelMatrix(obj, sigmaValues = c(0.05, 0.1), verbose = FALSE)
+  obj <- runSkrCCA(obj, scalePCs = TRUE, nCC = 1)
+  obj <- suppressWarnings(computeNormalizedCorrelation(obj))
+  obj <- computeGeneAndCellScores(obj)
+  expect_error(selectSigmaByPermutation(obj, verbose = FALSE),
+               "Morphology-Aware")
+})
+
+test_that("a flat z axis does not poison the scan with NaN", {
+  ## Euclidean3D coordinates whose z never varies: the wrap box has zero extent
+  ## on that axis, which used to make the shifted coordinates -- and then every
+  ## statistic -- NaN.
+  toy <- readRDS(system.file("extdata", "toy_copro_data.rds", package = "CoPro"))
+  loc <- toy$locationData
+  loc$z <- 0
+  obj <- newCoProSingle(
+    normalizedData = toy$normalizedData, locationData = loc,
+    metaData = toy$metaData, cellTypes = toy$cellTypes
+  )
+  obj <- subsetData(obj, cellTypesOfInterest = c("Epithelial", "Fibroblast"))
+  obj <- computePCA(obj, nPCA = 5)
+  obj <- computeDistance(obj, distType = "Euclidean3D",
+                         normalizeDistance = TRUE, verbose = FALSE)
+  obj <- computeKernelMatrix(obj, sigmaValues = c(0.05, 0.1, 0.2),
+                             verbose = FALSE)
+  obj <- runSkrCCA(obj, scalePCs = TRUE, nCC = 1)
+  obj <- suppressWarnings(computeNormalizedCorrelation(obj))
+  obj <- computeGeneAndCellScores(obj)
+
+  sel <- suppressWarnings(
+    selectSigmaByPermutation(obj, nPermu = 19L, seed = 5, verbose = FALSE)
+  )
+  expect_false(anyNA(sel$perSigma$z))
+  expect_false(anyNA(sel$nullMax))
+  expect_true(sel$sigmaValueChoice %in% obj@sigmaValues)
 })
 
 test_that("a bandwidth selected at the edge of the grid warns even when quiet", {

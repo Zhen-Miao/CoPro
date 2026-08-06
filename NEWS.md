@@ -159,19 +159,31 @@
   most-detectable scale in 12 of 20 and the rest one grid step away.
 
   Rather than model that floor, this measures it. At each sigma the observed
-  `T(sigma) = a' K(sigma) b` is divided by the standard deviation of its
-  toroidal-shift null, and the bandwidth maximizing `z = T / sd_null` is
-  selected. Because the denominator *is* the null spread, `z` has the same null
-  level at every bandwidth by construction and carries no tuning constant.
+  `T(sigma) = a' K(sigma) b` is compared to the mean and standard deviation of
+  its own toroidal-shift null, and the bandwidth maximizing
+  `z = (T - mean_null) / sd_null` is selected. Because both the location and the
+  scale are read off the null itself, `z` has the same null level at every
+  bandwidth by construction and carries no tuning constant.
+
+  Centering matters most within a single cell type, where the `w_ii = 0`
+  convention takes `sum_i a_i^2 k(x_i, x_i + delta)` off every draw and leaves
+  the null a negative mean that grows with sigma — on the package's toy object,
+  from `-0.06 sd_null` at sigma 0.05 to `-0.36 sd_null` at sigma 0.2. Across two
+  cell types the null mean is zero in expectation and subtracting the estimate
+  costs only Monte-Carlo noise.
 
   One pass of `nPermu` draws evaluates every bandwidth, so the draws are coupled
-  across the grid and the same draws give the null of `max_sigma z`. The
-  reported p-value is therefore already adjusted for having scanned the grid
-  (single-step Westfall–Young max-T) and is not circular — the selection is
-  replicated inside the null. Looping `runSkrCCAPermu()` over sigma does *not*
-  give this: it redraws permutations on every call and its default bin grid is
-  itself sigma-dependent, so the per-bandwidth nulls are neither coupled nor
-  comparable.
+  across the grid and the same draws give the null of `max_sigma z`. A draw is
+  one wrap offset *per cell type*, held across every pair that type appears in,
+  so each row of the null is the scan statistic of one realizable configuration
+  — with three or more cell types a type sits in several pairs at once, and an
+  offset redrawn per pair would put the same cells in two places within a single
+  draw. The reported p-value is therefore already adjusted for having scanned
+  the grid (single-step Westfall–Young max-T) and is not circular — the
+  selection is replicated inside the null. Looping `runSkrCCAPermu()` over sigma
+  does *not* give this: it redraws permutations on every call and its default
+  bin grid is itself sigma-dependent, so the per-bandwidth nulls are neither
+  coupled nor comparable.
 
   Two guards, both on by default. `minSigma = "spacing"` drops candidates below
   the median nearest-partner distance, where the kernel is nearly diagonal and
@@ -192,6 +204,14 @@
   null at small sigma, which is what `minSigma` guards. For a re-optimizing test
   at a chosen bandwidth use `runSkrCCAPermu()`, or `runSkrCCAPermu_FairSigma()`
   for a re-optimizing max-over-sigma test.
+
+  It requires a **Euclidean** geometry and refuses a `"Morphology-Aware"` object
+  rather than rescoring it. The selector rebuilds the kernel from coordinates at
+  every candidate bandwidth and under every shifted configuration, and a
+  morphology-aware distance is not a function of the coordinates alone — its
+  geodesic filter is fitted on a k-NN graph of the tissue as observed, which a
+  shift invalidates. `runSkrCCAPermu_FairSigma()` reuses the stored kernels and
+  so still serves those objects.
 
   The organoid vignette now selects its bandwidth this way.
 
