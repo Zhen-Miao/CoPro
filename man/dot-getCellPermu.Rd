@@ -12,7 +12,8 @@
   permu_which = "second_only",
   num_bins_x = 10,
   num_bins_y = 10,
-  match_quantile = FALSE
+  match_quantile = FALSE,
+  compactPermutation = .defaultCompactPermutation()
 )
 }
 \arguments{
@@ -33,6 +34,9 @@
 \item{match_quantile}{Logical. If TRUE and permu_method="bin", matches cells
 between tiles based on their relative (quantile) positions to better preserve
 within-tile spatial structure. Default: FALSE.}
+
+\item{compactPermutation}{Logical. Store the permuted side as one seed per
+draw instead of an explicit index matrix.}
 }
 \value{
 List of permutation matrices (for "global"/"bin"/"toroidal") or

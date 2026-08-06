@@ -108,8 +108,6 @@ test_that(".frnnGrid returns an empty result when no pair is within radius", {
 
 test_that("compiled and R fixed-radius engines return identical triplets", {
   set.seed(808)
-  old_options <- options(CoPro.useRcppFRNN = FALSE)
-  on.exit(options(old_options), add = TRUE)
 
   for (dimensions in 2:3) {
     A <- matrix(runif(240 * dimensions), ncol = dimensions)
@@ -118,14 +116,25 @@ test_that("compiled and R fixed-radius engines return identical triplets", {
 
     for (within in c(FALSE, TRUE)) {
       B_current <- if (within) NULL else B
-      r_result <- .canonFrnn(CoPro:::.frnnGrid(A, B_current, radius))
-      options(CoPro.useRcppFRNN = TRUE)
-      cpp_result <- .canonFrnn(CoPro:::.frnnGrid(A, B_current, radius))
-      options(CoPro.useRcppFRNN = FALSE)
+      r_result <- .canonFrnn(
+        CoPro:::.frnnGrid(A, B_current, radius, useCompiled = FALSE)
+      )
+      cpp_result <- .canonFrnn(
+        CoPro:::.frnnGrid(A, B_current, radius, useCompiled = TRUE)
+      )
 
       expect_identical(cpp_result$i, r_result$i)
       expect_identical(cpp_result$j, r_result$j)
       expect_equal(cpp_result$d, r_result$d, tolerance = 1e-12)
     }
   }
+})
+
+test_that("the useCompiled default still honors the legacy global option", {
+  old_options <- options(CoPro.useRcppFRNN = FALSE)
+  on.exit(options(old_options), add = TRUE)
+  expect_false(CoPro:::.defaultUseCompiledFrnn())
+
+  options(CoPro.useRcppFRNN = TRUE)
+  expect_true(CoPro:::.defaultUseCompiledFrnn())
 })

@@ -29,9 +29,11 @@
 # permu_method = "pc", which shuffles each PC column independently and so
 # changes the off-diagonal entries; those types keep the direct calculation.
 #
-# Set options(CoPro.factorizePermutation = FALSE) to disable the factorization
-# and route every pair through the original sparse product. Results are
-# equivalent; the option exists so the two paths can be compared directly.
+# Pass `factorize = FALSE` to a permutation entry point to disable the
+# factorization and route every pair through the original sparse product.
+# Results are equivalent; the switch exists so the two paths can be compared
+# directly. It used to be the global `options(CoPro.factorizePermutation=)`,
+# which still supplies the argument's default so old scripts keep working.
 #
 # -----------------------------------------------------------------------------
 # Compact permutation storage
@@ -48,17 +50,30 @@
 # The genuinely permuted side can be compressed the same way -- store one seed
 # per draw and re-draw on demand -- but that changes which permutations are
 # drawn, so a re-run of a saved analysis would move its p-values within Monte
-# Carlo error. That is gated behind options(CoPro.compactPermutation = TRUE)
-# and off by default. The identity marker changes no number at all.
+# Carlo error. That is gated behind `compactPermutation = TRUE` on the
+# permutation entry points and off by default. The identity marker changes no
+# number at all.
 # =============================================================================
 
-#' Should permuted draws be stored as seeds rather than index matrices?
+#' Default for the `compactPermutation` argument
 #'
 #' Off by default: enabling it changes the drawn permutations, so p-values from
 #' a re-run will differ from previously saved ones within Monte Carlo error.
+#' The former global `options(CoPro.compactPermutation=)` is still read here so
+#' that scripts which set it keep their behavior; an explicit argument wins.
 #' @noRd
-.useCompactPermutation <- function() {
+.defaultCompactPermutation <- function() {
   isTRUE(getOption("CoPro.compactPermutation", FALSE))
+}
+
+#' Default for the `factorize` argument
+#'
+#' On by default. The former global `options(CoPro.factorizePermutation=)` is
+#' still read here so that scripts which set it keep their behavior; an
+#' explicit argument wins.
+#' @noRd
+.defaultFactorizePermutation <- function() {
+  isTRUE(getOption("CoPro.factorizePermutation", TRUE))
 }
 
 #' Compact marker for a cell type that is held fixed across all draws
@@ -149,17 +164,6 @@
   as.matrix(.float32KernelMatMult(K, X))
 }
 
-#' Build the per-pair plan for evaluating Y across permutation draws
-#'
-#' @param PCmats Named list of unpermuted cell-by-PC matrices.
-#' @param flat_kernels Flat kernel list.
-#' @param sigma Kernel bandwidth.
-#' @param cts Cell types of interest.
-#' @param fixed Named logical vector from `.fixedPermutationTypes()`.
-#' @param slide Slide ID, or `NULL` for a single slide.
-#' @return A list with `ops` (nested by cell-type pair), `pairs`, `cts` and
-#'   `fixed`, consumable by `.yResiFromPlan()`.
-#' @noRd
 #' Cell-type pairs a permutation statistic is evaluated over
 #'
 #' One cell type is the within-type (self) problem and pairs with itself;
@@ -175,9 +179,23 @@
   }
 }
 
+#' Build the per-pair plan for evaluating Y across permutation draws
+#'
+#' @param PCmats Named list of unpermuted cell-by-PC matrices.
+#' @param flat_kernels Flat kernel list.
+#' @param sigma Kernel bandwidth.
+#' @param cts Cell types of interest.
+#' @param fixed Named logical vector from `.fixedPermutationTypes()`.
+#' @param slide Slide ID, or `NULL` for a single slide.
+#' @param factorize Use the fixed-side factorization? `FALSE` routes every pair
+#'   through the original sparse product.
+#' @return A list with `ops` (nested by cell-type pair), `pairs`, `cts` and
+#'   `fixed`, consumable by `.yResiFromPlan()`.
+#' @noRd
 .buildYPlan <- function(PCmats, flat_kernels, sigma, cts, fixed,
-                        slide = NULL) {
-  if (!isTRUE(getOption("CoPro.factorizePermutation", TRUE))) {
+                        slide = NULL,
+                        factorize = .defaultFactorizePermutation()) {
+  if (!isTRUE(factorize)) {
     fixed <- stats::setNames(rep(FALSE, length(cts)), cts)
   }
 
@@ -265,9 +283,12 @@
 #' assumption and get `NULL` (keeping the direct calculation): `"pc"` shuffles
 #' each PC column independently, which changes the off-diagonal entries, and
 #' `"bin"` draws a spatially matched resample rather than a permutation.
+#' @param factorize Cache the Gram matrices? `FALSE` returns all-`NULL` so every
+#'   draw recomputes `X[perm, ] w` directly.
 #' @noRd
-.permutationGrams <- function(PCmats, cell_permu, cts) {
-  if (!isTRUE(getOption("CoPro.factorizePermutation", TRUE))) {
+.permutationGrams <- function(PCmats, cell_permu, cts,
+                              factorize = .defaultFactorizePermutation()) {
+  if (!isTRUE(factorize)) {
     return(stats::setNames(vector("list", length(cts)), cts))
   }
   stats::setNames(lapply(cts, function(ct) {

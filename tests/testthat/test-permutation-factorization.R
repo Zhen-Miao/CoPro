@@ -4,8 +4,7 @@
 # evaluated from a precomputed one-sided product instead of the sparse kernel.
 # The identity is exact, so the whole point of these tests is that every
 # permutation entry point returns the SAME null -- and therefore the same
-# p-value -- as the unfactorized path, which
-# options(CoPro.factorizePermutation = FALSE) restores.
+# p-value -- as the unfactorized path, which `factorize = FALSE` restores.
 
 .fact_pipeline <- function(n_cell_types = 2, nCC = 2, seed = 42,
                            scalePCs = TRUE) {
@@ -28,6 +27,10 @@
 }
 
 # Run `expr` with the factorization switched off.
+#
+# `factorize` is an argument of every permutation entry point now, but it
+# defaults to the legacy global option -- so driving these tests through the
+# option keeps that back-compatibility path under test as well.
 .unfactorized <- function(expr) {
   old <- options(CoPro.factorizePermutation = FALSE)
   on.exit(options(old), add = TRUE)
@@ -593,15 +596,17 @@ test_that("compact permutation storage is opt-in and produces valid draws", {
 
   # Off by default: the permuted side is still an explicit index matrix, so
   # saved analyses reproduce exactly.
-  expect_false(.useCompactPermutation())
+  expect_false(.defaultCompactPermutation())
   default_permu <- .getCellPermu(obj, "global", 5, cts)
   expect_true(is.matrix(default_permu[[cts[2]]]))
 
+  # The legacy global option still supplies the argument's default.
   old <- options(CoPro.compactPermutation = TRUE)
   on.exit(options(old), add = TRUE)
-  expect_true(.useCompactPermutation())
+  expect_true(.defaultCompactPermutation())
 
-  compact <- .getCellPermu(obj, "global", 5, cts)
+  compact <- .getCellPermu(obj, "global", 5, cts,
+                           compactPermutation = TRUE)
   expect_identical(compact[[cts[2]]]$type, "global_seed")
   expect_length(compact[[cts[2]]]$seeds, 5L)
   expect_true(.isRowPermutationMatrix(compact[[cts[2]]]))
@@ -616,7 +621,9 @@ test_that("compact permutation storage is opt-in and produces valid draws", {
 
   # "bin" is a resample rather than a bijection, so it must not claim the
   # Gram shortcut even under compact storage.
-  compact_bin <- suppressWarnings(.getCellPermu(obj, "bin", 4, cts))
+  compact_bin <- suppressWarnings(
+    .getCellPermu(obj, "bin", 4, cts, compactPermutation = TRUE)
+  )
   expect_identical(compact_bin[[cts[2]]]$type, "bin_seed")
   expect_false(.isRowPermutationMatrix(compact_bin[[cts[2]]]))
   bin_spec <- .permutationDrawSpec(compact_bin, cts, 2L)

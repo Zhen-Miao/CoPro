@@ -185,5 +185,15 @@ setClass(
   )
 )
 
-setClass("CoProm", contains = "CoProMulti")    # alias for *old* CoProm
+# `CoProm` was the multi-slide class before it was renamed `CoProMulti`. The
+# class is kept -- and kept registered -- purely so that objects saved by those
+# older versions still load and still dispatch: it contains `CoProMulti`, so
+# every `CoProMulti` and `CoPro` method applies to it unchanged, including the
+# `is(object, "CoProMulti")` test the shared kernel and sigma methods use to
+# decide the multi-slide path.
+#
+# Nothing constructs a `CoProm`. New code should use `newCoProMulti()`; this
+# class is never returned by any exported function and is not documented as
+# part of the API.
+setClass("CoProm", contains = "CoProMulti")
 

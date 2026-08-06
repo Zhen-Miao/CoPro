@@ -867,7 +867,7 @@ NULL
 NULL
 
 # ============================================================================
-# Helper Functions Specific to Multi-Slide (shared functions are in 04_optimization_function_refactored.R)
+# Helper Functions Specific to Multi-Slide (shared functions are in 04_optimization.R)
 # ============================================================================
 
 #' Validate multi-slide input data structure

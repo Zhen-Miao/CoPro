@@ -4,13 +4,12 @@
 \alias{getNormCorr}
 \alias{getNormCorr,CoProSingle-method}
 \alias{getNormCorr,CoProMulti-method}
+\alias{getNormCorr,CoPro-method}
 \title{Get normalized correlation vs Sigma squared values}
 \usage{
 getNormCorr(object)
 
-\S4method{getNormCorr}{CoProSingle}(object)
-
-\S4method{getNormCorr}{CoProMulti}(object)
+\S4method{getNormCorr}{CoPro}(object)
 }
 \arguments{
 \item{object}{A \code{CoPro} object}

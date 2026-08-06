@@ -24,6 +24,8 @@
 #' @param match_quantile Logical. If TRUE and permu_method="bin", matches cells
 #'   between tiles based on their relative (quantile) positions to better preserve
 #'   within-tile spatial structure. Default: FALSE.
+#' @param compactPermutation Logical. Store the permuted side as one seed per
+#'   draw instead of an explicit index matrix.
 #'
 #' @return List of permutation matrices (for "global"/"bin"/"toroidal") or
 #'   list of permuted PC matrices (for "pc"), one per cell type. Held-fixed
@@ -33,10 +35,11 @@
 .getCellPermu <- function(object, permu_method, nPermu, cts,
                           permu_which = "second_only",
                           num_bins_x = 10, num_bins_y = 10,
-                          match_quantile = FALSE) {
+                          match_quantile = FALSE,
+                          compactPermutation = .defaultCompactPermutation()) {
 
   cell_permu <- setNames(vector("list", length = length(cts)), cts)
-  compact <- .useCompactPermutation()
+  compact <- isTRUE(compactPermutation)
 
   # Determine which cell types should be permuted
   should_permute <- function(ct_name, ct_index) {
@@ -557,6 +560,22 @@
 #'   selected `object@@sigmaValueChoice` is used conditionally and the returned
 #'   p-value is marked as not adjusted for sigma selection; use
 #'   [runSkrCCAPermu_FairSigma()] for a max-over-sigma test.
+#' @param factorize Apply the fixed-side operator factorization (default: TRUE).
+#'   A cell type held fixed across every draw lets its side of `X' K X` be
+#'   multiplied by the kernel once instead of once per draw, and lets the score
+#'   norms be read off a cached Gram matrix. The identity is exact, so this
+#'   changes speed and memory only, never a p-value. Set `FALSE` to route every
+#'   pair through the original sparse product when comparing the two paths.
+#'   Defaults to `getOption("CoPro.factorizePermutation", TRUE)`, the global
+#'   flag this argument replaced.
+#' @param compactPermutation Store the permuted side as one seed per draw rather
+#'   than an explicit index matrix (default: FALSE). Saves the `n * nPermu * 4`
+#'   bytes per permuted cell type that an index matrix costs, but it changes
+#'   *which* permutations are drawn, so re-running a saved analysis moves its
+#'   p-values within Monte Carlo error. Held-fixed types are always stored
+#'   compactly, which changes no number at all. Defaults to
+#'   `getOption("CoPro.compactPermutation", FALSE)`, the global flag this
+#'   argument replaced.
 #'
 #' @return CoPro object with permutation results stored in `@skrCCAPermuOut`
 #'
@@ -606,7 +625,9 @@ runSkrCCAPermu <- function(object, tol = 1e-5, nPermu = 999,
                            match_quantile = FALSE,
                            conservative = FALSE,
                            n_cores = 1, verbose = TRUE,
-                           sigma = NULL) {
+                           sigma = NULL,
+                           factorize = .defaultFactorizePermutation(),
+                           compactPermutation = .defaultCompactPermutation()) {
 
   ## Input validation
   if (!is(object, "CoPro")) {
@@ -743,7 +764,8 @@ runSkrCCAPermu <- function(object, tol = 1e-5, nPermu = 999,
                               nPermu = nPermu, cts = cts,
                               permu_which = permu_which,
                               num_bins_x = num_bins_x, num_bins_y = num_bins_y,
-                              match_quantile = match_quantile)
+                              match_quantile = match_quantile,
+                              compactPermutation = compactPermutation)
   if (verbose) {
     if (permu_method == "pc") {
       cat("PC-space permutation configured.\n\n")
@@ -776,7 +798,8 @@ runSkrCCAPermu <- function(object, tol = 1e-5, nPermu = 999,
     flat_kernels = object@kernelMatrices,
     sigma = sigmaValueChoice,
     cts = cts,
-    fixed = .fixedPermutationTypes(cell_permu, cts)
+    fixed = .fixedPermutationTypes(cell_permu, cts),
+    factorize = factorize
   )
 
   # A SUMCOR null divides by per-type score scales, so it needs the Gram
@@ -785,7 +808,7 @@ runSkrCCAPermu <- function(object, tol = 1e-5, nPermu = 999,
   # can be factorized decides which Grams a draw may inherit, and the worker
   # recomputes the rest.
   permu_grams <- if (identical(permu_objective$objective, "sumcor")) {
-    .permutationGrams(PCmats[cts], cell_permu, cts)
+    .permutationGrams(PCmats[cts], cell_permu, cts, factorize = factorize)
   } else {
     NULL
   }
@@ -839,6 +862,7 @@ runSkrCCAPermu <- function(object, tol = 1e-5, nPermu = 999,
 #'
 #' @param object A `CoPro` object with permutation results from `runSkrCCAPermu()`
 #' @param tol Tolerance for approximate SVD calculation (default: 1e-4)
+#' @inheritParams runSkrCCAPermu
 #'
 #' @return The `CoPro` object with permutation normalized correlations
 #'   stored in `@normalizedCorrelationPermu`
@@ -858,7 +882,9 @@ runSkrCCAPermu <- function(object, tol = 1e-5, nPermu = 999,
 #' }
 #'
 #' @export
-computeNormalizedCorrelationPermu <- function(object, tol = 1e-4) {
+computeNormalizedCorrelationPermu <- function(
+    object, tol = 1e-4,
+    factorize = .defaultFactorizePermutation()) {
 
   ## Input validation
   if (!is(object, "CoPro")) {
@@ -948,9 +974,11 @@ computeNormalizedCorrelationPermu <- function(object, tol = 1e-4) {
     flat_kernels = object@kernelMatrices,
     sigma = sigmaValueChoice,
     cts = cts,
-    fixed = .fixedPermutationTypes(object@cellPermu, cts)
+    fixed = .fixedPermutationTypes(object@cellPermu, cts),
+    factorize = factorize
   )
-  grams <- .permutationGrams(PCmats, object@cellPermu, cts)
+  grams <- .permutationGrams(PCmats, object@cellPermu, cts,
+                             factorize = factorize)
 
   ## Calculate normalized correlation for each permutation
   cat("Computing normalized correlations for permutations...\n")
@@ -1427,6 +1455,7 @@ calculate_pvalue <- function(object, cc_index = 1, alternative = "greater") {
 #' @param n_cores Number of PSOCK workers. Each worker holds the PCA and kernel
 #'   inputs, so choose this with available memory in mind.
 #' @param verbose Whether to print progress messages
+#' @inheritParams runSkrCCAPermu
 #' @seealso [runSkrCCAPermu_Conditional()] for a sequential step-down test
 #'   across canonical axes (the correct treatment when `nCC > 1`).
 #'
@@ -1463,7 +1492,10 @@ runSkrCCAPermu_FairSigma <- function(object,
                                      maxIter = 200,
                                      tol = 1e-5,
                                      n_cores = 1,
-                                     verbose = TRUE) {
+                                     verbose = TRUE,
+                                     factorize = .defaultFactorizePermutation(),
+                                     compactPermutation =
+                                       .defaultCompactPermutation()) {
 
   ## Input validation
   if (!is(object, "CoPro")) {
@@ -1569,7 +1601,8 @@ runSkrCCAPermu_FairSigma <- function(object,
     permu_which = permu_which,
     num_bins_x = num_bins_x,
     num_bins_y = num_bins_y,
-    match_quantile = match_quantile
+    match_quantile = match_quantile,
+    compactPermutation = compactPermutation
   )
 
   # Kernel matrices and their whitened-Frobenius normalizers are invariant to
@@ -1588,9 +1621,9 @@ runSkrCCAPermu_FairSigma <- function(object,
   fixed <- .fixedPermutationTypes(cell_permu, cts)
   plans <- lapply(sigma_values, function(sigma) .buildYPlan(
     PCmats = PCmats, flat_kernels = object@kernelMatrices, sigma = sigma,
-    cts = cts, fixed = fixed
+    cts = cts, fixed = fixed, factorize = factorize
   ))
-  grams <- .permutationGrams(PCmats, cell_permu, cts)
+  grams <- .permutationGrams(PCmats, cell_permu, cts, factorize = factorize)
 
   if (verbose) {
     cat("Running permutations...\n")
@@ -1904,6 +1937,7 @@ runSkrCCAPermu_FairSigma <- function(object,
 #' @param verbose Whether to print progress and a summary (default TRUE).
 #' @param n_cores Number of PSOCK workers. Each worker holds the PCA and kernel
 #'   inputs, so choose this with available memory in mind.
+#' @inheritParams runSkrCCAPermu
 #'
 #' @return The CoPro object with results stored in the `@conditionalPermu` slot,
 #'   a list whose `per_axis` element is a data frame of `CC_index`,
@@ -1943,7 +1977,11 @@ runSkrCCAPermu_Conditional <- function(object,
                                        maxIter = 200,
                                        tol = 1e-5,
                                        verbose = TRUE,
-                                       n_cores = 1) {
+                                       n_cores = 1,
+                                       factorize =
+                                         .defaultFactorizePermutation(),
+                                       compactPermutation =
+                                         .defaultCompactPermutation()) {
 
   ## ---- validation ----
   if (!is(object, "CoPro")) {
@@ -2052,7 +2090,8 @@ runSkrCCAPermu_Conditional <- function(object,
                               nPermu = nPermu, cts = cts,
                               permu_which = permu_which,
                               num_bins_x = num_bins_x, num_bins_y = num_bins_y,
-                              match_quantile = match_quantile)
+                              match_quantile = match_quantile,
+                              compactPermutation = compactPermutation)
 
   perm_stat <- matrix(NA_real_, nrow = nPermu, ncol = nCC)
   perm_sigma <- matrix(sigma_values[1], nrow = nPermu, ncol = nCC)
@@ -2075,9 +2114,9 @@ runSkrCCAPermu_Conditional <- function(object,
   fixed <- .fixedPermutationTypes(cell_permu, cts)
   plans <- lapply(sigma_values, function(sigma) .buildYPlan(
     PCmats = PCmats, flat_kernels = object@kernelMatrices, sigma = sigma,
-    cts = cts, fixed = fixed
+    cts = cts, fixed = fixed, factorize = factorize
   ))
-  grams <- .permutationGrams(PCmats, cell_permu, cts)
+  grams <- .permutationGrams(PCmats, cell_permu, cts, factorize = factorize)
 
   worker <- .makeConditionalWorker(
     PCmats = PCmats, plans = plans, cts = cts, nCC = nCC,

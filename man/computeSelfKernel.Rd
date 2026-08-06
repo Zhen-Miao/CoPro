@@ -4,6 +4,7 @@
 \alias{computeSelfKernel}
 \alias{computeSelfKernel,CoProSingle-method}
 \alias{computeSelfKernel,CoProMulti-method}
+\alias{computeSelfKernel,CoPro-method}
 \title{Compute Self-Kernel Matrices for Multiple Cell Types}
 \usage{
 computeSelfKernel(
@@ -29,30 +30,7 @@ computeSelfKernel(
   truncateLowDist = NULL
 )
 
-\S4method{computeSelfKernel}{CoProSingle}(
-  object,
-  sigmaValues,
-  lowerLimit = 1e-07,
-  upperQuantile = 0.85,
-  normalizeKernel = FALSE,
-  minAveCellNeighor = 2,
-  rowNormalizeKernel = FALSE,
-  colNormalizeKernel = FALSE,
-  verbose = TRUE,
-  overwrite = FALSE,
-  method = c("auto", "dense", "sparse"),
-  autoThreshold = 5000L,
-  distType = NULL,
-  xDistScale = NULL,
-  yDistScale = NULL,
-  zDistScale = NULL,
-  normalizeDistance = NULL,
-  normalizeMethod = NULL,
-  normalizeTarget = NULL,
-  truncateLowDist = NULL
-)
-
-\S4method{computeSelfKernel}{CoProMulti}(
+\S4method{computeSelfKernel}{CoPro}(
   object,
   sigmaValues,
   lowerLimit = 1e-07,

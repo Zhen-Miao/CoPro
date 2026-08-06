@@ -1,3 +1,61 @@
+# CoPro (development version)
+
+## Package options are now function arguments
+
+Four `options()` flags controlled behavior that belongs in a call, not in
+global state. Each is now an argument. The option is still read to supply that
+argument's default, so scripts that set the option keep their behavior and no
+result changes.
+
+* `CoPro.factorizePermutation` -> `factorize` on `runSkrCCAPermu()`,
+  `computeNormalizedCorrelationPermu()`, `runSkrCCAPermu_FairSigma()`, and
+  `runSkrCCAPermu_Conditional()`.
+* `CoPro.compactPermutation` -> `compactPermutation` on the three
+  `runSkrCCAPermu*()` entry points.
+* `CoPro.float32Threads` -> `nThreads` on `computeSparseKernelFloat32()`.
+  `NULL` means "not specified" and is resolved to the option inside
+  `.float32KernelThreads()` rather than in a default argument, so that
+  `computeKernelMatrix(method = "float32")` — which threads `NULL` through
+  explicitly — still honors it.
+* `CoPro.useRcppFRNN` -> `useCompiled` on the internal `.frnnGrid()`.
+
+The gain is that the equivalence tests no longer flip global state mid-loop to
+compare two paths; they pass the argument. `test-sparse-frnn.R` used to set the
+option, call, set it back, and call again inside a nested loop.
+
+## One method where there was a pair
+
+Six generics carried a `CoProSingle` method and a `CoProMulti` method whose
+bodies were identical, or identical apart from an `is_multi = TRUE/FALSE`
+literal the dispatcher can derive from the object's own class. Each is now a
+single method on the virtual `CoPro` base: `getNormCorr()`,
+`getCellScoresInSitu()`, `detectSigmaRange()`, `computeKernelMatrix()`,
+`computeSparseKernelFloat32()`, and `computeSelfKernel()`. Dispatch and results
+are unchanged — `CoProSingle` and `CoProMulti` both extend `CoPro` — and the
+generics whose two bodies genuinely differ (`computePCA()`, `subsetData()`,
+`getCellScores()`, `runSkrCCA()`, and the rest) keep their separate methods.
+
+## Documentation and repository
+
+* `?CoPro` now states the API naming convention outright: `camelCase` is the
+  object pipeline (takes a `CoPro` object, returns one), `snake_case` is the
+  engine and utility layer (plain matrices and data frames, no object), with the
+  two exports that sit outside the rule named explicitly. Also summarized in the
+  README.
+* The README Quick Start had drifted to the pre-1.2.0 pipeline. It now uses
+  `detectSigmaRange()` instead of a hardcoded sigma grid, drops the
+  `computeDistance()` step the sparse routes no longer need, and adds
+  `computeRegressionGeneScores()`.
+* `R/04_optimization_function_refactored.R` is now `R/04_optimization.R`. The
+  `_refactored` suffix on a shipped file read as an unfinished refactor.
+* Untracked `R/.DS_Store`, `vignettes/.DS_Store`, and the stray `..Rcheck/`
+  check output that had been committed. Note that `vignettes/*.Rmd.orig` are
+  *not* backups — they are the sources `vignettes/precompute.R` knits into the
+  shipped `.Rmd` files, and they stay.
+* Fixed a detached roxygen block in `R/D0_permutation_plan.R`: the docs for
+  `.buildYPlan()` sat above `.permutationPairTypes()`, leaving the first
+  undocumented and the second with two glued-together blocks.
+
 # CoPro 1.3.0
 
 ## Choosing the canonical criterion

@@ -2,8 +2,7 @@
 % Please edit documentation in R/12_compute_kernel.R
 \name{computeKernelMatrix}
 \alias{computeKernelMatrix}
-\alias{computeKernelMatrix,CoProSingle-method}
-\alias{computeKernelMatrix,CoProMulti-method}
+\alias{computeKernelMatrix,CoPro-method}
 \title{Compute Kernel Matrix for CoPro}
 \usage{
 computeKernelMatrix(
@@ -30,31 +29,7 @@ computeKernelMatrix(
   verbose = TRUE
 )
 
-\S4method{computeKernelMatrix}{CoProSingle}(
-  object,
-  sigmaValues,
-  lowerLimit = 1e-07,
-  upperQuantile = 0.85,
-  normalizeKernel = FALSE,
-  minAveCellNeighor = 2,
-  rowNormalizeKernel = FALSE,
-  colNormalizeKernel = FALSE,
-  method = c("auto", "dense", "sparse", "float32"),
-  dropDistances = TRUE,
-  autoThreshold = 5000L,
-  denseThreshold = 0.3,
-  distType = NULL,
-  xDistScale = NULL,
-  yDistScale = NULL,
-  zDistScale = NULL,
-  normalizeDistance = NULL,
-  normalizeMethod = NULL,
-  normalizeTarget = NULL,
-  truncateLowDist = NULL,
-  verbose = TRUE
-)
-
-\S4method{computeKernelMatrix}{CoProMulti}(
+\S4method{computeKernelMatrix}{CoPro}(
   object,
   sigmaValues,
   lowerLimit = 1e-07,

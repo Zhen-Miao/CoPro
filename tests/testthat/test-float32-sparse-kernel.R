@@ -778,3 +778,24 @@ test_that("parallel neighbour enumeration reproduces the serial CSR exactly", {
                    results(build(tiny, tiny, TRUE, 0L, 1L)))
   expect_error(build(coords, coords, TRUE, 0L, 0L), "at least one")
 })
+
+test_that("nThreads wins over the legacy option, and NULL falls back to it", {
+  old_options <- options(CoPro.float32Threads = 3L)
+  on.exit(options(old_options), add = TRUE)
+
+  # An explicit count wins over the option.
+  expect_identical(CoPro:::.float32KernelThreads(2L), 2L)
+
+  # NULL means "not specified" and must reach the option -- including when a
+  # caller threads NULL through explicitly, which is how
+  # computeKernelMatrix(method = "float32") reaches the float32 builder.
+  expect_identical(CoPro:::.float32KernelThreads(), 3L)
+  expect_identical(CoPro:::.float32KernelThreads(NULL), 3L)
+
+  # With neither set, the count is resolved from the machine.
+  options(CoPro.float32Threads = NULL)
+  auto <- CoPro:::.float32KernelThreads(NULL)
+  expect_true(is.integer(auto) && length(auto) == 1L && auto >= 1L)
+
+  expect_error(CoPro:::.float32KernelThreads(0L), "positive integer")
+})
