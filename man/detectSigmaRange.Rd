@@ -2,8 +2,7 @@
 % Please edit documentation in R/11d_detect_sigma.R
 \name{detectSigmaRange}
 \alias{detectSigmaRange}
-\alias{detectSigmaRange,CoProSingle-method}
-\alias{detectSigmaRange,CoProMulti-method}
+\alias{detectSigmaRange,CoPro-method}
 \title{Detect a usable sigma range from the data}
 \usage{
 detectSigmaRange(
@@ -20,21 +19,7 @@ detectSigmaRange(
   verbose = TRUE
 )
 
-\S4method{detectSigmaRange}{CoProSingle}(
-  object,
-  minNeighbors = 5,
-  maxNeighbors = 20,
-  nSigma = 5L,
-  nAnchor = 500L,
-  nNeighbor = 128L,
-  distType = NULL,
-  xDistScale = NULL,
-  yDistScale = NULL,
-  zDistScale = NULL,
-  verbose = TRUE
-)
-
-\S4method{detectSigmaRange}{CoProMulti}(
+\S4method{detectSigmaRange}{CoPro}(
   object,
   minNeighbors = 5,
   maxNeighbors = 20,

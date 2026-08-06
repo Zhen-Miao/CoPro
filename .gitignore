@@ -14,6 +14,12 @@ reports/skrcca_svd_evaluation/
 src/*.o
 src/*.so
 
+# Coding-agent session state and its instruction file, kept alongside the
+# already-ignored CLAUDE.md so a fresh clone carries neither.
+.claude/
+.workbuddy/
+AGENTS.md
+
 # Working-directory / rendered artifacts (not part of the package)
 Rplots.pdf
 embedding.tsv

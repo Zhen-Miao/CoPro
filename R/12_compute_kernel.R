@@ -516,8 +516,7 @@ kernel_from_distance <- function(
 #' obj <- computeDistance(obj, distType = "Euclidean2D", verbose = FALSE)
 #' obj <- computeKernelMatrix(obj, sigmaValues = c(0.05, 0.1), verbose = FALSE)
 #' @rdname computeKernelMatrix
-#' @aliases computeKernelMatrix,CoProSingle-method
-#' @aliases computeKernelMatrix,CoProMulti-method
+#' @aliases computeKernelMatrix,CoPro-method
 #' @export
 #' @note To-do: Shall we include row or column normalization of the kernel?
 setGeneric(
@@ -533,9 +532,8 @@ setGeneric(
            verbose = TRUE) standardGeneric("computeKernelMatrix"))
 
 #' @rdname computeKernelMatrix
-#' @aliases computeKernelMatrix,CoProSingle-method
 #' @export
-setMethod("computeKernelMatrix", "CoProSingle",
+setMethod("computeKernelMatrix", "CoPro",
           function(object, sigmaValues, lowerLimit = 1e-7, upperQuantile = 0.85,
                    normalizeKernel = FALSE, minAveCellNeighor = 2,
                    rowNormalizeKernel = FALSE, colNormalizeKernel = FALSE,
@@ -554,32 +552,8 @@ setMethod("computeKernelMatrix", "CoProSingle",
                                    zDistScale = zDistScale, normalizeDistance = normalizeDistance,
                                    normalizeMethod = normalizeMethod,
                                    normalizeTarget = normalizeTarget,
-                                   truncateLowDist = truncateLowDist, is_multi = FALSE)
-          })
-
-#' @rdname computeKernelMatrix
-#' @aliases computeKernelMatrix,CoProMulti-method
-#' @export
-setMethod("computeKernelMatrix", "CoProMulti",
-          function(object, sigmaValues, lowerLimit = 1e-7, upperQuantile = 0.85,
-                   normalizeKernel = FALSE, minAveCellNeighor = 2,
-                   rowNormalizeKernel = FALSE, colNormalizeKernel = FALSE,
-                   method = c("auto", "dense", "sparse", "float32"), dropDistances = TRUE,
-                   autoThreshold = 5000L, denseThreshold = 0.3, distType = NULL,
-                   xDistScale = NULL, yDistScale = NULL, zDistScale = NULL,
-                   normalizeDistance = NULL, normalizeMethod = NULL, normalizeTarget = NULL,
-                   truncateLowDist = NULL,
-                   verbose = TRUE) {
-            .computeKernelDispatch(object, sigmaValues, lowerLimit, upperQuantile,
-                                   normalizeKernel, minAveCellNeighor, rowNormalizeKernel,
-                                   colNormalizeKernel, verbose,
-                                   method = match.arg(method), dropDistances = dropDistances,
-                                   autoThreshold = autoThreshold, denseThreshold = denseThreshold, distType = distType,
-                                   xDistScale = xDistScale, yDistScale = yDistScale,
-                                   zDistScale = zDistScale, normalizeDistance = normalizeDistance,
-                                   normalizeMethod = normalizeMethod,
-                                   normalizeTarget = normalizeTarget,
-                                   truncateLowDist = truncateLowDist, is_multi = TRUE)
+                                   truncateLowDist = truncateLowDist,
+                                   is_multi = is(object, "CoProMulti"))
           })
 
 # Core dispatcher for multi-slide objects

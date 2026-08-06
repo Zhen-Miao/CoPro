@@ -13,7 +13,7 @@ knitr::opts_chunk$set(
 )
 ```
 
-# CoPro <img src="man/figures/copro-refined-logo-final.jpg" align="right" width="150" />
+# CoPro <img src="man/figures/copro-refined-logo-final.jpg" align="right" width="150" alt="CoPro logo" />
 
 <!-- badges: start -->
 [![R-CMD-check](https://github.com/Zhen-Miao/CoPro/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/Zhen-Miao/CoPro/actions/workflows/R-CMD-check.yaml)
@@ -52,15 +52,30 @@ obj <- newCoProSingle(
 # Run the analysis pipeline
 obj <- subsetData(obj, cellTypesOfInterest = c("TypeA", "TypeB"))
 obj <- computePCA(obj, nPCA = 30)
-obj <- computeDistance(obj, distType = "Euclidean2D")
-obj <- computeKernelMatrix(obj, sigmaValues = c(0.05, 0.1, 0.2))
+
+# Pick sigma from the data. sigma is a distance, so it lives in whatever units
+# locationData used; detectSigmaRange() reports the sigmas that give the median
+# cell 5-20 effective neighbors.
+sigmaRange <- detectSigmaRange(obj)
+sigmaRange                       # per-block diagnostics + recommended grid
+
+# No computeDistance() needed: the sparse routes build kernels straight from
+# coordinates, and method = "auto" picks float32 for anything large.
+obj <- computeKernelMatrix(obj, sigmaValues = sigmaRange$sigmaValues)
 obj <- runSkrCCA(obj, scalePCs = TRUE, nCC = 2)
 obj <- computeNormalizedCorrelation(obj)
 obj <- computeGeneAndCellScores(obj)
+obj <- computeRegressionGeneScores(obj)
 
 # Get results
 cell_scores <- getCellScores(obj, sigma = obj@sigmaValueChoice, cellType = "TypeA")
 ```
+
+Gene weights come in two flavors: `@geneScores` (PCA back-projection, from
+`computeGeneAndCellScores()`) and `@geneScoresRegression` (from
+`computeRegressionGeneScores()`). Prefer the regression weights — they avoid PCA
+collinearity, are insensitive to the `nPCA` choice, and reproduce better across
+replicates.
 
 For `CoProMulti`, these same calls use the batch-robust defaults: genes are
 centered and scaled within each `(slide, cell type)` block before one shared
@@ -69,6 +84,18 @@ PCA is fit, and `runSkrCCA()` optimizes equal-slide SUMCOR. Pass
 legacy pooled workflow.
 
 See the **[Getting Started vignettes](https://zhen-miao.github.io/CoPro/articles/)** for complete walkthroughs with real spatial transcriptomics datasets, including within-cell-type analysis, cross-cell-type co-progression, and multi-slide experiments.
+
+## API naming
+
+The two naming styles in the API mark two layers. `camelCase` is the object
+pipeline — functions that take a `CoProSingle` or `CoProMulti` and return one,
+so they chain (`computePCA()`, `computeKernelMatrix()`, `runSkrCCA()`,
+`getCellScores()`). `snake_case` is the engine and utility layer — functions
+that work on plain matrices and data frames with no CoPro object involved
+(`optimize_bilinear()`, `optimize_sumcor_pca()`, `resample_spatial()`,
+`quantile_normalize()`). Reach for the latter when you want the numerical core
+without the object wrapper. See `?CoPro` for the full rule and its two
+documented exceptions.
 
 ## Citation
 

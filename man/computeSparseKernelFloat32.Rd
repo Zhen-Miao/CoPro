@@ -2,8 +2,7 @@
 % Please edit documentation in R/12c_float32_sparse_kernel.R
 \name{computeSparseKernelFloat32}
 \alias{computeSparseKernelFloat32}
-\alias{computeSparseKernelFloat32,CoProSingle-method}
-\alias{computeSparseKernelFloat32,CoProMulti-method}
+\alias{computeSparseKernelFloat32,CoPro-method}
 \title{Compute block-streamed float32 sparse Gaussian kernels}
 \usage{
 computeSparseKernelFloat32(
@@ -24,10 +23,11 @@ computeSparseKernelFloat32(
   normalizeTarget = 0.01,
   truncateLowDist = TRUE,
   overwrite = TRUE,
-  verbose = TRUE
+  verbose = TRUE,
+  nThreads = NULL
 )
 
-\S4method{computeSparseKernelFloat32}{CoProSingle}(
+\S4method{computeSparseKernelFloat32}{CoPro}(
   object,
   sigmaValues,
   lowerLimit = 1e-07,
@@ -45,28 +45,8 @@ computeSparseKernelFloat32(
   normalizeTarget = 0.01,
   truncateLowDist = TRUE,
   overwrite = TRUE,
-  verbose = TRUE
-)
-
-\S4method{computeSparseKernelFloat32}{CoProMulti}(
-  object,
-  sigmaValues,
-  lowerLimit = 1e-07,
-  upperQuantile = 0.85,
-  normalizeKernel = FALSE,
-  minAveCellNeighor = 2,
-  rowNormalizeKernel = FALSE,
-  colNormalizeKernel = FALSE,
-  distType = c("Euclidean2D", "Euclidean3D"),
-  xDistScale = 1,
-  yDistScale = 1,
-  zDistScale = 1,
-  normalizeDistance = FALSE,
-  normalizeMethod = "global",
-  normalizeTarget = 0.01,
-  truncateLowDist = TRUE,
-  overwrite = TRUE,
-  verbose = TRUE
+  verbose = TRUE,
+  nThreads = NULL
 )
 }
 \arguments{
@@ -105,6 +85,15 @@ behavior). See \code{\link[=computeDistance]{computeDistance()}}.}
 \item{overwrite}{Whether to replace existing kernel matrices.}
 
 \item{verbose}{Whether to report progress.}
+
+\item{nThreads}{Worker threads for the compiled kernel builder. Pass a
+positive integer to fix the count, including to raise the ceiling for very
+large jobs. \code{NULL} (default) falls back to
+\code{getOption("CoPro.float32Threads")}, the global flag this argument
+replaced; with neither set, the count is resolved from the cores actually
+allocated to this process, capped by \code{OMP_NUM_THREADS}, by CRAN's core
+limit during \verb{R CMD check}, and by a ceiling of eight beyond which these
+memory-bandwidth-bound operators stop scaling.}
 }
 \value{
 The object with encoded float32 kernels in \verb{@kernelMatrices}.

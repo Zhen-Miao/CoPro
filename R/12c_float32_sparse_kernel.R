@@ -109,20 +109,30 @@ dimnames.CoProFloat32SparseMatrix <- function(x) {
 
 #' Number of worker threads for float32 sparse operators
 #'
-#' Resolution order: an explicit `options(CoPro.float32Threads=)` always wins;
-#' otherwise the count is derived automatically from the cores actually
-#' allocated to this process (see [.detectAllocatedCores]), then capped by
-#' `OMP_NUM_THREADS` when a cluster sets it, by CRAN's core limit during
-#' `R CMD check`, and by a default ceiling of eight beyond which the
-#' memory-bandwidth-bound operators stop scaling. Raise the ceiling for very
-#' large jobs with `options(CoPro.float32Threads = <n>)`.
+#' Resolution order: an explicit `nThreads` always wins; otherwise the count is
+#' derived automatically from the cores actually allocated to this process (see
+#' [.detectAllocatedCores]), then capped by `OMP_NUM_THREADS` when a cluster
+#' sets it, by CRAN's core limit during `R CMD check`, and by a default ceiling
+#' of eight beyond which the memory-bandwidth-bound operators stop scaling.
+#' Raise the ceiling for very large jobs with
+#' `computeSparseKernelFloat32(nThreads = <n>)`.
+#'
+#' `NULL` means "not specified" and falls back to
+#' `getOption("CoPro.float32Threads")`, the global flag the argument replaced,
+#' so scripts that set the option keep their behavior. The fallback is resolved
+#' here rather than in a default argument, so that callers which pass `NULL`
+#' through explicitly still honor the option.
+#'
+#' @param nThreads Positive integer, or `NULL` to resolve automatically.
 #' @noRd
-.float32KernelThreads <- function() {
-  option <- getOption("CoPro.float32Threads", NULL)
-  if (!is.null(option)) {
-    option <- suppressWarnings(as.integer(option))
+.float32KernelThreads <- function(nThreads = NULL) {
+  if (is.null(nThreads)) {
+    nThreads <- getOption("CoPro.float32Threads", NULL)
+  }
+  if (!is.null(nThreads)) {
+    option <- suppressWarnings(as.integer(nThreads))
     if (length(option) != 1L || is.na(option) || option < 1L) {
-      stop("options(CoPro.float32Threads=) must be a positive integer.")
+      stop("nThreads must be a positive integer.")
     }
     return(option)
   }
@@ -305,6 +315,14 @@ materializeFloat32Kernels <- function(object, verbose = TRUE) {
 #' @param truncateLowDist Whether to floor very small distances.
 #' @param overwrite Whether to replace existing kernel matrices.
 #' @param verbose Whether to report progress.
+#' @param nThreads Worker threads for the compiled kernel builder. Pass a
+#'   positive integer to fix the count, including to raise the ceiling for very
+#'   large jobs. `NULL` (default) falls back to
+#'   `getOption("CoPro.float32Threads")`, the global flag this argument
+#'   replaced; with neither set, the count is resolved from the cores actually
+#'   allocated to this process, capped by `OMP_NUM_THREADS`, by CRAN's core
+#'   limit during `R CMD check`, and by a ceiling of eight beyond which these
+#'   memory-bandwidth-bound operators stop scaling.
 #' @return The object with encoded float32 kernels in `@kernelMatrices`.
 #' @family spatial-pipeline
 #' @seealso [computeSparseKernel()], [runSkrCCA()], [asDoubleSparseMatrix()]
@@ -319,7 +337,8 @@ setGeneric(
       xDistScale = 1, yDistScale = 1, zDistScale = 1,
       normalizeDistance = FALSE, normalizeMethod = "global", normalizeTarget = 0.01,
       truncateLowDist = TRUE, overwrite = TRUE,
-      verbose = TRUE) {
+      verbose = TRUE,
+      nThreads = NULL) {
     standardGeneric("computeSparseKernelFloat32")
   }
 )
@@ -376,7 +395,8 @@ setGeneric(
     rowNormalizeKernel, colNormalizeKernel,
     distType, xDistScale, yDistScale, zDistScale,
     normalizeDistance, normalizeMethod, normalizeTarget, truncateLowDist, overwrite,
-    verbose, is_multi) {
+    verbose, is_multi, nThreads = NULL) {
+  n_threads <- .float32KernelThreads(nThreads)
   cts <- .checkInputSparseKernel(
     object, sigmaValues, lowerLimit, upperQuantile,
     minAveCellNeighor, rowNormalizeKernel, colNormalizeKernel, distType
@@ -496,7 +516,7 @@ setGeneric(
       lowerLimit, upperQuantile, truncateLowDist,
       symmetric = block$symmetric,
       normalization = normalization,
-      n_threads = .float32KernelThreads()
+      n_threads = n_threads
     )
 
     for (sigma_index in seq_along(sigmaValues)) {
@@ -572,7 +592,7 @@ setGeneric(
 #' @rdname computeSparseKernelFloat32
 #' @export
 setMethod(
-  "computeSparseKernelFloat32", "CoProSingle",
+  "computeSparseKernelFloat32", "CoPro",
   function(
       object, sigmaValues, lowerLimit = 1e-7, upperQuantile = 0.85,
       normalizeKernel = FALSE, minAveCellNeighor = 2,
@@ -581,38 +601,15 @@ setMethod(
       xDistScale = 1, yDistScale = 1, zDistScale = 1,
       normalizeDistance = FALSE, normalizeMethod = "global", normalizeTarget = 0.01,
       truncateLowDist = TRUE, overwrite = TRUE,
-      verbose = TRUE) {
+      verbose = TRUE,
+      nThreads = NULL) {
     .computeSparseKernelFloat32Core(
       object, sigmaValues, lowerLimit, upperQuantile,
       normalizeKernel, minAveCellNeighor,
       rowNormalizeKernel, colNormalizeKernel,
       match.arg(distType), xDistScale, yDistScale, zDistScale,
       normalizeDistance, normalizeMethod, normalizeTarget, truncateLowDist, overwrite,
-      verbose, is_multi = FALSE
-    )
-  }
-)
-
-#' @rdname computeSparseKernelFloat32
-#' @export
-setMethod(
-  "computeSparseKernelFloat32", "CoProMulti",
-  function(
-      object, sigmaValues, lowerLimit = 1e-7, upperQuantile = 0.85,
-      normalizeKernel = FALSE, minAveCellNeighor = 2,
-      rowNormalizeKernel = FALSE, colNormalizeKernel = FALSE,
-      distType = c("Euclidean2D", "Euclidean3D"),
-      xDistScale = 1, yDistScale = 1, zDistScale = 1,
-      normalizeDistance = FALSE, normalizeMethod = "global", normalizeTarget = 0.01,
-      truncateLowDist = TRUE, overwrite = TRUE,
-      verbose = TRUE) {
-    .computeSparseKernelFloat32Core(
-      object, sigmaValues, lowerLimit, upperQuantile,
-      normalizeKernel, minAveCellNeighor,
-      rowNormalizeKernel, colNormalizeKernel,
-      match.arg(distType), xDistScale, yDistScale, zDistScale,
-      normalizeDistance, normalizeMethod, normalizeTarget, truncateLowDist, overwrite,
-      verbose, is_multi = TRUE
+      verbose, is_multi = is(object, "CoProMulti"), nThreads = nThreads
     )
   }
 )

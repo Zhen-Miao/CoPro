@@ -335,17 +335,9 @@ setGeneric("getCellScoresInSitu",
 }
 
 #' @rdname getCellScoresInSitu
-#' @aliases getCellScoresInSitu,CoProSingle-method
+#' @aliases getCellScoresInSitu,CoPro-method
 #' @export
-setMethod("getCellScoresInSitu", "CoProSingle", function(object, sigmaValueChoice, ccIndex = 1) {
-  .checkInputCs(object, sigmaValueChoice, ccIndex = ccIndex)
-  .getCellScoresInSituCore(object = object, sigmaValueChoice = sigmaValueChoice, ccIndex = ccIndex)
-})
-
-#' @rdname getCellScoresInSitu
-#' @aliases getCellScoresInSitu,CoProMulti-method
-#' @export
-setMethod("getCellScoresInSitu", "CoProMulti", function(object, sigmaValueChoice, ccIndex = 1) {
+setMethod("getCellScoresInSitu", "CoPro", function(object, sigmaValueChoice, ccIndex = 1) {
   .checkInputCs(object, sigmaValueChoice, ccIndex = ccIndex)
   .getCellScoresInSituCore(object = object, sigmaValueChoice = sigmaValueChoice, ccIndex = ccIndex)
 })

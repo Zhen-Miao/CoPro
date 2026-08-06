@@ -4,12 +4,25 @@
 \alias{computeNormalizedCorrelationPermu}
 \title{Compute Normalized Correlation for Permutation Results}
 \usage{
-computeNormalizedCorrelationPermu(object, tol = 1e-04)
+computeNormalizedCorrelationPermu(
+  object,
+  tol = 1e-04,
+  factorize = .defaultFactorizePermutation()
+)
 }
 \arguments{
 \item{object}{A \code{CoPro} object with permutation results from \code{runSkrCCAPermu()}}
 
 \item{tol}{Tolerance for approximate SVD calculation (default: 1e-4)}
+
+\item{factorize}{Apply the fixed-side operator factorization (default: TRUE).
+A cell type held fixed across every draw lets its side of \verb{X' K X} be
+multiplied by the kernel once instead of once per draw, and lets the score
+norms be read off a cached Gram matrix. The identity is exact, so this
+changes speed and memory only, never a p-value. Set \code{FALSE} to route every
+pair through the original sparse product when comparing the two paths.
+Defaults to \code{getOption("CoPro.factorizePermutation", TRUE)}, the global
+flag this argument replaced.}
 }
 \value{
 The \code{CoPro} object with permutation normalized correlations

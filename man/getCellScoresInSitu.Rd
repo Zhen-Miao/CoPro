@@ -4,13 +4,12 @@
 \alias{getCellScoresInSitu}
 \alias{getCellScoresInSitu,CoProSingle-method}
 \alias{getCellScoresInSitu,CoProMulti-method}
+\alias{getCellScoresInSitu,CoPro-method}
 \title{Get cell score and location information as a data.frame}
 \usage{
 getCellScoresInSitu(object, sigmaValueChoice, ccIndex = 1)
 
-\S4method{getCellScoresInSitu}{CoProSingle}(object, sigmaValueChoice, ccIndex = 1)
-
-\S4method{getCellScoresInSitu}{CoProMulti}(object, sigmaValueChoice, ccIndex = 1)
+\S4method{getCellScoresInSitu}{CoPro}(object, sigmaValueChoice, ccIndex = 1)
 }
 \arguments{
 \item{object}{A \code{CoPro} object}

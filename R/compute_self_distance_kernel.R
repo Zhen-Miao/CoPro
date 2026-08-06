@@ -543,7 +543,7 @@ setGeneric(
 
 #' @rdname computeSelfKernel
 #' @export
-setMethod("computeSelfKernel", "CoProSingle", 
+setMethod("computeSelfKernel", "CoPro",
           function(object, sigmaValues, lowerLimit = 1e-7, upperQuantile = 0.85,
                    normalizeKernel = FALSE, minAveCellNeighor = 2,
                    rowNormalizeKernel = FALSE, colNormalizeKernel = FALSE,
@@ -561,31 +561,8 @@ setMethod("computeSelfKernel", "CoProSingle",
               zDistScale = zDistScale, normalizeDistance = normalizeDistance,
               normalizeMethod = normalizeMethod,
               normalizeTarget = normalizeTarget, truncateLowDist = truncateLowDist,
-              verbose = verbose, overwrite = overwrite, is_multi = FALSE
-            )
-          })
-
-#' @rdname computeSelfKernel
-#' @export
-setMethod("computeSelfKernel", "CoProMulti", 
-          function(object, sigmaValues, lowerLimit = 1e-7, upperQuantile = 0.85,
-                   normalizeKernel = FALSE, minAveCellNeighor = 2,
-                   rowNormalizeKernel = FALSE, colNormalizeKernel = FALSE,
-                   verbose = TRUE, overwrite = FALSE,
-                   method = c("auto", "dense", "sparse"), autoThreshold = 5000L,
-                   distType = NULL, xDistScale = NULL, yDistScale = NULL, zDistScale = NULL,
-                   normalizeDistance = NULL, normalizeMethod = NULL, normalizeTarget = NULL,
-                   truncateLowDist = NULL) {
-            .computeSelfKernelDispatch(
-              object, sigmaValues, lowerLimit, upperQuantile,
-              normalizeKernel, minAveCellNeighor, rowNormalizeKernel,
-              colNormalizeKernel, method = match.arg(method),
-              autoThreshold = autoThreshold, distType = distType,
-              xDistScale = xDistScale, yDistScale = yDistScale,
-              zDistScale = zDistScale, normalizeDistance = normalizeDistance,
-              normalizeMethod = normalizeMethod,
-              normalizeTarget = normalizeTarget, truncateLowDist = truncateLowDist,
-              verbose = verbose, overwrite = overwrite, is_multi = TRUE
+              verbose = verbose, overwrite = overwrite,
+              is_multi = is(object, "CoProMulti")
             )
           })
 

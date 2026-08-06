@@ -651,7 +651,7 @@ setGeneric(
 #' @rdname detectSigmaRange
 #' @export
 setMethod(
-  "detectSigmaRange", "CoProSingle",
+  "detectSigmaRange", "CoPro",
   function(object, minNeighbors = 5, maxNeighbors = 20, nSigma = 5L,
            nAnchor = 500L, nNeighbor = 128L,
            distType = NULL, xDistScale = NULL, yDistScale = NULL,
@@ -659,22 +659,7 @@ setMethod(
     .detectSigmaRangeCore(object, minNeighbors, maxNeighbors, nSigma,
                           nAnchor, nNeighbor, distType, xDistScale,
                           yDistScale, zDistScale, verbose,
-                          is_multi = FALSE)
-  }
-)
-
-#' @rdname detectSigmaRange
-#' @export
-setMethod(
-  "detectSigmaRange", "CoProMulti",
-  function(object, minNeighbors = 5, maxNeighbors = 20, nSigma = 5L,
-           nAnchor = 500L, nNeighbor = 128L,
-           distType = NULL, xDistScale = NULL, yDistScale = NULL,
-           zDistScale = NULL, verbose = TRUE) {
-    .detectSigmaRangeCore(object, minNeighbors, maxNeighbors, nSigma,
-                          nAnchor, nNeighbor, distType, xDistScale,
-                          yDistScale, zDistScale, verbose,
-                          is_multi = TRUE)
+                          is_multi = is(object, "CoProMulti"))
   }
 )
 

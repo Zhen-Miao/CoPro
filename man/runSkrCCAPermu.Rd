@@ -17,7 +17,9 @@ runSkrCCAPermu(
   conservative = FALSE,
   n_cores = 1,
   verbose = TRUE,
-  sigma = NULL
+  sigma = NULL,
+  factorize = .defaultFactorizePermutation(),
+  compactPermutation = .defaultCompactPermutation()
 )
 }
 \arguments{
@@ -82,6 +84,24 @@ and null statistics are evaluated at this fixed sigma. When \code{NULL}, the
 selected \code{object@sigmaValueChoice} is used conditionally and the returned
 p-value is marked as not adjusted for sigma selection; use
 \code{\link[=runSkrCCAPermu_FairSigma]{runSkrCCAPermu_FairSigma()}} for a max-over-sigma test.}
+
+\item{factorize}{Apply the fixed-side operator factorization (default: TRUE).
+A cell type held fixed across every draw lets its side of \verb{X' K X} be
+multiplied by the kernel once instead of once per draw, and lets the score
+norms be read off a cached Gram matrix. The identity is exact, so this
+changes speed and memory only, never a p-value. Set \code{FALSE} to route every
+pair through the original sparse product when comparing the two paths.
+Defaults to \code{getOption("CoPro.factorizePermutation", TRUE)}, the global
+flag this argument replaced.}
+
+\item{compactPermutation}{Store the permuted side as one seed per draw rather
+than an explicit index matrix (default: FALSE). Saves the \code{n * nPermu * 4}
+bytes per permuted cell type that an index matrix costs, but it changes
+\emph{which} permutations are drawn, so re-running a saved analysis moves its
+p-values within Monte Carlo error. Held-fixed types are always stored
+compactly, which changes no number at all. Defaults to
+\code{getOption("CoPro.compactPermutation", FALSE)}, the global flag this
+argument replaced.}
 }
 \value{
 CoPro object with permutation results stored in \verb{@skrCCAPermuOut}

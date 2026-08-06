@@ -145,15 +145,26 @@
 }
 
 
+#' Default for the `useCompiled` argument of `.frnnGrid()`
+#'
+#' The former global `options(CoPro.useRcppFRNN=)` is still read here so that
+#' scripts which set it keep their behavior; an explicit argument wins.
+#' @noRd
+.defaultUseCompiledFrnn <- function() {
+  isTRUE(getOption("CoPro.useRcppFRNN", TRUE))
+}
+
 #' Fixed-radius neighbor search using the compiled engine when available
 #'
-#' Set `options(CoPro.useRcppFRNN = FALSE)` to force the exact R reference
-#' implementation. Keeping the reference path makes equivalence testing easy
-#' and provides a diagnostic fallback for unusual platforms.
+#' Pass `useCompiled = FALSE` to force the exact R reference implementation.
+#' Keeping the reference path makes equivalence testing easy and provides a
+#' diagnostic fallback for unusual platforms.
+#'
+#' @param useCompiled Use the compiled engine when it is available?
 #' @noRd
-.frnnGrid <- function(A, B = NULL, r) {
-  use_cpp <- isTRUE(getOption("CoPro.useRcppFRNN", TRUE))
-  if (use_cpp && exists("frnn_grid_cpp", mode = "function", inherits = TRUE)) {
+.frnnGrid <- function(A, B = NULL, r, useCompiled = .defaultUseCompiledFrnn()) {
+  if (isTRUE(useCompiled) &&
+        exists("frnn_grid_cpp", mode = "function", inherits = TRUE)) {
     return(frnn_grid_cpp(A, B, r))
   }
   .frnnGridR(A, B, r)

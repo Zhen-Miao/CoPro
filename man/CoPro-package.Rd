@@ -4,10 +4,69 @@
 \name{CoPro-package}
 \alias{CoPro}
 \alias{CoPro-package}
-\title{CoPro package native routines}
+\title{CoPro: Detecting Co-Progression Between Cell Types in Spatial Transcriptomics Data}
 \description{
 Detecting co-progression between cell types in spatial transcriptomics data. The method works in both supervised and unsupervised manner, so it can be used for explorative data analyses.
 }
+\section{Naming convention}{
+
+
+The exported API deliberately uses two naming styles, split by layer:
+
+\itemize{
+\item \strong{\code{camelCase} -- the object pipeline.} Anything whose first argument
+is a \code{CoProSingle} or \code{CoProMulti} object: constructors
+(\code{\link[=newCoProSingle]{newCoProSingle()}}, \code{\link[=newCoProMulti]{newCoProMulti()}}), the S4 generics that advance an
+analysis (\code{\link[=computePCA]{computePCA()}}, \code{\link[=detectSigmaRange]{detectSigmaRange()}}, \code{\link[=computeKernelMatrix]{computeKernelMatrix()}},
+\code{\link[=runSkrCCA]{runSkrCCA()}}, \code{\link[=computeNormalizedCorrelation]{computeNormalizedCorrelation()}}), and the accessors that
+read results back out (\code{\link[=getCellScores]{getCellScores()}}, \code{\link[=getNormCorr]{getNormCorr()}},
+\code{\link[=getKernelMatrix]{getKernelMatrix()}}). These take an object and return an object, so they
+chain.
+\item \strong{\code{snake_case} -- the engine and utility layer.} Functions that work
+on plain matrices, lists, and data frames with no \code{CoPro} object
+involved: the CCA solvers (\code{\link[=optimize_bilinear]{optimize_bilinear()}},
+\code{\link[=optimize_sumcor_pca]{optimize_sumcor_pca()}}, \code{\link[=optimize_genespace_avg_corr]{optimize_genespace_avg_corr()}} and their
+\verb{_n} / \verb{_multi_slides} variants), the spatial-null builders
+(\code{\link[=resample_spatial]{resample_spatial()}},
+\code{\link[=generate_toroidal_permutations]{generate_toroidal_permutations()}}, \code{\link[=diagnose_bin_distribution]{diagnose_bin_distribution()}}), and
+standalone helpers (\code{\link[=quantile_normalize]{quantile_normalize()}}, \code{\link[=transfer_scores]{transfer_scores()}},
+\code{\link[=copro_download_data]{copro_download_data()}}). Call these directly when you want the numerical
+core without the object wrapper.
+}
+
+Two sets of exports sit outside that rule and are kept as they are for
+back-compatibility:
+
+\itemize{
+\item \code{\link[=runSkrCCAPermu_FairSigma]{runSkrCCAPermu_FairSigma()}} and \code{\link[=runSkrCCAPermu_Conditional]{runSkrCCAPermu_Conditional()}} keep
+the \code{camelCase} stem of \code{\link[=runSkrCCAPermu]{runSkrCCAPermu()}} with a \verb{_Variant} suffix, so
+the three permutation entry points sort together.
+\item \code{\link[=calculate_pvalue]{calculate_pvalue()}}, \code{\link[=calculate_pvalue_stepdown]{calculate_pvalue_stepdown()}}, and
+\code{\link[=compute_ground_truth_ncorr]{compute_ground_truth_ncorr()}} take a \code{CoPro} object but are
+\code{snake_case}. They read inference results out of an object rather than
+advancing the pipeline.
+}
+}
+
+\section{Package options}{
+
+
+Behavior that used to be set through \code{options()} is now reachable as function
+arguments; the options are still read to supply those arguments' defaults, so
+existing scripts keep working.
+
+\itemize{
+\item \code{CoPro.factorizePermutation} -- default for the \code{factorize} argument
+of \code{\link[=runSkrCCAPermu]{runSkrCCAPermu()}} and friends.
+\item \code{CoPro.compactPermutation} -- default for their \code{compactPermutation}
+argument.
+\item \code{CoPro.float32Threads} -- default for the \code{nThreads} argument of
+\code{\link[=computeSparseKernelFloat32]{computeSparseKernelFloat32()}}.
+\item \code{CoPro.useRcppFRNN} -- default for the compiled fixed-radius neighbor
+engine used internally by the sparse kernel routes.
+}
+}
+
 \seealso{
 Useful links:
 \itemize{

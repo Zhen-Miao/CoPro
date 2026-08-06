@@ -88,14 +88,7 @@ setGeneric("getNormCorr",
 
 
 #' @rdname getNormalizedCorrelation
-setMethod("getNormCorr", "CoProSingle", function(object) {
-  .checkInputNormCorrExists(object)
-  .getNormCorrCore(object = object)
-})
-
-
-#' @rdname getNormalizedCorrelation
-setMethod("getNormCorr", "CoProMulti", function(object) {
+setMethod("getNormCorr", "CoPro", function(object) {
   .checkInputNormCorrExists(object)
   .getNormCorrCore(object = object)
 })
