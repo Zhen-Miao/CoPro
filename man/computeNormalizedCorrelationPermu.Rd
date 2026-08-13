@@ -7,7 +7,8 @@
 computeNormalizedCorrelationPermu(
   object,
   tol = 1e-04,
-  factorize = .defaultFactorizePermutation()
+  factorize = .defaultFactorizePermutation(),
+  verbose = TRUE
 )
 }
 \arguments{
@@ -23,6 +24,8 @@ changes speed and memory only, never a p-value. Set \code{FALSE} to route every
 pair through the original sparse product when comparing the two paths.
 Defaults to \code{getOption("CoPro.factorizePermutation", TRUE)}, the global
 flag this argument replaced.}
+
+\item{verbose}{Whether to report progress.}
 }
 \value{
 The \code{CoPro} object with permutation normalized correlations
@@ -53,7 +56,8 @@ permu_values <- sapply(br@normalizedCorrelationPermu,
 observed <- max(getNormCorr(br)$normalizedCorrelation)
 
 # One-sided p-value (testing if observed > permutation)
-p_value <- mean(permu_values >= observed)
+p_value <- (1 + sum(permu_values >= observed)) /
+  (1 + length(permu_values))
 }
 
 }

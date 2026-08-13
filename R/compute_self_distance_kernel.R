@@ -494,11 +494,13 @@ setMethod("computeSelfDistance", "CoProMulti",
 #'  over all cells, ignoring type labels), `"spacing"` (median nearest-partner
 #'  distance per block, combined by median), or `"percentile"` (pre-1.2.0
 #'  behavior). See [computeDistance()].
-#' @param method One of `"auto"`, `"dense"`, or `"sparse"`. The sparse path
-#'  constructs exact thresholded self-kernels directly from coordinates and
-#'  does not require [computeSelfDistance()].
+#' @param method One of `"auto"`, `"dense"`, `"sparse"`, or `"float32"`.
+#'  Sparse paths construct thresholded self-kernels directly from coordinates
+#'  and do not require [computeSelfDistance()]. `"auto"` uses float32 sparse
+#'  storage for large workloads; request `"sparse"` for float64 equivalence
+#'  checks.
 #' @param autoThreshold Cell-count threshold used by `method = "auto"`.
-#'  Sparse construction is selected when a self-kernel dimension reaches this
+#'  Float32 sparse construction is selected when a self-kernel dimension reaches this
 #'  value, aggregate dense self-kernel entries reach its square, or required
 #'  self-distance matrices are absent. Default 5000.
 #' @param distType,xDistScale,yDistScale,zDistScale,normalizeDistance,normalizeTarget,truncateLowDist
@@ -535,7 +537,7 @@ setGeneric(
            normalizeKernel = FALSE, minAveCellNeighor = 2,
            rowNormalizeKernel = FALSE, colNormalizeKernel = FALSE,
            verbose = TRUE, overwrite = FALSE,
-           method = c("auto", "dense", "sparse"), autoThreshold = 5000L,
+           method = c("auto", "dense", "sparse", "float32"), autoThreshold = 5000L,
            distType = NULL, xDistScale = NULL, yDistScale = NULL, zDistScale = NULL,
            normalizeDistance = NULL, normalizeMethod = NULL, normalizeTarget = NULL,
            truncateLowDist = NULL) standardGeneric("computeSelfKernel")
@@ -548,7 +550,7 @@ setMethod("computeSelfKernel", "CoPro",
                    normalizeKernel = FALSE, minAveCellNeighor = 2,
                    rowNormalizeKernel = FALSE, colNormalizeKernel = FALSE,
                    verbose = TRUE, overwrite = FALSE,
-                   method = c("auto", "dense", "sparse"), autoThreshold = 5000L,
+                   method = c("auto", "dense", "sparse", "float32"), autoThreshold = 5000L,
                    distType = NULL, xDistScale = NULL, yDistScale = NULL, zDistScale = NULL,
                    normalizeDistance = NULL, normalizeMethod = NULL, normalizeTarget = NULL,
                    truncateLowDist = NULL) {
@@ -709,6 +711,12 @@ setMethod("computeSelfKernel", "CoPro",
       kernel_matrices <- kernel_matrices[!to_remove]
     }
   }
+
+  surviving <- sigmaValues[!sigmaValuesToRemove]
+  object <- .pruneSigmaValues(
+    object, surviving,
+    invalid = sigmaValues[sigmaValuesToRemove]
+  )
   
   object@kernelMatrices <- kernel_matrices
   return(object)
@@ -855,6 +863,12 @@ setMethod("computeSelfKernel", "CoPro",
       kernel_matrices_all <- kernel_matrices_all[!to_remove]
     }
   }
+
+  surviving <- sigmaValues[!sigmaValuesToRemove]
+  object <- .pruneSigmaValues(
+    object, surviving,
+    invalid = sigmaValues[sigmaValuesToRemove]
+  )
   
   object@kernelMatrices <- kernel_matrices_all
   return(object)

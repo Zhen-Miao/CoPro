@@ -18,7 +18,7 @@ computeSelfKernel(
   colNormalizeKernel = FALSE,
   verbose = TRUE,
   overwrite = FALSE,
-  method = c("auto", "dense", "sparse"),
+  method = c("auto", "dense", "sparse", "float32"),
   autoThreshold = 5000L,
   distType = NULL,
   xDistScale = NULL,
@@ -41,7 +41,7 @@ computeSelfKernel(
   colNormalizeKernel = FALSE,
   verbose = TRUE,
   overwrite = FALSE,
-  method = c("auto", "dense", "sparse"),
+  method = c("auto", "dense", "sparse", "float32"),
   autoThreshold = 5000L,
   distType = NULL,
   xDistScale = NULL,
@@ -75,12 +75,14 @@ computeSelfKernel(
 \item{overwrite}{Whether to overwrite existing kernel matrices. If FALSE,
 will add self-kernel matrices to existing cross-type kernels. Default = FALSE}
 
-\item{method}{One of \code{"auto"}, \code{"dense"}, or \code{"sparse"}. The sparse path
-constructs exact thresholded self-kernels directly from coordinates and
-does not require \code{\link[=computeSelfDistance]{computeSelfDistance()}}.}
+\item{method}{One of \code{"auto"}, \code{"dense"}, \code{"sparse"}, or \code{"float32"}.
+Sparse paths construct thresholded self-kernels directly from coordinates
+and do not require \code{\link[=computeSelfDistance]{computeSelfDistance()}}. \code{"auto"} uses float32 sparse
+storage for large workloads; request \code{"sparse"} for float64 equivalence
+checks.}
 
 \item{autoThreshold}{Cell-count threshold used by \code{method = "auto"}.
-Sparse construction is selected when a self-kernel dimension reaches this
+Float32 sparse construction is selected when a self-kernel dimension reaches this
 value, aggregate dense self-kernel entries reach its square, or required
 self-distance matrices are absent. Default 5000.}
 

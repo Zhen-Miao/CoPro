@@ -11,7 +11,10 @@ calculate_pvalue(object, cc_index = 1, alternative = "greater")
 
 \item{cc_index}{Which canonical correlation component to use (default: 1)}
 
-\item{alternative}{Direction of test: "greater" (default), "less", or "two.sided"}
+\item{alternative}{Direction of test: \code{"greater"} (default) or \code{"less"}.
+A two-sided test is not defined here because the null distribution of the
+optimized, max-aggregated normalized-correlation statistic is not symmetric
+about zero; use \code{"greater"} for evidence of co-progression.}
 }
 \value{
 List with the Phipson & Smyth (2010) permutation p-value (\code{p_value},

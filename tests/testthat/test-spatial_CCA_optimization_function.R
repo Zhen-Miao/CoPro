@@ -530,3 +530,93 @@ test_that("invalid step_size values are rejected", {
   expect_error(optimize_bilinear(X_list, flat_kernels, sigma = 0.1, step_size = "a"),
                "step_size must be a single numeric value")
 })
+
+test_that("exported optimizers reject non-finite and fractional controls", {
+  X <- list(TypeA = matrix(1, nrow = 3, ncol = 1))
+  W <- list(TypeA = matrix(1, nrow = 1, ncol = 1))
+  Y <- list(TypeA = list(TypeA = matrix(1, 1, 1)))
+  expect_error(optimize_bilinear(X, list(), sigma = 1, tol = NA_real_),
+               "tol must be a positive finite number")
+  expect_error(optimize_bilinear(X, list(), sigma = 1, max_iter = 1.5),
+               "max_iter must be a positive integer")
+  expect_error(optimize_bilinear(X, list(), sigma = 1, step_size = NA_real_),
+               "step_size must be a single numeric value")
+  expect_error(
+    optimize_bilinear_n(
+      X, list(), sigma = 1, w_list = W,
+      cellTypesOfInterest = "TypeA", nCC = 2, tol = Inf
+    ),
+    "tol must be a positive finite number"
+  )
+  expect_error(
+    CoPro:::bilinear_w_from_Y_resi(
+      W, Y, n_features = 1, max_iter = 2,
+      tol = 1e-5, step_size = NaN
+    ),
+    "step_size must be a single numeric value"
+  )
+
+  X_multi <- list(Slide1 = X)
+  expect_error(
+    optimize_bilinear_multi_slides(
+      X_multi, list(), sigma = 1, slides = "Slide1", max_iter = 1.5
+    ),
+    "max_iter must be a positive integer"
+  )
+  expect_error(
+    optimize_bilinear_n_multi_slides(
+      X_multi, list(), sigma = 1, slides = "Slide1", w_list = W,
+      cellTypesOfInterest = "TypeA", nCC = 2, tol = NA_real_
+    ),
+    "tol must be a positive finite number"
+  )
+  expect_error(
+    optimize_sumcor_pca(
+      X_multi, list(), sigma = 1, slides = "Slide1",
+      cell_types = "TypeA", step_size = Inf
+    ),
+    "step_size must be a single numeric value"
+  )
+  expect_error(
+    optimize_sumcor_pca_n(
+      X_multi, list(), sigma = 1, slides = "Slide1",
+      cell_types = "TypeA", w_list = W, nCC = 2, max_iter = 0
+    ),
+    "max_iter must be a positive integer"
+  )
+  expect_error(
+    CoPro:::.sumcorWarmStart(
+      list(), "TypeA", NULL, nCC = 1, tol = -1
+    ),
+    "tol must be a positive finite number"
+  )
+})
+
+test_that("non-finite iterates and zero CCA metrics fail explicitly", {
+  expect_error(
+    CoPro:::check_convergence(
+      list(A = matrix(NaN)), list(A = matrix(1)), "A"
+    ),
+    "Non-finite weight iterate"
+  )
+
+  Y <- list(A = list(A = NULL, B = matrix(1, 2, 2)),
+            B = list(A = matrix(1, 2, 2), B = NULL))
+  expect_error(
+    CoPro:::solve_two_type_svd(
+      Y, c("A", "B"), sdev2_list = list(A = c(1, 0), B = c(1, 1))
+    ),
+    "finite positive"
+  )
+  Y_one <- list(A = list(A = diag(2)))
+  expect_error(
+    CoPro:::solve_one_type_eigen(
+      Y_one, "A", sdev2_list = list(A = c(1, 0))
+    ),
+    "finite positive"
+  )
+  expect_error(
+    CoPro:::normalize_gradient_weighted(matrix(1, 2), c(1, 0)),
+    "finite positive"
+  )
+})

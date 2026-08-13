@@ -347,6 +347,8 @@
 #' Shuffle values within each PC column (the DIALOGUE-style "pc" null)
 #' @noRd
 .permutePCMatrix <- function(pc_mat, seed) {
+  rng_state <- .captureRNGState()
+  on.exit(.restoreRNGState(rng_state), add = TRUE)
   set.seed(seed)
   permuted <- apply(pc_mat, 2L, function(x) sample(x, length(x)))
   rownames(permuted) <- rownames(pc_mat)
@@ -379,6 +381,8 @@
 #' Re-draw a compact `"global"` permutation from its stored seed
 #' @noRd
 .drawGlobalPermutation <- function(n_cell, seed) {
+  rng_state <- .captureRNGState()
+  on.exit(.restoreRNGState(rng_state), add = TRUE)
   set.seed(seed)
   sample.int(n = n_cell, replace = FALSE)
 }
@@ -386,6 +390,8 @@
 #' Re-draw a compact `"bin"` resample from its stored seed
 #' @noRd
 .drawBinPermutation <- function(entry, seed) {
+  rng_state <- .captureRNGState()
+  on.exit(.restoreRNGState(rng_state), add = TRUE)
   set.seed(seed)
   .drawSpatialPermutation(entry$prepared,
                           match_quantile = entry$match_quantile)
@@ -505,15 +511,27 @@
     best_ncorr <- -Inf
     best_sigma <- sigma_values[1]
     best_weights <- NULL
+    errors <- character()
 
     for (si in seq_along(sigma_values)) {
       Y0 <- .yResiFromPlan(plans[[si]], PCmats_local)
-      fit <- .fitConditionalAxis(
-        PCmats = PCmats_local, flat_kernels = NULL,
-        sigma = sigma_values[si], cts = cts, k_minus_1 = 0, Y_resi = Y0,
-        kernel_info = kernel_info[[si]], sdev2_list = sdev2_list,
-        grams = grams, maxIter = maxIter, tol = tol
+      fit <- tryCatch(
+        .fitConditionalAxis(
+          PCmats = PCmats_local, flat_kernels = NULL,
+          sigma = sigma_values[si], cts = cts, k_minus_1 = 0, Y_resi = Y0,
+          kernel_info = kernel_info[[si]], sdev2_list = sdev2_list,
+          grams = grams, maxIter = maxIter, tol = tol
+        ),
+        error = function(e) {
+          errors <<- c(errors, conditionMessage(e))
+          NULL
+        }
       )
+      if (is.null(fit)) next
+      if (!is.finite(fit$ncorr)) {
+        errors <- c(errors, "non-finite normalized correlation")
+        next
+      }
       if (fit$ncorr > best_ncorr) {
         best_ncorr <- fit$ncorr
         best_sigma <- sigma_values[si]
@@ -521,7 +539,12 @@
       }
     }
 
-    list(weights = best_weights, sigma = best_sigma, ncorr = best_ncorr)
+    list(
+      weights = best_weights,
+      sigma = best_sigma,
+      ncorr = if (is.null(best_weights)) NA_real_ else best_ncorr,
+      errors = errors
+    )
   }
 }
 
@@ -557,6 +580,10 @@
             sdev2_list = sdev2_list, grams = grams,
             maxIter = maxIter, tol = tol
           )
+          if (!is.finite(fit$ncorr)) {
+            stop("non-finite normalized correlation for CC", k,
+                 " at sigma ", sigma_values[si])
+          }
           if (is.finite(fit$ncorr) && fit$ncorr > stat_k[k]) {
             stat_k[k] <- fit$ncorr
             sig_k[k] <- sigma_values[si]
@@ -565,7 +592,7 @@
       }
 
       list(stat = stat_k, sigma = sig_k)
-    }, error = function(e) NULL)
+    }, error = function(e) list(error = conditionMessage(e)))
   }
 }
 

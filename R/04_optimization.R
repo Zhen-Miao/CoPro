@@ -150,7 +150,10 @@ check_convergence <- function(w_list_new, w_list_old, cell_types) {
     diff_fwd <- max(abs(w_list_new[[ct]] - w_list_old[[ct]]))
     diff_flip <- max(abs(w_list_new[[ct]] + w_list_old[[ct]]))
     diff_val <- min(diff_fwd, diff_flip)
-    if(is.nan(diff_val)) diff_val <- 0
+    if (!is.finite(diff_val)) {
+      stop("Non-finite weight iterate detected for cell type '", ct,
+           "'; optimization did not converge.")
+    }
     if(diff_val > current_max_diff) {
       current_max_diff <- diff_val
     }
@@ -184,10 +187,7 @@ optimize_bilinear <- function(X_list, flat_kernels, sigma, max_iter = 1000,
                               tol = 1e-5, step_size = 1,
                               sdev2_list = NULL, Y_resi = NULL) {
 
-  # Validate step_size
-  if (!is.numeric(step_size) || length(step_size) != 1 || step_size <= 0 || step_size > 1) {
-    stop("step_size must be a single numeric value in (0, 1]")
-  }
+  .validateOptimizerParams(max_iter, tol, step_size)
 
   cell_types <- names(X_list)
   if (is.null(cell_types)) stop("Input X_list must be a named list.")
@@ -344,10 +344,7 @@ solve_one_type_eigen <- function(Y_resi, cell_types, nCC = 1L,
   inv_sqrt_d <- NULL
   if (!is.null(sdev2_list)) {
     d <- sdev2_list[[ct]]
-    if (length(d) != nrow(Y) || any(!is.finite(d)) || any(d <= 0)) {
-      stop("sdev2_list for ", ct,
-           " must contain one finite positive value per PC")
-    }
+    .validateSdev2(d, nrow(Y), paste0("sdev2_list for ", ct))
     inv_sqrt_d <- 1 / sqrt(d)
     Y <- sweep(sweep(Y, 1L, inv_sqrt_d, "*"),
                2L, inv_sqrt_d, "*")
@@ -392,8 +389,12 @@ solve_two_type_svd <- function(Y_resi, cell_types, nCC = 1L,
   }
 
   if (!is.null(sdev2_list)) {
-    inv_sqrt_d1 <- 1 / sqrt(sdev2_list[[ct1]])
-    inv_sqrt_d2 <- 1 / sqrt(sdev2_list[[ct2]])
+    d1 <- sdev2_list[[ct1]]
+    d2 <- sdev2_list[[ct2]]
+    .validateSdev2(d1, nrow(Y12), paste0("sdev2_list for ", ct1))
+    .validateSdev2(d2, ncol(Y12), paste0("sdev2_list for ", ct2))
+    inv_sqrt_d1 <- 1 / sqrt(d1)
+    inv_sqrt_d2 <- 1 / sqrt(d2)
     Y12 <- sweep(sweep(Y12, 1L, inv_sqrt_d1, "*"),
                  2L, inv_sqrt_d2, "*")
   }
@@ -649,6 +650,8 @@ bilinear_w_from_Y_resi <- function(w_list_new, Y_resi,
                                    step_size = 1,
                                    sdev2_list = NULL) {
 
+  .validateOptimizerParams(max_iter, tol, step_size)
+
   cell_types <- names(w_list_new)
   if (length(cell_types) == 0) stop("Input w_list_new must be a named list.")
   n_mat <- length(cell_types)
@@ -702,7 +705,8 @@ bilinear_w_from_Y_resi <- function(w_list_new, Y_resi,
     current_max_diff <- check_convergence(w_list_new, w_list_old, cell_types)
 
     if (current_max_diff <= tol) {
-      print(paste("Convergence reached at", iter, "iterations (Max diff =", sprintf("%.3e", current_max_diff), ")"))
+      message("Convergence reached at ", iter, " iterations (Max diff = ",
+              sprintf("%.3e", current_max_diff), ")")
       break
     }
     iter <- iter + 1
@@ -742,6 +746,8 @@ optimize_bilinear_n <- function(X_list, flat_kernels, sigma, w_list,
                                       step_size = 1,
                                       sdev2_list = NULL,
                                       Y_resi = NULL) {
+
+  .validateOptimizerParams(max_iter, tol, step_size)
 
   # Validate inputs based on assumption they are already subsetted
   cts <- cellTypesOfInterest
@@ -1186,11 +1192,7 @@ optimize_bilinear_multi_slides <- function(X_list_all, flat_kernels, sigma, slid
                                           n_cores = 1, direct_solve = TRUE,
                                           step_size = 1,
                                           sdev2_list = NULL) {
-
-  # Validate step_size
-  if (!is.numeric(step_size) || length(step_size) != 1 || step_size <= 0 || step_size > 1) {
-    stop("step_size must be a single numeric value in (0, 1]")
-  }
+  .validateOptimizerParams(max_iter, tol, step_size)
 
   # Validate inputs
   validated <- validate_multi_slide_inputs(X_list_all, NULL)  # Don't validate K_list_all anymore
@@ -1287,6 +1289,7 @@ optimize_bilinear_n_multi_slides <- function(X_list_all, flat_kernels, sigma, sl
                                             tol = 1e-5, n_cores = 1,
                                             step_size = 1,
                                             sdev2_list = NULL) {
+  .validateOptimizerParams(max_iter, tol, step_size)
   
   # Validate inputs
   validated <- validate_multi_slide_inputs(X_list_all, NULL, 

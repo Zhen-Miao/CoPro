@@ -159,4 +159,98 @@ test_that("building self-kernels does not overwrite the recorded scale factor", 
 
   with_self_auto <- quiet(computeSelfKernel(obj, sigmaValues = 0.05, verbose = FALSE))
   expect_equal(with_self_auto@distanceScaleFactor, recorded)
+  is_self <- vapply(names(with_self_auto@kernelMatrices), function(key) {
+    parsed <- .parseKernelMatrixName(key)
+    identical(parsed$cellType1, parsed$cellType2)
+  }, logical(1))
+  expect_true(all(vapply(
+    with_self_auto@kernelMatrices[is_self],
+    inherits, logical(1), "CoProFloat32SparseMatrix"
+  )))
+})
+
+test_that("invalid self-kernel bandwidths are pruned from sigmaValues", {
+  obj <- make_two_type_object(n = 120)
+  dense_obj <- quiet(computeSelfDistance(
+    obj, normalizeDistance = "inherit", verbose = FALSE
+  ))
+
+  for (method in c("dense", "sparse", "float32")) {
+    input <- if (method == "dense") dense_obj else obj
+    input@sigmaValues <- c(1e-10, 1)
+    out <- quiet(computeSelfKernel(
+      input, sigmaValues = c(1e-10, 1), method = method,
+      minAveCellNeighor = 1, normalizeDistance = "inherit",
+      verbose = FALSE
+    ))
+    expect_equal(out@sigmaValues, 1, info = method)
+    expect_false(any(vapply(names(out@kernelMatrices), function(key) {
+      identical(.parseKernelMatrixName(key)$sigma, 1e-10)
+    }, logical(1))), info = method)
+  }
+})
+
+test_that("a narrow self-kernel call preserves a broader cross-kernel grid", {
+  broad <- c(0.05, 0.1, 0.2)
+  obj <- make_two_type_object(n = 180)
+  cross <- quiet(computeKernelMatrix(
+    obj, sigmaValues = broad, method = "dense", dropDistances = FALSE,
+    minAveCellNeighor = 1, verbose = FALSE
+  ))
+  dense_input <- quiet(computeSelfDistance(
+    cross, normalizeDistance = "inherit", verbose = FALSE
+  ))
+
+  routes <- list(
+    dense = quiet(computeSelfKernel(
+      dense_input, sigmaValues = 0.1, method = "dense",
+      minAveCellNeighor = 1, normalizeDistance = "inherit", verbose = FALSE
+    )),
+    sparse = quiet(computeSelfKernel(
+      cross, sigmaValues = 0.1, method = "sparse",
+      minAveCellNeighor = 1, normalizeDistance = "inherit", verbose = FALSE
+    )),
+    float32 = quiet(computeSelfKernel(
+      cross, sigmaValues = 0.1, method = "float32",
+      minAveCellNeighor = 1, normalizeDistance = "inherit", verbose = FALSE
+    ))
+  )
+
+  for (method in names(routes)) {
+    out <- routes[[method]]
+    expect_equal(out@sigmaValues, broad, info = method)
+    for (sigma in broad) {
+      kernel <- getKernelMatrix(
+        out, sigma, "TypeA", "TypeB", verbose = FALSE
+      )
+      expect_false(is.null(kernel), info = paste(method, sigma))
+    }
+  }
+})
+
+test_that("dense multi-slide self kernels preserve unrequested sigmas", {
+  broad <- c(0.05, 0.1, 0.2)
+  obj <- create_test_copro_multi(
+    n_cells_per_slide = 90, n_slides = 2, n_genes = 15,
+    n_cell_types = 2, seed = 813
+  )
+  obj <- quiet(subsetData(
+    obj, cellTypesOfInterest = c("CellTypeA", "CellTypeB")
+  ))
+  obj <- quiet(computeDistance(
+    obj, normalizeDistance = TRUE, verbose = FALSE
+  ))
+  obj <- quiet(computeKernelMatrix(
+    obj, sigmaValues = broad, method = "dense", dropDistances = FALSE,
+    minAveCellNeighor = 1, verbose = FALSE
+  ))
+  obj <- quiet(computeSelfDistance(
+    obj, normalizeDistance = "inherit", verbose = FALSE
+  ))
+  out <- quiet(computeSelfKernel(
+    obj, sigmaValues = 0.1, method = "dense",
+    minAveCellNeighor = 1, normalizeDistance = "inherit", verbose = FALSE
+  ))
+
+  expect_equal(out@sigmaValues, broad)
 })

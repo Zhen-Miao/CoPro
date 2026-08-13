@@ -282,6 +282,210 @@ test_that("runSkrCCAPermu null is identical with and without factorization", {
   }
 })
 
+test_that("fixed-sigma scoring falls back when cellTypesOfInterest is empty", {
+  obj <- .fact_pipeline(nCC = 1)
+  obj@cellTypesOfInterest <- character()
+
+  expect_warning(
+    permuted <- suppressMessages(runSkrCCAPermu(
+      obj, nPermu = 2, permu_method = "global", verbose = FALSE
+    )),
+    "using all cell types"
+  )
+  expect_silent(
+    scored <- computeNormalizedCorrelationPermu(permuted, verbose = FALSE)
+  )
+  expect_length(scored@normalizedCorrelationPermu, 2L)
+})
+
+test_that("one-draw nulls are rejected by every permutation entry point", {
+  obj <- .fact_pipeline(nCC = 1)
+  expect_error(
+    runSkrCCAPermu(obj, nPermu = 1, permu_method = "global",
+                   verbose = FALSE),
+    "at least 2"
+  )
+  expect_error(
+    runSkrCCAPermu_FairSigma(
+      obj, nPermu = 1, permu_method = "global", verbose = FALSE
+    ),
+    "at least 2"
+  )
+  expect_error(
+    runSkrCCAPermu_Conditional(
+      obj, nPermu = 1, permu_method = "global", verbose = FALSE
+    ),
+    "at least 2"
+  )
+})
+
+test_that("compact permutation redraws restore the caller RNG", {
+  pc <- matrix(seq_len(20), nrow = 5)
+  location <- data.frame(
+    x = rep(1:4, each = 4), y = rep(1:4, times = 4),
+    cell_ID = paste0("cell", seq_len(16))
+  )
+  prepared <- CoPro:::.prepareSpatialResampling(location, 2, 2)
+
+  set.seed(812)
+  before <- .Random.seed
+  CoPro:::.permutePCMatrix(pc, 3)
+  expect_identical(.Random.seed, before)
+  CoPro:::.drawGlobalPermutation(10, 4)
+  expect_identical(.Random.seed, before)
+  CoPro:::.drawBinPermutation(
+    list(prepared = prepared, match_quantile = FALSE), 5
+  )
+  expect_identical(.Random.seed, before)
+})
+
+test_that("seeded helpers restore an absent caller RNG state", {
+  caller_state <- CoPro:::.captureRNGState()
+  on.exit(CoPro:::.restoreRNGState(caller_state), add = TRUE)
+  if (exists(".Random.seed", envir = .GlobalEnv, inherits = FALSE)) {
+    rm(".Random.seed", envir = .GlobalEnv)
+  }
+
+  expect_false(exists(".Random.seed", envir = .GlobalEnv, inherits = FALSE))
+  CoPro:::.drawGlobalPermutation(10, 4)
+  expect_false(exists(".Random.seed", envir = .GlobalEnv, inherits = FALSE))
+})
+
+test_that("two-sided max-correlation p-values are rejected", {
+  obj <- .fact_pipeline(nCC = 1)
+  null <- lapply(c(0.9, 0.95), function(value) {
+    data.frame(CC_index = 1L, normalizedCorrelation = value)
+  })
+  attr(null, "provenance") <- list(
+    sigma_values = obj@sigmaValueChoice,
+    sigma_aggregation = "fixed",
+    sigma_predeclared = TRUE
+  )
+  obj@normalizedCorrelationPermu <- null
+
+  expect_error(
+    calculate_pvalue(obj, alternative = "two.sided"),
+    "not symmetric about zero"
+  )
+})
+
+test_that("fair-sigma workers record non-finite statistics instead of crashing", {
+  testthat::local_mocked_bindings(
+    .yResiFromPlan = function(...) list(),
+    .fitConditionalAxis = function(...) list(w = list(A = matrix(1)),
+                                             ncorr = NaN),
+    .package = "CoPro"
+  )
+  worker <- CoPro:::.makeFairSigmaWorker(
+    PCmats = list(A = matrix(1:4, ncol = 1)),
+    plans = list(list()), cts = "A", sigma_values = 1,
+    sdev2_list = NULL, kernel_info = list(list()), grams = list(A = NULL),
+    maxIter = 2, tol = 1e-5
+  )
+  result <- worker(list(A = list(identity = TRUE)))
+  expect_true(is.na(result$ncorr))
+  expect_null(result$weights)
+  expect_match(result$errors, "non-finite")
+})
+
+test_that("fair-sigma caller drops failed draws and uses the effective null", {
+  obj <- .fact_pipeline(nCC = 1)
+  sigma <- obj@sigmaValues[[1L]]
+  weights <- obj@skrCCAOut[[paste0("sigma_", sigma)]]
+  mocked_results <- list(
+    list(weights = weights, sigma = sigma, ncorr = 0.05,
+         errors = character()),
+    list(weights = NULL, sigma = sigma, ncorr = NA_real_,
+         errors = "forced fair-sigma failure"),
+    list(weights = weights, sigma = sigma, ncorr = 0.95,
+         errors = character())
+  )
+  testthat::local_mocked_bindings(
+    .runPermutationDraws = function(...) mocked_results,
+    .package = "CoPro"
+  )
+
+  expect_warning(
+    out <- runSkrCCAPermu_FairSigma(
+      obj, nPermu = 3, sigma_values = sigma,
+      permu_method = "global", verbose = FALSE
+    ),
+    "1 of 3.*forced fair-sigma failure"
+  )
+  diagnostics <- attr(out, "fairSigmaPermu", exact = TRUE)
+  expect_identical(out@nPermu, 2L)
+  expect_length(out@skrCCAPermuOut, 2L)
+  expect_length(out@normalizedCorrelationPermu, 2L)
+  expect_identical(diagnostics$n_requested, 3L)
+  expect_identical(diagnostics$n_failed, 1L)
+  expect_identical(unname(diagnostics$error_counts), 1L)
+
+  p <- calculate_pvalue(out)
+  expect_equal(
+    p$p_value,
+    (1 + sum(c(0.05, 0.95) >= p$observed)) / 3
+  )
+  expect_equal(p$mc_floor, 1 / 3)
+})
+
+test_that("fair-sigma caller errors when every draw fails", {
+  obj <- .fact_pipeline(nCC = 1)
+  sigma <- obj@sigmaValues[[1L]]
+  failed <- list(
+    weights = NULL, sigma = sigma, ncorr = NA_real_,
+    errors = "forced total failure"
+  )
+  testthat::local_mocked_bindings(
+    .runPermutationDraws = function(...) rep(list(failed), 2L),
+    .package = "CoPro"
+  )
+
+  expect_error(
+    suppressWarnings(runSkrCCAPermu_FairSigma(
+      obj, nPermu = 2, sigma_values = sigma,
+      permu_method = "global", verbose = FALSE
+    )),
+    "Every fair-sigma permutation draw failed"
+  )
+})
+
+test_that("conditional worker and caller retain failure diagnostics", {
+  testthat::local_mocked_bindings(
+    .yResiFromPlan = function(...) list(),
+    .fitConditionalAxis = function(...) stop("forced conditional failure"),
+    .package = "CoPro"
+  )
+  worker <- CoPro:::.makeConditionalWorker(
+    PCmats = list(A = matrix(1:4, ncol = 1)), plans = list(list()),
+    cts = "A", nCC = 1L, sigma_values = 1, sigma_names = "sigma_1",
+    obs_W = list(sigma_1 = list(A = matrix(1))), sdev2_list = NULL,
+    kernel_info = list(list()), grams = list(A = NULL),
+    maxIter = 2, tol = 1e-5
+  )
+  expect_match(worker(list(A = list(identity = TRUE)))$error,
+               "forced conditional failure")
+
+  obj <- .fact_pipeline(nCC = 1)
+  sigma <- obj@sigmaValues[[1L]]
+  testthat::local_mocked_bindings(
+    .runPermutationDraws = function(...) list(
+      list(error = "forced conditional failure"),
+      list(stat = 0.2, sigma = sigma)
+    ),
+    .package = "CoPro"
+  )
+  expect_warning(
+    out <- runSkrCCAPermu_Conditional(
+      obj, nPermu = 2, sigma_values = sigma,
+      permu_method = "global", verbose = FALSE
+    ),
+    "forced conditional failure"
+  )
+  expect_identical(out@conditionalPermu$n_failed, 1L)
+  expect_identical(unname(out@conditionalPermu$error_counts), 1L)
+  expect_equal(out@conditionalPermu$per_axis$mc_floor, 1 / 2)
+})
+
 test_that("permu_which = 'both' and 'first_only' are also unchanged", {
   skip_on_cran()
   obj <- .fact_pipeline()

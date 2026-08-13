@@ -17,24 +17,26 @@
 # inspect its own cell and the surrounding 1-ring (3^d cells).
 # =============================================================================
 
-#' Encode integer cell indices (0-based, per axis) into a single integer key
+#' Encode cell indices (0-based, per axis) into an overflow-safe key
 #'
 #' @param cells integer matrix (n x d) of nonnegative per-axis cell indices,
 #'   each smaller than its corresponding grid dimension.
-#' @param G integer vector length d of per-axis grid dimensions
-#' @return integer vector of length n
+#' @param G numeric vector length d of per-axis grid dimensions
+#' @return character vector of length n
 #' @noRd
 .encodeCellKeys <- function(cells, G) {
-  d <- ncol(cells)
-  key <- cells[, 1]
-  if (d >= 2) {
-    mult <- 1
-    for (ax in 2:d) {
-      mult <- mult * G[ax - 1]
-      key <- key + cells[, ax] * mult
+  # Mixed-radix integer encoding overflows once the grid contains more than
+  # 2^31 cells. Character tuples avoid that overflow. Build them one axis at a
+  # time so each paste is vectorized over rows; this keeps the R fallback fast
+  # without returning to a bounded numeric encoding.
+  if (nrow(cells) == 0L) return(character())
+  keys <- as.character(cells[, 1L])
+  if (ncol(cells) > 1L) {
+    for (axis in 2:ncol(cells)) {
+      keys <- paste0(keys, ":", cells[, axis])
     }
   }
-  key
+  keys
 }
 
 #' Assign points to grid cells of side `r` using a shared origin/grid
@@ -42,14 +44,14 @@
 #' @param coords numeric matrix (n x d)
 #' @param origin numeric vector length d (min corner, shared across A and B)
 #' @param r positive cell side length
-#' @param G integer vector length d (per-axis grid dimensions, shared)
-#' @return integer matrix (n x d) of per-axis cell indices, clamped to range
+#' @param G numeric vector length d (per-axis grid dimensions, shared)
+#' @return numeric matrix (n x d) of per-axis cell indices, clamped to range
 #' @noRd
 .assignCells <- function(coords, origin, r, G) {
   d <- ncol(coords)
-  cells <- matrix(0L, nrow = nrow(coords), ncol = d)
+  cells <- matrix(0, nrow = nrow(coords), ncol = d)
   for (ax in seq_len(d)) {
-    idx <- as.integer(floor((coords[, ax] - origin[ax]) / r))
+    idx <- floor((coords[, ax] - origin[ax]) / r)
     # clamp into [0, G_axis - 1] to stay within the encoded grid
     idx[idx < 0L] <- 0L
     idx[idx > (G[ax] - 1L)] <- G[ax] - 1L
@@ -88,7 +90,7 @@
   upper  <- pmax(apply(A, 2, max), apply(B, 2, max))
   span <- upper - origin
   # number of cells per axis (at least 1); +1 guards the upper edge
-  G <- as.integer(pmax(1L, floor(span / r) + 1L))
+  G <- pmax(1, floor(span / r) + 1)
 
   cellA <- .assignCells(A, origin, r, G)
   cellB <- .assignCells(B, origin, r, G)

@@ -101,6 +101,32 @@ test_that("sparse kernels honor per-axis scales set by computeDistance", {
                                 tolerance = 1e-8, check.attributes = FALSE)))
 })
 
+test_that('cross-type sparse kernels implement normalizeDistance = "inherit"', {
+  obj <- .two_type_obj(n_cells = 120)
+  pinned <- computeDistance(
+    obj, normalizeDistance = TRUE, normalizeMethod = "spacing",
+    verbose = FALSE
+  )
+  factor_before <- pinned@distanceScaleFactor
+
+  inherited <- suppressWarnings(computeSparseKernel(
+    pinned, sigmaValues = 0.1, minAveCellNeighor = 1,
+    normalizeDistance = "inherit", normalizeMethod = "spacing",
+    verbose = FALSE
+  ))
+  expect_identical(inherited@distanceScaleFactor, factor_before)
+  expect_true(getDistanceGeometry(inherited)$normalizeDistance)
+
+  unpinned <- .two_type_obj(n_cells = 120)
+  expect_error(
+    computeSparseKernel(
+      unpinned, sigmaValues = 1, minAveCellNeighor = 1,
+      normalizeDistance = "inherit", verbose = FALSE
+    ),
+    "has none"
+  )
+})
+
 test_that("sparse kernels stay 2-D when computeDistance asked for 2-D", {
   obj <- .two_type_obj_3d()
   sigma <- 0.1

@@ -1,5 +1,32 @@
 # CoPro (development version)
 
+## Package-review hardening
+
+* Sparse and float32 kernel construction now honors
+  `normalizeDistance = "inherit"` on cross-type paths and rejects non-finite
+  coordinates with cell IDs in the error. The R nearest-neighbor fallback also
+  uses overflow-safe, vectorized character grid keys for very large coordinate
+  ranges.
+* Self-kernel calls prune only bandwidths they prove invalid. Requesting a
+  narrow self-kernel grid no longer hides otherwise valid cross-kernels from a
+  broader existing scan. `computeSelfKernel(method = "auto")` now uses float32
+  sparse storage when it selects a fused sparse route, reducing memory at the
+  cost of float32 rather than float64 kernel precision.
+* Permutation entry points reject `nPermu < 2`, restore the caller's RNG state,
+  account explicitly for failed draws, and use the effective null size in
+  Monte-Carlo p-values. `calculate_pvalue(alternative = "two.sided")` now
+  errors because the null for its optimized, max-aggregated
+  normalized-correlation statistic is not symmetric about zero. Signed
+  studentized and slide-level statistics retain their two-sided alternatives.
+* Optimizers now reject non-finite or invalid `max_iter`, `tol`, `step_size`,
+  and CCA metric values consistently. Gene-space initialization is deterministic
+  without advancing the caller's random stream, and reducible SUMCOR shortcuts
+  honor the caller's convergence controls.
+* Optimizer convergence notices are now conditions emitted by `message()`
+  rather than ordinary output from `print()`, so `suppressMessages()` silences
+  them. Code that captures those notices should use
+  `capture.output(type = "message")`.
+
 ## Package options are now function arguments
 
 Four `options()` flags controlled behavior that belongs in a call, not in

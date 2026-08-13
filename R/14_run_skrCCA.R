@@ -205,20 +205,12 @@
     stop("nCC must be a positive integer")
   }
   
-  if (!is.numeric(tol) || length(tol) != 1 || tol <= 0) {
-    stop("tol must be a positive number")
-  }
-  
-  if (!is.numeric(maxIter) || length(maxIter) != 1 || maxIter <= 0 || maxIter != as.integer(maxIter)) {
-    stop("maxIter must be a positive integer")
-  }
+  .validateOptimizerParams(maxIter, tol, step_size,
+                           max_iter_name = "maxIter")
   
   if (!is.numeric(n_cores) || length(n_cores) != 1 || n_cores <= 0 || n_cores != as.integer(n_cores)) {
     stop("n_cores must be a positive integer")
   }
-
-  # Same admissible range under both objectives; see .validateStepSize().
-  .validateStepSize(step_size)
 
   # Check kernel matrices
   if (length(object@kernelMatrices) == 0) {

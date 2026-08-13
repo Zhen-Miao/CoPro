@@ -78,8 +78,8 @@
   if (nA == 0L || nrow(B) == 0L) return(out)
 
   query <- A[anchors, , drop = FALSE]
-  # A within-type anchor must not count itself, so ask for one extra partner
-  # and drop the self pair by original index below.
+  # The self pair is removed by original index below, so `want` already means
+  # the requested number of non-self partners.
   want <- nNeighbor
   rho <- .boxDensity(B)
   r <- .radiusForCount(max(2 * want, 8), rho, d)

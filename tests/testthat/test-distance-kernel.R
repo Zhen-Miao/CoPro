@@ -56,6 +56,22 @@ test_that("computeDistance requires subsetData to be called first", {
   )
 })
 
+test_that("distance and kernel entry points reject non-finite coordinates", {
+  obj <- create_test_copro_single(n_cells = 60, n_cell_types = 2, seed = 91)
+  obj <- subsetData(obj, cellTypesOfInterest = c("CellTypeA", "CellTypeB"))
+  obj@locationDataSub$x[1] <- NA_real_
+
+  expect_error(
+    computeDistance(obj, distType = "Euclidean2D", verbose = FALSE),
+    "must be finite"
+  )
+  expect_error(
+    computeSparseKernel(obj, sigmaValues = 1, minAveCellNeighor = 1,
+                        verbose = FALSE),
+    "must be finite"
+  )
+})
+
 test_that("computeKernelMatrix works with multiple sigma values", {
   obj <- create_test_copro_single(n_cells = 100, n_cell_types = 2, seed = 42)
   obj <- subsetData(obj, cellTypesOfInterest = c("CellTypeA", "CellTypeB"))
@@ -231,4 +247,3 @@ test_that("CoProMulti: computeDistance -> computeKernelMatrix -> runGeneSpaceCCA
   expect_true(length(obj@geneScores) > 0)
   expect_true(length(obj@cellScores) > 0)
 })
-

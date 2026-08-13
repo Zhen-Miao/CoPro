@@ -5,7 +5,7 @@
 #' scale invariant, so here for easy computation we omit the scaling factor.
 #'
 #' @param sigma The variance parameter \eqn{\sigma}, a positive number.
-#' @param dist_mat A numeric matrix representing the squared distances
+#' @param dist_mat A numeric matrix representing Euclidean distances
 #'  between cells
 #' @param lower_limit A lower limit value below which the kernel value will
 #'  be set to zero, default = 1e-7
@@ -40,6 +40,16 @@ kernel_from_distance <- function(
   n_cell1 <- nrow(kernel_current)
   n_cell2 <- ncol(kernel_current)
 
+  if (any(!is.finite(kernel_current))) {
+    stop(
+      "Kernel matrix for cell types ", i, " and ", j,
+      " at sigma = ", sigma_choose,
+      " contains NA, NaN, or Inf. Check that spatial coordinates and any ",
+      "manually assigned distances are finite.",
+      call. = FALSE
+    )
+  }
+
   minPropZero <- minAveCellNeighor * min(n_cell1, n_cell2) / (n_cell1 * n_cell2)
   if (mean(kernel_current > lowerLimit) < minPropZero) {
     warning(paste("Kernel matrix for cell types", i, "and", j,
@@ -55,19 +65,6 @@ kernel_from_distance <- function(
                     sigma_choose,
                     "because all Gaussian kernel values are too small,",
                     "which will not produce meaningful results."))
-      return(TRUE)
-    }
-  }else if (all(is.na(kernel_current))) {
-    warning(paste("Kernel matrix for cell types", i, "and", j,
-                  "with sigma =", sigma_choose,
-                  "contains all NA."))
-    if (length(sigmaValues) == 1) {
-      stop(paste("Only one sigma value is specified,",
-                 "which resulted in all Gaussian kernel being NA."))
-    }else {
-      warning(paste("Dropping sigma value of ",
-                    sigma_choose,
-                    "because all Gaussian kernel values are NA."))
       return(TRUE)
     }
   }
@@ -518,7 +515,6 @@ kernel_from_distance <- function(
 #' @rdname computeKernelMatrix
 #' @aliases computeKernelMatrix,CoPro-method
 #' @export
-#' @note To-do: Shall we include row or column normalization of the kernel?
 setGeneric(
   "computeKernelMatrix",
   function(object, sigmaValues, lowerLimit = 1e-7, upperQuantile = 0.85,
