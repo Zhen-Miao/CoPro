@@ -94,5 +94,7 @@ Other spatial-pipeline:
 [`computePCA()`](https://zhen-miao.github.io/CoPro/reference/computePCA.md),
 [`computeSparseKernel()`](https://zhen-miao.github.io/CoPro/reference/computeSparseKernel.md),
 [`computeSparseKernelFloat32()`](https://zhen-miao.github.io/CoPro/reference/computeSparseKernelFloat32.md),
+[`detectSigmaRange()`](https://zhen-miao.github.io/CoPro/reference/detectSigmaRange.md),
 [`runGeneSpaceCCA()`](https://zhen-miao.github.io/CoPro/reference/runGeneSpaceCCA.md),
-[`runSkrCCA()`](https://zhen-miao.github.io/CoPro/reference/runSkrCCA.md)
+[`runSkrCCA()`](https://zhen-miao.github.io/CoPro/reference/runSkrCCA.md),
+[`selectSigmaByPermutation()`](https://zhen-miao.github.io/CoPro/reference/selectSigmaByPermutation.md)

@@ -106,37 +106,52 @@ neighbor search, and never forms the dense matrix. The result is
 numerically identical to the dense path (every entry beyond the radius
 is zero anyway).
 
-You get the sparse path in one of two equivalent ways:
+First pick sigma from the data with
+[`detectSigmaRange()`](https://zhen-miao.github.io/CoPro/reference/detectSigmaRange.md),
+then build:
 
 ``` r
 
-# Option A (recommended): let computeKernelMatrix choose.
-# method = "auto" (the default) picks the sparse path when any cell-type block
-# reaches autoThreshold (5000) cells, or the aggregate dense workload reaches
-# autoThreshold^2 entries. dropDistances = TRUE (default) frees the @distances
-# slot afterward. NOTE: do NOT call computeDistance() first on large data — the
-# sparse path builds kernels directly from coordinates and would ignore it.
+# Step 1: choose sigma in this dataset's own coordinate units. sigma is a
+# distance, so no fixed value travels between microns, pixels and Visium units.
+# detectSigmaRange() reports the sigmas at which the median cell is coupled to
+# 5-20 effective neighbors -- a dimensionless, biologically meaningful target.
+rng <- detectSigmaRange(obj, minNeighbors = 5, maxNeighbors = 20)
+rng                      # per-block diagnostics and the recommended grid
+
+# Step 2: build. method = "auto" (default) picks the float32 sparse route for
+# anything large and reports the density it predicts. dropDistances = TRUE
+# (default) frees @distances afterward. No computeDistance() call is needed --
+# the sparse routes build kernels directly from coordinates.
 obj <- computeKernelMatrix(
   obj,
-  sigmaValues   = c(0.05, 0.1, 0.2),  # required; no default is derived here
-  method        = "auto",             # or force "sparse"
+  sigmaValues   = rng$sigmaValues,
+  method        = "auto",
   dropDistances = TRUE
 )
-
-# Option B (explicit): call the fused sparse constructor directly.
-obj <- computeSparseKernel(obj, sigmaValues = c(0.05, 0.1, 0.2))
 ```
 
 Notes:
 
-- **Force it** with `method = "sparse"` if you want the sparse path
-  regardless of size, or raise/lower `autoThreshold` to move the
-  automatic cutoff. Note that `method = "auto"` only skips
-  [`computeDistance()`](https://zhen-miao.github.io/CoPro/reference/computeDistance.md)
-  when it actually selects the sparse path; if a block falls below the
-  threshold it picks `"dense"` and then needs distances. On a machine
-  where the dense matrix would not fit, pass `method = "sparse"`
-  explicitly so the choice never depends on the threshold.
+- **Sigma controls memory, steeply.** The search radius grows linearly
+  in sigma, so the number of retained pairs grows as `sigma^d` and
+  saturates: past roughly two-thirds density a sparse kernel costs
+  *more* than a dense one (12 bytes per stored entry against 8).
+  `method = "auto"` predicts the density before building and warns, with
+  the sigma that would bring it back under control. If you see that
+  warning, the fix is a smaller sigma, not more RAM.
+- **Build one sigma at a time** when memory is tight. Kernels for every
+  requested sigma are held simultaneously, so a three-sigma grid costs
+  roughly three times one sigma. Looping the sigma outside
+  [`computeKernelMatrix()`](https://zhen-miao.github.io/CoPro/reference/computeKernelMatrix.md)
+  and running
+  [`runSkrCCA()`](https://zhen-miao.github.io/CoPro/reference/runSkrCCA.md)
+  inside the loop bounds the peak.
+- **Force a representation** with `method = "float32"` (8 bytes per
+  entry, streams one block at a time) or `method = "sparse"` (float64,
+  12 bytes per entry, keeps every block’s neighbor list; use it for
+  exactness checks). The two agree to about 1e-6 in the normalized
+  correlation.
 - The sparse path supports `distType = "Euclidean2D"` and
   `"Euclidean3D"` (inferred from a `z` coordinate column).
   `"Morphology-Aware"` distances require the dense path.
@@ -148,13 +163,13 @@ Notes:
 
 ## 5. skrCCA is already exact and fast for two cell types
 
-For the ordinary two-cell-type (or single within-type) problem,
+For the ordinary two-cell-type (or single within-type) problem under
+`objective = "sumcov"`,
 [`runSkrCCA()`](https://zhen-miao.github.io/CoPro/reference/runSkrCCA.md)
-now solves **all** requested canonical axes with one exact SVD of the
-small PC-space cross-operator (`nPCA x nPCA`). There is no power
-iteration to tune, so `maxIter`, `tol`, and `step_size` do not affect
-the two-type result — the cost is dominated by the kernel, not the
-optimization.
+solves **all** requested canonical axes with one exact SVD of the small
+PC-space cross-operator (`nPCA x nPCA`). There is no power iteration to
+tune, so `maxIter`, `tol`, and `step_size` do not affect that result —
+the cost is dominated by the kernel, not the optimization.
 
 ``` r
 
@@ -165,18 +180,27 @@ obj <- computeNormalizedCorrelation(obj)
 obj <- computeRegressionGeneScores(obj)
 ```
 
-(`maxIter` / `step_size` still matter only when analyzing **three or
-more** cell types jointly, or when supplying a transferred first axis,
-where the sequential deflation path is used.)
+(`maxIter` / `step_size` still matter when analyzing **three or more**
+cell types jointly, when supplying a transferred first axis — both of
+which use the sequential deflation path — and for **any** number of cell
+types under `objective = "sumcor"`, the multi-slide default, whose
+operator depends on the weights and so has no fixed matrix to
+decompose.)
 
 ## 6. Multi-slide at scale
 
 [`newCoProMulti()`](https://zhen-miao.github.io/CoPro/reference/newCoProMulti.md)
-shares one set of weight vectors across slides. Kernels are built **per
-slide** and their small PC-space operators are summed — CoPro never
-materializes a block-diagonal `N x N` kernel across the whole cohort.
-Use `method = "auto"`/`"sparse"` exactly as above, and set `n_cores` to
-parallelize the per-slide kernel and skrCCA work.
+shares one PCA loading matrix and one set of CCA weight vectors across
+slides. By default,
+[`computePCA()`](https://zhen-miao.github.io/CoPro/reference/computePCA.md)
+centers and scales each `(slide, cell type)` gene matrix before stacking
+the blocks for that shared PCA.
+[`runSkrCCA()`](https://zhen-miao.github.io/CoPro/reference/runSkrCCA.md)
+then uses equal-slide SUMCOR, keeping the small per-slide PC-space
+operators separate so each cross term is divided by its own score
+scales. CoPro never materializes a block-diagonal `N x N` kernel across
+the cohort. Use `method = "auto"`/`"sparse"` exactly as above, and set
+`n_cores` to parallelize the per-slide kernel work.
 
 ``` r
 
@@ -233,6 +257,8 @@ cell_scores <- getCellScores(obj, sigma = obj@sigmaValueChoice,
 | **skip [`computeDistance()`](https://zhen-miao.github.io/CoPro/reference/computeDistance.md)** | pipeline order | The dense distance matrix is the main blow-up; the sparse path does not need it |
 | `dropDistances = TRUE` | [`computeKernelMatrix()`](https://zhen-miao.github.io/CoPro/reference/computeKernelMatrix.md) | Clears `@distances` after kernels are built (default) |
 | `autoThreshold` | [`computeKernelMatrix()`](https://zhen-miao.github.io/CoPro/reference/computeKernelMatrix.md) | Tunes the cell-count cutoff for the sparse path (default 5000) |
+| `denseThreshold` | [`computeKernelMatrix()`](https://zhen-miao.github.io/CoPro/reference/computeKernelMatrix.md) | Predicted density above which `"auto"` warns that sparse saves nothing (default 0.3) |
+| [`detectSigmaRange()`](https://zhen-miao.github.io/CoPro/reference/detectSigmaRange.md) | before kernels | Picks sigma from the data, in its own coordinate units |
 | `n_cores` | [`runSkrCCA()`](https://zhen-miao.github.io/CoPro/reference/runSkrCCA.md) (multi-slide) | Parallelizes per-slide kernel and skrCCA work |
 
 ## Verifying equivalence (optional)

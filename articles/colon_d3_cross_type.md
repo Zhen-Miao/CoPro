@@ -59,7 +59,7 @@ ggplot(plot_df, aes(x = x, y = y, color = celltype)) +
 ```
 
 ![plot of chunk
-plot-layout](colon_d3_cross_type_files/plot-layout-1.png)
+plot-layout](figures/colon_d3_cross_type-plot-layout-1.png)
 
 plot of chunk plot-layout
 
@@ -95,7 +95,7 @@ ggplot(mu_df, aes(x = x, y = y, color = MU_grouped)) +
         legend.title = element_blank())
 ```
 
-![plot of chunk plot-mu](colon_d3_cross_type_files/plot-mu-1.png)
+![plot of chunk plot-mu](figures/colon_d3_cross_type-plot-mu-1.png)
 
 plot of chunk plot-mu
 
@@ -122,10 +122,17 @@ obj <- subsetData(obj, cellTypesOfInterest = cell_types)
 obj <- computePCA(obj, nPCA = 15, center = TRUE, scale. = TRUE)
 
 # Distance and kernel
-obj <- computeDistance(obj, distType = "Euclidean2D")
+obj <- computeDistance(obj, distType = "Euclidean2D",
+                            normalizeDistance = TRUE)
 
 sigma_choice <- c(0.005, 0.01, 0.02, 0.05, 0.1)
 obj <- computeKernelMatrix(obj, sigmaValues = sigma_choice)
+```
+
+    ## Warning: The kernel at sigma = 0.1 is predicted to be 38% dense, so a fixed-radius sparse kernel saves little or no memory here (sparse storage costs more than dense past ~67% density).
+    ##   Sigma below about 0.0884 would keep it under 30%. Use detectSigmaRange() to pick sigma from the data, or build one sigma at a time to bound peak memory.
+
+``` r
 
 # Sparse kernel CCA -- request 4 CCs to capture multiple axes
 obj <- runSkrCCA(obj, scalePCs = TRUE, maxIter = 500, nCC = 4)
@@ -151,7 +158,8 @@ ggplot(ncorr, aes(x = sigmaValues, y = normalizedCorrelation)) +
   theme_minimal()
 ```
 
-![plot of chunk plot-ncorr](colon_d3_cross_type_files/plot-ncorr-1.png)
+![plot of chunk
+plot-ncorr](figures/colon_d3_cross_type-plot-ncorr-1.png)
 
 plot of chunk plot-ncorr
 
@@ -178,7 +186,8 @@ ggplot(cs_cc1) +
   theme_minimal()
 ```
 
-![plot of chunk insitu-cc1](colon_d3_cross_type_files/insitu-cc1-1.png)
+![plot of chunk
+insitu-cc1](figures/colon_d3_cross_type-insitu-cc1-1.png)
 
 plot of chunk insitu-cc1
 
@@ -198,7 +207,8 @@ ggplot(cs_cc2) +
   theme_minimal()
 ```
 
-![plot of chunk insitu-cc2](colon_d3_cross_type_files/insitu-cc2-1.png)
+![plot of chunk
+insitu-cc2](figures/colon_d3_cross_type-insitu-cc2-1.png)
 
 plot of chunk insitu-cc2
 
@@ -238,7 +248,7 @@ ggplot() +
 ```
 
 ![plot of chunk
-cc1-vs-cc2-mu](colon_d3_cross_type_files/cc1-vs-cc2-mu-1.png)
+cc1-vs-cc2-mu](figures/colon_d3_cross_type-cc1-vs-cc2-mu-1.png)
 
 plot of chunk cc1-vs-cc2-mu
 
@@ -271,7 +281,7 @@ ggplot(expr_df, aes(x = x, y = y, color = Egr1)) +
 ```
 
 ![plot of chunk
-gene-insitu-egr1](colon_d3_cross_type_files/gene-insitu-egr1-1.png)
+gene-insitu-egr1](figures/colon_d3_cross_type-gene-insitu-egr1-1.png)
 
 plot of chunk gene-insitu-egr1
 
@@ -290,7 +300,7 @@ ggplot(expr_df, aes(x = x, y = y, color = Mki67)) +
 ```
 
 ![plot of chunk
-gene-insitu-mki67](colon_d3_cross_type_files/gene-insitu-mki67-1.png)
+gene-insitu-mki67](figures/colon_d3_cross_type-gene-insitu-mki67-1.png)
 
 plot of chunk gene-insitu-mki67
 
@@ -317,7 +327,8 @@ ggplot(df_cc1) +
   theme_minimal()
 ```
 
-![plot of chunk cross-corr](colon_d3_cross_type_files/cross-corr-1.png)
+![plot of chunk
+cross-corr](figures/colon_d3_cross_type-cross-corr-1.png)
 
 plot of chunk cross-corr
 
@@ -339,7 +350,8 @@ ggplot(df_cc2) +
   theme_minimal()
 ```
 
-![plot of chunk cross-corr](colon_d3_cross_type_files/cross-corr-2.png)
+![plot of chunk
+cross-corr](figures/colon_d3_cross_type-cross-corr-2.png)
 
 plot of chunk cross-corr
 
@@ -387,7 +399,7 @@ ggplot(top_df, aes(x = gene, y = weight, fill = direction)) +
 ```
 
 ![plot of chunk
-top-genes-cc1](colon_d3_cross_type_files/top-genes-cc1-1.png)
+top-genes-cc1](figures/colon_d3_cross_type-top-genes-cc1-1.png)
 
 plot of chunk top-genes-cc1
 
@@ -415,7 +427,7 @@ ggplot(top_df_cc2, aes(x = gene, y = weight, fill = direction)) +
 ```
 
 ![plot of chunk
-top-genes-cc2](colon_d3_cross_type_files/top-genes-cc2-1.png)
+top-genes-cc2](figures/colon_d3_cross_type-top-genes-cc2-1.png)
 
 plot of chunk top-genes-cc2
 
@@ -444,16 +456,21 @@ sessionInfo()
     ## [1] stats     graphics  grDevices utils     datasets  methods   base     
     ## 
     ## other attached packages:
-    ## [1] ggplot2_4.0.2 CoPro_1.1.1   knitr_1.51   
+    ## [1] patchwork_1.3.2 ggplot2_4.0.2   CoPro_1.3.0     testthat_3.3.2 
+    ## [5] knitr_1.51     
     ## 
     ## loaded via a namespace (and not attached):
-    ##  [1] Matrix_1.7-5       gtable_0.3.6       dplyr_1.2.1        compiler_4.5.2    
-    ##  [5] maps_3.4.3         tidyselect_1.2.1   Rcpp_1.1.1         parallel_4.5.2    
-    ##  [9] scales_1.4.0       lattice_0.22-9     R6_2.6.1           labeling_0.4.3    
-    ## [13] generics_0.1.4     isoband_0.3.0      MASS_7.3-65        dotCall64_1.2     
-    ## [17] tibble_3.3.1       pillar_1.11.1      RColorBrewer_1.1-3 rlang_1.2.0       
-    ## [21] xfun_0.57          S7_0.2.1           otel_0.2.0         viridisLite_0.4.3 
-    ## [25] cli_3.6.5          withr_3.0.2        magrittr_2.0.5     grid_4.5.2        
-    ## [29] irlba_2.3.7        spam_2.11-3        lifecycle_1.0.5    fields_17.1       
-    ## [33] vctrs_0.7.2        evaluate_1.0.5     glue_1.8.0         farver_2.1.2      
-    ## [37] matrixStats_1.5.0  tools_4.5.2        pkgconfig_2.0.3
+    ##  [1] generics_0.1.4     lattice_0.22-9     magrittr_2.0.5     evaluate_1.0.5    
+    ##  [5] grid_4.5.2         RColorBrewer_1.1-3 pkgload_1.5.1      fastmap_1.2.0     
+    ##  [9] maps_3.4.3         rprojroot_2.1.1    Matrix_1.7-5       pkgbuild_1.4.8    
+    ## [13] sessioninfo_1.2.3  brio_1.1.5         purrr_1.2.1        spam_2.11-3       
+    ## [17] viridisLite_0.4.3  scales_1.4.0       isoband_0.3.0      cli_3.6.5         
+    ## [21] rlang_1.2.0        ellipsis_0.3.3     withr_3.0.2        cachem_1.1.0      
+    ## [25] devtools_2.5.0     otel_0.2.0         tools_4.5.2        parallel_4.5.2    
+    ## [29] memoise_2.0.1      dplyr_1.2.1        vctrs_0.7.2        R6_2.6.1          
+    ## [33] matrixStats_1.5.0  lifecycle_1.0.5    fs_2.0.1           MASS_7.3-65       
+    ## [37] usethis_3.2.1      irlba_2.3.7        pkgconfig_2.0.3    desc_1.4.3        
+    ## [41] pillar_1.11.1      gtable_0.3.6       glue_1.8.0         Rcpp_1.1.1        
+    ## [45] fields_17.1        xfun_0.57          tibble_3.3.1       tidyselect_1.2.1  
+    ## [49] rstudioapi_0.18.0  farver_2.1.2       labeling_0.4.3     dotCall64_1.2     
+    ## [53] compiler_4.5.2     S7_0.2.1

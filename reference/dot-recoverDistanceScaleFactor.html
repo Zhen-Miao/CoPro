@@ -21,7 +21,7 @@ truncated entries and avoids copying the full distance matrix."></head><body>
 
     <a class="navbar-brand me-2" href="../index.html">CoPro</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.1.3</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.3.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -98,12 +98,15 @@ if it cannot be recovered.</p>
     </div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
-    <p>This assumes isotropic coordinates (<code>xDistScale = yDistScale</code>, the default).
-Under anisotropic scaling the recovered value is a representative, not exact,
-factor; the <code>[sigma, 4*sigma]</code> guardrail in <code><a href="dot-sigmaAwareBins.html">.sigmaAwareBins()</a></code> will flag a
-grossly mis-sized grid. When <code>normalizeDistance = FALSE</code> the recovered factor
-is simply the coordinate scale (1 by default), which is also correct because
-<code>sigma</code> is then on the raw coordinate scale.</p>
+    <p>The raw coordinates are rebuilt using the geometry recorded in
+<code>@distanceGeometry</code> – the per-axis scales and, for a 3-D <code>distType</code>, the <code>z</code>
+column – so the probed ratio is the true constant rather than a spread of
+direction-dependent values. Objects with no recorded geometry (built before
+the slot existed) fall back to unscaled 2-D <code>x,y</code>, which is exact only under
+the default isotropic setting; the <code>[sigma, 4*sigma]</code> guardrail in
+<code><a href="dot-sigmaAwareBins.html">.sigmaAwareBins()</a></code> will flag a grossly mis-sized grid. When
+<code>normalizeDistance = FALSE</code> the recovered factor is simply 1, which is also
+correct because <code>sigma</code> is then on the (scaled) coordinate scale.</p>
     </div>
 
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>

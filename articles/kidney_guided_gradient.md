@@ -123,7 +123,7 @@ ggplot(plot_df, aes(x = x, y = y, color = celltype)) +
 ```
 
 ![plot of chunk
-plot-layout](kidney_guided_gradient_files/plot-layout-1.png)
+plot-layout](figures/kidney_guided_gradient-plot-layout-1.png)
 
 plot of chunk plot-layout
 
@@ -156,7 +156,7 @@ ggplot(tub_df, aes(x = x, y = y, color = subtype)) +
 ```
 
 ![plot of chunk
-plot-subtypes](kidney_guided_gradient_files/plot-subtypes-1.png)
+plot-subtypes](figures/kidney_guided_gradient-plot-subtypes-1.png)
 
 plot of chunk plot-subtypes
 
@@ -230,7 +230,8 @@ with the nephron axis.
 ``` r
 
 sigma_choice <- c(0.04, 0.08, 0.1, 0.15)
-obj <- computeDistance(obj, distType = "Euclidean2D")
+obj <- computeDistance(obj, distType = "Euclidean2D",
+                            normalizeDistance = TRUE)
 obj <- computeKernelMatrix(obj, sigmaValues = sigma_choice)
 
 # Get vascular PCA scores
@@ -293,7 +294,7 @@ ggplot(ncorr, aes(x = sigmaValues, y = normalizedCorrelation, group = 1)) +
   theme_minimal()
 ```
 
-![plot of chunk ncorr](kidney_guided_gradient_files/ncorr-1.png)
+![plot of chunk ncorr](figures/kidney_guided_gradient-ncorr-1.png)
 
 plot of chunk ncorr
 
@@ -323,7 +324,7 @@ ggplot(cs_tub) +
 ```
 
 ![plot of chunk
-insitu-tubular](kidney_guided_gradient_files/insitu-tubular-1.png)
+insitu-tubular](figures/kidney_guided_gradient-insitu-tubular-1.png)
 
 plot of chunk insitu-tubular
 
@@ -349,7 +350,7 @@ ggplot(cs_vasc) +
 ```
 
 ![plot of chunk
-insitu-vasc](kidney_guided_gradient_files/insitu-vasc-1.png)
+insitu-vasc](figures/kidney_guided_gradient-insitu-vasc-1.png)
 
 plot of chunk insitu-vasc
 
@@ -385,7 +386,7 @@ ggplot(tub_meta[!is.na(tub_meta$segment), ]) +
 ```
 
 ![plot of chunk
-boxplot-segments](kidney_guided_gradient_files/boxplot-segments-1.png)
+boxplot-segments](figures/kidney_guided_gradient-boxplot-segments-1.png)
 
 plot of chunk boxplot-segments
 
@@ -410,7 +411,7 @@ ggplot(vasc_meta) +
 ```
 
 ![plot of chunk
-vasc-subtypes](kidney_guided_gradient_files/vasc-subtypes-1.png)
+vasc-subtypes](figures/kidney_guided_gradient-vasc-subtypes-1.png)
 
 plot of chunk vasc-subtypes
 
@@ -434,7 +435,7 @@ ggplot(df_corr) +
 ```
 
 ![plot of chunk
-cross-corr](kidney_guided_gradient_files/cross-corr-1.png)
+cross-corr](figures/kidney_guided_gradient-cross-corr-1.png)
 
 plot of chunk cross-corr
 
@@ -464,7 +465,7 @@ ggplot(top_df, aes(x = gene, y = weight, fill = direction)) +
 ```
 
 ![plot of chunk
-top-vasc-genes](kidney_guided_gradient_files/top-vasc-genes-1.png)
+top-vasc-genes](figures/kidney_guided_gradient-top-vasc-genes-1.png)
 
 plot of chunk top-vasc-genes
 
@@ -492,7 +493,7 @@ ggplot(top_tub_df, aes(x = gene, y = weight, fill = direction)) +
 ```
 
 ![plot of chunk
-top-tub-genes](kidney_guided_gradient_files/top-tub-genes-1.png)
+top-tub-genes](figures/kidney_guided_gradient-top-tub-genes-1.png)
 
 plot of chunk top-tub-genes
 
@@ -616,7 +617,7 @@ ggplot(neph_umap_filt[!is.na(neph_umap_filt$axis_score), ],
 ```
 
 ![plot of chunk
-neph-umap-score](kidney_guided_gradient_files/neph-umap-score-1.png)
+neph-umap-score](figures/kidney_guided_gradient-neph-umap-score-1.png)
 
 plot of chunk neph-umap-score
 
@@ -648,7 +649,7 @@ ggplot(neph_umap_filt[!is.na(neph_umap_filt$agg_label), ],
 ```
 
 ![plot of chunk
-neph-umap-celltype](kidney_guided_gradient_files/neph-umap-celltype-1.png)
+neph-umap-celltype](figures/kidney_guided_gradient-neph-umap-celltype-1.png)
 
 plot of chunk neph-umap-celltype
 
@@ -680,7 +681,7 @@ ggplot(neph_box, aes(x = agg_label, y = axis_score, fill = agg_label)) +
 ```
 
 ![plot of chunk
-neph-boxplot](kidney_guided_gradient_files/neph-boxplot-1.png)
+neph-boxplot](figures/kidney_guided_gradient-neph-boxplot-1.png)
 
 plot of chunk neph-boxplot
 
@@ -706,7 +707,7 @@ ggplot(vasc_umap[!is.na(vasc_umap$axis_score), ],
 ```
 
 ![plot of chunk
-vasc-umap-score](kidney_guided_gradient_files/vasc-umap-score-1.png)
+vasc-umap-score](figures/kidney_guided_gradient-vasc-umap-score-1.png)
 
 plot of chunk vasc-umap-score
 
@@ -724,7 +725,7 @@ ggplot(vasc_umap, aes(x = UMAP1, y = UMAP2, color = cluster)) +
 ```
 
 ![plot of chunk
-vasc-umap-cluster](kidney_guided_gradient_files/vasc-umap-cluster-1.png)
+vasc-umap-cluster](figures/kidney_guided_gradient-vasc-umap-cluster-1.png)
 
 plot of chunk vasc-umap-cluster
 
@@ -754,7 +755,7 @@ ggplot(vasc_box, aes(x = cluster, y = axis_score, fill = cluster)) +
 ```
 
 ![plot of chunk
-vasc-boxplot](kidney_guided_gradient_files/vasc-boxplot-1.png)
+vasc-boxplot](figures/kidney_guided_gradient-vasc-boxplot-1.png)
 
 plot of chunk vasc-boxplot
 
@@ -869,7 +870,7 @@ ggplot(reg_results, aes(x = beta, y = log_mean_expr)) +
 ```
 
 ![plot of chunk
-full-transcriptome-regression](kidney_guided_gradient_files/full-transcriptome-regression-1.png)
+full-transcriptome-regression](figures/kidney_guided_gradient-full-transcriptome-regression-1.png)
 
 plot of chunk full-transcriptome-regression
 
@@ -921,22 +922,21 @@ sessionInfo()
     ## [1] stats     graphics  grDevices utils     datasets  methods   base     
     ## 
     ## other attached packages:
-    ## [1] scales_1.4.0    ggrepel_0.9.6   patchwork_1.3.2 ggplot2_4.0.1  
-    ## [5] CoPro_1.1.0     testthat_3.3.2 
+    ## [1] scales_1.4.0    ggrepel_0.9.8   patchwork_1.3.2 ggplot2_4.0.2  
+    ## [5] CoPro_1.3.0     testthat_3.3.2  knitr_1.51     
     ## 
     ## loaded via a namespace (and not attached):
-    ##  [1] generics_0.1.4     renv_1.1.7         lattice_0.22-9     magrittr_2.0.4    
-    ##  [5] evaluate_1.0.5     grid_4.5.2         RColorBrewer_1.1-3 pkgload_1.4.1     
-    ##  [9] fastmap_1.2.0      maps_3.4.3         rprojroot_2.1.1    Matrix_1.7-5      
-    ## [13] pkgbuild_1.4.8     sessioninfo_1.2.3  brio_1.1.5         mgcv_1.9-4        
-    ## [17] purrr_1.2.1        spam_2.11-3        viridisLite_0.4.2  isoband_0.3.0     
-    ## [21] cli_3.6.5          rlang_1.1.7        splines_4.5.2      ellipsis_0.3.2    
-    ## [25] remotes_2.5.0      withr_3.0.2        cachem_1.1.0       yaml_2.3.12       
-    ## [29] devtools_2.4.6     otel_0.2.0         tools_4.5.2        parallel_4.5.2    
-    ## [33] memoise_2.0.1      dplyr_1.1.4        vctrs_0.7.1        R6_2.6.1          
-    ## [37] matrixStats_1.5.0  lifecycle_1.0.5    fs_1.6.6           MASS_7.3-65       
-    ## [41] usethis_3.2.1      irlba_2.3.7        pkgconfig_2.0.3    desc_1.4.3        
-    ## [45] pillar_1.11.1      gtable_0.3.6       glue_1.8.0         Rcpp_1.1.1        
-    ## [49] fields_17.1        xfun_0.56          tibble_3.3.1       tidyselect_1.2.1  
-    ## [53] rstudioapi_0.18.0  knitr_1.51         farver_2.1.2       nlme_3.1-169      
-    ## [57] labeling_0.4.3     dotCall64_1.2      compiler_4.5.2     S7_0.2.1
+    ##  [1] generics_0.1.4     lattice_0.22-9     magrittr_2.0.5     evaluate_1.0.5    
+    ##  [5] grid_4.5.2         RColorBrewer_1.1-3 pkgload_1.5.1      fastmap_1.2.0     
+    ##  [9] maps_3.4.3         rprojroot_2.1.1    Matrix_1.7-5       pkgbuild_1.4.8    
+    ## [13] sessioninfo_1.2.3  brio_1.1.5         mgcv_1.9-4         purrr_1.2.1       
+    ## [17] spam_2.11-3        viridisLite_0.4.3  isoband_0.3.0      cli_3.6.5         
+    ## [21] rlang_1.2.0        splines_4.5.2      ellipsis_0.3.3     withr_3.0.2       
+    ## [25] cachem_1.1.0       devtools_2.5.0     otel_0.2.0         tools_4.5.2       
+    ## [29] parallel_4.5.2     memoise_2.0.1      dplyr_1.2.1        vctrs_0.7.2       
+    ## [33] R6_2.6.1           matrixStats_1.5.0  lifecycle_1.0.5    fs_2.0.1          
+    ## [37] MASS_7.3-65        usethis_3.2.1      irlba_2.3.7        pkgconfig_2.0.3   
+    ## [41] desc_1.4.3         pillar_1.11.1      gtable_0.3.6       glue_1.8.0        
+    ## [45] Rcpp_1.1.1         fields_17.1        xfun_0.57          tibble_3.3.1      
+    ## [49] tidyselect_1.2.1   rstudioapi_0.18.0  farver_2.1.2       nlme_3.1-169      
+    ## [53] labeling_0.4.3     dotCall64_1.2      compiler_4.5.2     S7_0.2.1

@@ -13,7 +13,7 @@ batch-level mean shifts from inflating the objective."></head><body>
 
     <a class="navbar-brand me-2" href="../index.html">CoPro</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.1.3</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.3.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -73,10 +73,13 @@ batch-level mean shifts from inflating the objective.</p>
 <span>  min_cells <span class="op">=</span> <span class="fl">20</span>,</span>
 <span>  max_iter <span class="op">=</span> <span class="fl">3000</span>,</span>
 <span>  tol <span class="op">=</span> <span class="fl">1e-06</span>,</span>
+<span>  step_size <span class="op">=</span> <span class="fl">1</span>,</span>
 <span>  streaming <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  distanceArgs <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span><span class="op">)</span>,</span>
 <span>  kernelArgs <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span><span class="op">)</span>,</span>
-<span>  verbose <span class="op">=</span> <span class="cn">TRUE</span></span>
+<span>  verbose <span class="op">=</span> <span class="cn">TRUE</span>,</span>
+<span>  sweep <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"gauss-seidel"</span>, <span class="st">"jacobi"</span><span class="op">)</span>,</span>
+<span>  objective <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"sumcor"</span>, <span class="st">"sumcov"</span><span class="op">)</span></span>
 <span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># S4 method for class 'CoPro'</span></span>
@@ -89,10 +92,13 @@ batch-level mean shifts from inflating the objective.</p>
 <span>  min_cells <span class="op">=</span> <span class="fl">20</span>,</span>
 <span>  max_iter <span class="op">=</span> <span class="fl">3000</span>,</span>
 <span>  tol <span class="op">=</span> <span class="fl">1e-06</span>,</span>
+<span>  step_size <span class="op">=</span> <span class="fl">1</span>,</span>
 <span>  streaming <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  distanceArgs <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span><span class="op">)</span>,</span>
 <span>  kernelArgs <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span><span class="op">)</span>,</span>
-<span>  verbose <span class="op">=</span> <span class="cn">TRUE</span></span>
+<span>  verbose <span class="op">=</span> <span class="cn">TRUE</span>,</span>
+<span>  sweep <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"gauss-seidel"</span>, <span class="st">"jacobi"</span><span class="op">)</span>,</span>
+<span>  objective <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"sumcor"</span>, <span class="st">"sumcov"</span><span class="op">)</span></span>
 <span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># S4 method for class 'CoProMulti'</span></span>
@@ -105,10 +111,13 @@ batch-level mean shifts from inflating the objective.</p>
 <span>  min_cells <span class="op">=</span> <span class="fl">20</span>,</span>
 <span>  max_iter <span class="op">=</span> <span class="fl">3000</span>,</span>
 <span>  tol <span class="op">=</span> <span class="fl">1e-06</span>,</span>
+<span>  step_size <span class="op">=</span> <span class="fl">1</span>,</span>
 <span>  streaming <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  distanceArgs <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span><span class="op">)</span>,</span>
 <span>  kernelArgs <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span><span class="op">)</span>,</span>
-<span>  verbose <span class="op">=</span> <span class="cn">TRUE</span></span>
+<span>  verbose <span class="op">=</span> <span class="cn">TRUE</span>,</span>
+<span>  sweep <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"gauss-seidel"</span>, <span class="st">"jacobi"</span><span class="op">)</span>,</span>
+<span>  objective <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"sumcor"</span>, <span class="st">"sumcov"</span><span class="op">)</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -152,6 +161,12 @@ for which kernels were computed.</p></dd>
 <dd><p>Convergence tolerance (default 1e-6).</p></dd>
 
 
+<dt id="arg-step-size">step_size<a class="anchor" aria-label="anchor" href="#arg-step-size"></a></dt>
+<dd><p>Step size for damped power iteration (default 1).
+Must be in (0, 1]; 1 is pure power iteration (the default behavior).
+Set lower (e.g. 0.5) if optimization oscillates without converging.</p></dd>
+
+
 <dt id="arg-streaming">streaming<a class="anchor" aria-label="anchor" href="#arg-streaming"></a></dt>
 <dd><p>Logical. If <code>TRUE</code>, fuse distance + kernel +
 covariance reduction into a per-slide loop and free the n x n matrices
@@ -175,6 +190,32 @@ streaming path (e.g., <code>lowerLimit</code>, <code>upperQuantile</code>,
 
 <dt id="arg-verbose">verbose<a class="anchor" aria-label="anchor" href="#arg-verbose"></a></dt>
 <dd><p>Print progress messages (default TRUE).</p></dd>
+
+
+<dt id="arg-sweep">sweep<a class="anchor" aria-label="anchor" href="#arg-sweep"></a></dt>
+<dd><p>Block sweep for the power iteration: <code>"gauss-seidel"</code>
+(default) or <code>"jacobi"</code>. Gauss-Seidel reads the blocks already updated
+in the current sweep, which makes each block update an exact maximization
+over that block and rules out convergence to a negative objective. Jacobi
+reads only the previous iterate and can settle on the negative singular
+pair, which is why it needs a post-hoc sign repair – valid for two cell
+types, not for three or more. Kept so results computed before
+<code>"gauss-seidel"</code> became the default reproduce exactly.</p>
+<p>The guarantee is about the <strong>sign, not solution quality</strong>. Under
+<code>objective = "sumcor"</code> the frozen-<code>sigma</code> sweep maximizes a
+surrogate rather than the objective itself, so which local optimum each
+sweep reaches is data-dependent and neither dominates the other.
+Gauss-Seidel is the default because it cannot produce the pathology the
+sign repair was covering for, not because it optimizes better. See
+<code><a href="optimize_genespace_avg_corr.html">optimize_genespace_avg_corr()</a></code>.</p></dd>
+
+
+<dt id="arg-objective">objective<a class="anchor" aria-label="anchor" href="#arg-objective"></a></dt>
+<dd><p><code>"sumcor"</code> (default) normalizes each slide's cross
+term by that slide's own score scales. <code>"sumcov"</code> fixes every scale at
+1, giving the plain sum of kernel-smoothed cross-covariances – the
+gene-space counterpart of <code><a href="runSkrCCA.html">runSkrCCA()</a></code>'s default objective, provided so
+the space and the criterion can be varied independently.</p></dd>
 
 </dl></div>
     <div class="section level2">
@@ -240,8 +281,10 @@ degenerate canonical components on heterogeneous datasets. Use
 <code><a href="computePCA.html">computePCA()</a></code>,
 <code><a href="computeSparseKernel.html">computeSparseKernel()</a></code>,
 <code><a href="computeSparseKernelFloat32.html">computeSparseKernelFloat32()</a></code>,
+<code><a href="detectSigmaRange.html">detectSigmaRange()</a></code>,
 <code><a href="runSkrCCA.html">runSkrCCA()</a></code>,
-<code><a href="runSlideLevelInference.html">runSlideLevelInference()</a></code></p></div>
+<code><a href="runSlideLevelInference.html">runSlideLevelInference()</a></code>,
+<code><a href="selectSigmaByPermutation.html">selectSigmaByPermutation()</a></code></p></div>
     </div>
 
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>

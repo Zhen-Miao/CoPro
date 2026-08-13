@@ -11,7 +11,7 @@ provided kernel matrices at a selected sigma value."></head><body>
 
     <a class="navbar-brand me-2" href="../index.html">CoPro</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.1.3</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.3.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -68,6 +68,8 @@ provided kernel matrices at a selected sigma value.</p>
 <span>  tol <span class="op">=</span> <span class="fl">1e-04</span>,</span>
 <span>  calculationMode <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  sigma_choice_tar <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  normalizer <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"legacy"</span>, <span class="st">"unwhitened"</span>, <span class="st">"kernel"</span>, <span class="st">"variogram"</span><span class="op">)</span>,</span>
+<span>  normalizerControl <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span><span class="op">)</span>,</span>
 <span>  verbose <span class="op">=</span> <span class="cn">TRUE</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
@@ -106,6 +108,15 @@ is multi-slide.</p></dd>
 
 <dt id="arg-sigma-choice-tar">sigma_choice_tar<a class="anchor" aria-label="anchor" href="#arg-sigma-choice-tar"></a></dt>
 <dd><p>Numeric; sigma value for target object kernel matrices. If NULL (default), uses sigma_choice. Not recommended for general use.</p></dd>
+
+
+<dt id="arg-normalizer-normalizercontrol">normalizer, normalizerControl<a class="anchor" aria-label="anchor" href="#arg-normalizer-normalizercontrol"></a></dt>
+<dd><p>Which whitening operators to use in the
+denominator, and their tuning; see <code><a href="computeNormalizedCorrelation.html">computeNormalizedCorrelation()</a></code>. Match
+whatever was used on the reference object, or the transferred correlations
+will not be on the same scale. The autocorrelation range for <code>"variogram"</code>
+is fitted from the target object's PC scores, never from the transferred
+canonical scores, which would leak signal into the denominator.</p></dd>
 
 
 <dt id="arg-verbose">verbose<a class="anchor" aria-label="anchor" href="#arg-verbose"></a></dt>

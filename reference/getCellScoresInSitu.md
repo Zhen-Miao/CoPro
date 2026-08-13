@@ -7,10 +7,7 @@ Get cell score and location information as a data.frame
 ``` r
 getCellScoresInSitu(object, sigmaValueChoice, ccIndex = 1)
 
-# S4 method for class 'CoProSingle'
-getCellScoresInSitu(object, sigmaValueChoice, ccIndex = 1)
-
-# S4 method for class 'CoProMulti'
+# S4 method for class 'CoPro'
 getCellScoresInSitu(object, sigmaValueChoice, ccIndex = 1)
 ```
 
@@ -41,4 +38,5 @@ A data.frame object with cell scores and their locations
 Other accessors:
 [`getCellScores()`](https://zhen-miao.github.io/CoPro/reference/getCellScores.md),
 [`getDistMat()`](https://zhen-miao.github.io/CoPro/reference/getDistMat.md),
+[`getDistanceGeometry()`](https://zhen-miao.github.io/CoPro/reference/getDistanceGeometry.md),
 [`getKernelMatrix()`](https://zhen-miao.github.io/CoPro/reference/getKernelMatrix.md)

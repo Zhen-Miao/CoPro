@@ -19,20 +19,22 @@ computeKernelMatrix(
   minAveCellNeighor = 2,
   rowNormalizeKernel = FALSE,
   colNormalizeKernel = FALSE,
-  method = c("auto", "dense", "sparse"),
+  method = c("auto", "dense", "sparse", "float32"),
   dropDistances = TRUE,
   autoThreshold = 5000L,
+  denseThreshold = 0.3,
   distType = NULL,
-  xDistScale = 1,
-  yDistScale = 1,
-  zDistScale = 1,
-  normalizeDistance = TRUE,
-  normalizeTarget = 0.01,
-  truncateLowDist = TRUE,
+  xDistScale = NULL,
+  yDistScale = NULL,
+  zDistScale = NULL,
+  normalizeDistance = NULL,
+  normalizeMethod = NULL,
+  normalizeTarget = NULL,
+  truncateLowDist = NULL,
   verbose = TRUE
 )
 
-# S4 method for class 'CoProSingle'
+# S4 method for class 'CoPro'
 computeKernelMatrix(
   object,
   sigmaValues,
@@ -42,39 +44,18 @@ computeKernelMatrix(
   minAveCellNeighor = 2,
   rowNormalizeKernel = FALSE,
   colNormalizeKernel = FALSE,
-  method = c("auto", "dense", "sparse"),
+  method = c("auto", "dense", "sparse", "float32"),
   dropDistances = TRUE,
   autoThreshold = 5000L,
+  denseThreshold = 0.3,
   distType = NULL,
-  xDistScale = 1,
-  yDistScale = 1,
-  zDistScale = 1,
-  normalizeDistance = TRUE,
-  normalizeTarget = 0.01,
-  truncateLowDist = TRUE,
-  verbose = TRUE
-)
-
-# S4 method for class 'CoProMulti'
-computeKernelMatrix(
-  object,
-  sigmaValues,
-  lowerLimit = 1e-07,
-  upperQuantile = 0.85,
-  normalizeKernel = FALSE,
-  minAveCellNeighor = 2,
-  rowNormalizeKernel = FALSE,
-  colNormalizeKernel = FALSE,
-  method = c("auto", "dense", "sparse"),
-  dropDistances = TRUE,
-  autoThreshold = 5000L,
-  distType = NULL,
-  xDistScale = 1,
-  yDistScale = 1,
-  zDistScale = 1,
-  normalizeDistance = TRUE,
-  normalizeTarget = 0.01,
-  truncateLowDist = TRUE,
+  xDistScale = NULL,
+  yDistScale = NULL,
+  zDistScale = NULL,
+  normalizeDistance = NULL,
+  normalizeMethod = NULL,
+  normalizeTarget = NULL,
+  truncateLowDist = NULL,
   verbose = TRUE
 )
 ```
@@ -126,21 +107,29 @@ computeKernelMatrix(
 
 - method:
 
-  One of `"auto"`, `"dense"`, or `"sparse"`. `"dense"` is the classic
-  path that reads the distance matrices produced by
+  One of `"auto"`, `"dense"`, `"sparse"`, or `"float32"`. `"dense"` is
+  the classic path that reads the distance matrices produced by
   [`computeDistance()`](https://zhen-miao.github.io/CoPro/reference/computeDistance.md).
-  `"sparse"` is a fused, memory-efficient path
-  ([`computeSparseKernel()`](https://zhen-miao.github.io/CoPro/reference/computeSparseKernel.md))
-  that builds sparse kernels directly from coordinates via a
-  fixed-radius neighbor search, never forming a dense `n x n` matrix,
-  and does not require
+  `"sparse"` and `"float32"` are fused, memory-efficient paths
+  ([`computeSparseKernel()`](https://zhen-miao.github.io/CoPro/reference/computeSparseKernel.md)
+  and
+  [`computeSparseKernelFloat32()`](https://zhen-miao.github.io/CoPro/reference/computeSparseKernelFloat32.md))
+  that build kernels directly from coordinates via a fixed-radius
+  neighbor search, never forming a dense `n x n` matrix, and do not
+  require
   [`computeDistance()`](https://zhen-miao.github.io/CoPro/reference/computeDistance.md)
-  to have been run. Symmetric within-type kernels retain one triangle in
-  a `dsCMatrix`; cross-type and asymmetrically normalized kernels use
-  `dgCMatrix`. Results are numerically equivalent. `"auto"` (default)
-  picks `"sparse"` when any per-slide cell-type block reaches
-  `autoThreshold` cells or when the aggregate dense block workload
-  reaches `autoThreshold^2` entries; otherwise it picks `"dense"`.
+  to have been run. `"float32"` stores 8 bytes per entry against
+  `"sparse"`'s 12 and streams one block at a time instead of caching
+  every block's neighbors, so it is the cheaper of the two; `"sparse"`
+  keeps float64 values for exactness checks.
+
+  `"auto"` (default) picks `"dense"` for small data, and otherwise
+  `"float32"`. Small means every per-slide cell-type block is under
+  `autoThreshold` cells and the aggregate dense workload is under
+  `autoThreshold^2` entries. Above that, a neighbor probe predicts how
+  dense the kernel will actually be and warns when a fixed-radius kernel
+  would retain more than `denseThreshold` of each block, since sparse
+  storage saves nothing there.
 
 - dropDistances:
 
@@ -159,15 +148,36 @@ computeKernelMatrix(
   aggregate dense block entries reach `autoThreshold^2`. Default 5000
   (about 200 MB of doubles before temporary matrices and copies).
 
-- distType, xDistScale, yDistScale, zDistScale, normalizeDistance,
-  normalizeTarget, truncateLowDist:
+- denseThreshold:
 
-  Distance options used only by the sparse path (see
+  Predicted kernel density above which `method = "auto"` warns that a
+  sparse representation is a poor fit and suggests a smaller sigma.
+  Default 0.3. A `dgCMatrix` costs 12 bytes per stored entry against 8
+  for a dense double, so sparse storage is strictly worse past about
+  0.67.
+
+- distType, xDistScale, yDistScale, zDistScale, normalizeDistance,
+  normalizeMethod, normalizeTarget, truncateLowDist:
+
+  Distance options used only by the sparse paths (see
   [`computeDistance()`](https://zhen-miao.github.io/CoPro/reference/computeDistance.md)
   and
   [`computeSparseKernel()`](https://zhen-miao.github.io/CoPro/reference/computeSparseKernel.md)).
-  `distType` defaults to `"Euclidean3D"` when the coordinates contain a
-  `z` column, otherwise `"Euclidean2D"`.
+  Each defaults to `NULL`, meaning "inherit the geometry recorded by
+  [`computeDistance()`](https://zhen-miao.github.io/CoPro/reference/computeDistance.md)",
+  so sparse kernels are built on the same coordinates as the distances
+  rather than on this function's own defaults. When nothing has been
+  recorded, the fallbacks are `xDistScale` / `yDistScale` / `zDistScale`
+  `= 1`, `normalizeDistance = FALSE`, `normalizeMethod = "global"`,
+  `normalizeTarget = 0.01`, `truncateLowDist = TRUE`, and a `distType`
+  of `"Euclidean3D"` when the coordinates contain a `z` column,
+  otherwise `"Euclidean2D"`. Passing a value that contradicts the
+  recorded geometry is an error; inspect the record with
+  [`getDistanceGeometry()`](https://zhen-miao.github.io/CoPro/reference/getDistanceGeometry.md).
+
+  `normalizeDistance` defaulted to `TRUE` before CoPro 1.2.0. Use
+  [`detectSigmaRange()`](https://zhen-miao.github.io/CoPro/reference/detectSigmaRange.md)
+  to choose sigma in the data's own units instead.
 
 - verbose:
 
@@ -180,10 +190,6 @@ matrices are organized into a three-layer nested list object. The first
 layer is indexed by the sigma value, and the second and the third layers
 are cell types
 
-## Note
-
-To-do: Shall we include row or column normalization of the kernel?
-
 ## See also
 
 [`computeDistance()`](https://zhen-miao.github.io/CoPro/reference/computeDistance.md),
@@ -195,9 +201,11 @@ Other spatial-pipeline:
 [`computePCA()`](https://zhen-miao.github.io/CoPro/reference/computePCA.md),
 [`computeSparseKernel()`](https://zhen-miao.github.io/CoPro/reference/computeSparseKernel.md),
 [`computeSparseKernelFloat32()`](https://zhen-miao.github.io/CoPro/reference/computeSparseKernelFloat32.md),
+[`detectSigmaRange()`](https://zhen-miao.github.io/CoPro/reference/detectSigmaRange.md),
 [`runGeneSpaceCCA()`](https://zhen-miao.github.io/CoPro/reference/runGeneSpaceCCA.md),
 [`runSkrCCA()`](https://zhen-miao.github.io/CoPro/reference/runSkrCCA.md),
-[`runSlideLevelInference()`](https://zhen-miao.github.io/CoPro/reference/runSlideLevelInference.md)
+[`runSlideLevelInference()`](https://zhen-miao.github.io/CoPro/reference/runSlideLevelInference.md),
+[`selectSigmaByPermutation()`](https://zhen-miao.github.io/CoPro/reference/selectSigmaByPermutation.md)
 
 ## Examples
 

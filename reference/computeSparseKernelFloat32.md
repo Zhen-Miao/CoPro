@@ -23,14 +23,16 @@ computeSparseKernelFloat32(
   xDistScale = 1,
   yDistScale = 1,
   zDistScale = 1,
-  normalizeDistance = TRUE,
+  normalizeDistance = FALSE,
+  normalizeMethod = "global",
   normalizeTarget = 0.01,
   truncateLowDist = TRUE,
   overwrite = TRUE,
-  verbose = TRUE
+  verbose = TRUE,
+  nThreads = NULL
 )
 
-# S4 method for class 'CoProSingle'
+# S4 method for class 'CoPro'
 computeSparseKernelFloat32(
   object,
   sigmaValues,
@@ -44,32 +46,13 @@ computeSparseKernelFloat32(
   xDistScale = 1,
   yDistScale = 1,
   zDistScale = 1,
-  normalizeDistance = TRUE,
+  normalizeDistance = FALSE,
+  normalizeMethod = "global",
   normalizeTarget = 0.01,
   truncateLowDist = TRUE,
   overwrite = TRUE,
-  verbose = TRUE
-)
-
-# S4 method for class 'CoProMulti'
-computeSparseKernelFloat32(
-  object,
-  sigmaValues,
-  lowerLimit = 1e-07,
-  upperQuantile = 0.85,
-  normalizeKernel = FALSE,
-  minAveCellNeighor = 2,
-  rowNormalizeKernel = FALSE,
-  colNormalizeKernel = FALSE,
-  distType = c("Euclidean2D", "Euclidean3D"),
-  xDistScale = 1,
-  yDistScale = 1,
-  zDistScale = 1,
-  normalizeDistance = TRUE,
-  normalizeTarget = 0.01,
-  truncateLowDist = TRUE,
-  overwrite = TRUE,
-  verbose = TRUE
+  verbose = TRUE,
+  nThreads = NULL
 )
 ```
 
@@ -114,7 +97,16 @@ computeSparseKernelFloat32(
 
 - normalizeDistance:
 
-  Whether to normalize the low distance percentile.
+  Whether to rescale distances to a common unit.
+
+- normalizeMethod:
+
+  How the reference distance is estimated when
+  `normalizeDistance = TRUE`: `"global"` (median nearest-neighbor
+  distance over all cells, ignoring type labels), `"spacing"` (median
+  nearest-partner distance per block, combined by median), or
+  `"percentile"` (pre-1.2.0 behavior). See
+  [`computeDistance()`](https://zhen-miao.github.io/CoPro/reference/computeDistance.md).
 
 - normalizeTarget:
 
@@ -131,6 +123,17 @@ computeSparseKernelFloat32(
 - verbose:
 
   Whether to report progress.
+
+- nThreads:
+
+  Worker threads for the compiled kernel builder. Pass a positive
+  integer to fix the count, including to raise the ceiling for very
+  large jobs. `NULL` (default) falls back to
+  `getOption("CoPro.float32Threads")`, the global flag this argument
+  replaced; with neither set, the count is resolved from the cores
+  actually allocated to this process, capped by `OMP_NUM_THREADS`, by
+  CRAN's core limit during `R CMD check`, and by a ceiling of eight
+  beyond which these memory-bandwidth-bound operators stop scaling.
 
 ## Value
 
@@ -173,6 +176,8 @@ Other spatial-pipeline:
 [`computeKernelMatrix()`](https://zhen-miao.github.io/CoPro/reference/computeKernelMatrix.md),
 [`computePCA()`](https://zhen-miao.github.io/CoPro/reference/computePCA.md),
 [`computeSparseKernel()`](https://zhen-miao.github.io/CoPro/reference/computeSparseKernel.md),
+[`detectSigmaRange()`](https://zhen-miao.github.io/CoPro/reference/detectSigmaRange.md),
 [`runGeneSpaceCCA()`](https://zhen-miao.github.io/CoPro/reference/runGeneSpaceCCA.md),
 [`runSkrCCA()`](https://zhen-miao.github.io/CoPro/reference/runSkrCCA.md),
-[`runSlideLevelInference()`](https://zhen-miao.github.io/CoPro/reference/runSlideLevelInference.md)
+[`runSlideLevelInference()`](https://zhen-miao.github.io/CoPro/reference/runSlideLevelInference.md),
+[`selectSigmaByPermutation()`](https://zhen-miao.github.io/CoPro/reference/selectSigmaByPermutation.md)

@@ -11,7 +11,7 @@ by permuting cell assignments while optionally preserving spatial structure."></
 
     <a class="navbar-brand me-2" href="../index.html">CoPro</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.1.3</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.3.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -74,7 +74,9 @@ by permuting cell assignments while optionally preserving spatial structure.</p>
 <span>  conservative <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  n_cores <span class="op">=</span> <span class="fl">1</span>,</span>
 <span>  verbose <span class="op">=</span> <span class="cn">TRUE</span>,</span>
-<span>  sigma <span class="op">=</span> <span class="cn">NULL</span></span>
+<span>  sigma <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  factorize <span class="op">=</span> <span class="fu">.defaultFactorizePermutation</span><span class="op">(</span><span class="op">)</span>,</span>
+<span>  compactPermutation <span class="op">=</span> <span class="fu">.defaultCompactPermutation</span><span class="op">(</span><span class="op">)</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -114,7 +116,8 @@ spatial autocorrelation by shifting coordinates in a wrap-around manner
 <dd><p>Which cell types to permute:</p><ul><li><p>"second_only" (default): Keep first cell type fixed, permute others</p></li>
 <li><p>"both": Permute all cell types independently (more conservative)</p></li>
 <li><p>"first_only": Keep others fixed, permute only the first cell type</p></li>
-</ul></dd>
+</ul><p>Ignored when the object has a single cell type: there is nothing to hold
+fixed, so that type is permuted and the null is the within-type one.</p></dd>
 
 
 <dt id="arg-num-bins-x">num_bins_x<a class="anchor" aria-label="anchor" href="#arg-num-bins-x"></a></dt>
@@ -162,6 +165,28 @@ and null statistics are evaluated at this fixed sigma. When <code>NULL</code>, t
 selected <code>object@sigmaValueChoice</code> is used conditionally and the returned
 p-value is marked as not adjusted for sigma selection; use
 <code><a href="runSkrCCAPermu_FairSigma.html">runSkrCCAPermu_FairSigma()</a></code> for a max-over-sigma test.</p></dd>
+
+
+<dt id="arg-factorize">factorize<a class="anchor" aria-label="anchor" href="#arg-factorize"></a></dt>
+<dd><p>Apply the fixed-side operator factorization (default: TRUE).
+A cell type held fixed across every draw lets its side of <code>X' K X</code> be
+multiplied by the kernel once instead of once per draw, and lets the score
+norms be read off a cached Gram matrix. The identity is exact, so this
+changes speed and memory only, never a p-value. Set <code>FALSE</code> to route every
+pair through the original sparse product when comparing the two paths.
+Defaults to <code>getOption("CoPro.factorizePermutation", TRUE)</code>, the global
+flag this argument replaced.</p></dd>
+
+
+<dt id="arg-compactpermutation">compactPermutation<a class="anchor" aria-label="anchor" href="#arg-compactpermutation"></a></dt>
+<dd><p>Store the permuted side as one seed per draw rather
+than an explicit index matrix (default: FALSE). Saves the <code>n * nPermu * 4</code>
+bytes per permuted cell type that an index matrix costs, but it changes
+<em>which</em> permutations are drawn, so re-running a saved analysis moves its
+p-values within Monte Carlo error. Held-fixed types are always stored
+compactly, which changes no number at all. Defaults to
+<code>getOption("CoPro.compactPermutation", FALSE)</code>, the global flag this
+argument replaced.</p></dd>
 
 </dl></div>
     <div class="section level2">
@@ -217,6 +242,12 @@ with different random permutations. This breaks MORE structure and may
 lead to higher FPR. Use "second_only" for better FPR control.</p>
 <p><strong>"first_only"</strong>: Keep second+ cell types FIXED, permute only the first.
 Useful if you want to test from the opposite direction.</p>
+<p>With a <strong>single</strong> cell type none of these apply – there is no other type to
+hold fixed – so <code>permu_which</code> is ignored and that type is permuted. The
+resulting null is the within-type one: scores are relabelled against their
+own locations, breaking the association between a cell's score and where it
+sits while leaving the spatial configuration and the score distribution
+intact.</p>
 </div>
 
 <div class="section">
@@ -277,7 +308,8 @@ correlation from permutation results
 <span class="r-in"><span><span class="va">observed</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/Extremes.html" class="external-link">max</a></span><span class="op">(</span><span class="fu"><a href="getNormalizedCorrelation.html">getNormCorr</a></span><span class="op">(</span><span class="va">br</span><span class="op">)</span><span class="op">$</span><span class="va">normalizedCorrelation</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="va">permu_values</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">sapply</a></span><span class="op">(</span><span class="va">br</span><span class="op">@</span><span class="va">normalizedCorrelationPermu</span>,</span></span>
 <span class="r-in"><span>                       <span class="kw">function</span><span class="op">(</span><span class="va">x</span><span class="op">)</span> <span class="va">x</span><span class="op">$</span><span class="va">normalizedCorrelation</span><span class="op">[</span><span class="fl">1</span><span class="op">]</span><span class="op">)</span></span></span>
-<span class="r-in"><span><span class="va">p_value</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/mean.html" class="external-link">mean</a></span><span class="op">(</span><span class="va">permu_values</span> <span class="op">&gt;=</span> <span class="va">observed</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="va">p_value</span> <span class="op">&lt;-</span> <span class="op">(</span><span class="fl">1</span> <span class="op">+</span> <span class="fu"><a href="https://rdrr.io/r/base/sum.html" class="external-link">sum</a></span><span class="op">(</span><span class="va">permu_values</span> <span class="op">&gt;=</span> <span class="va">observed</span><span class="op">)</span><span class="op">)</span> <span class="op">/</span></span></span>
+<span class="r-in"><span>  <span class="op">(</span><span class="fl">1</span> <span class="op">+</span> <span class="fu"><a href="https://rdrr.io/r/base/length.html" class="external-link">length</a></span><span class="op">(</span><span class="va">permu_values</span><span class="op">)</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="op">}</span> <span class="co"># }</span></span></span>
 <span class="r-in"><span></span></span>
 </code></pre></div>

@@ -20,7 +20,9 @@ runSkrCCAPermu_FairSigma(
   maxIter = 200,
   tol = 1e-05,
   n_cores = 1,
-  verbose = TRUE
+  verbose = TRUE,
+  factorize = .defaultFactorizePermutation(),
+  compactPermutation = .defaultCompactPermutation()
 )
 ```
 
@@ -48,7 +50,8 @@ runSkrCCAPermu_FairSigma(
 
 - permu_which:
 
-  Which cell types to permute: "second_only", "both", "first_only"
+  Which cell types to permute: "second_only", "both", "first_only".
+  Ignored with a single cell type, which is always permuted.
 
 - num_bins_x:
 
@@ -83,6 +86,29 @@ runSkrCCAPermu_FairSigma(
 - verbose:
 
   Whether to print progress messages
+
+- factorize:
+
+  Apply the fixed-side operator factorization (default: TRUE). A cell
+  type held fixed across every draw lets its side of `X' K X` be
+  multiplied by the kernel once instead of once per draw, and lets the
+  score norms be read off a cached Gram matrix. The identity is exact,
+  so this changes speed and memory only, never a p-value. Set `FALSE` to
+  route every pair through the original sparse product when comparing
+  the two paths. Defaults to
+  `getOption("CoPro.factorizePermutation", TRUE)`, the global flag this
+  argument replaced.
+
+- compactPermutation:
+
+  Store the permuted side as one seed per draw rather than an explicit
+  index matrix (default: FALSE). Saves the `n * nPermu * 4` bytes per
+  permuted cell type that an index matrix costs, but it changes *which*
+  permutations are drawn, so re-running a saved analysis moves its
+  p-values within Monte Carlo error. Held-fixed types are always stored
+  compactly, which changes no number at all. Defaults to
+  `getOption("CoPro.compactPermutation", FALSE)`, the global flag this
+  argument replaced.
 
 ## Value
 

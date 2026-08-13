@@ -21,7 +21,9 @@ runSkrCCAPermu(
   conservative = FALSE,
   n_cores = 1,
   verbose = TRUE,
-  sigma = NULL
+  sigma = NULL,
+  factorize = .defaultFactorizePermutation(),
+  compactPermutation = .defaultCompactPermutation()
 )
 ```
 
@@ -72,6 +74,10 @@ runSkrCCAPermu(
   - "both": Permute all cell types independently (more conservative)
 
   - "first_only": Keep others fixed, permute only the first cell type
+
+  Ignored when the object has a single cell type: there is nothing to
+  hold fixed, so that type is permuted and the null is the within-type
+  one.
 
 - num_bins_x:
 
@@ -124,6 +130,29 @@ runSkrCCAPermu(
   returned p-value is marked as not adjusted for sigma selection; use
   [`runSkrCCAPermu_FairSigma()`](https://zhen-miao.github.io/CoPro/reference/runSkrCCAPermu_FairSigma.md)
   for a max-over-sigma test.
+
+- factorize:
+
+  Apply the fixed-side operator factorization (default: TRUE). A cell
+  type held fixed across every draw lets its side of `X' K X` be
+  multiplied by the kernel once instead of once per draw, and lets the
+  score norms be read off a cached Gram matrix. The identity is exact,
+  so this changes speed and memory only, never a p-value. Set `FALSE` to
+  route every pair through the original sparse product when comparing
+  the two paths. Defaults to
+  `getOption("CoPro.factorizePermutation", TRUE)`, the global flag this
+  argument replaced.
+
+- compactPermutation:
+
+  Store the permuted side as one seed per draw rather than an explicit
+  index matrix (default: FALSE). Saves the `n * nPermu * 4` bytes per
+  permuted cell type that an index matrix costs, but it changes *which*
+  permutations are drawn, so re-running a saved analysis moves its
+  p-values within Monte Carlo error. Held-fixed types are always stored
+  compactly, which changes no number at all. Defaults to
+  `getOption("CoPro.compactPermutation", FALSE)`, the global flag this
+  argument replaced.
 
 ## Value
 
@@ -182,6 +211,13 @@ and may lead to higher FPR. Use "second_only" for better FPR control.
 
 **"first_only"**: Keep second+ cell types FIXED, permute only the first.
 Useful if you want to test from the opposite direction.
+
+With a **single** cell type none of these apply – there is no other type
+to hold fixed – so `permu_which` is ignored and that type is permuted.
+The resulting null is the within-type one: scores are relabelled against
+their own locations, breaking the association between a cell's score and
+where it sits while leaving the spatial configuration and the score
+distribution intact.
 
 ### Controlling False Positive Rate
 
@@ -248,6 +284,7 @@ br <- computeNormalizedCorrelationPermu(br)
 observed <- max(getNormCorr(br)$normalizedCorrelation)
 permu_values <- sapply(br@normalizedCorrelationPermu,
                        function(x) x$normalizedCorrelation[1])
-p_value <- mean(permu_values >= observed)
+p_value <- (1 + sum(permu_values >= observed)) /
+  (1 + length(permu_values))
 } # }
 ```

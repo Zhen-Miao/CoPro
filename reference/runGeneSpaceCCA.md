@@ -18,10 +18,13 @@ runGeneSpaceCCA(
   min_cells = 20,
   max_iter = 3000,
   tol = 1e-06,
+  step_size = 1,
   streaming = FALSE,
   distanceArgs = list(),
   kernelArgs = list(),
-  verbose = TRUE
+  verbose = TRUE,
+  sweep = c("gauss-seidel", "jacobi"),
+  objective = c("sumcor", "sumcov")
 )
 
 # S4 method for class 'CoPro'
@@ -34,10 +37,13 @@ runGeneSpaceCCA(
   min_cells = 20,
   max_iter = 3000,
   tol = 1e-06,
+  step_size = 1,
   streaming = FALSE,
   distanceArgs = list(),
   kernelArgs = list(),
-  verbose = TRUE
+  verbose = TRUE,
+  sweep = c("gauss-seidel", "jacobi"),
+  objective = c("sumcor", "sumcov")
 )
 
 # S4 method for class 'CoProMulti'
@@ -50,10 +56,13 @@ runGeneSpaceCCA(
   min_cells = 20,
   max_iter = 3000,
   tol = 1e-06,
+  step_size = 1,
   streaming = FALSE,
   distanceArgs = list(),
   kernelArgs = list(),
-  verbose = TRUE
+  verbose = TRUE,
+  sweep = c("gauss-seidel", "jacobi"),
+  objective = c("sumcor", "sumcov")
 )
 ```
 
@@ -95,6 +104,12 @@ runGeneSpaceCCA(
 
   Convergence tolerance (default 1e-6).
 
+- step_size:
+
+  Step size for damped power iteration (default 1). Must be in (0, 1\];
+  1 is pure power iteration (the default behavior). Set lower (e.g. 0.5)
+  if optimization oscillates without converging.
+
 - streaming:
 
   Logical. If `TRUE`, fuse distance + kernel + covariance reduction into
@@ -121,6 +136,35 @@ runGeneSpaceCCA(
 - verbose:
 
   Print progress messages (default TRUE).
+
+- sweep:
+
+  Block sweep for the power iteration: `"gauss-seidel"` (default) or
+  `"jacobi"`. Gauss-Seidel reads the blocks already updated in the
+  current sweep, which makes each block update an exact maximization
+  over that block and rules out convergence to a negative objective.
+  Jacobi reads only the previous iterate and can settle on the negative
+  singular pair, which is why it needs a post-hoc sign repair – valid
+  for two cell types, not for three or more. Kept so results computed
+  before `"gauss-seidel"` became the default reproduce exactly.
+
+  The guarantee is about the **sign, not solution quality**. Under
+  `objective = "sumcor"` the frozen-`sigma` sweep maximizes a surrogate
+  rather than the objective itself, so which local optimum each sweep
+  reaches is data-dependent and neither dominates the other.
+  Gauss-Seidel is the default because it cannot produce the pathology
+  the sign repair was covering for, not because it optimizes better. See
+  [`optimize_genespace_avg_corr()`](https://zhen-miao.github.io/CoPro/reference/optimize_genespace_avg_corr.md).
+
+- objective:
+
+  `"sumcor"` (default) normalizes each slide's cross term by that
+  slide's own score scales. `"sumcov"` fixes every scale at 1, giving
+  the plain sum of kernel-smoothed cross-covariances – the gene-space
+  counterpart of
+  [`runSkrCCA()`](https://zhen-miao.github.io/CoPro/reference/runSkrCCA.md)'s
+  default objective, provided so the space and the criterion can be
+  varied independently.
 
 ## Value
 
@@ -193,5 +237,7 @@ Other spatial-pipeline:
 [`computePCA()`](https://zhen-miao.github.io/CoPro/reference/computePCA.md),
 [`computeSparseKernel()`](https://zhen-miao.github.io/CoPro/reference/computeSparseKernel.md),
 [`computeSparseKernelFloat32()`](https://zhen-miao.github.io/CoPro/reference/computeSparseKernelFloat32.md),
+[`detectSigmaRange()`](https://zhen-miao.github.io/CoPro/reference/detectSigmaRange.md),
 [`runSkrCCA()`](https://zhen-miao.github.io/CoPro/reference/runSkrCCA.md),
-[`runSlideLevelInference()`](https://zhen-miao.github.io/CoPro/reference/runSlideLevelInference.md)
+[`runSlideLevelInference()`](https://zhen-miao.github.io/CoPro/reference/runSlideLevelInference.md),
+[`selectSigmaByPermutation()`](https://zhen-miao.github.io/CoPro/reference/selectSigmaByPermutation.md)

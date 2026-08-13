@@ -9,10 +9,7 @@ downstream analyses.
 ``` r
 getNormCorr(object)
 
-# S4 method for class 'CoProSingle'
-getNormCorr(object)
-
-# S4 method for class 'CoProMulti'
+# S4 method for class 'CoPro'
 getNormCorr(object)
 ```
 

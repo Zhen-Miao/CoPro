@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">CoPro</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.1.3</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.3.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -122,6 +122,18 @@ two cell types of interest.</p></dd>
 <dd><p>A single numeric value. The raw-to-normalized
 distance scaling factor recorded at <code>computeDistance</code> time; persists after
 <code>computeKernelMatrix(dropDistances = TRUE)</code> clears <code>@distances</code>.</p></dd>
+
+
+<dt><code>distanceGeometry</code></dt>
+<dd><p>A <code>list</code> recording the coordinate geometry the
+distances (and therefore the kernels) were built on: <code>distType</code>, the
+per-axis scales <code>xDistScale</code> / <code>yDistScale</code> / <code>zDistScale</code>, the distance
+processing flags <code>normalizeDistance</code> / <code>normalizeTarget</code> /
+<code>truncateLowDist</code>, and the <code>source</code> function that wrote it. Read it with
+<code><a href="getDistanceGeometry.html">getDistanceGeometry()</a></code>. Empty until a distance- or kernel-building step
+has run. Like <code>@distanceScaleFactor</code> it persists after
+<code>computeKernelMatrix(dropDistances = TRUE)</code> clears <code>@distances</code>, so a
+stored object always knows which coordinates its kernels live on.</p></dd>
 
 
 <dt><code>geneList</code></dt>

@@ -20,7 +20,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">CoPro</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.1.3</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.3.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -70,7 +70,7 @@
 
       <h1>Multi-slide, multi-type joint analysis (Colon Day 0)</h1>
             
-            <h4 data-toc-skip class="date">2026-05-19</h4>
+            <h4 data-toc-skip class="date">2026-07-29</h4>
       
       <small class="dont-index">Source: <a href="https://github.com/Zhen-Miao/CoPro/blob/main/vignettes/colon_d0_multi_slide.Rmd" class="external-link"><code>vignettes/colon_d0_multi_slide.Rmd</code></a></small>
       <div class="d-none name"><code>colon_d0_multi_slide.Rmd</code></div>
@@ -185,7 +185,7 @@ own coordinate system.</p>
 <span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/theme.html" class="external-link">theme</a></span><span class="op">(</span>plot.title <span class="op">=</span> <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/element.html" class="external-link">element_text</a></span><span class="op">(</span>hjust <span class="op">=</span> <span class="fl">0.5</span><span class="op">)</span>,</span>
 <span>        legend.position <span class="op">=</span> <span class="st">"bottom"</span><span class="op">)</span></span></code></pre></div>
 <div class="float">
-<img src="colon_d0_multi_slide_files/plot-celltype-1.png" alt="plot of chunk plot-celltype"><div class="figcaption">plot of chunk plot-celltype</div>
+<img src="figures/colon_d0_multi_slide-plot-celltype-1.png" alt="plot of chunk plot-celltype"><div class="figcaption">plot of chunk plot-celltype</div>
 </div>
 </div>
 </div>
@@ -219,7 +219,8 @@ expression. It internally standardizes expression per slide per cell
 type, filters genes by prevalence, and clips extreme values. The only
 prerequisites are distance and kernel matrices.</p>
 <div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">multi_obj</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/computeDistance.html">computeDistance</a></span><span class="op">(</span><span class="va">multi_obj</span>, distType <span class="op">=</span> <span class="st">"Euclidean2D"</span><span class="op">)</span></span>
+<code class="sourceCode R"><span><span class="va">multi_obj</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/computeDistance.html">computeDistance</a></span><span class="op">(</span><span class="va">multi_obj</span>, distType <span class="op">=</span> <span class="st">"Euclidean2D"</span>,</span>
+<span>                            normalizeDistance <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
 <span></span>
 <span><span class="va">sigma_choice</span> <span class="op">&lt;-</span> <span class="fl">0.01</span></span>
 <span><span class="va">multi_obj</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/computeKernelMatrix.html">computeKernelMatrix</a></span><span class="op">(</span><span class="va">multi_obj</span>, sigmaValues <span class="op">=</span> <span class="va">sigma_choice</span><span class="op">)</span></span>
@@ -274,7 +275,7 @@ slides indicate a robust biological signal.</p>
 <span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/theme.html" class="external-link">theme</a></span><span class="op">(</span>plot.title <span class="op">=</span> <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/element.html" class="external-link">element_text</a></span><span class="op">(</span>hjust <span class="op">=</span> <span class="fl">0.5</span><span class="op">)</span>,</span>
 <span>        legend.position <span class="op">=</span> <span class="st">"right"</span><span class="op">)</span></span></code></pre></div>
 <div class="float">
-<img src="colon_d0_multi_slide_files/insitu-cc1-1.png" alt="plot of chunk insitu-cc1"><div class="figcaption">plot of chunk insitu-cc1</div>
+<img src="figures/colon_d0_multi_slide-insitu-cc1-1.png" alt="plot of chunk insitu-cc1"><div class="figcaption">plot of chunk insitu-cc1</div>
 </div>
 </div>
 </div>
@@ -308,7 +309,7 @@ co-progression.</p>
 <span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/theme.html" class="external-link">theme</a></span><span class="op">(</span>legend.position <span class="op">=</span> <span class="st">"bottom"</span><span class="op">)</span> <span class="op">+</span></span>
 <span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/guides.html" class="external-link">guides</a></span><span class="op">(</span>color <span class="op">=</span> <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/guide_legend.html" class="external-link">guide_legend</a></span><span class="op">(</span>override.aes <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>size <span class="op">=</span> <span class="fl">2</span>, alpha <span class="op">=</span> <span class="fl">1</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
 <div class="float">
-<img src="colon_d0_multi_slide_files/cross-corr-1.png" alt="plot of chunk cross-corr"><div class="figcaption">plot of chunk cross-corr</div>
+<img src="figures/colon_d0_multi_slide-cross-corr-1.png" alt="plot of chunk cross-corr"><div class="figcaption">plot of chunk cross-corr</div>
 </div>
 </div>
 <div class="section level2">
@@ -355,7 +356,7 @@ rankings across replicates.</p>
 <span><span class="va">p_epi</span> <span class="op">+</span> <span class="va">p_fib</span> <span class="op">+</span> <span class="va">p_imm</span> <span class="op">+</span></span>
 <span>  <span class="fu"><a href="https://patchwork.data-imaginist.com/reference/plot_annotation.html" class="external-link">plot_annotation</a></span><span class="op">(</span>title <span class="op">=</span> <span class="st">"Top 20 gene weights per cell type (CC1)"</span><span class="op">)</span></span></code></pre></div>
 <div class="float">
-<img src="colon_d0_multi_slide_files/top-genes-cc1-1.png" alt="plot of chunk top-genes-cc1"><div class="figcaption">plot of chunk top-genes-cc1</div>
+<img src="figures/colon_d0_multi_slide-top-genes-cc1-1.png" alt="plot of chunk top-genes-cc1"><div class="figcaption">plot of chunk top-genes-cc1</div>
 </div>
 </div>
 </div>
@@ -389,7 +390,7 @@ correlations.</p>
 <span><span class="fu"><a href="https://patchwork.data-imaginist.com/reference/wrap_plots.html" class="external-link">wrap_plots</a></span><span class="op">(</span><span class="va">dist_plots</span>, ncol <span class="op">=</span> <span class="fl">3</span><span class="op">)</span> <span class="op">+</span></span>
 <span>  <span class="fu"><a href="https://patchwork.data-imaginist.com/reference/plot_annotation.html" class="external-link">plot_annotation</a></span><span class="op">(</span>title <span class="op">=</span> <span class="st">"CC1 score distributions across slides"</span><span class="op">)</span></span></code></pre></div>
 <div class="float">
-<img src="colon_d0_multi_slide_files/per-slide-dist-1.png" alt="plot of chunk per-slide-dist"><div class="figcaption">plot of chunk per-slide-dist</div>
+<img src="figures/colon_d0_multi_slide-per-slide-dist-1.png" alt="plot of chunk per-slide-dist"><div class="figcaption">plot of chunk per-slide-dist</div>
 </div>
 </div>
 <div class="section level3">
@@ -438,7 +439,7 @@ correlations.</p>
 <span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/ggtheme.html" class="external-link">theme_classic</a></span><span class="op">(</span><span class="op">)</span> <span class="op">+</span></span>
 <span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/theme.html" class="external-link">theme</a></span><span class="op">(</span>axis.title.x <span class="op">=</span> <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/element.html" class="external-link">element_blank</a></span><span class="op">(</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
 <div class="float">
-<img src="colon_d0_multi_slide_files/per-slide-corr-1.png" alt="plot of chunk per-slide-corr"><div class="figcaption">plot of chunk per-slide-corr</div>
+<img src="figures/colon_d0_multi_slide-per-slide-corr-1.png" alt="plot of chunk per-slide-corr"><div class="figcaption">plot of chunk per-slide-corr</div>
 </div>
 </div>
 </div>
@@ -486,30 +487,30 @@ from PCA space is needed.</li>
 <span><span class="co">## locale:</span></span>
 <span><span class="co">## [1] en_US.UTF-8/en_US.UTF-8/en_US.UTF-8/C/en_US.UTF-8/en_US.UTF-8</span></span>
 <span><span class="co">## </span></span>
-<span><span class="co">## time zone: America/New_York</span></span>
+<span><span class="co">## time zone: America/Los_Angeles</span></span>
 <span><span class="co">## tzcode source: internal</span></span>
 <span><span class="co">## </span></span>
 <span><span class="co">## attached base packages:</span></span>
 <span><span class="co">## [1] stats     graphics  grDevices utils     datasets  methods   base     </span></span>
 <span><span class="co">## </span></span>
 <span><span class="co">## other attached packages:</span></span>
-<span><span class="co">## [1] patchwork_1.3.2 CoPro_1.1.0     testthat_3.3.2  magrittr_2.0.5 </span></span>
-<span><span class="co">## [5] devtools_2.5.0  usethis_3.2.1   ggplot2_4.0.2   dplyr_1.2.1    </span></span>
+<span><span class="co">## [1] patchwork_1.3.2 ggplot2_4.0.2   CoPro_1.3.0     testthat_3.3.2 </span></span>
+<span><span class="co">## [5] knitr_1.51     </span></span>
 <span><span class="co">## </span></span>
 <span><span class="co">## loaded via a namespace (and not attached):</span></span>
-<span><span class="co">##  [1] generics_0.1.4     lattice_0.22-9     evaluate_1.0.5     grid_4.5.2        </span></span>
-<span><span class="co">##  [5] RColorBrewer_1.1-3 pkgload_1.5.1      fastmap_1.2.0      maps_3.4.3        </span></span>
-<span><span class="co">##  [9] rprojroot_2.1.1    Matrix_1.7-5       pkgbuild_1.4.8     sessioninfo_1.2.3 </span></span>
-<span><span class="co">## [13] brio_1.1.5         purrr_1.2.1        spam_2.11-3        viridisLite_0.4.3 </span></span>
-<span><span class="co">## [17] scales_1.4.0       cli_3.6.5          rlang_1.2.0        ellipsis_0.3.3    </span></span>
-<span><span class="co">## [21] withr_3.0.2        cachem_1.1.0       otel_0.2.0         tools_4.5.2       </span></span>
-<span><span class="co">## [25] parallel_4.5.2     memoise_2.0.1      vctrs_0.7.2        R6_2.6.1          </span></span>
-<span><span class="co">## [29] matrixStats_1.5.0  lifecycle_1.0.5    fs_2.0.1           irlba_2.3.7       </span></span>
-<span><span class="co">## [33] pkgconfig_2.0.3    desc_1.4.3         pillar_1.11.1      gtable_0.3.6      </span></span>
-<span><span class="co">## [37] glue_1.8.0         Rcpp_1.1.1         fields_17.1        xfun_0.57         </span></span>
-<span><span class="co">## [41] tibble_3.3.1       tidyselect_1.2.1   knitr_1.51         rstudioapi_0.18.0 </span></span>
-<span><span class="co">## [45] farver_2.1.2       labeling_0.4.3     dotCall64_1.2      compiler_4.5.2    </span></span>
-<span><span class="co">## [49] S7_0.2.1</span></span></code></pre>
+<span><span class="co">##  [1] generics_0.1.4     lattice_0.22-9     magrittr_2.0.5     evaluate_1.0.5    </span></span>
+<span><span class="co">##  [5] grid_4.5.2         RColorBrewer_1.1-3 pkgload_1.5.1      fastmap_1.2.0     </span></span>
+<span><span class="co">##  [9] maps_3.4.3         rprojroot_2.1.1    Matrix_1.7-5       pkgbuild_1.4.8    </span></span>
+<span><span class="co">## [13] sessioninfo_1.2.3  brio_1.1.5         purrr_1.2.1        spam_2.11-3       </span></span>
+<span><span class="co">## [17] viridisLite_0.4.3  scales_1.4.0       cli_3.6.5          rlang_1.2.0       </span></span>
+<span><span class="co">## [21] ellipsis_0.3.3     withr_3.0.2        cachem_1.1.0       devtools_2.5.0    </span></span>
+<span><span class="co">## [25] otel_0.2.0         tools_4.5.2        parallel_4.5.2     memoise_2.0.1     </span></span>
+<span><span class="co">## [29] dplyr_1.2.1        vctrs_0.7.2        R6_2.6.1           matrixStats_1.5.0 </span></span>
+<span><span class="co">## [33] lifecycle_1.0.5    fs_2.0.1           usethis_3.2.1      irlba_2.3.7       </span></span>
+<span><span class="co">## [37] pkgconfig_2.0.3    desc_1.4.3         pillar_1.11.1      gtable_0.3.6      </span></span>
+<span><span class="co">## [41] glue_1.8.0         Rcpp_1.1.1         fields_17.1        xfun_0.57         </span></span>
+<span><span class="co">## [45] tibble_3.3.1       tidyselect_1.2.1   rstudioapi_0.18.0  farver_2.1.2      </span></span>
+<span><span class="co">## [49] labeling_0.4.3     dotCall64_1.2      compiler_4.5.2     S7_0.2.1</span></span></code></pre>
 </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
     </nav></aside>

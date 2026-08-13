@@ -92,4 +92,5 @@ A standard kernel matrix, or an encoded float32 kernel when
 Other accessors:
 [`getCellScores()`](https://zhen-miao.github.io/CoPro/reference/getCellScores.md),
 [`getCellScoresInSitu()`](https://zhen-miao.github.io/CoPro/reference/getCellScoresInSitu.md),
-[`getDistMat()`](https://zhen-miao.github.io/CoPro/reference/getDistMat.md)
+[`getDistMat()`](https://zhen-miao.github.io/CoPro/reference/getDistMat.md),
+[`getDistanceGeometry()`](https://zhen-miao.github.io/CoPro/reference/getDistanceGeometry.md)

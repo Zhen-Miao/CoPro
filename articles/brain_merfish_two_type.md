@@ -35,7 +35,7 @@ ggplot(dat$metaData) +
 ```
 
 ![plot of chunk
-plot-layout](brain_merfish_two_type_files/plot-layout-1.png)
+plot-layout](figures/brain_merfish_two_type-plot-layout-1.png)
 
 plot of chunk plot-layout
 
@@ -80,7 +80,7 @@ ggplot(ncorr, aes(x = sigmaValues, y = normalizedCorrelation)) +
 ```
 
 ![plot of chunk
-plot-ncorr](brain_merfish_two_type_files/plot-ncorr-1.png)
+plot-ncorr](figures/brain_merfish_two_type-plot-ncorr-1.png)
 
 plot of chunk plot-ncorr
 
@@ -106,7 +106,7 @@ ggplot(df_corr) +
 ```
 
 ![plot of chunk
-plot-cross-corr](brain_merfish_two_type_files/plot-cross-corr-1.png)
+plot-cross-corr](figures/brain_merfish_two_type-plot-cross-corr-1.png)
 
 plot of chunk plot-cross-corr
 
@@ -126,7 +126,7 @@ ggplot(cs) +
 ```
 
 ![plot of chunk
-plot-insitu](brain_merfish_two_type_files/plot-insitu-1.png)
+plot-insitu](figures/brain_merfish_two_type-plot-insitu-1.png)
 
 plot of chunk plot-insitu
 
@@ -142,7 +142,7 @@ ggplot(cs) +
 ```
 
 ![plot of chunk
-plot-insitu](brain_merfish_two_type_files/plot-insitu-2.png)
+plot-insitu](figures/brain_merfish_two_type-plot-insitu-2.png)
 
 plot of chunk plot-insitu
 
@@ -208,16 +208,16 @@ print(nc_permu)
     ## permu_5.1         0.5 061 STR D1 Gaba 062 STR D2 Gaba        1
     ## permu_5.2         0.5 061 STR D1 Gaba 062 STR D2 Gaba        2
     ##           normalizedCorrelation
-    ## permu_1.1            0.11962518
-    ## permu_1.2            0.08066617
-    ## permu_2.1            0.09511043
-    ## permu_2.2            0.06913074
-    ## permu_3.1            0.11137639
-    ## permu_3.2            0.05411276
-    ## permu_4.1            0.12439634
-    ## permu_4.2            0.08982477
-    ## permu_5.1            0.10812664
-    ## permu_5.2            0.05715897
+    ## permu_1.1            0.15218903
+    ## permu_1.2            0.05617256
+    ## permu_2.1            0.11783491
+    ## permu_2.2            0.10282334
+    ## permu_3.1            0.12198456
+    ## permu_3.2            0.06373995
+    ## permu_4.1            0.10547411
+    ## permu_4.2            0.09324433
+    ## permu_5.1            0.12172732
+    ## permu_5.2            0.07113216
 
 ## References
 
@@ -250,16 +250,19 @@ sessionInfo()
     ## [1] stats     graphics  grDevices utils     datasets  methods   base     
     ## 
     ## other attached packages:
-    ## [1] ggplot2_4.0.2 CoPro_1.1.1   knitr_1.51   
+    ## [1] ggplot2_4.0.2  CoPro_1.3.0    testthat_3.3.2 knitr_1.51    
     ## 
     ## loaded via a namespace (and not attached):
-    ##  [1] Matrix_1.7-5       gtable_0.3.6       dplyr_1.2.1        compiler_4.5.2    
-    ##  [5] maps_3.4.3         tidyselect_1.2.1   Rcpp_1.1.1         parallel_4.5.2    
-    ##  [9] scales_1.4.0       lattice_0.22-9     R6_2.6.1           labeling_0.4.3    
-    ## [13] generics_0.1.4     dotCall64_1.2      tibble_3.3.1       pillar_1.11.1     
-    ## [17] RColorBrewer_1.1-3 rlang_1.2.0        xfun_0.57          S7_0.2.1          
-    ## [21] otel_0.2.0         viridisLite_0.4.3  cli_3.6.5          withr_3.0.2       
-    ## [25] magrittr_2.0.5     grid_4.5.2         irlba_2.3.7        spam_2.11-3       
-    ## [29] lifecycle_1.0.5    fields_17.1        vctrs_0.7.2        evaluate_1.0.5    
-    ## [33] glue_1.8.0         farver_2.1.2       matrixStats_1.5.0  tools_4.5.2       
-    ## [37] pkgconfig_2.0.3
+    ##  [1] generics_0.1.4     lattice_0.22-9     magrittr_2.0.5     evaluate_1.0.5    
+    ##  [5] grid_4.5.2         RColorBrewer_1.1-3 pkgload_1.5.1      fastmap_1.2.0     
+    ##  [9] maps_3.4.3         rprojroot_2.1.1    Matrix_1.7-5       pkgbuild_1.4.8    
+    ## [13] sessioninfo_1.2.3  brio_1.1.5         purrr_1.2.1        spam_2.11-3       
+    ## [17] viridisLite_0.4.3  scales_1.4.0       cli_3.6.5          rlang_1.2.0       
+    ## [21] ellipsis_0.3.3     withr_3.0.2        cachem_1.1.0       devtools_2.5.0    
+    ## [25] otel_0.2.0         tools_4.5.2        parallel_4.5.2     memoise_2.0.1     
+    ## [29] dplyr_1.2.1        vctrs_0.7.2        R6_2.6.1           matrixStats_1.5.0 
+    ## [33] lifecycle_1.0.5    fs_2.0.1           usethis_3.2.1      irlba_2.3.7       
+    ## [37] pkgconfig_2.0.3    desc_1.4.3         pillar_1.11.1      gtable_0.3.6      
+    ## [41] glue_1.8.0         Rcpp_1.1.1         fields_17.1        xfun_0.57         
+    ## [45] tibble_3.3.1       tidyselect_1.2.1   rstudioapi_0.18.0  farver_2.1.2      
+    ## [49] labeling_0.4.3     dotCall64_1.2      compiler_4.5.2     S7_0.2.1

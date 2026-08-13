@@ -14,6 +14,8 @@ getTransferNormCorr(
   tol = 1e-04,
   calculationMode = NULL,
   sigma_choice_tar = NULL,
+  normalizer = c("legacy", "unwhitened", "kernel", "variogram"),
+  normalizerControl = list(),
   verbose = TRUE
 )
 ```
@@ -52,6 +54,17 @@ getTransferNormCorr(
 
   Numeric; sigma value for target object kernel matrices. If NULL
   (default), uses sigma_choice. Not recommended for general use.
+
+- normalizer, normalizerControl:
+
+  Which whitening operators to use in the denominator, and their tuning;
+  see
+  [`computeNormalizedCorrelation()`](https://zhen-miao.github.io/CoPro/reference/computeNormalizedCorrelation.md).
+  Match whatever was used on the reference object, or the transferred
+  correlations will not be on the same scale. The autocorrelation range
+  for `"variogram"` is fitted from the target object's PC scores, never
+  from the transferred canonical scores, which would leak signal into
+  the denominator.
 
 - verbose:
 

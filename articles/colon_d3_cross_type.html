@@ -20,7 +20,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">CoPro</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.1.3</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.3.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -70,7 +70,7 @@
 
       <h1>Cross-cell-type co-progression with orthogonal axes (Colon Day 3)</h1>
             
-            <h4 data-toc-skip class="date">2026-07-20</h4>
+            <h4 data-toc-skip class="date">2026-07-29</h4>
       
       <small class="dont-index">Source: <a href="https://github.com/Zhen-Miao/CoPro/blob/main/vignettes/colon_d3_cross_type.Rmd" class="external-link"><code>vignettes/colon_d3_cross_type.Rmd</code></a></small>
       <div class="d-none name"><code>colon_d3_cross_type.Rmd</code></div>
@@ -134,7 +134,7 @@ structure.</p>
 <span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/ggtheme.html" class="external-link">theme_classic</a></span><span class="op">(</span><span class="op">)</span> <span class="op">+</span></span>
 <span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/theme.html" class="external-link">theme</a></span><span class="op">(</span>legend.position <span class="op">=</span> <span class="st">"bottom"</span><span class="op">)</span></span></code></pre></div>
 <div class="float">
-<img src="colon_d3_cross_type_files/plot-layout-1.png" alt="plot of chunk plot-layout"><div class="figcaption">plot of chunk plot-layout</div>
+<img src="figures/colon_d3_cross_type-plot-layout-1.png" alt="plot of chunk plot-layout"><div class="figcaption">plot of chunk plot-layout</div>
 </div>
 <div class="section level3">
 <h3 id="mucosal-neighborhood-mu-labels">Mucosal neighborhood (MU) labels<a class="anchor" aria-label="anchor" href="#mucosal-neighborhood-mu-labels"></a>
@@ -166,7 +166,7 @@ MU1–3 (crypt-associated neighborhoods):</p>
 <span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/theme.html" class="external-link">theme</a></span><span class="op">(</span>legend.position <span class="op">=</span> <span class="st">"bottom"</span>,</span>
 <span>        legend.title <span class="op">=</span> <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/element.html" class="external-link">element_blank</a></span><span class="op">(</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
 <div class="float">
-<img src="colon_d3_cross_type_files/plot-mu-1.png" alt="plot of chunk plot-mu"><div class="figcaption">plot of chunk plot-mu</div>
+<img src="figures/colon_d3_cross_type-plot-mu-1.png" alt="plot of chunk plot-mu"><div class="figcaption">plot of chunk plot-mu</div>
 </div>
 </div>
 </div>
@@ -192,12 +192,15 @@ MU1–3 (crypt-associated neighborhoods):</p>
 <span><span class="va">obj</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/computePCA.html">computePCA</a></span><span class="op">(</span><span class="va">obj</span>, nPCA <span class="op">=</span> <span class="fl">15</span>, center <span class="op">=</span> <span class="cn">TRUE</span>, scale. <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># Distance and kernel</span></span>
-<span><span class="va">obj</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/computeDistance.html">computeDistance</a></span><span class="op">(</span><span class="va">obj</span>, distType <span class="op">=</span> <span class="st">"Euclidean2D"</span><span class="op">)</span></span>
+<span><span class="va">obj</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/computeDistance.html">computeDistance</a></span><span class="op">(</span><span class="va">obj</span>, distType <span class="op">=</span> <span class="st">"Euclidean2D"</span>,</span>
+<span>                            normalizeDistance <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
 <span></span>
 <span><span class="va">sigma_choice</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.005</span>, <span class="fl">0.01</span>, <span class="fl">0.02</span>, <span class="fl">0.05</span>, <span class="fl">0.1</span><span class="op">)</span></span>
-<span><span class="va">obj</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/computeKernelMatrix.html">computeKernelMatrix</a></span><span class="op">(</span><span class="va">obj</span>, sigmaValues <span class="op">=</span> <span class="va">sigma_choice</span><span class="op">)</span></span>
-<span></span>
-<span><span class="co"># Sparse kernel CCA -- request 4 CCs to capture multiple axes</span></span>
+<span><span class="va">obj</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/computeKernelMatrix.html">computeKernelMatrix</a></span><span class="op">(</span><span class="va">obj</span>, sigmaValues <span class="op">=</span> <span class="va">sigma_choice</span><span class="op">)</span></span></code></pre></div>
+<pre><code><span><span class="co">## Warning: The kernel at sigma = 0.1 is predicted to be 38% dense, so a fixed-radius sparse kernel saves little or no memory here (sparse storage costs more than dense past ~67% density).</span></span>
+<span><span class="co">##   Sigma below about 0.0884 would keep it under 30%. Use detectSigmaRange() to pick sigma from the data, or build one sigma at a time to bound peak memory.</span></span></code></pre>
+<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co"># Sparse kernel CCA -- request 4 CCs to capture multiple axes</span></span>
 <span><span class="va">obj</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/runSkrCCA.html">runSkrCCA</a></span><span class="op">(</span><span class="va">obj</span>, scalePCs <span class="op">=</span> <span class="cn">TRUE</span>, maxIter <span class="op">=</span> <span class="fl">500</span>, nCC <span class="op">=</span> <span class="fl">4</span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># Normalized correlation and scores</span></span>
@@ -207,7 +210,7 @@ MU1–3 (crypt-associated neighborhoods):</p>
 <div class="section level2">
 <h2 id="select-optimal-sigma">Select optimal sigma<a class="anchor" aria-label="anchor" href="#select-optimal-sigma"></a>
 </h2>
-<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">ncorr</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/getNormalizedCorrelation.html">getNormCorr</a></span><span class="op">(</span><span class="va">obj</span><span class="op">)</span></span>
 <span></span>
 <span><span class="fu"><a href="https://ggplot2.tidyverse.org/reference/ggplot.html" class="external-link">ggplot</a></span><span class="op">(</span><span class="va">ncorr</span>, <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/aes.html" class="external-link">aes</a></span><span class="op">(</span>x <span class="op">=</span> <span class="va">sigmaValues</span>, y <span class="op">=</span> <span class="va">normalizedCorrelation</span><span class="op">)</span><span class="op">)</span> <span class="op">+</span></span>
@@ -219,7 +222,7 @@ MU1–3 (crypt-associated neighborhoods):</p>
 <span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/labs.html" class="external-link">ggtitle</a></span><span class="op">(</span><span class="st">"Normalized correlation across sigma values"</span><span class="op">)</span> <span class="op">+</span></span>
 <span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/ggtheme.html" class="external-link">theme_minimal</a></span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
 <div class="float">
-<img src="colon_d3_cross_type_files/plot-ncorr-1.png" alt="plot of chunk plot-ncorr"><div class="figcaption">plot of chunk plot-ncorr</div>
+<img src="figures/colon_d3_cross_type-plot-ncorr-1.png" alt="plot of chunk plot-ncorr"><div class="figcaption">plot of chunk plot-ncorr</div>
 </div>
 </div>
 <div class="section level2">
@@ -231,7 +234,7 @@ co-variation:</p>
 <div class="section level3">
 <h3 id="cc1-cell-scores-in-situ">CC1 cell scores in situ<a class="anchor" aria-label="anchor" href="#cc1-cell-scores-in-situ"></a>
 </h3>
-<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">sigma_opt</span> <span class="op">&lt;-</span> <span class="fl">0.01</span>  <span class="co"># adjust based on ncorr plot</span></span>
 <span></span>
 <span><span class="va">cs_cc1</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/getCellScoresInSitu.html">getCellScoresInSitu</a></span><span class="op">(</span><span class="va">obj</span>, sigmaValueChoice <span class="op">=</span> <span class="va">sigma_opt</span>,</span>
@@ -245,13 +248,13 @@ co-variation:</p>
 <span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/labs.html" class="external-link">ggtitle</a></span><span class="op">(</span><span class="st">"CC1 cell scores in situ (by cell type)"</span><span class="op">)</span> <span class="op">+</span></span>
 <span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/ggtheme.html" class="external-link">theme_minimal</a></span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
 <div class="float">
-<img src="colon_d3_cross_type_files/insitu-cc1-1.png" alt="plot of chunk insitu-cc1"><div class="figcaption">plot of chunk insitu-cc1</div>
+<img src="figures/colon_d3_cross_type-insitu-cc1-1.png" alt="plot of chunk insitu-cc1"><div class="figcaption">plot of chunk insitu-cc1</div>
 </div>
 </div>
 <div class="section level3">
 <h3 id="cc2-cell-scores-in-situ">CC2 cell scores in situ<a class="anchor" aria-label="anchor" href="#cc2-cell-scores-in-situ"></a>
 </h3>
-<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">cs_cc2</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/getCellScoresInSitu.html">getCellScoresInSitu</a></span><span class="op">(</span><span class="va">obj</span>, sigmaValueChoice <span class="op">=</span> <span class="va">sigma_opt</span>,</span>
 <span>                               ccIndex <span class="op">=</span> <span class="fl">2</span><span class="op">)</span></span>
 <span></span>
@@ -263,7 +266,7 @@ co-variation:</p>
 <span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/labs.html" class="external-link">ggtitle</a></span><span class="op">(</span><span class="st">"CC2 cell scores in situ (by cell type)"</span><span class="op">)</span> <span class="op">+</span></span>
 <span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/ggtheme.html" class="external-link">theme_minimal</a></span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
 <div class="float">
-<img src="colon_d3_cross_type_files/insitu-cc2-1.png" alt="plot of chunk insitu-cc2"><div class="figcaption">plot of chunk insitu-cc2</div>
+<img src="figures/colon_d3_cross_type-insitu-cc2-1.png" alt="plot of chunk insitu-cc2"><div class="figcaption">plot of chunk insitu-cc2</div>
 </div>
 <p>CC1 and CC2 capture distinct spatial gradients. Because CCA axes are
 orthogonal, these represent independent programs of coordinated gene
@@ -277,7 +280,7 @@ expression across cell types.</p>
 independently derived MU labels. We plot CC1 vs CC2 cell scores colored
 by MU label, showing that MU4 (inflammation) occupies a distinct region
 of the CoPro score space:</p>
-<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">lmeta</span> <span class="op">&lt;-</span> <span class="va">obj</span><span class="op">@</span><span class="va">metaDataSub</span></span>
 <span><span class="va">lmeta</span><span class="op">$</span><span class="va">cc1</span> <span class="op">&lt;-</span> <span class="va">lmeta</span><span class="op">[</span>, <span class="fu"><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste0</a></span><span class="op">(</span><span class="st">"cellScore_sigma_"</span>, <span class="va">sigma_opt</span>, <span class="st">"_cc_index_1"</span><span class="op">)</span><span class="op">]</span></span>
 <span><span class="va">lmeta</span><span class="op">$</span><span class="va">cc2</span> <span class="op">&lt;-</span> <span class="va">lmeta</span><span class="op">[</span>, <span class="fu"><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste0</a></span><span class="op">(</span><span class="st">"cellScore_sigma_"</span>, <span class="va">sigma_opt</span>, <span class="st">"_cc_index_2"</span><span class="op">)</span><span class="op">]</span></span>
@@ -299,7 +302,7 @@ of the CoPro score space:</p>
 <span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/labs.html" class="external-link">ggtitle</a></span><span class="op">(</span><span class="st">"CoPro CC1 vs CC2 colored by MU label"</span><span class="op">)</span> <span class="op">+</span></span>
 <span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/ggtheme.html" class="external-link">theme_classic</a></span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
 <div class="float">
-<img src="colon_d3_cross_type_files/cc1-vs-cc2-mu-1.png" alt="plot of chunk cc1-vs-cc2-mu"><div class="figcaption">plot of chunk cc1-vs-cc2-mu</div>
+<img src="figures/colon_d3_cross_type-cc1-vs-cc2-mu-1.png" alt="plot of chunk cc1-vs-cc2-mu"><div class="figcaption">plot of chunk cc1-vs-cc2-mu</div>
 </div>
 </div>
 <div class="section level2">
@@ -309,7 +312,7 @@ of the CoPro score space:</p>
 visualize two marker genes: <strong>Egr1</strong> (immediate early gene,
 enriched in the inflammation/CC2 axis) and <strong>Mki67</strong>
 (proliferation marker, enriched in crypt base/CC1 axis):</p>
-<div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb14"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">expr_df</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span></span>
 <span>  x <span class="op">=</span> <span class="va">dat</span><span class="op">$</span><span class="va">locationData</span><span class="op">$</span><span class="va">x</span>,</span>
 <span>  y <span class="op">=</span> <span class="va">dat</span><span class="op">$</span><span class="va">locationData</span><span class="op">$</span><span class="va">y</span>,</span>
@@ -328,9 +331,9 @@ enriched in the inflammation/CC2 axis) and <strong>Mki67</strong>
 <span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/theme.html" class="external-link">theme</a></span><span class="op">(</span>axis.line <span class="op">=</span> <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/element.html" class="external-link">element_blank</a></span><span class="op">(</span><span class="op">)</span>, axis.text <span class="op">=</span> <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/element.html" class="external-link">element_blank</a></span><span class="op">(</span><span class="op">)</span>,</span>
 <span>        axis.ticks <span class="op">=</span> <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/element.html" class="external-link">element_blank</a></span><span class="op">(</span><span class="op">)</span>, axis.title <span class="op">=</span> <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/element.html" class="external-link">element_blank</a></span><span class="op">(</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
 <div class="float">
-<img src="colon_d3_cross_type_files/gene-insitu-egr1-1.png" alt="plot of chunk gene-insitu-egr1"><div class="figcaption">plot of chunk gene-insitu-egr1</div>
+<img src="figures/colon_d3_cross_type-gene-insitu-egr1-1.png" alt="plot of chunk gene-insitu-egr1"><div class="figcaption">plot of chunk gene-insitu-egr1</div>
 </div>
-<div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb15"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Mki67 (proliferation marker)</span></span>
 <span><span class="va">expr_df</span> <span class="op">&lt;-</span> <span class="va">expr_df</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/order.html" class="external-link">order</a></span><span class="op">(</span><span class="va">expr_df</span><span class="op">$</span><span class="va">Mki67</span><span class="op">)</span>, <span class="op">]</span></span>
 <span><span class="fu"><a href="https://ggplot2.tidyverse.org/reference/ggplot.html" class="external-link">ggplot</a></span><span class="op">(</span><span class="va">expr_df</span>, <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/aes.html" class="external-link">aes</a></span><span class="op">(</span>x <span class="op">=</span> <span class="va">x</span>, y <span class="op">=</span> <span class="va">y</span>, color <span class="op">=</span> <span class="va">Mki67</span><span class="op">)</span><span class="op">)</span> <span class="op">+</span></span>
@@ -342,7 +345,7 @@ enriched in the inflammation/CC2 axis) and <strong>Mki67</strong>
 <span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/theme.html" class="external-link">theme</a></span><span class="op">(</span>axis.line <span class="op">=</span> <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/element.html" class="external-link">element_blank</a></span><span class="op">(</span><span class="op">)</span>, axis.text <span class="op">=</span> <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/element.html" class="external-link">element_blank</a></span><span class="op">(</span><span class="op">)</span>,</span>
 <span>        axis.ticks <span class="op">=</span> <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/element.html" class="external-link">element_blank</a></span><span class="op">(</span><span class="op">)</span>, axis.title <span class="op">=</span> <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/element.html" class="external-link">element_blank</a></span><span class="op">(</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
 <div class="float">
-<img src="colon_d3_cross_type_files/gene-insitu-mki67-1.png" alt="plot of chunk gene-insitu-mki67"><div class="figcaption">plot of chunk gene-insitu-mki67</div>
+<img src="figures/colon_d3_cross_type-gene-insitu-mki67-1.png" alt="plot of chunk gene-insitu-mki67"><div class="figcaption">plot of chunk gene-insitu-mki67</div>
 </div>
 </div>
 <div class="section level2">
@@ -350,7 +353,7 @@ enriched in the inflammation/CC2 axis) and <strong>Mki67</strong>
 </h2>
 <p>The correlation between cell types shows how strongly their spatial
 programs are coupled:</p>
-<div class="sourceCode" id="cb14"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb16"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># CC1: Epithelial vs Fibroblast</span></span>
 <span><span class="va">df_cc1</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/getCorrTwoTypes.html">getCorrTwoTypes</a></span><span class="op">(</span><span class="va">obj</span>,</span>
 <span>  sigmaValueChoice <span class="op">=</span> <span class="va">sigma_opt</span>,</span>
@@ -366,9 +369,9 @@ programs are coupled:</p>
 <span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/labs.html" class="external-link">ggtitle</a></span><span class="op">(</span><span class="st">"CC1: Epithelial-Fibroblast co-progression"</span><span class="op">)</span> <span class="op">+</span></span>
 <span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/ggtheme.html" class="external-link">theme_minimal</a></span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
 <div class="float">
-<img src="colon_d3_cross_type_files/cross-corr-1.png" alt="plot of chunk cross-corr"><div class="figcaption">plot of chunk cross-corr</div>
+<img src="figures/colon_d3_cross_type-cross-corr-1.png" alt="plot of chunk cross-corr"><div class="figcaption">plot of chunk cross-corr</div>
 </div>
-<div class="sourceCode" id="cb15"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb17"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># CC2: Epithelial vs Fibroblast</span></span>
 <span><span class="va">df_cc2</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/getCorrTwoTypes.html">getCorrTwoTypes</a></span><span class="op">(</span><span class="va">obj</span>,</span>
 <span>  sigmaValueChoice <span class="op">=</span> <span class="va">sigma_opt</span>,</span>
@@ -384,14 +387,14 @@ programs are coupled:</p>
 <span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/labs.html" class="external-link">ggtitle</a></span><span class="op">(</span><span class="st">"CC2: Epithelial-Fibroblast co-progression"</span><span class="op">)</span> <span class="op">+</span></span>
 <span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/ggtheme.html" class="external-link">theme_minimal</a></span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
 <div class="float">
-<img src="colon_d3_cross_type_files/cross-corr-2.png" alt="plot of chunk cross-corr"><div class="figcaption">plot of chunk cross-corr</div>
+<img src="figures/colon_d3_cross_type-cross-corr-2.png" alt="plot of chunk cross-corr"><div class="figcaption">plot of chunk cross-corr</div>
 </div>
 </div>
 <div class="section level2">
 <h2 id="gene-scores">Gene scores<a class="anchor" aria-label="anchor" href="#gene-scores"></a>
 </h2>
 <p>Identify which genes drive each co-progression axis:</p>
-<div class="sourceCode" id="cb16"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb18"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Compute regression-based gene scores (recommended)</span></span>
 <span><span class="va">obj</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/computeRegressionGeneScores.html">computeRegressionGeneScores</a></span><span class="op">(</span><span class="va">obj</span>, sigma <span class="op">=</span> <span class="va">sigma_opt</span><span class="op">)</span></span></code></pre></div>
 <pre><code><span><span class="co">## Computed regression gene scores for sigma=0.01, cellType='Epithelial'</span></span></code></pre>
@@ -400,7 +403,7 @@ programs are coupled:</p>
 <div class="section level3">
 <h3 id="visualize-top-genes-for-cc1">Visualize top genes for CC1<a class="anchor" aria-label="anchor" href="#visualize-top-genes-for-cc1"></a>
 </h3>
-<div class="sourceCode" id="cb20"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb22"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Extract regression gene scores for Epithelial CC1</span></span>
 <span><span class="va">key</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste0</a></span><span class="op">(</span><span class="st">"geneScores|sigma"</span>, <span class="va">sigma_opt</span>, <span class="st">"|Epithelial"</span><span class="op">)</span></span>
 <span><span class="va">gs_epi</span> <span class="op">&lt;-</span> <span class="va">obj</span><span class="op">@</span><span class="va">geneScoresRegression</span><span class="op">[[</span><span class="va">key</span><span class="op">]</span><span class="op">]</span></span>
@@ -423,13 +426,13 @@ programs are coupled:</p>
 <span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/ggtheme.html" class="external-link">theme_classic</a></span><span class="op">(</span><span class="op">)</span> <span class="op">+</span></span>
 <span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/theme.html" class="external-link">theme</a></span><span class="op">(</span>legend.position <span class="op">=</span> <span class="st">"none"</span><span class="op">)</span></span></code></pre></div>
 <div class="float">
-<img src="colon_d3_cross_type_files/top-genes-cc1-1.png" alt="plot of chunk top-genes-cc1"><div class="figcaption">plot of chunk top-genes-cc1</div>
+<img src="figures/colon_d3_cross_type-top-genes-cc1-1.png" alt="plot of chunk top-genes-cc1"><div class="figcaption">plot of chunk top-genes-cc1</div>
 </div>
 </div>
 <div class="section level3">
 <h3 id="visualize-top-genes-for-cc2">Visualize top genes for CC2<a class="anchor" aria-label="anchor" href="#visualize-top-genes-for-cc2"></a>
 </h3>
-<div class="sourceCode" id="cb21"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb23"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Top 20 genes by absolute weight for CC2</span></span>
 <span><span class="va">gs_cc2</span> <span class="op">&lt;-</span> <span class="va">gs_epi</span><span class="op">[</span>, <span class="fl">2</span><span class="op">]</span></span>
 <span><span class="va">top_genes_cc2</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/sort.html" class="external-link">sort</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/MathFun.html" class="external-link">abs</a></span><span class="op">(</span><span class="va">gs_cc2</span><span class="op">)</span>, decreasing <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span>, <span class="fl">20</span><span class="op">)</span></span>
@@ -448,14 +451,14 @@ programs are coupled:</p>
 <span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/ggtheme.html" class="external-link">theme_classic</a></span><span class="op">(</span><span class="op">)</span> <span class="op">+</span></span>
 <span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/theme.html" class="external-link">theme</a></span><span class="op">(</span>legend.position <span class="op">=</span> <span class="st">"none"</span><span class="op">)</span></span></code></pre></div>
 <div class="float">
-<img src="colon_d3_cross_type_files/top-genes-cc2-1.png" alt="plot of chunk top-genes-cc2"><div class="figcaption">plot of chunk top-genes-cc2</div>
+<img src="figures/colon_d3_cross_type-top-genes-cc2-1.png" alt="plot of chunk top-genes-cc2"><div class="figcaption">plot of chunk top-genes-cc2</div>
 </div>
 </div>
 </div>
 <div class="section level2">
 <h2 id="session-info">Session info<a class="anchor" aria-label="anchor" href="#session-info"></a>
 </h2>
-<div class="sourceCode" id="cb22"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb24"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/sessionInfo.html" class="external-link">sessionInfo</a></span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
 <pre><code><span><span class="co">## R version 4.5.2 (2025-10-31)</span></span>
 <span><span class="co">## Platform: aarch64-apple-darwin20</span></span>
@@ -475,19 +478,24 @@ programs are coupled:</p>
 <span><span class="co">## [1] stats     graphics  grDevices utils     datasets  methods   base     </span></span>
 <span><span class="co">## </span></span>
 <span><span class="co">## other attached packages:</span></span>
-<span><span class="co">## [1] ggplot2_4.0.2 CoPro_1.1.1   knitr_1.51   </span></span>
+<span><span class="co">## [1] patchwork_1.3.2 ggplot2_4.0.2   CoPro_1.3.0     testthat_3.3.2 </span></span>
+<span><span class="co">## [5] knitr_1.51     </span></span>
 <span><span class="co">## </span></span>
 <span><span class="co">## loaded via a namespace (and not attached):</span></span>
-<span><span class="co">##  [1] Matrix_1.7-5       gtable_0.3.6       dplyr_1.2.1        compiler_4.5.2    </span></span>
-<span><span class="co">##  [5] maps_3.4.3         tidyselect_1.2.1   Rcpp_1.1.1         parallel_4.5.2    </span></span>
-<span><span class="co">##  [9] scales_1.4.0       lattice_0.22-9     R6_2.6.1           labeling_0.4.3    </span></span>
-<span><span class="co">## [13] generics_0.1.4     isoband_0.3.0      MASS_7.3-65        dotCall64_1.2     </span></span>
-<span><span class="co">## [17] tibble_3.3.1       pillar_1.11.1      RColorBrewer_1.1-3 rlang_1.2.0       </span></span>
-<span><span class="co">## [21] xfun_0.57          S7_0.2.1           otel_0.2.0         viridisLite_0.4.3 </span></span>
-<span><span class="co">## [25] cli_3.6.5          withr_3.0.2        magrittr_2.0.5     grid_4.5.2        </span></span>
-<span><span class="co">## [29] irlba_2.3.7        spam_2.11-3        lifecycle_1.0.5    fields_17.1       </span></span>
-<span><span class="co">## [33] vctrs_0.7.2        evaluate_1.0.5     glue_1.8.0         farver_2.1.2      </span></span>
-<span><span class="co">## [37] matrixStats_1.5.0  tools_4.5.2        pkgconfig_2.0.3</span></span></code></pre>
+<span><span class="co">##  [1] generics_0.1.4     lattice_0.22-9     magrittr_2.0.5     evaluate_1.0.5    </span></span>
+<span><span class="co">##  [5] grid_4.5.2         RColorBrewer_1.1-3 pkgload_1.5.1      fastmap_1.2.0     </span></span>
+<span><span class="co">##  [9] maps_3.4.3         rprojroot_2.1.1    Matrix_1.7-5       pkgbuild_1.4.8    </span></span>
+<span><span class="co">## [13] sessioninfo_1.2.3  brio_1.1.5         purrr_1.2.1        spam_2.11-3       </span></span>
+<span><span class="co">## [17] viridisLite_0.4.3  scales_1.4.0       isoband_0.3.0      cli_3.6.5         </span></span>
+<span><span class="co">## [21] rlang_1.2.0        ellipsis_0.3.3     withr_3.0.2        cachem_1.1.0      </span></span>
+<span><span class="co">## [25] devtools_2.5.0     otel_0.2.0         tools_4.5.2        parallel_4.5.2    </span></span>
+<span><span class="co">## [29] memoise_2.0.1      dplyr_1.2.1        vctrs_0.7.2        R6_2.6.1          </span></span>
+<span><span class="co">## [33] matrixStats_1.5.0  lifecycle_1.0.5    fs_2.0.1           MASS_7.3-65       </span></span>
+<span><span class="co">## [37] usethis_3.2.1      irlba_2.3.7        pkgconfig_2.0.3    desc_1.4.3        </span></span>
+<span><span class="co">## [41] pillar_1.11.1      gtable_0.3.6       glue_1.8.0         Rcpp_1.1.1        </span></span>
+<span><span class="co">## [45] fields_17.1        xfun_0.57          tibble_3.3.1       tidyselect_1.2.1  </span></span>
+<span><span class="co">## [49] rstudioapi_0.18.0  farver_2.1.2       labeling_0.4.3     dotCall64_1.2     </span></span>
+<span><span class="co">## [53] compiler_4.5.2     S7_0.2.1</span></span></code></pre>
 </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
     </nav></aside>

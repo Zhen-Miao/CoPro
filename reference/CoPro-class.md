@@ -68,6 +68,19 @@ CoPro object of spatial transcriptomics data
   recorded at `computeDistance` time; persists after
   `computeKernelMatrix(dropDistances = TRUE)` clears `@distances`.
 
+- `distanceGeometry`:
+
+  A `list` recording the coordinate geometry the distances (and
+  therefore the kernels) were built on: `distType`, the per-axis scales
+  `xDistScale` / `yDistScale` / `zDistScale`, the distance processing
+  flags `normalizeDistance` / `normalizeTarget` / `truncateLowDist`, and
+  the `source` function that wrote it. Read it with
+  [`getDistanceGeometry()`](https://zhen-miao.github.io/CoPro/reference/getDistanceGeometry.md).
+  Empty until a distance- or kernel-building step has run. Like
+  `@distanceScaleFactor` it persists after
+  `computeKernelMatrix(dropDistances = TRUE)` clears `@distances`, so a
+  stored object always knows which coordinates its kernels live on.
+
 - `geneList`:
 
   A `vector` object with elements being character. To store the gene

@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">CoPro</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.1.3</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.3.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -63,7 +63,8 @@
 <span>  permu_which <span class="op">=</span> <span class="st">"second_only"</span>,</span>
 <span>  num_bins_x <span class="op">=</span> <span class="fl">10</span>,</span>
 <span>  num_bins_y <span class="op">=</span> <span class="fl">10</span>,</span>
-<span>  match_quantile <span class="op">=</span> <span class="cn">FALSE</span></span>
+<span>  match_quantile <span class="op">=</span> <span class="cn">FALSE</span>,</span>
+<span>  compactPermutation <span class="op">=</span> <span class="fu">.defaultCompactPermutation</span><span class="op">(</span><span class="op">)</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -103,6 +104,11 @@
 <dd><p>Logical. If TRUE and permu_method="bin", matches cells
 between tiles based on their relative (quantile) positions to better preserve
 within-tile spatial structure. Default: FALSE.</p></dd>
+
+
+<dt id="arg-compactpermutation">compactPermutation<a class="anchor" aria-label="anchor" href="#arg-compactpermutation"></a></dt>
+<dd><p>Logical. Store the permuted side as one seed per
+draw instead of an explicit index matrix.</p></dd>
 
 </dl></div>
     <div class="section level2">

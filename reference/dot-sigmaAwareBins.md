@@ -19,7 +19,8 @@ grid (e.g. the historical 10x10) ignores both the tissue extent and
 
 - object:
 
-  A CoPro object (uses `@locationDataSub` and `@distances`).
+  A CoPro object (uses `@locationDataSub`, `@distanceGeometry`, and
+  `@distances`).
 
 - sigma:
 
@@ -37,3 +38,15 @@ grid (e.g. the historical 10x10) ignores both the tissue extent and
 
 A list with integer `num_bins_x`, `num_bins_y`, and the recovered
 `scale_factor`.
+
+## Details
+
+The grid is laid out in raw `x,y` coordinate units, but `sigma` lives on
+the analysis distance scale, so the two are related by the distance
+scale factor *and* by the per-axis coordinate scales recorded in
+`@distanceGeometry`. A `yDistScale` of 2.5 stretches the y axis by 2.5
+before distances are taken, so a patch that is `2 * sigma` wide on the
+analysis scale is 2.5 times narrower in raw y units than in raw x units.
+Each axis is therefore sized independently. A 3-D `distType` is binned
+on `x,y` only, as the permutation grid is two-dimensional; that is
+reported rather than silently assumed.

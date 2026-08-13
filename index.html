@@ -22,7 +22,7 @@
 
     <a class="navbar-brand me-2" href="index.html">CoPro</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.1.3</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.3.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -65,7 +65,7 @@
 </nav><div class="container template-home">
 <div class="row">
   <main id="main" class="col-md-9"><div class="section level1">
-<div class="page-header"><h1 id="copro-">CoPro <img src="reference/figures/copro-refined-logo-final.jpg" align="right" width="150"><a class="anchor" aria-label="anchor" href="#copro-"></a>
+<div class="page-header"><h1 id="copro-">CoPro <img src="reference/figures/copro-refined-logo-final.jpg" align="right" width="150" alt="CoPro logo"><a class="anchor" aria-label="anchor" href="#copro-"></a>
 </h1></div>
 <!-- badges: start -->
 
@@ -104,15 +104,31 @@
 <span><span class="co"># Run the analysis pipeline</span></span>
 <span><span class="va">obj</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/subsetData.html">subsetData</a></span><span class="op">(</span><span class="va">obj</span>, cellTypesOfInterest <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"TypeA"</span>, <span class="st">"TypeB"</span><span class="op">)</span><span class="op">)</span></span>
 <span><span class="va">obj</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/computePCA.html">computePCA</a></span><span class="op">(</span><span class="va">obj</span>, nPCA <span class="op">=</span> <span class="fl">30</span><span class="op">)</span></span>
-<span><span class="va">obj</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/computeDistance.html">computeDistance</a></span><span class="op">(</span><span class="va">obj</span>, distType <span class="op">=</span> <span class="st">"Euclidean2D"</span><span class="op">)</span></span>
-<span><span class="va">obj</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/computeKernelMatrix.html">computeKernelMatrix</a></span><span class="op">(</span><span class="va">obj</span>, sigmaValues <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.05</span>, <span class="fl">0.1</span>, <span class="fl">0.2</span><span class="op">)</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Pick sigma from the data. sigma is a distance, so it lives in whatever units</span></span>
+<span><span class="co"># locationData used; detectSigmaRange() reports the sigmas that give the median</span></span>
+<span><span class="co"># cell 5-20 effective neighbors.</span></span>
+<span><span class="va">sigmaRange</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/detectSigmaRange.html">detectSigmaRange</a></span><span class="op">(</span><span class="va">obj</span><span class="op">)</span></span>
+<span><span class="va">sigmaRange</span>                       <span class="co"># per-block diagnostics + recommended grid</span></span>
+<span></span>
+<span><span class="co"># No computeDistance() needed: the sparse routes build kernels straight from</span></span>
+<span><span class="co"># coordinates, and method = "auto" picks float32 for anything large.</span></span>
+<span><span class="va">obj</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/computeKernelMatrix.html">computeKernelMatrix</a></span><span class="op">(</span><span class="va">obj</span>, sigmaValues <span class="op">=</span> <span class="va">sigmaRange</span><span class="op">$</span><span class="va">sigmaValues</span><span class="op">)</span></span>
 <span><span class="va">obj</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/runSkrCCA.html">runSkrCCA</a></span><span class="op">(</span><span class="va">obj</span>, scalePCs <span class="op">=</span> <span class="cn">TRUE</span>, nCC <span class="op">=</span> <span class="fl">2</span><span class="op">)</span></span>
 <span><span class="va">obj</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/computeNormalizedCorrelation.html">computeNormalizedCorrelation</a></span><span class="op">(</span><span class="va">obj</span><span class="op">)</span></span>
 <span><span class="va">obj</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/computeGeneAndCellScores.html">computeGeneAndCellScores</a></span><span class="op">(</span><span class="va">obj</span><span class="op">)</span></span>
+<span><span class="va">obj</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/computeRegressionGeneScores.html">computeRegressionGeneScores</a></span><span class="op">(</span><span class="va">obj</span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># Get results</span></span>
 <span><span class="va">cell_scores</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/getCellScores.html">getCellScores</a></span><span class="op">(</span><span class="va">obj</span>, sigma <span class="op">=</span> <span class="va">obj</span><span class="op">@</span><span class="va">sigmaValueChoice</span>, cellType <span class="op">=</span> <span class="st">"TypeA"</span><span class="op">)</span></span></code></pre></div>
+<p>Gene weights come in two flavors: <code>@geneScores</code> (PCA back-projection, from <code><a href="reference/computeGeneAndCellScores.html">computeGeneAndCellScores()</a></code>) and <code>@geneScoresRegression</code> (from <code><a href="reference/computeRegressionGeneScores.html">computeRegressionGeneScores()</a></code>). Prefer the regression weights — they avoid PCA collinearity, are insensitive to the <code>nPCA</code> choice, and reproduce better across replicates.</p>
+<p>For <code>CoProMulti</code>, these same calls use the batch-robust defaults: genes are centered and scaled within each <code>(slide, cell type)</code> block before one shared PCA is fit, and <code><a href="reference/runSkrCCA.html">runSkrCCA()</a></code> optimizes equal-slide SUMCOR. Pass <code>center_per_slide = FALSE</code> and <code>objective = "sumcov"</code> only when reproducing the legacy pooled workflow.</p>
 <p>See the <strong><a href="https://zhen-miao.github.io/CoPro/articles/">Getting Started vignettes</a></strong> for complete walkthroughs with real spatial transcriptomics datasets, including within-cell-type analysis, cross-cell-type co-progression, and multi-slide experiments.</p>
+</div>
+<div class="section level2">
+<h2 id="api-naming">API naming<a class="anchor" aria-label="anchor" href="#api-naming"></a>
+</h2>
+<p>The two naming styles in the API mark two layers. <code>camelCase</code> is the object pipeline — functions that take a <code>CoProSingle</code> or <code>CoProMulti</code> and return one, so they chain (<code><a href="reference/computePCA.html">computePCA()</a></code>, <code><a href="reference/computeKernelMatrix.html">computeKernelMatrix()</a></code>, <code><a href="reference/runSkrCCA.html">runSkrCCA()</a></code>, <code><a href="reference/getCellScores.html">getCellScores()</a></code>). <code>snake_case</code> is the engine and utility layer — functions that work on plain matrices and data frames with no CoPro object involved (<code><a href="reference/optimize_bilinear.html">optimize_bilinear()</a></code>, <code><a href="reference/optimize_sumcor_pca.html">optimize_sumcor_pca()</a></code>, <code><a href="reference/resample_spatial.html">resample_spatial()</a></code>, <code><a href="reference/quantile_normalize.html">quantile_normalize()</a></code>). Reach for the latter when you want the numerical core without the object wrapper. See <code><a href="reference/CoPro-package.html">?CoPro</a></code> for the full rule and its two documented exceptions.</p>
 </div>
 <div class="section level2">
 <h2 id="citation">Citation<a class="anchor" aria-label="anchor" href="#citation"></a>

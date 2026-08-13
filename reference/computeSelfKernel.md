@@ -20,18 +20,19 @@ computeSelfKernel(
   colNormalizeKernel = FALSE,
   verbose = TRUE,
   overwrite = FALSE,
-  method = c("auto", "dense", "sparse"),
+  method = c("auto", "dense", "sparse", "float32"),
   autoThreshold = 5000L,
   distType = NULL,
-  xDistScale = 1,
-  yDistScale = 1,
-  zDistScale = 1,
-  normalizeDistance = TRUE,
-  normalizeTarget = 0.01,
-  truncateLowDist = TRUE
+  xDistScale = NULL,
+  yDistScale = NULL,
+  zDistScale = NULL,
+  normalizeDistance = NULL,
+  normalizeMethod = NULL,
+  normalizeTarget = NULL,
+  truncateLowDist = NULL
 )
 
-# S4 method for class 'CoProSingle'
+# S4 method for class 'CoPro'
 computeSelfKernel(
   object,
   sigmaValues,
@@ -43,38 +44,16 @@ computeSelfKernel(
   colNormalizeKernel = FALSE,
   verbose = TRUE,
   overwrite = FALSE,
-  method = c("auto", "dense", "sparse"),
+  method = c("auto", "dense", "sparse", "float32"),
   autoThreshold = 5000L,
   distType = NULL,
-  xDistScale = 1,
-  yDistScale = 1,
-  zDistScale = 1,
-  normalizeDistance = TRUE,
-  normalizeTarget = 0.01,
-  truncateLowDist = TRUE
-)
-
-# S4 method for class 'CoProMulti'
-computeSelfKernel(
-  object,
-  sigmaValues,
-  lowerLimit = 1e-07,
-  upperQuantile = 0.85,
-  normalizeKernel = FALSE,
-  minAveCellNeighor = 2,
-  rowNormalizeKernel = FALSE,
-  colNormalizeKernel = FALSE,
-  verbose = TRUE,
-  overwrite = FALSE,
-  method = c("auto", "dense", "sparse"),
-  autoThreshold = 5000L,
-  distType = NULL,
-  xDistScale = 1,
-  yDistScale = 1,
-  zDistScale = 1,
-  normalizeDistance = TRUE,
-  normalizeTarget = 0.01,
-  truncateLowDist = TRUE
+  xDistScale = NULL,
+  yDistScale = NULL,
+  zDistScale = NULL,
+  normalizeDistance = NULL,
+  normalizeMethod = NULL,
+  normalizeTarget = NULL,
+  truncateLowDist = NULL
 )
 ```
 
@@ -123,23 +102,46 @@ computeSelfKernel(
 
 - method:
 
-  One of `"auto"`, `"dense"`, or `"sparse"`. The sparse path constructs
-  exact thresholded self-kernels directly from coordinates and does not
-  require
+  One of `"auto"`, `"dense"`, `"sparse"`, or `"float32"`. Sparse paths
+  construct thresholded self-kernels directly from coordinates and do
+  not require
   [`computeSelfDistance()`](https://zhen-miao.github.io/CoPro/reference/computeSelfDistance.md).
+  `"auto"` uses float32 sparse storage for large workloads; request
+  `"sparse"` for float64 equivalence checks.
 
 - autoThreshold:
 
-  Cell-count threshold used by `method = "auto"`. Sparse construction is
-  selected when a self-kernel dimension reaches this value, aggregate
-  dense self-kernel entries reach its square, or required self-distance
-  matrices are absent. Default 5000.
+  Cell-count threshold used by `method = "auto"`. Float32 sparse
+  construction is selected when a self-kernel dimension reaches this
+  value, aggregate dense self-kernel entries reach its square, or
+  required self-distance matrices are absent. Default 5000.
 
 - distType, xDistScale, yDistScale, zDistScale, normalizeDistance,
   normalizeTarget, truncateLowDist:
 
   Distance options for the sparse path, matching
-  [`computeKernelMatrix()`](https://zhen-miao.github.io/CoPro/reference/computeKernelMatrix.md).
+  [`computeKernelMatrix()`](https://zhen-miao.github.io/CoPro/reference/computeKernelMatrix.md):
+  `NULL` inherits the geometry recorded by
+  [`computeDistance()`](https://zhen-miao.github.io/CoPro/reference/computeDistance.md)
+  /
+  [`computeSelfDistance()`](https://zhen-miao.github.io/CoPro/reference/computeSelfDistance.md),
+  and a value that contradicts that record is an error.
+  `normalizeDistance` additionally accepts `"inherit"`, which reuses the
+  scaling factor
+  [`computeDistance()`](https://zhen-miao.github.io/CoPro/reference/computeDistance.md)
+  recorded rather than deriving one from the self-distances; see
+  [`computeSelfDistance()`](https://zhen-miao.github.io/CoPro/reference/computeSelfDistance.md).
+  Building self-kernels never overwrites a factor already recorded on
+  the object.
+
+- normalizeMethod:
+
+  How the reference distance is estimated when
+  `normalizeDistance = TRUE`: `"global"` (median nearest-neighbor
+  distance over all cells, ignoring type labels), `"spacing"` (median
+  nearest-partner distance per block, combined by median), or
+  `"percentile"` (pre-1.2.0 behavior). See
+  [`computeDistance()`](https://zhen-miao.github.io/CoPro/reference/computeDistance.md).
 
 ## Value
 

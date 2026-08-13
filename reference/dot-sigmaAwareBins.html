@@ -21,7 +21,7 @@ root cause of mis-calibrated bin-wise permutation."></head><body>
 
     <a class="navbar-brand me-2" href="../index.html">CoPro</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.1.3</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.3.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -84,7 +84,8 @@ root cause of mis-calibrated bin-wise permutation.</p>
 
 
 <dl><dt id="arg-object">object<a class="anchor" aria-label="anchor" href="#arg-object"></a></dt>
-<dd><p>A CoPro object (uses <code>@locationDataSub</code> and <code>@distances</code>).</p></dd>
+<dd><p>A CoPro object (uses <code>@locationDataSub</code>, <code>@distanceGeometry</code>,
+and <code>@distances</code>).</p></dd>
 
 
 <dt id="arg-sigma">sigma<a class="anchor" aria-label="anchor" href="#arg-sigma"></a></dt>
@@ -103,6 +104,17 @@ root cause of mis-calibrated bin-wise permutation.</p>
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
     <p>A list with integer <code>num_bins_x</code>, <code>num_bins_y</code>, and the recovered
 <code>scale_factor</code>.</p>
+    </div>
+    <div class="section level2">
+    <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
+    <p>The grid is laid out in raw <code>x,y</code> coordinate units, but <code>sigma</code> lives on the
+analysis distance scale, so the two are related by the distance scale factor
+<em>and</em> by the per-axis coordinate scales recorded in <code>@distanceGeometry</code>. A
+<code>yDistScale</code> of 2.5 stretches the y axis by 2.5 before distances are taken,
+so a patch that is <code>2 * sigma</code> wide on the analysis scale is 2.5 times
+narrower in raw y units than in raw x units. Each axis is therefore sized
+independently. A 3-D <code>distType</code> is binned on <code>x,y</code> only, as the permutation
+grid is two-dimensional; that is reported rather than silently assumed.</p>
     </div>
 
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>

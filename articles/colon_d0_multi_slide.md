@@ -120,7 +120,7 @@ wrap_plots(ct_plots, ncol = 3) +
 ```
 
 ![plot of chunk
-plot-celltype](colon_d0_multi_slide_files/plot-celltype-1.png)
+plot-celltype](figures/colon_d0_multi_slide-plot-celltype-1.png)
 
 plot of chunk plot-celltype
 
@@ -156,7 +156,8 @@ matrices.
 
 ``` r
 
-multi_obj <- computeDistance(multi_obj, distType = "Euclidean2D")
+multi_obj <- computeDistance(multi_obj, distType = "Euclidean2D",
+                            normalizeDistance = TRUE)
 
 sigma_choice <- 0.01
 multi_obj <- computeKernelMatrix(multi_obj, sigmaValues = sigma_choice)
@@ -213,7 +214,8 @@ wrap_plots(cc1_plots, ncol = 3) +
         legend.position = "right")
 ```
 
-![plot of chunk insitu-cc1](colon_d0_multi_slide_files/insitu-cc1-1.png)
+![plot of chunk
+insitu-cc1](figures/colon_d0_multi_slide-insitu-cc1-1.png)
 
 plot of chunk insitu-cc1
 
@@ -249,7 +251,8 @@ ggplot(df_cc1, aes(x = AK, y = B, color = slide_label)) +
   guides(color = guide_legend(override.aes = list(size = 2, alpha = 1)))
 ```
 
-![plot of chunk cross-corr](colon_d0_multi_slide_files/cross-corr-1.png)
+![plot of chunk
+cross-corr](figures/colon_d0_multi_slide-cross-corr-1.png)
 
 plot of chunk cross-corr
 
@@ -299,7 +302,7 @@ p_epi + p_fib + p_imm +
 ```
 
 ![plot of chunk
-top-genes-cc1](colon_d0_multi_slide_files/top-genes-cc1-1.png)
+top-genes-cc1](figures/colon_d0_multi_slide-top-genes-cc1-1.png)
 
 plot of chunk top-genes-cc1
 
@@ -335,7 +338,7 @@ wrap_plots(dist_plots, ncol = 3) +
 ```
 
 ![plot of chunk
-per-slide-dist](colon_d0_multi_slide_files/per-slide-dist-1.png)
+per-slide-dist](figures/colon_d0_multi_slide-per-slide-dist-1.png)
 
 plot of chunk per-slide-dist
 
@@ -387,7 +390,7 @@ ggplot(corr_df, aes(x = slide, y = r)) +
 ```
 
 ![plot of chunk
-per-slide-corr](colon_d0_multi_slide_files/per-slide-corr-1.png)
+per-slide-corr](figures/colon_d0_multi_slide-per-slide-corr-1.png)
 
 plot of chunk per-slide-corr
 
@@ -427,27 +430,27 @@ sessionInfo()
     ## locale:
     ## [1] en_US.UTF-8/en_US.UTF-8/en_US.UTF-8/C/en_US.UTF-8/en_US.UTF-8
     ## 
-    ## time zone: America/New_York
+    ## time zone: America/Los_Angeles
     ## tzcode source: internal
     ## 
     ## attached base packages:
     ## [1] stats     graphics  grDevices utils     datasets  methods   base     
     ## 
     ## other attached packages:
-    ## [1] patchwork_1.3.2 CoPro_1.1.0     testthat_3.3.2  magrittr_2.0.5 
-    ## [5] devtools_2.5.0  usethis_3.2.1   ggplot2_4.0.2   dplyr_1.2.1    
+    ## [1] patchwork_1.3.2 ggplot2_4.0.2   CoPro_1.3.0     testthat_3.3.2 
+    ## [5] knitr_1.51     
     ## 
     ## loaded via a namespace (and not attached):
-    ##  [1] generics_0.1.4     lattice_0.22-9     evaluate_1.0.5     grid_4.5.2        
-    ##  [5] RColorBrewer_1.1-3 pkgload_1.5.1      fastmap_1.2.0      maps_3.4.3        
-    ##  [9] rprojroot_2.1.1    Matrix_1.7-5       pkgbuild_1.4.8     sessioninfo_1.2.3 
-    ## [13] brio_1.1.5         purrr_1.2.1        spam_2.11-3        viridisLite_0.4.3 
-    ## [17] scales_1.4.0       cli_3.6.5          rlang_1.2.0        ellipsis_0.3.3    
-    ## [21] withr_3.0.2        cachem_1.1.0       otel_0.2.0         tools_4.5.2       
-    ## [25] parallel_4.5.2     memoise_2.0.1      vctrs_0.7.2        R6_2.6.1          
-    ## [29] matrixStats_1.5.0  lifecycle_1.0.5    fs_2.0.1           irlba_2.3.7       
-    ## [33] pkgconfig_2.0.3    desc_1.4.3         pillar_1.11.1      gtable_0.3.6      
-    ## [37] glue_1.8.0         Rcpp_1.1.1         fields_17.1        xfun_0.57         
-    ## [41] tibble_3.3.1       tidyselect_1.2.1   knitr_1.51         rstudioapi_0.18.0 
-    ## [45] farver_2.1.2       labeling_0.4.3     dotCall64_1.2      compiler_4.5.2    
-    ## [49] S7_0.2.1
+    ##  [1] generics_0.1.4     lattice_0.22-9     magrittr_2.0.5     evaluate_1.0.5    
+    ##  [5] grid_4.5.2         RColorBrewer_1.1-3 pkgload_1.5.1      fastmap_1.2.0     
+    ##  [9] maps_3.4.3         rprojroot_2.1.1    Matrix_1.7-5       pkgbuild_1.4.8    
+    ## [13] sessioninfo_1.2.3  brio_1.1.5         purrr_1.2.1        spam_2.11-3       
+    ## [17] viridisLite_0.4.3  scales_1.4.0       cli_3.6.5          rlang_1.2.0       
+    ## [21] ellipsis_0.3.3     withr_3.0.2        cachem_1.1.0       devtools_2.5.0    
+    ## [25] otel_0.2.0         tools_4.5.2        parallel_4.5.2     memoise_2.0.1     
+    ## [29] dplyr_1.2.1        vctrs_0.7.2        R6_2.6.1           matrixStats_1.5.0 
+    ## [33] lifecycle_1.0.5    fs_2.0.1           usethis_3.2.1      irlba_2.3.7       
+    ## [37] pkgconfig_2.0.3    desc_1.4.3         pillar_1.11.1      gtable_0.3.6      
+    ## [41] glue_1.8.0         Rcpp_1.1.1         fields_17.1        xfun_0.57         
+    ## [45] tibble_3.3.1       tidyselect_1.2.1   rstudioapi_0.18.0  farver_2.1.2      
+    ## [49] labeling_0.4.3     dotCall64_1.2      compiler_4.5.2     S7_0.2.1

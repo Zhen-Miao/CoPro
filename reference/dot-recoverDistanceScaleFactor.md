@@ -33,10 +33,14 @@ cannot be recovered.
 
 ## Details
 
-This assumes isotropic coordinates (`xDistScale = yDistScale`, the
-default). Under anisotropic scaling the recovered value is a
-representative, not exact, factor; the `[sigma, 4*sigma]` guardrail in
+The raw coordinates are rebuilt using the geometry recorded in
+`@distanceGeometry` – the per-axis scales and, for a 3-D `distType`, the
+`z` column – so the probed ratio is the true constant rather than a
+spread of direction-dependent values. Objects with no recorded geometry
+(built before the slot existed) fall back to unscaled 2-D `x,y`, which
+is exact only under the default isotropic setting; the
+`[sigma, 4*sigma]` guardrail in
 [`.sigmaAwareBins()`](https://zhen-miao.github.io/CoPro/reference/dot-sigmaAwareBins.md)
 will flag a grossly mis-sized grid. When `normalizeDistance = FALSE` the
-recovered factor is simply the coordinate scale (1 by default), which is
-also correct because `sigma` is then on the raw coordinate scale.
+recovered factor is simply 1, which is also correct because `sigma` is
+then on the (scaled) coordinate scale.

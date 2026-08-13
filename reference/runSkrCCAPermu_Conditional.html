@@ -19,7 +19,7 @@ anti-conservative for axes k &amp;gt;= 2 when CC1 is strong."></head><body>
 
     <a class="navbar-brand me-2" href="../index.html">CoPro</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.1.3</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.3.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -86,7 +86,9 @@ anti-conservative for axes <code>k &gt;= 2</code> when CC1 is strong.</p>
 <span>  maxIter <span class="op">=</span> <span class="fl">200</span>,</span>
 <span>  tol <span class="op">=</span> <span class="fl">1e-05</span>,</span>
 <span>  verbose <span class="op">=</span> <span class="cn">TRUE</span>,</span>
-<span>  n_cores <span class="op">=</span> <span class="fl">1</span></span>
+<span>  n_cores <span class="op">=</span> <span class="fl">1</span>,</span>
+<span>  factorize <span class="op">=</span> <span class="fu">.defaultFactorizePermutation</span><span class="op">(</span><span class="op">)</span>,</span>
+<span>  compactPermutation <span class="op">=</span> <span class="fu">.defaultCompactPermutation</span><span class="op">(</span><span class="op">)</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -143,6 +145,28 @@ across the sigma sweep. Pass integers to override.</p></dd>
 <dt id="arg-n-cores">n_cores<a class="anchor" aria-label="anchor" href="#arg-n-cores"></a></dt>
 <dd><p>Number of PSOCK workers. Each worker holds the PCA and kernel
 inputs, so choose this with available memory in mind.</p></dd>
+
+
+<dt id="arg-factorize">factorize<a class="anchor" aria-label="anchor" href="#arg-factorize"></a></dt>
+<dd><p>Apply the fixed-side operator factorization (default: TRUE).
+A cell type held fixed across every draw lets its side of <code>X' K X</code> be
+multiplied by the kernel once instead of once per draw, and lets the score
+norms be read off a cached Gram matrix. The identity is exact, so this
+changes speed and memory only, never a p-value. Set <code>FALSE</code> to route every
+pair through the original sparse product when comparing the two paths.
+Defaults to <code>getOption("CoPro.factorizePermutation", TRUE)</code>, the global
+flag this argument replaced.</p></dd>
+
+
+<dt id="arg-compactpermutation">compactPermutation<a class="anchor" aria-label="anchor" href="#arg-compactpermutation"></a></dt>
+<dd><p>Store the permuted side as one seed per draw rather
+than an explicit index matrix (default: FALSE). Saves the <code>n * nPermu * 4</code>
+bytes per permuted cell type that an index matrix costs, but it changes
+<em>which</em> permutations are drawn, so re-running a saved analysis moves its
+p-values within Monte Carlo error. Held-fixed types are always stored
+compactly, which changes no number at all. Defaults to
+<code>getOption("CoPro.compactPermutation", FALSE)</code>, the global flag this
+argument replaced.</p></dd>
 
 </dl></div>
     <div class="section level2">

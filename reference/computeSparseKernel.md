@@ -28,7 +28,8 @@ computeSparseKernel(
   xDistScale = 1,
   yDistScale = 1,
   zDistScale = 1,
-  normalizeDistance = TRUE,
+  normalizeDistance = FALSE,
+  normalizeMethod = "global",
   normalizeTarget = 0.01,
   truncateLowDist = TRUE,
   verbose = TRUE
@@ -48,7 +49,8 @@ computeSparseKernel(
   xDistScale = 1,
   yDistScale = 1,
   zDistScale = 1,
-  normalizeDistance = TRUE,
+  normalizeDistance = FALSE,
+  normalizeMethod = "global",
   normalizeTarget = 0.01,
   truncateLowDist = TRUE,
   verbose = TRUE
@@ -68,7 +70,8 @@ computeSparseKernel(
   xDistScale = 1,
   yDistScale = 1,
   zDistScale = 1,
-  normalizeDistance = TRUE,
+  normalizeDistance = FALSE,
+  normalizeMethod = "global",
   normalizeTarget = 0.01,
   truncateLowDist = TRUE,
   verbose = TRUE
@@ -134,6 +137,17 @@ computeSparseKernel(
   distance-processing options, matching
   [`computeDistance()`](https://zhen-miao.github.io/CoPro/reference/computeDistance.md).
 
+- normalizeMethod:
+
+  How the reference distance is estimated when
+  `normalizeDistance = TRUE`. `"global"` (default) uses the median
+  nearest-neighbor distance over all cells of interest, ignoring their
+  type labels, so the unit is a property of the tissue rather than of
+  whichever blocks this call builds. `"spacing"` measures each cell-type
+  block and takes the median across blocks. `"percentile"` reproduces
+  the pre-1.2.0 behavior: the minimum, across blocks, of a low quantile
+  of pairwise distances.
+
 - verbose:
 
   Whether to output the progress and related information
@@ -152,6 +166,8 @@ Other spatial-pipeline:
 [`computeKernelMatrix()`](https://zhen-miao.github.io/CoPro/reference/computeKernelMatrix.md),
 [`computePCA()`](https://zhen-miao.github.io/CoPro/reference/computePCA.md),
 [`computeSparseKernelFloat32()`](https://zhen-miao.github.io/CoPro/reference/computeSparseKernelFloat32.md),
+[`detectSigmaRange()`](https://zhen-miao.github.io/CoPro/reference/detectSigmaRange.md),
 [`runGeneSpaceCCA()`](https://zhen-miao.github.io/CoPro/reference/runGeneSpaceCCA.md),
 [`runSkrCCA()`](https://zhen-miao.github.io/CoPro/reference/runSkrCCA.md),
-[`runSlideLevelInference()`](https://zhen-miao.github.io/CoPro/reference/runSlideLevelInference.md)
+[`runSlideLevelInference()`](https://zhen-miao.github.io/CoPro/reference/runSlideLevelInference.md),
+[`selectSigmaByPermutation()`](https://zhen-miao.github.io/CoPro/reference/selectSigmaByPermutation.md)

@@ -64,7 +64,8 @@ ggplot(plot_df, aes(x = x, y = y)) +
   theme_classic()
 ```
 
-![plot of chunk plot-layout](organoid_one_type_files/plot-layout-1.png)
+![plot of chunk
+plot-layout](figures/organoid_one_type-plot-layout-1.png)
 
 plot of chunk plot-layout
 
@@ -99,20 +100,37 @@ obj <- computeKernelMatrix(obj, sigmaValues = sigma_choice,
                             upperQuantile = 0.85,
                             normalizeKernel = FALSE,
                             lowerLimit = 5e-7)
+```
+
+    ## Warning in .computeSparseKernelFloat32Core(object, sigmaValues, lowerLimit, :
+    ## Float32 kernel Epithelial -> Epithelial at sigma=0.01 is too sparse (16048
+    ## represented entries).
+
+``` r
 
 # Sparse kernel CCA
 obj <- runSkrCCA(obj, scalePCs = TRUE, maxIter = 500, nCC = 4)
 
 # Normalized correlation and scores
 obj <- computeNormalizedCorrelation(obj, tol = 1e-3)
+```
+
+    ## Warning: The whitening operator R has an all-zero diagonal (a stored
+    ## self-kernel). A correlation operator has R_ii = 1; with a zero diagonal
+    ## trace(R) = 0, so R has negative eigenvalues, R^(1/2) does not exist, and the
+    ## whitened-Frobenius denominator is not a norm. The zero diagonal is correct in
+    ## the numerator's kernel and wrong here. Use normalizer = "variogram", or
+    ## "kernel", which restores the unit diagonal.
+
+``` r
+
 obj <- computeGeneAndCellScores(obj)
 ```
 
-## Select optimal sigma
+## Select the bandwidth
 
-CoPro automatically selects the sigma that maximizes the CC1 normalized
-correlation. We visualize the normalized correlation across all sigma
-values and canonical components:
+The normalized correlation varies with sigma, and `obj@sigmaValueChoice`
+records where it is largest:
 
 ``` r
 
@@ -128,18 +146,131 @@ ggplot(ncorr, aes(x = sigmaValues, y = normalizedCorrelation)) +
   theme_minimal()
 ```
 
-![plot of chunk plot-ncorr](organoid_one_type_files/plot-ncorr-1.png)
+![plot of chunk plot-ncorr](figures/organoid_one_type-plot-ncorr-1.png)
 
 plot of chunk plot-ncorr
 
+That curve is not a safe basis for choosing sigma, because the quantity
+it plots does not have the same meaning at every bandwidth. The
+normalized correlation divides the co-progression statistic by a norm of
+the kernel, and no available denominator holds the *null* level of that
+ratio constant across sigma: the shipped un-whitened norm ignores the
+cells’ own spatial autocorrelation and drifts one way, whitened variants
+need a within-type correlation operator that the data do not pin down.
+Comparing the curve across sigma therefore compares numbers with
+different floors, and its peak is pulled toward whichever bandwidth has
+the highest floor rather than the strongest signal.
+
+This bites hardest in exactly the within-type setting of this vignette,
+where the natural whitening operator is the stored self-kernel — which
+carries a zero diagonal, so it is not a correlation operator and its
+square root does not exist.
+
+[`selectSigmaByPermutation()`](https://zhen-miao.github.io/CoPro/reference/selectSigmaByPermutation.md)
+measures the floor instead of modelling it. At each bandwidth it
+compares the observed statistic to its own permutation null, built by
+rigidly shifting the tissue against itself (a wrap-around shift
+preserves the cells’ own spatial structure while destroying the
+alignment being tested), and selects the bandwidth maximizing the
+studentized statistic `z = (T - mean_null) / sd_null`. Both the location
+and the scale come from the null itself, which is what makes the values
+comparable across the grid; within a single cell type the location term
+is not decorative, because the convention that a cell is not its own
+neighbour gives the null a sigma-dependent mean of its own. Because one
+pass of draws evaluates every bandwidth, the same draws also give the
+null distribution of `max z`, so the reported p-value already accounts
+for having scanned the grid.
+
 ``` r
 
-# Use the automatically selected sigma
-sigma_opt <- obj@sigmaValueChoice
-cat("Selected sigma:", sigma_opt, "\n")
+set.seed(1)
+sel <- selectSigmaByPermutation(obj, nPermu = 199, maxCells = 2000,
+                                verbose = FALSE)
 ```
 
-    ## Selected sigma: 0.01
+    ## Warning: Selected bandwidth 0.05 sits at the low end of the scanned grid, so
+    ## the most detectable scale may lie outside it. Widen sigmaValues (see
+    ## detectSigmaRange()) and re-run before reporting this bandwidth.
+
+``` r
+
+sel
+```
+
+    ## CoPro bandwidth selection (studentized max-T permutation)
+    ##   selected sigma : 0.05
+    ##   max-T p-value  : 0.005  (B = 199, floor 0.005, greater)
+    ##   z at optimum   : 18.213
+    ##   plateau        : 0.05, 0.10, 0.15, 0.20  (pAdjusted <= 0.05)
+    ##   sigma  cellType1  cellType2 statistic   nullMean     nullSD         z
+    ## 1  0.05 Epithelial Epithelial  1547.508   3.199195   84.79253 18.212795
+    ## 2  0.10 Epithelial Epithelial  4239.725  22.182222  376.63623 11.197921
+    ## 3  0.15 Epithelial Epithelial  7128.151  57.428122  847.91764  8.338926
+    ## 4  0.20 Epithelial Epithelial 10151.631 111.748307 1458.74715  6.882538
+    ##   pAdjusted
+    ## 1     0.005
+    ## 2     0.005
+    ## 3     0.005
+    ## 4     0.005
+
+``` r
+
+ggplot(sel$perSigma, aes(x = sigma, y = z)) +
+  geom_line() +
+  geom_point() +
+  geom_point(data = subset(sel$perSigma, sigma == sel$sigmaValueChoice),
+             color = "darkred", size = 3) +
+  xlab("Sigma") +
+  ylab(expression(z == (T - mean[null]) / sd[null])) +
+  ggtitle("Detectability across bandwidths (studentized)") +
+  theme_minimal()
+```
+
+![plot of chunk
+plot-sigma-scan](figures/organoid_one_type-plot-sigma-scan-1.png)
+
+plot of chunk plot-sigma-scan
+
+``` r
+
+sigma_opt <- sel$sigmaValueChoice
+cat("Permutation-selected sigma:", sigma_opt, "\n")
+```
+
+    ## Permutation-selected sigma: 0.05
+
+``` r
+
+cat("Largest-normalized-correlation sigma:", obj@sigmaValueChoice, "\n")
+```
+
+    ## Largest-normalized-correlation sigma: 0.02
+
+Two things in that output are worth reading carefully.
+
+The scan does not cover the whole grid. Candidates below the median
+nearest-neighbour spacing are dropped by default
+(`minSigma = "spacing"`), because a Gaussian kernel narrower than one
+cell spacing has almost no mass off the diagonal: the statistic rests on
+a handful of pairs and the null understates its own floor, so `z` climbs
+as sigma shrinks and the argmax simply rails at whichever tiny bandwidth
+is on offer. Pass `minSigma = NULL` to see that behaviour.
+
+The warning is doing its job. `z` decreases monotonically across every
+retained bandwidth, so the selected value sits at the low end of the
+grid — the scan found the edge, not an interior optimum. The selected
+0.05 is about 1.3 cell spacings, which is a plausible scale for this
+tissue and matches what this fixed-direction statistic returns on other
+datasets, but the grid here is a hardcoded one, and a bandwidth chosen
+at a boundary should be widened and re-run before it is reported.
+[`detectSigmaRange()`](https://zhen-miao.github.io/CoPro/reference/detectSigmaRange.md)
+builds a grid from the data instead of by hand.
+
+Finally, `z` is typically flat-topped, so sigma is only weakly
+identified: read `sel$plateau` as the band of scales at which
+co-progression is detectable and treat the selected value as a
+representative point inside it, checking that the gene programs below
+are stable across the band rather than tied to one number.
 
 ## Correlation plot
 
@@ -166,7 +297,7 @@ ggplot(df_corr) +
 ```
 
 ![plot of chunk
-plot-correlation](organoid_one_type_files/plot-correlation-1.png)
+plot-correlation](figures/organoid_one_type-plot-correlation-1.png)
 
 plot of chunk plot-correlation
 
@@ -195,7 +326,8 @@ ggplot(cs) +
         axis.ticks = element_blank(), axis.title = element_blank())
 ```
 
-![plot of chunk plot-insitu](organoid_one_type_files/plot-insitu-1.png)
+![plot of chunk
+plot-insitu](figures/organoid_one_type-plot-insitu-1.png)
 
 plot of chunk plot-insitu
 
@@ -219,7 +351,8 @@ ggplot(cs) +
         axis.ticks = element_blank(), axis.title = element_blank())
 ```
 
-![plot of chunk plot-binary](organoid_one_type_files/plot-binary-1.png)
+![plot of chunk
+plot-binary](figures/organoid_one_type-plot-binary-1.png)
 
 plot of chunk plot-binary
 
@@ -257,7 +390,7 @@ ggplot(top_df, aes(x = gene, y = score, fill = direction)) +
   theme_classic()
 ```
 
-![plot of chunk top-genes](organoid_one_type_files/top-genes-1.png)
+![plot of chunk top-genes](figures/organoid_one_type-top-genes-1.png)
 
 plot of chunk top-genes
 
@@ -293,17 +426,20 @@ sessionInfo()
     ## [1] stats     graphics  grDevices utils     datasets  methods   base     
     ## 
     ## other attached packages:
-    ## [1] ggplot2_4.0.2 CoPro_1.1.1   knitr_1.51   
+    ## [1] ggplot2_4.0.2  CoPro_1.3.0    testthat_3.3.2
     ## 
     ## loaded via a namespace (and not attached):
-    ##  [1] Matrix_1.7-5       gtable_0.3.6       dplyr_1.2.1        compiler_4.5.2    
-    ##  [5] maps_3.4.3         tidyselect_1.2.1   Rcpp_1.1.1         parallel_4.5.2    
-    ##  [9] splines_4.5.2      scales_1.4.0       lattice_0.22-9     R6_2.6.1          
-    ## [13] labeling_0.4.3     generics_0.1.4     isoband_0.3.0      MASS_7.3-65       
-    ## [17] dotCall64_1.2      tibble_3.3.1       pillar_1.11.1      RColorBrewer_1.1-3
-    ## [21] rlang_1.2.0        xfun_0.57          S7_0.2.1           otel_0.2.0        
-    ## [25] viridisLite_0.4.3  cli_3.6.5          mgcv_1.9-4         withr_3.0.2       
-    ## [29] magrittr_2.0.5     grid_4.5.2         irlba_2.3.7        nlme_3.1-169      
-    ## [33] spam_2.11-3        lifecycle_1.0.5    fields_17.1        vctrs_0.7.2       
-    ## [37] evaluate_1.0.5     glue_1.8.0         farver_2.1.2       matrixStats_1.5.0 
-    ## [41] tools_4.5.2        pkgconfig_2.0.3
+    ##  [1] generics_0.1.4     lattice_0.22-9     magrittr_2.0.5     evaluate_1.0.5    
+    ##  [5] grid_4.5.2         RColorBrewer_1.1-3 pkgload_1.5.1      fastmap_1.2.0     
+    ##  [9] maps_3.4.3         rprojroot_2.1.1    Matrix_1.7-5       pkgbuild_1.4.8    
+    ## [13] sessioninfo_1.2.3  brio_1.1.5         purrr_1.2.1        spam_2.11-3       
+    ## [17] viridisLite_0.4.3  scales_1.4.0       cli_3.6.5          rlang_1.2.0       
+    ## [21] ellipsis_0.3.3     withr_3.0.2        cachem_1.1.0       devtools_2.5.0    
+    ## [25] otel_0.2.0         tools_4.5.2        parallel_4.5.2     memoise_2.0.1     
+    ## [29] dplyr_1.2.1        vctrs_0.7.2        R6_2.6.1           matrixStats_1.5.0 
+    ## [33] lifecycle_1.0.5    fs_2.0.1           usethis_3.2.1      irlba_2.3.7       
+    ## [37] pkgconfig_2.0.3    desc_1.4.3         pillar_1.11.1      gtable_0.3.6      
+    ## [41] glue_1.8.0         Rcpp_1.1.1         fields_17.1        xfun_0.57         
+    ## [45] tibble_3.3.1       tidyselect_1.2.1   rstudioapi_0.18.0  knitr_1.51        
+    ## [49] farver_2.1.2       labeling_0.4.3     dotCall64_1.2      compiler_4.5.2    
+    ## [53] S7_0.2.1

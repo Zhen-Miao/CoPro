@@ -27,6 +27,8 @@ The main CoPro analysis workflow
 
 - [`computePCA()`](https://zhen-miao.github.io/CoPro/reference/computePCA.md)
   : Compute PCA on Single- or Multi-Slide Data
+- [`detectSigmaRange()`](https://zhen-miao.github.io/CoPro/reference/detectSigmaRange.md)
+  : Detect a usable sigma range from the data
 - [`computeDistance()`](https://zhen-miao.github.io/CoPro/reference/computeDistance.md)
   : computeDistance between pairs of cell types
 - [`computeKernelMatrix()`](https://zhen-miao.github.io/CoPro/reference/computeKernelMatrix.md)
@@ -68,6 +70,13 @@ Retrieve analysis results
   : Get Kernel Matrix
 - [`getSelfKernelMatrix()`](https://zhen-miao.github.io/CoPro/reference/getSelfKernelMatrix.md)
   : Get Self-Kernel Matrix
+- [`getDistanceGeometry()`](https://zhen-miao.github.io/CoPro/reference/getDistanceGeometry.md)
+  : Get the coordinate geometry a CoPro object's distances and kernels
+  use
+- [`getCCAObjective()`](https://zhen-miao.github.io/CoPro/reference/getCCAObjective.md)
+  : What objective produced an object's CCA weights
+- [`getNormalizerInfo()`](https://zhen-miao.github.io/CoPro/reference/getNormalizerInfo.md)
+  : Report the normalizer actually used
 - [`getColocScores()`](https://zhen-miao.github.io/CoPro/reference/getColocScores.md)
   : Compute Colocalization Scores for All Cell Type Pairs
 - [`getSlideID()`](https://zhen-miao.github.io/CoPro/reference/getSlideID.md)
@@ -132,6 +141,8 @@ Statistical significance via spatial permutations
   axes
 - [`runSlideLevelInference()`](https://zhen-miao.github.io/CoPro/reference/runSlideLevelInference.md)
   : Replicate-level inference for multi-slide CoPro analyses
+- [`selectSigmaByPermutation()`](https://zhen-miao.github.io/CoPro/reference/selectSigmaByPermutation.md)
+  : Select the kernel bandwidth by studentized permutation (max-T)
 - [`computeNormalizedCorrelationPermu()`](https://zhen-miao.github.io/CoPro/reference/computeNormalizedCorrelationPermu.md)
   : Compute Normalized Correlation for Permutation Results
 - [`resample_spatial()`](https://zhen-miao.github.io/CoPro/reference/resample_spatial.md)

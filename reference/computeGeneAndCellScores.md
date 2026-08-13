@@ -25,12 +25,32 @@ computeGeneAndCellScores(object)
 
 A `CoPro` or `CoProMulti` object with gene and cell scores computed
 
+## Details
+
+Gene scores are the PCA back-projection
+\\R\\\mathrm{diag}(1/\mathrm{sdev})\\w\\, so they carry the units of the
+loading matrix \\R\\: **weights per standardized gene**, not per unit of
+raw expression. That was already true under pooled preprocessing. Under
+the `CoProMulti` default (`computePCA(center_per_slide = TRUE)`) the
+standardization is per (slide, cell type), so when the stored slide
+scales differ there is no single equivalent coefficient vector in raw
+units; the per-slide maps are kept on `pcaGlobal[[ct]]$slideCenter` and
+`$slideScale`.
+
+For gene weights that do not depend on the PCA coordinate system, prefer
+[`computeRegressionGeneScores()`](https://zhen-miao.github.io/CoPro/reference/computeRegressionGeneScores.md),
+which regresses cell scores on expression directly. Those are also more
+robust to `nPCA` and reproduce better across replicates.
+
 ## See also
 
 [`runSkrCCA()`](https://zhen-miao.github.io/CoPro/reference/runSkrCCA.md),
 [`computeNormalizedCorrelation()`](https://zhen-miao.github.io/CoPro/reference/computeNormalizedCorrelation.md),
+[`computeRegressionGeneScores()`](https://zhen-miao.github.io/CoPro/reference/computeRegressionGeneScores.md),
 [`getCellScores()`](https://zhen-miao.github.io/CoPro/reference/getCellScores.md),
 [`getCellScoresInSitu()`](https://zhen-miao.github.io/CoPro/reference/getCellScoresInSitu.md)
 
 Other scores-and-correlation:
-[`computeNormalizedCorrelation()`](https://zhen-miao.github.io/CoPro/reference/computeNormalizedCorrelation.md)
+[`computeNormalizedCorrelation()`](https://zhen-miao.github.io/CoPro/reference/computeNormalizedCorrelation.md),
+[`getCCAObjective()`](https://zhen-miao.github.io/CoPro/reference/getCCAObjective.md),
+[`getNormalizerInfo()`](https://zhen-miao.github.io/CoPro/reference/getNormalizerInfo.md)

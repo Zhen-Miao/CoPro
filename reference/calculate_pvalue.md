@@ -20,7 +20,10 @@ calculate_pvalue(object, cc_index = 1, alternative = "greater")
 
 - alternative:
 
-  Direction of test: "greater" (default), "less", or "two.sided"
+  Direction of test: `"greater"` (default) or `"less"`. A two-sided test
+  is not defined here because the null distribution of the optimized,
+  max-aggregated normalized-correlation statistic is not symmetric about
+  zero; use `"greater"` for evidence of co-progression.
 
 ## Value
 

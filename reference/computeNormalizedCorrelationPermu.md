@@ -7,7 +7,12 @@ distribution.
 ## Usage
 
 ``` r
-computeNormalizedCorrelationPermu(object, tol = 1e-04)
+computeNormalizedCorrelationPermu(
+  object,
+  tol = 1e-04,
+  factorize = .defaultFactorizePermutation(),
+  verbose = TRUE
+)
 ```
 
 ## Arguments
@@ -20,6 +25,22 @@ computeNormalizedCorrelationPermu(object, tol = 1e-04)
 - tol:
 
   Tolerance for approximate SVD calculation (default: 1e-4)
+
+- factorize:
+
+  Apply the fixed-side operator factorization (default: TRUE). A cell
+  type held fixed across every draw lets its side of `X' K X` be
+  multiplied by the kernel once instead of once per draw, and lets the
+  score norms be read off a cached Gram matrix. The identity is exact,
+  so this changes speed and memory only, never a p-value. Set `FALSE` to
+  route every pair through the original sparse product when comparing
+  the two paths. Defaults to
+  `getOption("CoPro.factorizePermutation", TRUE)`, the global flag this
+  argument replaced.
+
+- verbose:
+
+  Whether to report progress.
 
 ## Value
 
@@ -51,6 +72,7 @@ permu_values <- sapply(br@normalizedCorrelationPermu,
 observed <- max(getNormCorr(br)$normalizedCorrelation)
 
 # One-sided p-value (testing if observed > permutation)
-p_value <- mean(permu_values >= observed)
+p_value <- (1 + sum(permu_values >= observed)) /
+  (1 + length(permu_values))
 } # }
 ```

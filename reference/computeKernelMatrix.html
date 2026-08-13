@@ -19,7 +19,7 @@ within the object."></head><body>
 
     <a class="navbar-brand me-2" href="../index.html">CoPro</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.1.3</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.3.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -82,20 +82,22 @@ within the object.</p>
 <span>  minAveCellNeighor <span class="op">=</span> <span class="fl">2</span>,</span>
 <span>  rowNormalizeKernel <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  colNormalizeKernel <span class="op">=</span> <span class="cn">FALSE</span>,</span>
-<span>  method <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"auto"</span>, <span class="st">"dense"</span>, <span class="st">"sparse"</span><span class="op">)</span>,</span>
+<span>  method <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"auto"</span>, <span class="st">"dense"</span>, <span class="st">"sparse"</span>, <span class="st">"float32"</span><span class="op">)</span>,</span>
 <span>  dropDistances <span class="op">=</span> <span class="cn">TRUE</span>,</span>
 <span>  autoThreshold <span class="op">=</span> <span class="fl">5000L</span>,</span>
+<span>  denseThreshold <span class="op">=</span> <span class="fl">0.3</span>,</span>
 <span>  distType <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  xDistScale <span class="op">=</span> <span class="fl">1</span>,</span>
-<span>  yDistScale <span class="op">=</span> <span class="fl">1</span>,</span>
-<span>  zDistScale <span class="op">=</span> <span class="fl">1</span>,</span>
-<span>  normalizeDistance <span class="op">=</span> <span class="cn">TRUE</span>,</span>
-<span>  normalizeTarget <span class="op">=</span> <span class="fl">0.01</span>,</span>
-<span>  truncateLowDist <span class="op">=</span> <span class="cn">TRUE</span>,</span>
+<span>  xDistScale <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  yDistScale <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  zDistScale <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  normalizeDistance <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  normalizeMethod <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  normalizeTarget <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  truncateLowDist <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  verbose <span class="op">=</span> <span class="cn">TRUE</span></span>
 <span><span class="op">)</span></span>
 <span></span>
-<span><span class="co"># S4 method for class 'CoProSingle'</span></span>
+<span><span class="co"># S4 method for class 'CoPro'</span></span>
 <span><span class="fu">computeKernelMatrix</span><span class="op">(</span></span>
 <span>  <span class="va">object</span>,</span>
 <span>  <span class="va">sigmaValues</span>,</span>
@@ -105,39 +107,18 @@ within the object.</p>
 <span>  minAveCellNeighor <span class="op">=</span> <span class="fl">2</span>,</span>
 <span>  rowNormalizeKernel <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  colNormalizeKernel <span class="op">=</span> <span class="cn">FALSE</span>,</span>
-<span>  method <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"auto"</span>, <span class="st">"dense"</span>, <span class="st">"sparse"</span><span class="op">)</span>,</span>
+<span>  method <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"auto"</span>, <span class="st">"dense"</span>, <span class="st">"sparse"</span>, <span class="st">"float32"</span><span class="op">)</span>,</span>
 <span>  dropDistances <span class="op">=</span> <span class="cn">TRUE</span>,</span>
 <span>  autoThreshold <span class="op">=</span> <span class="fl">5000L</span>,</span>
+<span>  denseThreshold <span class="op">=</span> <span class="fl">0.3</span>,</span>
 <span>  distType <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  xDistScale <span class="op">=</span> <span class="fl">1</span>,</span>
-<span>  yDistScale <span class="op">=</span> <span class="fl">1</span>,</span>
-<span>  zDistScale <span class="op">=</span> <span class="fl">1</span>,</span>
-<span>  normalizeDistance <span class="op">=</span> <span class="cn">TRUE</span>,</span>
-<span>  normalizeTarget <span class="op">=</span> <span class="fl">0.01</span>,</span>
-<span>  truncateLowDist <span class="op">=</span> <span class="cn">TRUE</span>,</span>
-<span>  verbose <span class="op">=</span> <span class="cn">TRUE</span></span>
-<span><span class="op">)</span></span>
-<span></span>
-<span><span class="co"># S4 method for class 'CoProMulti'</span></span>
-<span><span class="fu">computeKernelMatrix</span><span class="op">(</span></span>
-<span>  <span class="va">object</span>,</span>
-<span>  <span class="va">sigmaValues</span>,</span>
-<span>  lowerLimit <span class="op">=</span> <span class="fl">1e-07</span>,</span>
-<span>  upperQuantile <span class="op">=</span> <span class="fl">0.85</span>,</span>
-<span>  normalizeKernel <span class="op">=</span> <span class="cn">FALSE</span>,</span>
-<span>  minAveCellNeighor <span class="op">=</span> <span class="fl">2</span>,</span>
-<span>  rowNormalizeKernel <span class="op">=</span> <span class="cn">FALSE</span>,</span>
-<span>  colNormalizeKernel <span class="op">=</span> <span class="cn">FALSE</span>,</span>
-<span>  method <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"auto"</span>, <span class="st">"dense"</span>, <span class="st">"sparse"</span><span class="op">)</span>,</span>
-<span>  dropDistances <span class="op">=</span> <span class="cn">TRUE</span>,</span>
-<span>  autoThreshold <span class="op">=</span> <span class="fl">5000L</span>,</span>
-<span>  distType <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  xDistScale <span class="op">=</span> <span class="fl">1</span>,</span>
-<span>  yDistScale <span class="op">=</span> <span class="fl">1</span>,</span>
-<span>  zDistScale <span class="op">=</span> <span class="fl">1</span>,</span>
-<span>  normalizeDistance <span class="op">=</span> <span class="cn">TRUE</span>,</span>
-<span>  normalizeTarget <span class="op">=</span> <span class="fl">0.01</span>,</span>
-<span>  truncateLowDist <span class="op">=</span> <span class="cn">TRUE</span>,</span>
+<span>  xDistScale <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  yDistScale <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  zDistScale <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  normalizeDistance <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  normalizeMethod <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  normalizeTarget <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  truncateLowDist <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  verbose <span class="op">=</span> <span class="cn">TRUE</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
@@ -191,18 +172,22 @@ asymmetric result in skrCCA inference.</p></dd>
 
 
 <dt id="arg-method">method<a class="anchor" aria-label="anchor" href="#arg-method"></a></dt>
-<dd><p>One of <code>"auto"</code>, <code>"dense"</code>, or <code>"sparse"</code>. <code>"dense"</code> is the
-classic path that reads the distance matrices produced by
-<code><a href="computeDistance.html">computeDistance()</a></code>. <code>"sparse"</code> is a fused, memory-efficient path
-(<code><a href="computeSparseKernel.html">computeSparseKernel()</a></code>) that builds sparse kernels directly from
-coordinates via a fixed-radius neighbor search, never forming a dense
-<code>n x n</code> matrix, and does not require <code><a href="computeDistance.html">computeDistance()</a></code> to have been run.
-Symmetric within-type kernels retain one triangle in a <code>dsCMatrix</code>;
-cross-type and asymmetrically normalized kernels use <code>dgCMatrix</code>. Results
-are numerically equivalent. <code>"auto"</code> (default) picks <code>"sparse"</code> when
-any per-slide cell-type block reaches <code>autoThreshold</code> cells or when the
-aggregate dense block workload reaches <code>autoThreshold^2</code> entries; otherwise
-it picks <code>"dense"</code>.</p></dd>
+<dd><p>One of <code>"auto"</code>, <code>"dense"</code>, <code>"sparse"</code>, or <code>"float32"</code>.
+<code>"dense"</code> is the classic path that reads the distance matrices produced by
+<code><a href="computeDistance.html">computeDistance()</a></code>. <code>"sparse"</code> and <code>"float32"</code> are fused, memory-efficient
+paths (<code><a href="computeSparseKernel.html">computeSparseKernel()</a></code> and <code><a href="computeSparseKernelFloat32.html">computeSparseKernelFloat32()</a></code>) that
+build kernels directly from coordinates via a fixed-radius neighbor search,
+never forming a dense <code>n x n</code> matrix, and do not require <code><a href="computeDistance.html">computeDistance()</a></code>
+to have been run. <code>"float32"</code> stores 8 bytes per entry against <code>"sparse"</code>'s
+12 and streams one block at a time instead of caching every block's
+neighbors, so it is the cheaper of the two; <code>"sparse"</code> keeps float64 values
+for exactness checks.</p>
+<p><code>"auto"</code> (default) picks <code>"dense"</code> for small data, and otherwise <code>"float32"</code>.
+Small means every per-slide cell-type block is under <code>autoThreshold</code> cells
+and the aggregate dense workload is under <code>autoThreshold^2</code> entries. Above
+that, a neighbor probe predicts how dense the kernel will actually be and
+warns when a fixed-radius kernel would retain more than <code>denseThreshold</code> of
+each block, since sparse storage saves nothing there.</p></dd>
 
 
 <dt id="arg-dropdistances">dropDistances<a class="anchor" aria-label="anchor" href="#arg-dropdistances"></a></dt>
@@ -220,10 +205,27 @@ selected when aggregate dense block entries reach <code>autoThreshold^2</code>.
 Default 5000 (about 200 MB of doubles before temporary matrices and copies).</p></dd>
 
 
-<dt id="arg-disttype-xdistscale-ydistscale-zdistscale-normalizedistance-normalizetarget-truncatelowdist">distType, xDistScale, yDistScale, zDistScale, normalizeDistance, normalizeTarget, truncateLowDist<a class="anchor" aria-label="anchor" href="#arg-disttype-xdistscale-ydistscale-zdistscale-normalizedistance-normalizetarget-truncatelowdist"></a></dt>
-<dd><p>Distance options used only by the sparse path (see <code><a href="computeDistance.html">computeDistance()</a></code> and
-<code><a href="computeSparseKernel.html">computeSparseKernel()</a></code>). <code>distType</code> defaults to <code>"Euclidean3D"</code> when the
-coordinates contain a <code>z</code> column, otherwise <code>"Euclidean2D"</code>.</p></dd>
+<dt id="arg-densethreshold">denseThreshold<a class="anchor" aria-label="anchor" href="#arg-densethreshold"></a></dt>
+<dd><p>Predicted kernel density above which <code>method = "auto"</code>
+warns that a sparse representation is a poor fit and suggests a smaller
+sigma. Default 0.3. A <code>dgCMatrix</code> costs 12 bytes per stored entry against 8
+for a dense double, so sparse storage is strictly worse past about 0.67.</p></dd>
+
+
+<dt id="arg-disttype-xdistscale-ydistscale-zdistscale-normalizedistance-normalizemethod-normalizetarget-truncatelowdist">distType, xDistScale, yDistScale, zDistScale, normalizeDistance, normalizeMethod, normalizeTarget, truncateLowDist<a class="anchor" aria-label="anchor" href="#arg-disttype-xdistscale-ydistscale-zdistscale-normalizedistance-normalizemethod-normalizetarget-truncatelowdist"></a></dt>
+<dd><p>Distance options used only by the sparse paths (see <code><a href="computeDistance.html">computeDistance()</a></code> and
+<code><a href="computeSparseKernel.html">computeSparseKernel()</a></code>). Each defaults to <code>NULL</code>, meaning "inherit the
+geometry recorded by <code><a href="computeDistance.html">computeDistance()</a></code>", so sparse kernels are built on
+the same coordinates as the distances rather than on this function's own
+defaults. When nothing has been recorded, the fallbacks are <code>xDistScale</code> /
+<code>yDistScale</code> / <code>zDistScale</code> <code>= 1</code>, <code>normalizeDistance = FALSE</code>,
+<code>normalizeMethod = "global"</code>, <code>normalizeTarget = 0.01</code>,
+<code>truncateLowDist = TRUE</code>, and a <code>distType</code> of <code>"Euclidean3D"</code> when the
+coordinates contain a <code>z</code> column, otherwise <code>"Euclidean2D"</code>. Passing a value
+that contradicts the recorded geometry is an error; inspect the record with
+<code><a href="getDistanceGeometry.html">getDistanceGeometry()</a></code>.</p>
+<p><code>normalizeDistance</code> defaulted to <code>TRUE</code> before CoPro 1.2.0. Use
+<code><a href="detectSigmaRange.html">detectSigmaRange()</a></code> to choose sigma in the data's own units instead.</p></dd>
 
 
 <dt id="arg-verbose">verbose<a class="anchor" aria-label="anchor" href="#arg-verbose"></a></dt>
@@ -238,10 +240,6 @@ is indexed by the sigma value, and the second and the third layers are cell
 types</p>
     </div>
     <div class="section level2">
-    <h2 id="note">Note<a class="anchor" aria-label="anchor" href="#note"></a></h2>
-    <p>To-do: Shall we include row or column normalization of the kernel?</p>
-    </div>
-    <div class="section level2">
     <h2 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a></h2>
     <div class="dont-index"><p><code><a href="computeDistance.html">computeDistance()</a></code>, <code><a href="computePCA.html">computePCA()</a></code>, <code><a href="runSkrCCA.html">runSkrCCA()</a></code></p>
 <p>Other spatial-pipeline:
@@ -249,9 +247,11 @@ types</p>
 <code><a href="computePCA.html">computePCA()</a></code>,
 <code><a href="computeSparseKernel.html">computeSparseKernel()</a></code>,
 <code><a href="computeSparseKernelFloat32.html">computeSparseKernelFloat32()</a></code>,
+<code><a href="detectSigmaRange.html">detectSigmaRange()</a></code>,
 <code><a href="runGeneSpaceCCA.html">runGeneSpaceCCA()</a></code>,
 <code><a href="runSkrCCA.html">runSkrCCA()</a></code>,
-<code><a href="runSlideLevelInference.html">runSlideLevelInference()</a></code></p></div>
+<code><a href="runSlideLevelInference.html">runSlideLevelInference()</a></code>,
+<code><a href="selectSigmaByPermutation.html">selectSigmaByPermutation()</a></code></p></div>
     </div>
 
     <div class="section level2">

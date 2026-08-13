@@ -79,7 +79,7 @@ ggplot(plot_df[plot_df$slide == dat$selectedSlides[1], ],
 ```
 
 ![plot of chunk
-plot-celltype](colon_d9_multi_slide_files/plot-celltype-1.png)
+plot-celltype](figures/colon_d9_multi_slide-plot-celltype-1.png)
 
 plot of chunk plot-celltype
 
@@ -119,7 +119,7 @@ ggplot(mu_df[mu_df$slide == dat$selectedSlides[1], ],
   guides(color = guide_legend(override.aes = list(size = 3)))
 ```
 
-![plot of chunk plot-mu](colon_d9_multi_slide_files/plot-mu-1.png)
+![plot of chunk plot-mu](figures/colon_d9_multi_slide-plot-mu-1.png)
 
 plot of chunk plot-mu
 
@@ -156,10 +156,24 @@ ref_obj <- subsetData(ref_obj, cellTypesOfInterest = cell_types)
 
 # Run pipeline
 ref_obj <- computePCA(ref_obj, nPCA = 15, center = TRUE, scale. = TRUE)
-ref_obj <- computeDistance(ref_obj, distType = "Euclidean2D")
+ref_obj <- computeDistance(ref_obj, distType = "Euclidean2D",
+                            normalizeDistance = TRUE)
 
 sigma_choice <- c(0.005, 0.01, 0.02, 0.05, 0.1)
 ref_obj <- computeKernelMatrix(ref_obj, sigmaValues = sigma_choice)
+```
+
+    ## Warning in .CheckSigmaValuesToRemove(kernel_current = kernel_current,
+    ## lowerLimit = lowerLimit, : Kernel matrix for cell types Epithelial and Immune
+    ## with sigma = 0.005 contains too many zeros. Specifically, less than
+    ## 0.0634316523945449 % total counts are above the threshold
+
+    ## Warning in .CheckSigmaValuesToRemove(kernel_current = kernel_current,
+    ## lowerLimit = lowerLimit, : Dropping sigma value of 0.005 because all Gaussian
+    ## kernel values are too small, which will not produce meaningful results.
+
+``` r
+
 ref_obj <- runSkrCCA(ref_obj, scalePCs = TRUE, maxIter = 500, nCC = 2)
 ref_obj <- computeNormalizedCorrelation(ref_obj)
 ref_obj <- computeGeneAndCellScores(ref_obj)
@@ -184,7 +198,7 @@ ggplot(cs_ref) +
 ```
 
 ![plot of chunk
-ref-results](colon_d9_multi_slide_files/ref-results-1.png)
+ref-results](figures/colon_d9_multi_slide-ref-results-1.png)
 
 plot of chunk ref-results
 
@@ -216,7 +230,8 @@ ggplot(ref_meta, aes(x = MU_grouped, y = cell_score, fill = MU_grouped)) +
   theme_classic()
 ```
 
-![plot of chunk mu-boxplot](colon_d9_multi_slide_files/mu-boxplot-1.png)
+![plot of chunk
+mu-boxplot](figures/colon_d9_multi_slide-mu-boxplot-1.png)
 
 plot of chunk mu-boxplot
 
@@ -271,7 +286,7 @@ ggplot(prop_long, aes(x = score_mid, y = proportion, color = celltype)) +
     ## `geom_smooth()` using formula = 'y ~ x'
 
 ![plot of chunk
-celltype-prop](colon_d9_multi_slide_files/celltype-prop-1.png)
+celltype-prop](figures/colon_d9_multi_slide-celltype-prop-1.png)
 
 plot of chunk celltype-prop
 
@@ -301,7 +316,7 @@ ggplot(top_imm_df, aes(x = gene, y = weight, fill = direction)) +
   theme(legend.position = "bottom")
 ```
 
-![plot of chunk top-genes](colon_d9_multi_slide_files/top-genes-1.png)
+![plot of chunk top-genes](figures/colon_d9_multi_slide-top-genes-1.png)
 
 plot of chunk top-genes
 
@@ -318,8 +333,21 @@ tar1_obj <- newCoProSingle(
 )
 tar1_obj <- subsetData(tar1_obj, cellTypesOfInterest = cell_types)
 tar1_obj <- computePCA(tar1_obj, nPCA = 15, center = TRUE, scale. = TRUE)
-tar1_obj <- computeDistance(tar1_obj, distType = "Euclidean2D")
+tar1_obj <- computeDistance(tar1_obj, distType = "Euclidean2D",
+                            normalizeDistance = TRUE)
 tar1_obj <- computeKernelMatrix(tar1_obj, sigmaValues = sigma_choice)
+```
+
+    ## Warning in .CheckSigmaValuesToRemove(kernel_current = kernel_current,
+    ## lowerLimit = lowerLimit, : Kernel matrix for cell types Epithelial and Immune
+    ## with sigma = 0.005 contains too many zeros. Specifically, less than
+    ## 0.067001675041876 % total counts are above the threshold
+
+    ## Warning in .CheckSigmaValuesToRemove(kernel_current = kernel_current,
+    ## lowerLimit = lowerLimit, : Dropping sigma value of 0.005 because all Gaussian
+    ## kernel values are too small, which will not produce meaningful results.
+
+``` r
 
 # Target slide 2
 tar2_obj <- newCoProSingle(
@@ -330,9 +358,18 @@ tar2_obj <- newCoProSingle(
 )
 tar2_obj <- subsetData(tar2_obj, cellTypesOfInterest = cell_types)
 tar2_obj <- computePCA(tar2_obj, nPCA = 15, center = TRUE, scale. = TRUE)
-tar2_obj <- computeDistance(tar2_obj, distType = "Euclidean2D")
+tar2_obj <- computeDistance(tar2_obj, distType = "Euclidean2D",
+                            normalizeDistance = TRUE)
 tar2_obj <- computeKernelMatrix(tar2_obj, sigmaValues = sigma_choice)
 ```
+
+    ## Warning in .CheckSigmaValuesToRemove(kernel_current = kernel_current,
+    ## lowerLimit = lowerLimit, : Kernel matrix for cell types Epithelial and Immune
+    ## with sigma = 0.005 contains too many zeros. Specifically, less than
+    ## 0.0689179875947622 % total counts are above the threshold
+    ## Warning in .CheckSigmaValuesToRemove(kernel_current = kernel_current,
+    ## lowerLimit = lowerLimit, : Dropping sigma value of 0.005 because all Gaussian
+    ## kernel values are too small, which will not produce meaningful results.
 
 ## Step 3: Transfer scores
 
@@ -445,7 +482,7 @@ ggplot(all_cs) +
 ```
 
 ![plot of chunk
-plot-transfer](colon_d9_multi_slide_files/plot-transfer-1.png)
+plot-transfer](figures/colon_d9_multi_slide-plot-transfer-1.png)
 
 plot of chunk plot-transfer
 
@@ -480,7 +517,7 @@ ggplot(tar1_mu, aes(x = x, y = y, color = MU_grouped)) +
 ```
 
 ![plot of chunk
-transfer-mu-spatial](colon_d9_multi_slide_files/transfer-mu-spatial-1.png)
+transfer-mu-spatial](figures/colon_d9_multi_slide-transfer-mu-spatial-1.png)
 
 plot of chunk transfer-mu-spatial
 
@@ -517,9 +554,9 @@ print(ref_ncorr[ref_ncorr$sigmaValues == sigma_opt &
 ```
 
     ##              sigmaValues  cellType1  cellType2 CC_index normalizedCorrelation
-    ## sigma_0.01.1        0.01 Epithelial Fibroblast        1            0.01579938
-    ## sigma_0.01.2        0.01 Epithelial     Immune        1            0.01530432
-    ## sigma_0.01.3        0.01 Fibroblast     Immune        1            0.03249753
+    ## sigma_0.01.1        0.01 Epithelial Fibroblast        1           0.007753195
+    ## sigma_0.01.2        0.01 Epithelial     Immune        1           0.009481625
+    ## sigma_0.01.3        0.01 Fibroblast     Immune        1           0.020926702
     ##                               ct12
     ## sigma_0.01.1 Epithelial-Fibroblast
     ## sigma_0.01.2     Epithelial-Immune
@@ -540,9 +577,9 @@ print(tar1_ncorr_df[tar1_ncorr_df$CC_index == 1, ])
 ```
 
     ##   sigmaValue  cellType1  cellType2 CC_index normalizedCorrelation
-    ## 1       0.01 Epithelial Fibroblast        1            0.01704917
-    ## 3       0.01 Epithelial     Immune        1            0.01866639
-    ## 5       0.01 Fibroblast     Immune        1            0.04501453
+    ## 1       0.01 Epithelial Fibroblast        1           0.007748889
+    ## 3       0.01 Epithelial     Immune        1           0.011243537
+    ## 5       0.01 Fibroblast     Immune        1           0.028148237
 
 ``` r
 
@@ -559,9 +596,9 @@ print(tar2_ncorr_df[tar2_ncorr_df$CC_index == 1, ])
 ```
 
     ##   sigmaValue  cellType1  cellType2 CC_index normalizedCorrelation
-    ## 1       0.01 Epithelial Fibroblast        1           0.009621446
-    ## 3       0.01 Epithelial     Immune        1           0.011690447
-    ## 5       0.01 Fibroblast     Immune        1           0.028163776
+    ## 1       0.01 Epithelial Fibroblast        1           0.004660964
+    ## 3       0.01 Epithelial     Immune        1           0.007321099
+    ## 5       0.01 Fibroblast     Immune        1           0.016077567
 
 High transferred normalized correlations indicate that the
 co-progression pattern learned from the reference generalizes well to
@@ -571,6 +608,12 @@ independent slides.
 
 For joint analysis across all slides simultaneously, use
 `newCoProMulti`:
+
+The multi-slide defaults remove gene means and scales within each
+`(slide, cell type)` block before fitting one shared PCA loading matrix,
+then combine slides with equal-slide SUMCOR. Thus the low-dimensional
+coordinates are shared without letting between-slide offsets or
+variances choose the PC subspace or dominate the CoPro objective.
 
 ``` r
 
@@ -585,12 +628,71 @@ multi_obj <- subsetData(multi_obj, cellTypesOfInterest = cell_types)
 
 # The rest of the pipeline is identical
 multi_obj <- computePCA(multi_obj, nPCA = 15, center = TRUE, scale. = TRUE)
-multi_obj <- computeDistance(multi_obj, distType = "Euclidean2D")
+multi_obj <- computeDistance(multi_obj, distType = "Euclidean2D",
+                            normalizeDistance = TRUE)
 multi_obj <- computeKernelMatrix(multi_obj, sigmaValues = sigma_choice)
+```
+
+    ## Warning: The kernel at sigma = 0.1 is predicted to be 43% dense, so a fixed-radius sparse kernel saves little or no memory here (sparse storage costs more than dense past ~67% density).
+    ##   Sigma below about 0.0831 would keep it under 30%. Use detectSigmaRange() to pick sigma from the data, or build one sigma at a time to bound peak memory.
+
+    ## Warning in .computeSparseKernelFloat32Core(object, sigmaValues, lowerLimit, :
+    ## Float32 kernel Epithelial -> Immune on 062221_D9_m3_2_slice_3 at sigma=0.005 is
+    ## too sparse (0 represented entries).
+
+    ## Warning in .computeSparseKernelFloat32Core(object, sigmaValues, lowerLimit, :
+    ## Float32 kernel Epithelial -> Immune on 062221_D9_m3_2_slice_1 at sigma=0.005 is
+    ## too sparse (0 represented entries).
+
+    ## Warning in .computeSparseKernelFloat32Core(object, sigmaValues, lowerLimit, :
+    ## Float32 kernel Epithelial -> Immune on 062221_D9_m3_2_slice_2 at sigma=0.005 is
+    ## too sparse (0 represented entries).
+
+``` r
+
 multi_obj <- runSkrCCA(multi_obj, scalePCs = TRUE, maxIter = 500, nCC = 2)
+```
+
+    ## Warning in value[[3L]](cond): Optimization failed for sigma = 0.005 : Could not
+    ## find kernel matrix for pair: Epithelial Immune with sigma = 0.005 on slide
+    ## 062221_D9_m3_2_slice_3 in flat kernel structure. in
+    ## get_kernel_matrix_flat(flat_kernels, sigma, ct_i, ct_j, slide)
+
+    ## Warning in .processOptimizationResults(cca_out, sigma_names_run): Optimization
+    ## failed for 1 sigma value(s): sigma_0.005
+
+``` r
+
 multi_obj <- computeNormalizedCorrelation(multi_obj)
 multi_obj <- computeGeneAndCellScores(multi_obj)
 ```
+
+    ## Warning in .checkXW(X_ct, W_ct, sID, ct): Missing PCA or Weight data for cell
+    ## score calc: 062221_D9_m3_2_slice_3, Epithelial
+
+    ## Warning in .checkXW(X_ct, W_ct, sID, ct): Missing PCA or Weight data for cell
+    ## score calc: 062221_D9_m3_2_slice_3, Fibroblast
+
+    ## Warning in .checkXW(X_ct, W_ct, sID, ct): Missing PCA or Weight data for cell
+    ## score calc: 062221_D9_m3_2_slice_3, Immune
+
+    ## Warning in .checkXW(X_ct, W_ct, sID, ct): Missing PCA or Weight data for cell
+    ## score calc: 062221_D9_m3_2_slice_2, Epithelial
+
+    ## Warning in .checkXW(X_ct, W_ct, sID, ct): Missing PCA or Weight data for cell
+    ## score calc: 062221_D9_m3_2_slice_2, Fibroblast
+
+    ## Warning in .checkXW(X_ct, W_ct, sID, ct): Missing PCA or Weight data for cell
+    ## score calc: 062221_D9_m3_2_slice_2, Immune
+
+    ## Warning in .checkXW(X_ct, W_ct, sID, ct): Missing PCA or Weight data for cell
+    ## score calc: 062221_D9_m3_2_slice_1, Epithelial
+
+    ## Warning in .checkXW(X_ct, W_ct, sID, ct): Missing PCA or Weight data for cell
+    ## score calc: 062221_D9_m3_2_slice_1, Fibroblast
+
+    ## Warning in .checkXW(X_ct, W_ct, sID, ct): Missing PCA or Weight data for cell
+    ## score calc: 062221_D9_m3_2_slice_1, Immune
 
 The multi-slide approach optimizes CCA weights jointly across all
 slides, while the transfer approach trains on one slide and evaluates
@@ -621,17 +723,22 @@ sessionInfo()
     ## [1] stats     graphics  grDevices utils     datasets  methods   base     
     ## 
     ## other attached packages:
-    ## [1] ggplot2_4.0.2 CoPro_1.1.1   knitr_1.51   
+    ## [1] patchwork_1.3.2 ggplot2_4.0.2   CoPro_1.3.0     testthat_3.3.2 
+    ## [5] knitr_1.51     
     ## 
     ## loaded via a namespace (and not attached):
-    ##  [1] Matrix_1.7-5       gtable_0.3.6       dplyr_1.2.1        compiler_4.5.2    
-    ##  [5] maps_3.4.3         tidyselect_1.2.1   Rcpp_1.1.1         parallel_4.5.2    
-    ##  [9] splines_4.5.2      scales_1.4.0       lattice_0.22-9     R6_2.6.1          
-    ## [13] labeling_0.4.3     generics_0.1.4     isoband_0.3.0      MASS_7.3-65       
-    ## [17] dotCall64_1.2      tibble_3.3.1       pillar_1.11.1      RColorBrewer_1.1-3
-    ## [21] rlang_1.2.0        xfun_0.57          S7_0.2.1           otel_0.2.0        
-    ## [25] viridisLite_0.4.3  cli_3.6.5          mgcv_1.9-4         withr_3.0.2       
-    ## [29] magrittr_2.0.5     grid_4.5.2         irlba_2.3.7        nlme_3.1-169      
-    ## [33] spam_2.11-3        lifecycle_1.0.5    fields_17.1        vctrs_0.7.2       
-    ## [37] evaluate_1.0.5     glue_1.8.0         farver_2.1.2       matrixStats_1.5.0 
-    ## [41] tools_4.5.2        pkgconfig_2.0.3
+    ##  [1] generics_0.1.4     lattice_0.22-9     magrittr_2.0.5     evaluate_1.0.5    
+    ##  [5] grid_4.5.2         RColorBrewer_1.1-3 pkgload_1.5.1      fastmap_1.2.0     
+    ##  [9] maps_3.4.3         rprojroot_2.1.1    Matrix_1.7-5       pkgbuild_1.4.8    
+    ## [13] sessioninfo_1.2.3  brio_1.1.5         mgcv_1.9-4         purrr_1.2.1       
+    ## [17] spam_2.11-3        viridisLite_0.4.3  scales_1.4.0       isoband_0.3.0     
+    ## [21] cli_3.6.5          rlang_1.2.0        splines_4.5.2      ellipsis_0.3.3    
+    ## [25] withr_3.0.2        cachem_1.1.0       devtools_2.5.0     otel_0.2.0        
+    ## [29] tools_4.5.2        parallel_4.5.2     memoise_2.0.1      dplyr_1.2.1       
+    ## [33] vctrs_0.7.2        R6_2.6.1           matrixStats_1.5.0  lifecycle_1.0.5   
+    ## [37] fs_2.0.1           MASS_7.3-65        usethis_3.2.1      irlba_2.3.7       
+    ## [41] pkgconfig_2.0.3    desc_1.4.3         pillar_1.11.1      gtable_0.3.6      
+    ## [45] glue_1.8.0         Rcpp_1.1.1         fields_17.1        xfun_0.57         
+    ## [49] tibble_3.3.1       tidyselect_1.2.1   rstudioapi_0.18.0  farver_2.1.2      
+    ## [53] nlme_3.1-169       labeling_0.4.3     dotCall64_1.2      compiler_4.5.2    
+    ## [57] S7_0.2.1

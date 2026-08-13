@@ -20,7 +20,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">CoPro</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.1.3</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.3.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -70,7 +70,7 @@
 
       <h1>Handling very large datasets (Xenium, large MERFISH)</h1>
             
-            <h4 data-toc-skip class="date">2026-07-28</h4>
+            <h4 data-toc-skip class="date">2026-08-13</h4>
       
       <small class="dont-index">Source: <a href="https://github.com/Zhen-Miao/CoPro/blob/main/vignettes/large_datasets.Rmd" class="external-link"><code>vignettes/large_datasets.Rmd</code></a></small>
       <div class="d-none name"><code>large_datasets.Rmd</code></div>
@@ -181,35 +181,49 @@ path</strong> enumerates only the cell pairs inside that radius, using a
 grid-based fixed-radius neighbor search, and never forms the dense
 matrix. The result is numerically identical to the dense path (every
 entry beyond the radius is zero anyway).</p>
-<p>You get the sparse path in one of two equivalent ways:</p>
+<p>First pick sigma from the data with <code><a href="../reference/detectSigmaRange.html">detectSigmaRange()</a></code>,
+then build:</p>
 <div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># Option A (recommended): let computeKernelMatrix choose.</span></span>
-<span><span class="co"># method = "auto" (the default) picks the sparse path when any cell-type block</span></span>
-<span><span class="co"># reaches autoThreshold (5000) cells, or the aggregate dense workload reaches</span></span>
-<span><span class="co"># autoThreshold^2 entries. dropDistances = TRUE (default) frees the @distances</span></span>
-<span><span class="co"># slot afterward. NOTE: do NOT call computeDistance() first on large data — the</span></span>
-<span><span class="co"># sparse path builds kernels directly from coordinates and would ignore it.</span></span>
+<code class="sourceCode R"><span><span class="co"># Step 1: choose sigma in this dataset's own coordinate units. sigma is a</span></span>
+<span><span class="co"># distance, so no fixed value travels between microns, pixels and Visium units.</span></span>
+<span><span class="co"># detectSigmaRange() reports the sigmas at which the median cell is coupled to</span></span>
+<span><span class="co"># 5-20 effective neighbors -- a dimensionless, biologically meaningful target.</span></span>
+<span><span class="va">rng</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/detectSigmaRange.html">detectSigmaRange</a></span><span class="op">(</span><span class="va">obj</span>, minNeighbors <span class="op">=</span> <span class="fl">5</span>, maxNeighbors <span class="op">=</span> <span class="fl">20</span><span class="op">)</span></span>
+<span><span class="va">rng</span>                      <span class="co"># per-block diagnostics and the recommended grid</span></span>
+<span></span>
+<span><span class="co"># Step 2: build. method = "auto" (default) picks the float32 sparse route for</span></span>
+<span><span class="co"># anything large and reports the density it predicts. dropDistances = TRUE</span></span>
+<span><span class="co"># (default) frees @distances afterward. No computeDistance() call is needed --</span></span>
+<span><span class="co"># the sparse routes build kernels directly from coordinates.</span></span>
 <span><span class="va">obj</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/computeKernelMatrix.html">computeKernelMatrix</a></span><span class="op">(</span></span>
 <span>  <span class="va">obj</span>,</span>
-<span>  sigmaValues   <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.05</span>, <span class="fl">0.1</span>, <span class="fl">0.2</span><span class="op">)</span>,  <span class="co"># required; no default is derived here</span></span>
-<span>  method        <span class="op">=</span> <span class="st">"auto"</span>,             <span class="co"># or force "sparse"</span></span>
+<span>  sigmaValues   <span class="op">=</span> <span class="va">rng</span><span class="op">$</span><span class="va">sigmaValues</span>,</span>
+<span>  method        <span class="op">=</span> <span class="st">"auto"</span>,</span>
 <span>  dropDistances <span class="op">=</span> <span class="cn">TRUE</span></span>
-<span><span class="op">)</span></span>
-<span></span>
-<span><span class="co"># Option B (explicit): call the fused sparse constructor directly.</span></span>
-<span><span class="va">obj</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/computeSparseKernel.html">computeSparseKernel</a></span><span class="op">(</span><span class="va">obj</span>, sigmaValues <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.05</span>, <span class="fl">0.1</span>, <span class="fl">0.2</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
+<span><span class="op">)</span></span></code></pre></div>
 <p>Notes:</p>
 <ul>
 <li>
-<strong>Force it</strong> with <code>method = "sparse"</code> if you
-want the sparse path regardless of size, or raise/lower
-<code>autoThreshold</code> to move the automatic cutoff. Note that
-<code>method = "auto"</code> only skips <code><a href="../reference/computeDistance.html">computeDistance()</a></code>
-when it actually selects the sparse path; if a block falls below the
-threshold it picks <code>"dense"</code> and then needs distances. On a
-machine where the dense matrix would not fit, pass
-<code>method = "sparse"</code> explicitly so the choice never depends on
-the threshold.</li>
+<strong>Sigma controls memory, steeply.</strong> The search radius
+grows linearly in sigma, so the number of retained pairs grows as
+<code>sigma^d</code> and saturates: past roughly two-thirds density a
+sparse kernel costs <em>more</em> than a dense one (12 bytes per stored
+entry against 8). <code>method = "auto"</code> predicts the density
+before building and warns, with the sigma that would bring it back under
+control. If you see that warning, the fix is a smaller sigma, not more
+RAM.</li>
+<li>
+<strong>Build one sigma at a time</strong> when memory is tight.
+Kernels for every requested sigma are held simultaneously, so a
+three-sigma grid costs roughly three times one sigma. Looping the sigma
+outside <code><a href="../reference/computeKernelMatrix.html">computeKernelMatrix()</a></code> and running
+<code><a href="../reference/runSkrCCA.html">runSkrCCA()</a></code> inside the loop bounds the peak.</li>
+<li>
+<strong>Force a representation</strong> with
+<code>method = "float32"</code> (8 bytes per entry, streams one block at
+a time) or <code>method = "sparse"</code> (float64, 12 bytes per entry,
+keeps every block’s neighbor list; use it for exactness checks). The two
+agree to about 1e-6 in the normalized correlation.</li>
 <li>The sparse path supports <code>distType = "Euclidean2D"</code> and
 <code>"Euclidean3D"</code> (inferred from a <code>z</code> coordinate
 column). <code>"Morphology-Aware"</code> distances require the dense
@@ -227,34 +241,40 @@ as in the dense path.</li>
 <div class="section level2">
 <h2 id="skrcca-is-already-exact-and-fast-for-two-cell-types">5. skrCCA is already exact and fast for two cell types<a class="anchor" aria-label="anchor" href="#skrcca-is-already-exact-and-fast-for-two-cell-types"></a>
 </h2>
-<p>For the ordinary two-cell-type (or single within-type) problem,
-<code><a href="../reference/runSkrCCA.html">runSkrCCA()</a></code> now solves <strong>all</strong> requested
-canonical axes with one exact SVD of the small PC-space cross-operator
-(<code>nPCA x nPCA</code>). There is no power iteration to tune, so
-<code>maxIter</code>, <code>tol</code>, and <code>step_size</code> do
-not affect the two-type result — the cost is dominated by the kernel,
-not the optimization.</p>
+<p>For the ordinary two-cell-type (or single within-type) problem under
+<code>objective = "sumcov"</code>, <code><a href="../reference/runSkrCCA.html">runSkrCCA()</a></code> solves
+<strong>all</strong> requested canonical axes with one exact SVD of the
+small PC-space cross-operator (<code>nPCA x nPCA</code>). There is no
+power iteration to tune, so <code>maxIter</code>, <code>tol</code>, and
+<code>step_size</code> do not affect that result — the cost is dominated
+by the kernel, not the optimization.</p>
 <div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">obj</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/runSkrCCA.html">runSkrCCA</a></span><span class="op">(</span><span class="va">obj</span>, scalePCs <span class="op">=</span> <span class="cn">TRUE</span>, nCC <span class="op">=</span> <span class="fl">2</span><span class="op">)</span></span>
 <span><span class="va">obj</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/computeNormalizedCorrelation.html">computeNormalizedCorrelation</a></span><span class="op">(</span><span class="va">obj</span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># Prefer regression gene weights for downstream use / transfer:</span></span>
 <span><span class="va">obj</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/computeRegressionGeneScores.html">computeRegressionGeneScores</a></span><span class="op">(</span><span class="va">obj</span><span class="op">)</span></span></code></pre></div>
-<p>(<code>maxIter</code> / <code>step_size</code> still matter only when
-analyzing <strong>three or more</strong> cell types jointly, or when
-supplying a transferred first axis, where the sequential deflation path
-is used.)</p>
+<p>(<code>maxIter</code> / <code>step_size</code> still matter when
+analyzing <strong>three or more</strong> cell types jointly, when
+supplying a transferred first axis — both of which use the sequential
+deflation path — and for <strong>any</strong> number of cell types under
+<code>objective = "sumcor"</code>, the multi-slide default, whose
+operator depends on the weights and so has no fixed matrix to
+decompose.)</p>
 </div>
 <div class="section level2">
 <h2 id="multi-slide-at-scale">6. Multi-slide at scale<a class="anchor" aria-label="anchor" href="#multi-slide-at-scale"></a>
 </h2>
-<p><code><a href="../reference/newCoProMulti.html">newCoProMulti()</a></code> shares one set of weight vectors across
-slides. Kernels are built <strong>per slide</strong> and their small
-PC-space operators are summed — CoPro never materializes a
-block-diagonal <code>N x N</code> kernel across the whole cohort. Use
+<p><code><a href="../reference/newCoProMulti.html">newCoProMulti()</a></code> shares one PCA loading matrix and one
+set of CCA weight vectors across slides. By default,
+<code><a href="../reference/computePCA.html">computePCA()</a></code> centers and scales each
+<code>(slide, cell type)</code> gene matrix before stacking the blocks
+for that shared PCA. <code><a href="../reference/runSkrCCA.html">runSkrCCA()</a></code> then uses equal-slide
+SUMCOR, keeping the small per-slide PC-space operators separate so each
+cross term is divided by its own score scales. CoPro never materializes
+a block-diagonal <code>N x N</code> kernel across the cohort. Use
 <code>method = "auto"</code>/<code>"sparse"</code> exactly as above, and
-set <code>n_cores</code> to parallelize the per-slide kernel and skrCCA
-work.</p>
+set <code>n_cores</code> to parallelize the per-slide kernel work.</p>
 <div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">multi</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/newCoProMulti.html">newCoProMulti</a></span><span class="op">(</span></span>
 <span>  normalizedData <span class="op">=</span> <span class="va">expr_list</span>,   <span class="co"># named list of per-slide cells x genes matrices</span></span>
@@ -353,6 +373,17 @@ not need it</td>
 <td><code>autoThreshold</code></td>
 <td><code><a href="../reference/computeKernelMatrix.html">computeKernelMatrix()</a></code></td>
 <td>Tunes the cell-count cutoff for the sparse path (default 5000)</td>
+</tr>
+<tr class="even">
+<td><code>denseThreshold</code></td>
+<td><code><a href="../reference/computeKernelMatrix.html">computeKernelMatrix()</a></code></td>
+<td>Predicted density above which <code>"auto"</code> warns that sparse
+saves nothing (default 0.3)</td>
+</tr>
+<tr class="odd">
+<td><code><a href="../reference/detectSigmaRange.html">detectSigmaRange()</a></code></td>
+<td>before kernels</td>
+<td>Picks sigma from the data, in its own coordinate units</td>
 </tr>
 <tr class="even">
 <td><code>n_cores</code></td>

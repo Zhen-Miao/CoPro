@@ -74,4 +74,5 @@ Distance matrix as a numeric matrix
 Other accessors:
 [`getCellScores()`](https://zhen-miao.github.io/CoPro/reference/getCellScores.md),
 [`getCellScoresInSitu()`](https://zhen-miao.github.io/CoPro/reference/getCellScoresInSitu.md),
+[`getDistanceGeometry()`](https://zhen-miao.github.io/CoPro/reference/getDistanceGeometry.md),
 [`getKernelMatrix()`](https://zhen-miao.github.io/CoPro/reference/getKernelMatrix.md)
