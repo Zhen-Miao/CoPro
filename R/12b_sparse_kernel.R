@@ -167,7 +167,7 @@
     has_dense_inputs <- .hasSelfDistanceMatrices(object, is_multi)
     use_sparse <- !has_dense_inputs || n_max >= autoThreshold ||
       dense_entries >= as.numeric(autoThreshold)^2
-    method <- if (use_sparse) "sparse" else "dense"
+    method <- if (use_sparse) "float32" else "dense"
     if (verbose) {
       message(sprintf(
         paste0("computeSelfKernel: method='auto' -> '%s' ",
@@ -193,7 +193,7 @@
     ))
   }
 
-  # Sparse route only: see the matching note in .computeKernelDispatch().
+  # Sparse routes only: see the matching note in .computeKernelDispatch().
   # `normalizeDistance = "inherit"` says where the scaling factor comes from,
   # not which coordinates were used, so the record keeps the resulting scaling.
   stamped <- geometry
@@ -201,6 +201,17 @@
     geometry$normalizeDistance, .getDistanceGeometry(object)
   )
   object@distanceGeometry <- stamped
+
+  if (method == "float32") {
+    return(.computeSparseKernelFloat32Core(
+      object, sigmaValues, lowerLimit, upperQuantile, normalizeKernel,
+      minAveCellNeighor, rowNormalizeKernel, colNormalizeKernel,
+      distType, xDistScale, yDistScale, zDistScale,
+      normalizeDistance, normalizeMethod, normalizeTarget, truncateLowDist,
+      overwrite = overwrite, verbose = verbose, is_multi = is_multi,
+      nThreads = NULL, self_only = TRUE
+    ))
+  }
 
   .computeSparseSelfKernelCore(
     object, sigmaValues, lowerLimit, upperQuantile, normalizeKernel,
@@ -681,9 +692,11 @@
   # The low percentile floors small distances; the scaling reference sets the
   # unit. They were one number before 1.2.0, which is why one dense block could
   # rescale the whole object. They are now computed separately.
+  scaling_mode <- .normalizeDistanceMode(normalizeDistance)
+  derive_own <- identical(scaling_mode, "own")
   need_pct <- truncateLowDist ||
-    (normalizeDistance && identical(normalizeMethod, "percentile"))
-  need_spacing <- normalizeDistance && identical(normalizeMethod, "spacing")
+    (derive_own && identical(normalizeMethod, "percentile"))
+  need_spacing <- derive_own && identical(normalizeMethod, "spacing")
 
   if (verbose) {
     cat(sprintf("Computing sparse kernel for %d cell type(s) [%s]\n",
@@ -709,20 +722,20 @@
       }
     }
   }
-  scaling_factor <- if (!normalizeDistance) {
-    1
-  } else {
-    .normalizationScaleFactor(
-      object, blockValues = if (need_spacing) spacings else pctls,
-      normalizeMethod = normalizeMethod, normalizeTarget = normalizeTarget,
-      distType = distType, xDistScale = xDistScale, yDistScale = yDistScale,
-      zDistScale = zDistScale, what = "computeSparseKernel", verbose = verbose
-    )
-  }
-  if (normalizeDistance && verbose) {
+  scaling_factor <- .selfScaleFactor(
+    object, normalizeDistance,
+    blockValues = if (need_spacing) spacings else pctls,
+    normalizeMethod = normalizeMethod, normalizeTarget = normalizeTarget,
+    distType = distType, xDistScale = xDistScale, yDistScale = yDistScale,
+    zDistScale = zDistScale, what = "computeSparseKernel", verbose = verbose
+  )
+  if (!identical(scaling_mode, "none") && verbose) {
     message(sprintf("Distance normalization scaling factor: %g", scaling_factor))
   }
-  if (normalizeDistance) object@distanceScaleFactor <- scaling_factor
+  if (!identical(scaling_mode, "none") &&
+      length(object@distanceScaleFactor) == 0L) {
+    object@distanceScaleFactor <- scaling_factor
+  }
 
   # PASS 2a: cache kernel-ready triplets per block
   block_tri <- vector("list", length(blocks))
@@ -805,9 +818,11 @@
   object@sigmaValues <- sigmaValues
   max_sigma <- max(sigmaValues)
   within_only <- length(cts) == 1
+  scaling_mode <- .normalizeDistanceMode(normalizeDistance)
+  derive_own <- identical(scaling_mode, "own")
   need_pct <- truncateLowDist ||
-    (normalizeDistance && identical(normalizeMethod, "percentile"))
-  need_spacing <- normalizeDistance && identical(normalizeMethod, "spacing")
+    (derive_own && identical(normalizeMethod, "percentile"))
+  need_spacing <- derive_own && identical(normalizeMethod, "spacing")
 
   if (verbose) {
     cat(sprintf("Computing sparse kernel for %d cell type(s) across %d slides [%s]\n",
@@ -868,20 +883,20 @@
       }
     }
   }
-  scaling_factor <- if (!normalizeDistance) {
-    1
-  } else {
-    .normalizationScaleFactor(
-      object, blockValues = if (need_spacing) spacings else pctls,
-      normalizeMethod = normalizeMethod, normalizeTarget = normalizeTarget,
-      distType = distType, xDistScale = xDistScale, yDistScale = yDistScale,
-      zDistScale = zDistScale, what = "computeSparseKernel", verbose = verbose
-    )
-  }
-  if (normalizeDistance && verbose) {
+  scaling_factor <- .selfScaleFactor(
+    object, normalizeDistance,
+    blockValues = if (need_spacing) spacings else pctls,
+    normalizeMethod = normalizeMethod, normalizeTarget = normalizeTarget,
+    distType = distType, xDistScale = xDistScale, yDistScale = yDistScale,
+    zDistScale = zDistScale, what = "computeSparseKernel", verbose = verbose
+  )
+  if (!identical(scaling_mode, "none") && verbose) {
     message(sprintf("Global distance scaling factor: %g", scaling_factor))
   }
-  if (normalizeDistance) object@distanceScaleFactor <- scaling_factor
+  if (!identical(scaling_mode, "none") &&
+      length(object@distanceScaleFactor) == 0L) {
+    object@distanceScaleFactor <- scaling_factor
+  }
 
   # PASS 2a: cache triplets per block
   block_tri <- vector("list", length(blocks))
@@ -1143,7 +1158,11 @@
   }
 
   surviving <- sigmaValues[!sigma_invalid]
-  if (length(object@sigmaValues) == 0L) object@sigmaValues <- surviving
+  object@sigmaValues <- if (length(object@sigmaValues) == 0L) {
+    surviving
+  } else {
+    object@sigmaValues[object@sigmaValues %in% surviving]
+  }
   object@kernelMatrices <- kernel_matrices
   object
 }

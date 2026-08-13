@@ -782,6 +782,7 @@ setMethod(
            objective = c("sumcor", "sumcov")) {
 
     # Validate inputs
+    .validateOptimizerParams(max_iter, tol, step_size)
     if (!is.logical(streaming) || length(streaming) != 1 || is.na(streaming)) {
       stop("streaming must be a single logical value.")
     }

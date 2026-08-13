@@ -184,6 +184,25 @@ test_that("the studentized null is flat across bandwidths and the p-value is Phi
   expect_gte(min(st$pAdjusted), 1 / (B + 1))
 })
 
+test_that("degenerate columns are absent from both sides of the max-T scan", {
+  null <- cbind(constant = rep(4, 20), varying = seq_len(20))
+  obs <- c(100, 25)
+
+  expect_warning(
+    got <- CoPro:::.studentizeSelectMaxT(obs, null, "greater"),
+    "dropped from the scan"
+  )
+  z_varying <- as.numeric(scale(null[, "varying"]))
+  expect_equal(got$nullMax, z_varying, tolerance = 1e-12)
+  expect_identical(got$zSelect[[1]], -Inf)
+
+  expect_warning(
+    got_two <- CoPro:::.studentizeSelectMaxT(obs, null, "two.sided"),
+    "dropped from the scan"
+  )
+  expect_equal(got_two$nullMax, abs(z_varying), tolerance = 1e-12)
+})
+
 test_that("two.sided uses the null of the maximum absolute studentized statistic", {
   set.seed(6)
   nullMat <- cbind(rnorm(100), rnorm(100, sd = 10))
@@ -385,7 +404,10 @@ test_that("the within-type null is centred, not just scaled", {
 
 test_that("the same seed reproduces the selection exactly", {
   obj <- .fit_selection_object(c("Epithelial", "Fibroblast"))
+  set.seed(812)
+  before <- .Random.seed
   a <- selectSigmaByPermutation(obj, nPermu = 25L, seed = 99, verbose = FALSE)
+  expect_identical(.Random.seed, before)
   b <- selectSigmaByPermutation(obj, nPermu = 25L, seed = 99, verbose = FALSE)
   expect_equal(a$perSigma, b$perSigma)
   expect_equal(a$nullMax, b$nullMax)

@@ -282,6 +282,86 @@ test_that("runSkrCCAPermu null is identical with and without factorization", {
   }
 })
 
+test_that("fixed-sigma scoring falls back when cellTypesOfInterest is empty", {
+  obj <- .fact_pipeline(nCC = 1)
+  obj@cellTypesOfInterest <- character()
+
+  expect_warning(
+    permuted <- suppressMessages(runSkrCCAPermu(
+      obj, nPermu = 2, permu_method = "global", verbose = FALSE
+    )),
+    "using all cell types"
+  )
+  expect_silent(
+    scored <- computeNormalizedCorrelationPermu(permuted, verbose = FALSE)
+  )
+  expect_length(scored@normalizedCorrelationPermu, 2L)
+})
+
+test_that("a one-draw fixed-sigma null is rejected", {
+  obj <- .fact_pipeline(nCC = 1)
+  expect_error(
+    runSkrCCAPermu(obj, nPermu = 1, permu_method = "global",
+                   verbose = FALSE),
+    "at least 2"
+  )
+})
+
+test_that("compact permutation redraws restore the caller RNG", {
+  pc <- matrix(seq_len(20), nrow = 5)
+  location <- data.frame(
+    x = rep(1:4, each = 4), y = rep(1:4, times = 4),
+    cell_ID = paste0("cell", seq_len(16))
+  )
+  prepared <- CoPro:::.prepareSpatialResampling(location, 2, 2)
+
+  set.seed(812)
+  before <- .Random.seed
+  CoPro:::.permutePCMatrix(pc, 3)
+  expect_identical(.Random.seed, before)
+  CoPro:::.drawGlobalPermutation(10, 4)
+  expect_identical(.Random.seed, before)
+  CoPro:::.drawBinPermutation(
+    list(prepared = prepared, match_quantile = FALSE), 5
+  )
+  expect_identical(.Random.seed, before)
+})
+
+test_that("two-sided permutation p-values use absolute statistics", {
+  obj <- .fact_pipeline(nCC = 1)
+  observed <- max(getNormCorr(obj)$normalizedCorrelation)
+  null <- lapply(c(-2 * abs(observed), 2 * abs(observed)), function(value) {
+    data.frame(CC_index = 1L, normalizedCorrelation = value)
+  })
+  attr(null, "provenance") <- list(
+    sigma_values = obj@sigmaValueChoice,
+    sigma_aggregation = "fixed",
+    sigma_predeclared = TRUE
+  )
+  obj@normalizedCorrelationPermu <- null
+
+  expect_equal(calculate_pvalue(obj, alternative = "two.sided")$p_value, 1)
+})
+
+test_that("fair-sigma workers record non-finite statistics instead of crashing", {
+  testthat::local_mocked_bindings(
+    .yResiFromPlan = function(...) list(),
+    .fitConditionalAxis = function(...) list(w = list(A = matrix(1)),
+                                             ncorr = NaN),
+    .package = "CoPro"
+  )
+  worker <- CoPro:::.makeFairSigmaWorker(
+    PCmats = list(A = matrix(1:4, ncol = 1)),
+    plans = list(list()), cts = "A", sigma_values = 1,
+    sdev2_list = NULL, kernel_info = list(list()), grams = list(A = NULL),
+    maxIter = 2, tol = 1e-5
+  )
+  result <- worker(list(A = list(identity = TRUE)))
+  expect_true(is.na(result$ncorr))
+  expect_null(result$weights)
+  expect_match(result$errors, "non-finite")
+})
+
 test_that("permu_which = 'both' and 'first_only' are also unchanged", {
   skip_on_cran()
   obj <- .fact_pipeline()

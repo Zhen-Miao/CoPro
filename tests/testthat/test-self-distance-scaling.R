@@ -159,4 +159,27 @@ test_that("building self-kernels does not overwrite the recorded scale factor", 
 
   with_self_auto <- quiet(computeSelfKernel(obj, sigmaValues = 0.05, verbose = FALSE))
   expect_equal(with_self_auto@distanceScaleFactor, recorded)
+  is_self <- vapply(names(with_self_auto@kernelMatrices), function(key) {
+    parsed <- .parseKernelMatrixName(key)
+    identical(parsed$cellType1, parsed$cellType2)
+  }, logical(1))
+  expect_true(all(vapply(
+    with_self_auto@kernelMatrices[is_self],
+    inherits, logical(1), "CoProFloat32SparseMatrix"
+  )))
+})
+
+test_that("invalid self-kernel bandwidths are pruned from sigmaValues", {
+  obj <- make_two_type_object(n = 120)
+  obj@sigmaValues <- c(1e-10, 1)
+
+  out <- quiet(computeSelfKernel(
+    obj, sigmaValues = c(1e-10, 1), method = "sparse",
+    minAveCellNeighor = 1, normalizeDistance = "inherit",
+    verbose = FALSE
+  ))
+  expect_equal(out@sigmaValues, 1)
+  expect_false(any(vapply(names(out@kernelMatrices), function(key) {
+    identical(.parseKernelMatrixName(key)$sigma, 1e-10)
+  }, logical(1))))
 })

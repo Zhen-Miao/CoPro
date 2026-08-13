@@ -444,6 +444,22 @@ setGeneric(
   } else {
     rownames(mat) <- rownames(object@locationDataSub)[ct_indices]
   }
+
+  if (any(!is.finite(mat))) {
+    bad <- which(!is.finite(mat), arr.ind = TRUE)
+    bad_rows <- unique(rownames(mat)[bad[, "row"]])
+    label <- if (is.null(cellType)) "the cells of interest" else {
+      paste0("cell type '", cellType, "'")
+    }
+    slide_label <- if (is.null(slideID)) "" else paste0(" in slide '", slideID, "'")
+    stop(
+      "Spatial coordinates for ", label, slide_label,
+      " must be finite; found NA, NaN, or Inf for cell(s): ",
+      paste(utils::head(bad_rows, 5L), collapse = ", "),
+      if (length(bad_rows) > 5L) ", ..." else "",
+      call. = FALSE
+    )
+  }
   
   return(mat)
 }

@@ -106,6 +106,16 @@ test_that(".frnnGrid returns an empty result when no pair is within radius", {
   expect_length(g$d, 0L)
 })
 
+test_that("the R grid reference does not overflow beyond 32-bit cell keys", {
+  A <- cbind(x = c(0, 3e9), y = c(0, 0))
+  B <- A
+  got <- CoPro:::.frnnGridR(A, B, r = 0.1)
+
+  expect_equal(got$i, 1:2)
+  expect_equal(got$j, 1:2)
+  expect_equal(got$d, c(0, 0))
+})
+
 test_that("compiled and R fixed-radius engines return identical triplets", {
   set.seed(808)
 

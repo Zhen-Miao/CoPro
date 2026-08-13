@@ -106,6 +106,17 @@ make_synthetic_data <- function(n_slides = 3, n_genes = 20, n_cells = 50,
   )
 }
 
+test_that("gene-space initialization is deterministic and RNG-neutral", {
+  set.seed(812)
+  before <- .Random.seed
+  first <- CoPro:::.deterministicGeneSpaceInit(12, c("A", "B"), component = 2)
+  expect_identical(.Random.seed, before)
+
+  runif(10)
+  second <- CoPro:::.deterministicGeneSpaceInit(12, c("A", "B"), component = 2)
+  expect_identical(first, second)
+})
+
 test_that("optimize_genespace_avg_corr converges and recovers planted signal", {
   dat <- make_synthetic_data(seed = 42)
 

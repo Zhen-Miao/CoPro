@@ -263,7 +263,11 @@ selectSigmaByPermutation <- function(object,
             "; the null SD is also noisy. Consider nPermu >= 199.",
             call. = FALSE)
   }
-  if (!is.null(seed)) set.seed(seed)
+  if (!is.null(seed)) {
+    rng_state <- .captureRNGState()
+    on.exit(.restoreRNGState(rng_state), add = TRUE)
+    set.seed(seed)
+  }
 
   sigmaValues <- .resolveSelectionSigmas(object, sigmaValues)
   cts <- .resolveSelectionCellTypes(object)
@@ -753,18 +757,20 @@ print.CoProSigmaSelection <- function(x, ...) {
             "combinations had a null spread of zero and were dropped from the ",
             "scan. This usually means the kernel is empty at that bandwidth.",
             call. = FALSE)
-    nullSD[degenerate] <- Inf
   }
   z <- (statObs - nullMean) / nullSD
   zNull <- sweep(sweep(statNull, 2, nullMean, "-"), 2, nullSD, "/")
 
   if (alternative == "two.sided") {
     zSelect <- abs(z)
-    nullMax <- apply(abs(zNull), 1, max)
+    zNullScan <- abs(zNull)
   } else {
     zSelect <- z
-    nullMax <- apply(zNull, 1, max)
+    zNullScan <- zNull
   }
+  zSelect[degenerate] <- -Inf
+  zNullScan[, degenerate] <- -Inf
+  nullMax <- apply(zNullScan, 1, max)
   ## Phipson & Smyth (2010): the observed configuration is itself an admissible
   ## draw, so both counts get a +1 and the smallest resolvable p is 1/(B + 1).
   pAdjusted <- vapply(zSelect, function(zi) {
@@ -774,7 +780,7 @@ print.CoProSigmaSelection <- function(x, ...) {
   list(nullMean = nullMean,
        nullSD = ifelse(degenerate, NA_real_, nullSD),
        z = ifelse(degenerate, NA_real_, z),
-       zSelect = ifelse(degenerate, -Inf, zSelect),
+       zSelect = zSelect,
        zMax = max(zSelect[!degenerate]),
        nullMax = nullMax,
        pAdjusted = ifelse(degenerate, NA_real_, pAdjusted))

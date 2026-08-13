@@ -894,7 +894,7 @@ test_that("step_size reaches every axis of the SUMCOV warm start", {
     msg <- capture.output(invisible(suppressWarnings(
       CoPro:::.sumcorWarmStart(ops_w, ops$cell_types, NULL, nCC = 3L,
                                step_size = step_size)
-    )))
+    )), type = "message")
     as.integer(sub(" iterations", "", regmatches(
       msg, regexpr("[0-9]+ iterations", msg)
     )))

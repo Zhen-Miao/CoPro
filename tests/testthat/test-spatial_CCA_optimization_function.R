@@ -530,3 +530,35 @@ test_that("invalid step_size values are rejected", {
   expect_error(optimize_bilinear(X_list, flat_kernels, sigma = 0.1, step_size = "a"),
                "step_size must be a single numeric value")
 })
+
+test_that("exported optimizers reject non-finite and fractional controls", {
+  X <- list(TypeA = matrix(1, nrow = 3, ncol = 1))
+  expect_error(optimize_bilinear(X, list(), sigma = 1, tol = NA_real_),
+               "tol must be a positive finite number")
+  expect_error(optimize_bilinear(X, list(), sigma = 1, max_iter = 1.5),
+               "max_iter must be a positive integer")
+  expect_error(optimize_bilinear(X, list(), sigma = 1, step_size = NA_real_),
+               "step_size must be a single numeric value")
+})
+
+test_that("non-finite iterates and zero CCA metrics fail explicitly", {
+  expect_error(
+    CoPro:::check_convergence(
+      list(A = matrix(NaN)), list(A = matrix(1)), "A"
+    ),
+    "Non-finite weight iterate"
+  )
+
+  Y <- list(A = list(A = NULL, B = matrix(1, 2, 2)),
+            B = list(A = matrix(1, 2, 2), B = NULL))
+  expect_error(
+    CoPro:::solve_two_type_svd(
+      Y, c("A", "B"), sdev2_list = list(A = c(1, 0), B = c(1, 1))
+    ),
+    "finite positive"
+  )
+  expect_error(
+    CoPro:::normalize_gradient_weighted(matrix(1, 2), c(1, 0)),
+    "finite positive"
+  )
+})

@@ -148,9 +148,6 @@ The matrices are adjusted by clipping the upper quantile of
 the values to reduce the effect of outliers. The results are stored
 within the object.
 }
-\note{
-To-do: Shall we include row or column normalization of the kernel?
-}
 \examples{
 toy <- readRDS(system.file("extdata", "toy_copro_data.rds", package = "CoPro"))
 obj <- newCoProSingle(

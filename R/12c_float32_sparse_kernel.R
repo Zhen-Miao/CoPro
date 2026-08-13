@@ -345,7 +345,7 @@ setGeneric(
 
 #' Build a list of float32 construction blocks
 #' @noRd
-.float32KernelBlocks <- function(object, cts, is_multi) {
+.float32KernelBlocks <- function(object, cts, is_multi, self_only = FALSE) {
   slides <- if (is_multi) getSlideList(object) else NA_character_
   if (is_multi && length(slides) == 0L) {
     stop("No slides found in multi-slide object.")
@@ -353,7 +353,16 @@ setGeneric(
   blocks <- list()
   for (slide_key in slides) {
     slide <- if (is.na(slide_key)) NULL else slide_key
-    if (length(cts) == 1L) {
+    if (self_only) {
+      for (cell_type in cts) {
+        n <- .countSlideCellType(object, slide, cell_type)
+        if (n <= 5L) next
+        blocks[[length(blocks) + 1L]] <- list(
+          slide = slide, cellType1 = cell_type, cellType2 = cell_type,
+          n1 = n, n2 = n, symmetric = TRUE
+        )
+      }
+    } else if (length(cts) == 1L) {
       n <- .countSlideCellType(object, slide, cts)
       if (n <= if (is_multi) 5L else 1L) next
       blocks[[length(blocks) + 1L]] <- list(
@@ -395,7 +404,7 @@ setGeneric(
     rowNormalizeKernel, colNormalizeKernel,
     distType, xDistScale, yDistScale, zDistScale,
     normalizeDistance, normalizeMethod, normalizeTarget, truncateLowDist, overwrite,
-    verbose, is_multi, nThreads = NULL) {
+    verbose, is_multi, nThreads = NULL, self_only = FALSE) {
   n_threads <- .float32KernelThreads(nThreads)
   cts <- .checkInputSparseKernel(
     object, sigmaValues, lowerLimit, upperQuantile,
@@ -405,12 +414,16 @@ setGeneric(
       is.na(overwrite)) {
     stop("overwrite must be TRUE or FALSE.")
   }
+  source_name <- if (self_only) "computeSelfKernel" else {
+    "computeSparseKernelFloat32"
+  }
   object <- .recordSparseKernelGeometry(
     object, distType, xDistScale, yDistScale, zDistScale,
     normalizeDistance, normalizeMethod, normalizeTarget, truncateLowDist,
-    "computeSparseKernelFloat32"
+    source_name
   )
-  blocks <- .float32KernelBlocks(object, cts, is_multi)
+  blocks <- .float32KernelBlocks(object, cts, is_multi,
+                                 self_only = self_only)
   normalization <- if (rowNormalizeKernel) {
     2L
   } else if (colNormalizeKernel) {
@@ -432,9 +445,11 @@ setGeneric(
   # Pass 1 retains only two scalars per block: the low percentile that floors
   # small distances, and the typical spacing that sets the unit. Combining them
   # matches the ordinary sparse single/multi paths exactly.
+  scaling_mode <- .normalizeDistanceMode(normalizeDistance)
+  derive_own <- identical(scaling_mode, "own")
   need_percentile <- truncateLowDist ||
-    (normalizeDistance && identical(normalizeMethod, "percentile"))
-  need_spacing <- normalizeDistance && identical(normalizeMethod, "spacing")
+    (derive_own && identical(normalizeMethod, "percentile"))
+  need_spacing <- derive_own && identical(normalizeMethod, "spacing")
   percentiles <- rep(NA_real_, length(blocks))
   spacings <- rep(NA_real_, length(blocks))
   if (need_percentile || need_spacing) {
@@ -465,17 +480,14 @@ setGeneric(
       }
     }
   }
-  scaling_factor <- if (!normalizeDistance) {
-    1
-  } else {
-    .normalizationScaleFactor(
-      object, blockValues = if (need_spacing) spacings else percentiles,
-      normalizeMethod = normalizeMethod, normalizeTarget = normalizeTarget,
-      distType = distType, xDistScale = xDistScale, yDistScale = yDistScale,
-      zDistScale = zDistScale, what = "computeSparseKernelFloat32",
-      verbose = verbose
-    )
-  }
+  scaling_factor <- .selfScaleFactor(
+    object, normalizeDistance,
+    blockValues = if (need_spacing) spacings else percentiles,
+    normalizeMethod = normalizeMethod, normalizeTarget = normalizeTarget,
+    distType = distType, xDistScale = xDistScale, yDistScale = yDistScale,
+    zDistScale = zDistScale, what = source_name,
+    verbose = verbose
+  )
 
   kernel_matrices <- if (
     overwrite || length(object@kernelMatrices) == 0L
@@ -530,7 +542,9 @@ setGeneric(
       valid <- represented_nnz >=
         minAveCellNeighor * min(block$n1, block$n2)
       if (!valid) {
-        if (!is_multi) invalid_sigmas[as.character(sigma)] <- TRUE
+        if (!is_multi || self_only) {
+          invalid_sigmas[as.character(sigma)] <- TRUE
+        }
         warning(sprintf(
           paste0(
             "Float32 kernel %s -> %s%s at sigma=%g is too sparse ",
@@ -540,7 +554,7 @@ setGeneric(
           sigma, represented_nnz
         ))
         if (is_multi) next
-      } else if (is_multi) {
+      } else if (is_multi && !self_only) {
         valid_multi_sigmas[as.character(sigma)] <- TRUE
       }
 
@@ -558,7 +572,7 @@ setGeneric(
     invisible(gc(FALSE))
   }
 
-  if (is_multi) {
+  if (is_multi && !self_only) {
     invalid_sigmas <- !valid_multi_sigmas
   }
   if (any(invalid_sigmas)) {
@@ -578,14 +592,21 @@ setGeneric(
   }
 
   object@kernelMatrices <- kernel_matrices
-  object@sigmaValues <- sigmaValues
+  if (self_only && length(object@sigmaValues) > 0L) {
+    object@sigmaValues <- object@sigmaValues[object@sigmaValues %in% sigmaValues]
+  } else {
+    object@sigmaValues <- sigmaValues
+  }
   # Only a normalizing run has a factor to record. Writing the `scaling_factor
   # <- 1` of a non-normalizing run would erase a factor computeDistance() had
   # already pinned, and .recoverDistanceScaleFactor() reads that slot to map
   # analysis coordinates back to raw ones for the permutation null. Matches the
   # three guarded sites in 12b_sparse_kernel.R.
-  if (normalizeDistance) object@distanceScaleFactor <- scaling_factor
-  object@distances <- list()
+  if (!identical(scaling_mode, "none") &&
+      length(object@distanceScaleFactor) == 0L) {
+    object@distanceScaleFactor <- scaling_factor
+  }
+  if (!self_only) object@distances <- list()
   object
 }
 

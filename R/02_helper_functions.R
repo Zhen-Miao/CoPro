@@ -157,6 +157,7 @@ normalize_vec_weighted <- function(v, sdev2 = NULL) {
   if (is.null(sdev2)) {
     return(normalize_vec(v))
   }
+  .validateSdev2(sdev2, length(v))
   v_norm <- sqrt(sum(as.numeric(v)^2 * sdev2))
   if (v_norm < 1e-12) {
     warning("Vector has very small weighted norm, may cause numerical issues")
@@ -186,10 +187,70 @@ normalize_gradient_weighted <- function(v, sdev2 = NULL) {
   if (is.null(sdev2)) {
     return(normalize_vec(v))
   }
+  .validateSdev2(sdev2, length(v))
   # D^{-1} v
   u <- as.numeric(v) / sdev2
   # Normalize under D-norm: sqrt(u' D u) = sqrt(sum(u^2 * sdev2))
   normalize_vec_weighted(matrix(u, ncol = 1), sdev2)
+}
+
+#' Validate a diagonal CCA metric
+#' @noRd
+.validateSdev2 <- function(sdev2, expected_length, label = "sdev2") {
+  if (!is.numeric(sdev2) || length(sdev2) != expected_length ||
+      any(!is.finite(sdev2)) || any(sdev2 <= 0)) {
+    stop(label, " must contain one finite positive value per feature")
+  }
+  invisible(sdev2)
+}
+
+#' Validate parameters shared by the iterative optimizers
+#'
+#' Exported low-level optimizers can be called without going through
+#' `runSkrCCA()`, so validation belongs at every public entry point rather than
+#' only in the high-level pipeline.
+#' @noRd
+.validateOptimizerParams <- function(max_iter, tol, step_size,
+                                     max_iter_name = "max_iter") {
+  if (!is.numeric(max_iter) || length(max_iter) != 1L ||
+      !is.finite(max_iter) || max_iter < 1 ||
+      max_iter != floor(max_iter)) {
+    stop(max_iter_name, " must be a positive integer")
+  }
+  if (!is.numeric(tol) || length(tol) != 1L ||
+      !is.finite(tol) || tol <= 0) {
+    stop("tol must be a positive finite number")
+  }
+  if (!is.numeric(step_size) || length(step_size) != 1L ||
+      !is.finite(step_size) || step_size <= 0 || step_size > 1) {
+    stop("step_size must be a single numeric value in (0, 1]")
+  }
+  invisible(NULL)
+}
+
+#' Capture and restore the caller's global RNG state
+#'
+#' The returned value distinguishes an absent `.Random.seed` from an existing
+#' seed. Seeded entry points use this with `on.exit()` so reproducibility does
+#' not come at the cost of changing the caller's random stream.
+#' @noRd
+.captureRNGState <- function() {
+  exists <- exists(".Random.seed", envir = .GlobalEnv, inherits = FALSE)
+  list(
+    exists = exists,
+    seed = if (exists) get(".Random.seed", envir = .GlobalEnv,
+                          inherits = FALSE) else NULL
+  )
+}
+
+#' @noRd
+.restoreRNGState <- function(state) {
+  if (isTRUE(state$exists)) {
+    assign(".Random.seed", state$seed, envir = .GlobalEnv)
+  } else if (exists(".Random.seed", envir = .GlobalEnv, inherits = FALSE)) {
+    rm(".Random.seed", envir = .GlobalEnv)
+  }
+  invisible(NULL)
 }
 
 # Declare globals used across the package to quiet R CMD check NOTES

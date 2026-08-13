@@ -80,7 +80,7 @@ NULL
 #' @noRd
 .validateStepSize <- function(step_size) {
   if (!is.numeric(step_size) || length(step_size) != 1L ||
-      is.na(step_size) || step_size <= 0 || step_size > 1) {
+      !is.finite(step_size) || step_size <= 0 || step_size > 1) {
     stop("step_size must be a single numeric value in (0, 1]")
   }
   invisible(step_size)
@@ -773,7 +773,7 @@ optimize_sumcor_pca <- function(X_list_all, flat_kernels, sigma, slides,
                                 tol = 1e-6, step_size = 1, n_cores = 1,
                                 verbose = FALSE, ops = NULL) {
   slideWeight <- .resolveSlideWeight(slideWeight)
-  .validateStepSize(step_size)
+  .validateOptimizerParams(max_iter, tol, step_size)
 
   if (is.null(ops)) {
     ops <- .computeSlideOperators(X_list_all, flat_kernels, sigma, slides,
@@ -783,8 +783,10 @@ optimize_sumcor_pca <- function(X_list_all, flat_kernels, sigma, slides,
   # Everything below runs metric-free in whitened coordinates; see
   # .whitenSlideOperators() for why this is required and not merely tidier.
   ops_w <- .whitenSlideOperators(ops, sdev2_list)
-  warm <- .sumcorWarmStart(ops_w, cell_types, NULL, nCC = 1L,
-                           step_size = step_size)
+  warm <- .sumcorWarmStart(
+    ops_w, cell_types, NULL, nCC = 1L, step_size = step_size,
+    max_iter = max_iter, tol = tol
+  )
 
   # One slide, and the per-pair constants coincide: SUMCOR and SUMCOV are then
   # the same optimization problem, so the SUMCOV route already targets the
@@ -835,7 +837,7 @@ optimize_sumcor_pca_n <- function(X_list_all, flat_kernels, sigma, slides,
                                   max_iter = 200, tol = 1e-6, step_size = 1,
                                   n_cores = 1, verbose = FALSE, ops = NULL) {
   slideWeight <- .resolveSlideWeight(slideWeight)
-  .validateStepSize(step_size)
+  .validateOptimizerParams(max_iter, tol, step_size)
 
   if (is.null(ops)) {
     ops <- .computeSlideOperators(X_list_all, flat_kernels, sigma, slides,
@@ -870,8 +872,10 @@ optimize_sumcor_pca_n <- function(X_list_all, flat_kernels, sigma, slides,
   # silently discard the transferred direction. The SUMCOV route already keeps
   # the sequential path in exactly that case.
   if (length(ops$slides) == 1L && .sumcorReducesToSumcov(ops_w, slideWeight)) {
-    warm <- .sumcorWarmStart(ops_w, cell_types, NULL, nCC = nCC,
-                             step_size = step_size)
+    warm <- .sumcorWarmStart(
+      ops_w, cell_types, NULL, nCC = nCC, step_size = step_size,
+      max_iter = max_iter, tol = tol
+    )
     if (.axesAgree(warm, w_list_w, k_start, cell_types)) {
       result <- .unwhitenWeights(warm, sdev2_list)
       attr(result, "slideWeight") <- slideWeight
@@ -888,8 +892,10 @@ optimize_sumcor_pca_n <- function(X_list_all, flat_kernels, sigma, slides,
 
     # Warm-start each deflated axis from the corresponding SUMCOV axis, keeping
     # the whole routine deterministic.
-    warm_all <- .sumcorWarmStart(ops_w, cell_types, NULL, nCC = cc,
-                                 step_size = step_size)
+    warm_all <- .sumcorWarmStart(
+      ops_w, cell_types, NULL, nCC = cc, step_size = step_size,
+      max_iter = max_iter, tol = tol
+    )
     w_init <- setNames(lapply(cell_types, function(ct) {
       warm_all[[ct]][, cc, drop = FALSE]
     }), cell_types)
@@ -931,7 +937,9 @@ optimize_sumcor_pca_n <- function(X_list_all, flat_kernels, sigma, slides,
 #'   there.
 #' @return Named list of `nPC x nCC` weight matrices.
 #' @noRd
-.sumcorWarmStart <- function(ops, cell_types, sdev2_list, nCC, step_size = 1) {
+.sumcorWarmStart <- function(ops, cell_types, sdev2_list, nCC, step_size = 1,
+                             max_iter = 200, tol = 1e-6) {
+  .validateOptimizerParams(max_iter, tol, step_size)
   Y_aggregate <- .aggregateSlideOperators(ops)
 
   if (length(cell_types) == 1L) {
@@ -955,7 +963,8 @@ optimize_sumcor_pca_n <- function(X_list_all, flat_kernels, sigma, slides,
   w1 <- suppressWarnings(bilinear_w_from_Y_resi(
     w_list_new = initialize_next_component(Y_aggregate, cell_types),
     Y_resi = Y_aggregate, n_features = feature_counts,
-    max_iter = 200, tol = 1e-6, step_size = step_size, sdev2_list = sdev2_list
+    max_iter = max_iter, tol = tol, step_size = step_size,
+    sdev2_list = sdev2_list
   ))
   if (nCC == 1L) return(w1)
 
@@ -969,7 +978,7 @@ optimize_sumcor_pca_n <- function(X_list_all, flat_kernels, sigma, slides,
     w_next <- suppressWarnings(bilinear_w_from_Y_resi(
       w_list_new = initialize_next_component(Y_resi, cell_types),
       Y_resi = Y_resi, n_features = feature_counts,
-      max_iter = 200, tol = 1e-6, step_size = step_size,
+      max_iter = max_iter, tol = tol, step_size = step_size,
       sdev2_list = sdev2_list
     ))
     for (ct in cell_types) {

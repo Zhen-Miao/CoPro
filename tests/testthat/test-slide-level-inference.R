@@ -33,6 +33,24 @@ test_that("multi-slide inference uses held-out equal-replicate effects", {
   expect_true(result$selection_adjusted)
 })
 
+test_that("seeded slide-level inference restores the caller RNG", {
+  obj <- create_test_copro_multi(
+    n_cells_per_slide = 50, n_slides = 3, n_genes = 20,
+    n_cell_types = 2, seed = 812
+  )
+  obj <- subsetData(obj, cellTypesOfInterest = c("CellTypeA", "CellTypeB"))
+  obj <- computePCA(obj, nPCA = 5)
+  obj <- computeDistance(obj, normalizeDistance = TRUE, verbose = FALSE)
+  obj <- computeKernelMatrix(obj, sigmaValues = 0.1, verbose = FALSE)
+
+  set.seed(99)
+  before <- .Random.seed
+  suppressWarnings(runSlideLevelInference(
+    obj, n_resamples = 99, seed = 4, verbose = FALSE
+  ))
+  expect_identical(.Random.seed, before)
+})
+
 test_that("cell-level permutation refuses to masquerade as multi-slide inference", {
   obj <- create_test_copro_multi(
     n_cells_per_slide = 30, n_slides = 2, n_genes = 20,

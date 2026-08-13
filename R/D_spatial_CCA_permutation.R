@@ -270,7 +270,8 @@
 #'   `NULL` unless a SUMCOR null is actually required.
 #' @noRd
 .resolvePermutationObjective <- function(object, cts, scalePCs = TRUE,
-                                         supports_sumcor = TRUE) {
+                                         supports_sumcor = TRUE,
+                                         verbose = TRUE) {
   sumcov <- list(objective = "sumcov", slideWeight = NULL,
                  grams = NULL, n_cells = NULL)
   record <- attr(object@skrCCAOut, "ccaObjective")
@@ -308,7 +309,7 @@
   # matrices the optimizer would see under this object's scalePCs setting.
   ops_w <- .whitenSlideOperators(ops, .permutationSdev2(object, cts))
   if (.sumcorReducesToSumcov(ops_w, slideWeight)) {
-    message(
+    if (verbose) message(
       "Weights were fitted under objective = \"sumcor\", but with ",
       length(cts), " cell type(s) on one slide that is the same optimization ",
       "problem as \"sumcov\". The existing null is the matching null."
@@ -369,7 +370,10 @@
     .whitenWeights(prev_axes, sdev2_list)
   }
 
-  warm <- .sumcorWarmStart(ops_w, cts, NULL, nCC = 1L, step_size = step_size)
+  warm <- .sumcorWarmStart(
+    ops_w, cts, NULL, nCC = 1L, step_size = step_size,
+    max_iter = maxIter, tol = tol
+  )
   fit <- suppressWarnings(.sumcorIterate(
     w_init = stats::setNames(lapply(cts, function(ct) {
       warm[[ct]][, 1L, drop = FALSE]
@@ -390,8 +394,10 @@
           cbind(prev_w[[ct]], axes[[ct]])
         }), cts)
       }
-      warm_cc <- .sumcorWarmStart(ops_w, cts, NULL, nCC = cc,
-                                  step_size = step_size)
+      warm_cc <- .sumcorWarmStart(
+        ops_w, cts, NULL, nCC = cc, step_size = step_size,
+        max_iter = maxIter, tol = tol
+      )
       fit_cc <- suppressWarnings(.sumcorIterate(
         w_init = stats::setNames(lapply(cts, function(ct) {
           warm_cc[[ct]][, cc, drop = FALSE]
@@ -613,7 +619,8 @@
 #' observed <- max(getNormCorr(br)$normalizedCorrelation)
 #' permu_values <- sapply(br@normalizedCorrelationPermu,
 #'                        function(x) x$normalizedCorrelation[1])
-#' p_value <- mean(permu_values >= observed)
+#' p_value <- (1 + sum(permu_values >= observed)) /
+#'   (1 + length(permu_values))
 #' }
 #'
 #' @importFrom stats setNames
@@ -658,6 +665,10 @@ runSkrCCAPermu <- function(object, tol = 1e-5, nPermu = 999,
     stop("permu_which must be 'second_only', 'both', or 'first_only'.")
   }
 
+  nPermu <- .checkPositiveScalarInt(nPermu, "nPermu")
+  if (nPermu < 2L) {
+    stop("nPermu must be at least 2; one draw produces a degenerate null.")
+  }
   if (nPermu < 10) {
     warning("nPermu < 10 may give unreliable p-values. Consider nPermu >= 100.")
   }
@@ -681,7 +692,9 @@ runSkrCCAPermu <- function(object, tol = 1e-5, nPermu = 999,
   }
 
   ## The null must be optimized by the same criterion as the observed weights.
-  permu_objective <- .resolvePermutationObjective(object, cts, scalePCs)
+  permu_objective <- .resolvePermutationObjective(
+    object, cts, scalePCs, verbose = verbose
+  )
 
   if (length(cts) == 1L && verbose) {
     message("Single cell type: permu_which is ignored and the one type is ",
@@ -862,6 +875,7 @@ runSkrCCAPermu <- function(object, tol = 1e-5, nPermu = 999,
 #'
 #' @param object A `CoPro` object with permutation results from `runSkrCCAPermu()`
 #' @param tol Tolerance for approximate SVD calculation (default: 1e-4)
+#' @param verbose Whether to report progress.
 #' @inheritParams runSkrCCAPermu
 #'
 #' @return The `CoPro` object with permutation normalized correlations
@@ -878,13 +892,14 @@ runSkrCCAPermu <- function(object, tol = 1e-5, nPermu = 999,
 #' observed <- max(getNormCorr(br)$normalizedCorrelation)
 #'
 #' # One-sided p-value (testing if observed > permutation)
-#' p_value <- mean(permu_values >= observed)
+#' p_value <- (1 + sum(permu_values >= observed)) /
+#'   (1 + length(permu_values))
 #' }
 #'
 #' @export
 computeNormalizedCorrelationPermu <- function(
     object, tol = 1e-4,
-    factorize = .defaultFactorizePermutation()) {
+    factorize = .defaultFactorizePermutation(), verbose = TRUE) {
 
   ## Input validation
   if (!is(object, "CoPro")) {
@@ -898,7 +913,11 @@ computeNormalizedCorrelationPermu <- function(
   }
 
   ## Get parameters
-  cts <- object@cellTypesOfInterest
+  cts <- if (length(object@cellTypesOfInterest) > 0L) {
+    object@cellTypesOfInterest
+  } else {
+    unique(object@cellTypesSub)
+  }
   nPermu <- object@nPermu
 
   if (length(object@scalePCs) == 0) {
@@ -926,7 +945,7 @@ computeNormalizedCorrelationPermu <- function(
   s_name <- paste("sigma", sigmaValueChoice, sep = "_")
 
   ## Calculate whitened-Frobenius normalizers (only need to do this once)
-  cat("Calculating whitened-Frobenius normalizers...\n")
+  if (verbose) cat("Calculating whitened-Frobenius normalizers...\n")
   norm_K12 <- setNames(vector(mode = "list", length = 1), s_name)
   norm_K12[[s_name]] <- setNames(vector(mode = "list", length = length(cts)), cts)
   normalizer_cache <- attr(object, "kernelNormalizerCache", exact = TRUE)
@@ -963,7 +982,7 @@ computeNormalizedCorrelationPermu <- function(
     }
     norm_K12[[s_name]][[cellType1]][[cellType2]] <- nrm
   }
-  cat("Whitened-Frobenius normalizers calculated.\n\n")
+  if (verbose) cat("Whitened-Frobenius normalizers calculated.\n\n")
 
   ## The null scores use the same permutations and the same kernel as the fits
   ## that produced them, so the same factorization applies: everything below is
@@ -981,7 +1000,7 @@ computeNormalizedCorrelationPermu <- function(
                              factorize = factorize)
 
   ## Calculate normalized correlation for each permutation
-  cat("Computing normalized correlations for permutations...\n")
+  if (verbose) cat("Computing normalized correlations for permutations...\n")
 
   for (tt in seq_len(nPermu)) {
     t <- permu_names[tt]
@@ -1033,7 +1052,7 @@ computeNormalizedCorrelationPermu <- function(
     }
 
     # Progress indicator
-    if (tt %% 20 == 0 || tt == nPermu) {
+    if (verbose && (tt %% 20 == 0 || tt == nPermu)) {
       cat(paste("  Completed", tt, "of", nPermu, "permutations\n"))
     }
   }
@@ -1047,7 +1066,7 @@ computeNormalizedCorrelationPermu <- function(
   )
   attr(object, "kernelNormalizerCache") <- normalizer_cache
 
-  cat("\nNormalized correlation computation complete.\n")
+  if (verbose) cat("\nNormalized correlation computation complete.\n")
 
   return(object)
 }
@@ -1264,9 +1283,7 @@ calculate_pvalue <- function(object, cc_index = 1, alternative = "greater") {
   } else if (alternative == "less") {
     p_value <- (1 + sum(permu_values <= observed)) / (1 + m)
   } else if (alternative == "two.sided") {
-    p_greater <- (1 + sum(permu_values >= observed)) / (1 + m)
-    p_less <- (1 + sum(permu_values <= observed)) / (1 + m)
-    p_value <- min(2 * min(p_greater, p_less), 1)  # Cap at 1
+    p_value <- (1 + sum(abs(permu_values) >= abs(observed))) / (1 + m)
   } else {
     stop("alternative must be 'greater', 'less', or 'two.sided'")
   }
@@ -1510,6 +1527,10 @@ runSkrCCAPermu_FairSigma <- function(object,
   if (length(object@normalizedCorrelation) == 0) {
     stop("Please run computeNormalizedCorrelation() first")
   }
+  nPermu <- .checkPositiveScalarInt(nPermu, "nPermu")
+  if (nPermu < 2L) {
+    stop("nPermu must be at least 2; one draw produces a degenerate null.")
+  }
 
   # Use all sigma values from original analysis if not specified
   if (is.null(sigma_values)) {
@@ -1558,7 +1579,9 @@ runSkrCCAPermu_FairSigma <- function(object,
   sdev2_list <- .permutationSdev2(object, cts)
   ## Restricted to at most two cell types above, where sumcor and sumcov are
   ## the same problem. Verified rather than assumed.
-  .resolvePermutationObjective(object, cts, scalePCs, supports_sumcor = FALSE)
+  .resolvePermutationObjective(
+    object, cts, scalePCs, supports_sumcor = FALSE, verbose = verbose
+  )
 
   if (nCC > 1) {
     warning("Fair sigma permutation tests only the first canonical axis (CC1). ",
@@ -1639,18 +1662,46 @@ runSkrCCAPermu_FairSigma <- function(object,
     cell_permu = cell_permu, cts = cts, nPermu = nPermu, worker = worker,
     n_cores = n_cores, verbose = verbose
   )
+  valid_draw <- vapply(permu_results, function(x) {
+    is.finite(x$ncorr) && !is.null(x$weights)
+  }, logical(1))
+  error_messages <- unlist(lapply(permu_results, `[[`, "errors"),
+                           use.names = FALSE)
+  n_failed <- sum(!valid_draw)
+  if (n_failed > 0L || length(error_messages) > 0L) {
+    breakdown <- if (length(error_messages) == 0L) "" else {
+      counts <- sort(table(error_messages), decreasing = TRUE)
+      paste0(" Error counts: ", paste(
+        paste0(names(counts), " (", as.integer(counts), ")"),
+        collapse = "; "), ".")
+    }
+    summary <- if (n_failed > 0L) {
+      paste0(n_failed, " of ", nPermu,
+             " fair-sigma permutation draws had no finite fit and were dropped.")
+    } else {
+      paste0("Some sigma-level fits failed, but all ", nPermu,
+             " fair-sigma permutation draws retained a finite fit.")
+    }
+    warning(summary, breakdown, call. = FALSE)
+  }
+  permu_results <- permu_results[valid_draw]
+  if (length(permu_results) == 0L) {
+    stop("Every fair-sigma permutation draw failed to produce a finite fit.")
+  }
+  nPermu_effective <- length(permu_results)
   permu_ncorrs <- vapply(permu_results, `[[`, numeric(1), "ncorr")
   permu_sigmas <- vapply(permu_results, `[[`, numeric(1), "sigma")
-  if (verbose) cat("  Completed", nPermu, "permutations\n")
+  if (verbose) cat("  Completed", nPermu, "permutations (",
+                   nPermu_effective, " usable)\n", sep = "")
 
   # Store results in object
   object@skrCCAPermuOut <- lapply(permu_results, function(x) x$weights)
-  names(object@skrCCAPermuOut) <- paste0("permu_", seq_len(nPermu))
+  names(object@skrCCAPermuOut) <- paste0("permu_", seq_len(nPermu_effective))
 
   # Create normalized correlation results structure
   pair_cell_types <- .permutationPairTypes(cts)
-  correlation_value <- vector("list", nPermu)
-  for (tt in seq_len(nPermu)) {
+  correlation_value <- vector("list", nPermu_effective)
+  for (tt in seq_len(nPermu_effective)) {
     correlation_value[[tt]] <- data.frame(
       sigmaValues = permu_results[[tt]]$sigma,
       cellType1 = pair_cell_types[1, 1],
@@ -1660,9 +1711,9 @@ runSkrCCAPermu_FairSigma <- function(object,
       stringsAsFactors = FALSE
     )
   }
-  names(correlation_value) <- paste0("permu_", seq_len(nPermu))
+  names(correlation_value) <- paste0("permu_", seq_len(nPermu_effective))
   object@normalizedCorrelationPermu <- correlation_value
-  object@nPermu <- as.integer(nPermu)
+  object@nPermu <- as.integer(nPermu_effective)
 
   # Get observed best sigma for comparison
   observed_best_sigma <- object@sigmaValueChoice
@@ -1680,7 +1731,10 @@ runSkrCCAPermu_FairSigma <- function(object,
     observed_best_sigma = observed_best_sigma,
     sigma_differs = sigma_differs,
     prop_sigma_differs = prop_sigma_differs,
-    n_sigma_differs = n_sigma_differs
+    n_sigma_differs = n_sigma_differs,
+    n_requested = as.integer(nPermu),
+    n_failed = as.integer(n_failed),
+    error_counts = sort(table(error_messages), decreasing = TRUE)
   )
   attr(object, "permutationProvenance") <- list(
     method = "fair_sigma",
@@ -1706,13 +1760,14 @@ runSkrCCAPermu_FairSigma <- function(object,
     cat(paste("Permutation mean:", round(mean(permu_ncorrs), 4), "\n"))
     cat(paste("Permutation SD:", round(sd(permu_ncorrs), 4), "\n"))
     cat(paste("P-value (Phipson-Smyth):",
-              round((1 + sum(permu_ncorrs >= observed_ncorr)) / (1 + nPermu), 4),
-              paste0("(MC floor ", round(1 / (1 + nPermu), 4), ")"), "\n"))
+              round((1 + sum(permu_ncorrs >= observed_ncorr)) /
+                      (1 + nPermu_effective), 4),
+              paste0("(MC floor ", round(1 / (1 + nPermu_effective), 4), ")"), "\n"))
     cat("\nSigma selection in permutations:\n")
     cat(paste("  Observed best sigma:", observed_best_sigma, "\n"))
     cat(paste("  Sigma values used:", paste(unique(permu_sigmas), collapse = ", "), "\n"))
     cat(paste("  Most common:", names(sort(table(permu_sigmas), decreasing = TRUE))[1], "\n"))
-    cat(paste("  Sigma differs from observed:", n_sigma_differs, "/", nPermu,
+    cat(paste("  Sigma differs from observed:", n_sigma_differs, "/", nPermu_effective,
               "(", round(prop_sigma_differs * 100, 1), "%)\n"))
   }
 
@@ -1994,6 +2049,10 @@ runSkrCCAPermu_Conditional <- function(object,
   if (length(object@normalizedCorrelation) == 0) {
     stop("Please run computeNormalizedCorrelation() first")
   }
+  nPermu <- .checkPositiveScalarInt(nPermu, "nPermu")
+  if (nPermu < 2L) {
+    stop("nPermu must be at least 2; one draw produces a degenerate null.")
+  }
   if (!(permu_method %in% c("bin", "global", "pc", "toroidal"))) {
     stop("permu_method must be 'bin', 'global', 'pc', or 'toroidal'.")
   }
@@ -2015,7 +2074,9 @@ runSkrCCAPermu_Conditional <- function(object,
   sdev2_list <- .permutationSdev2(object, cts)
   ## Restricted to at most two cell types above, where sumcor and sumcov are
   ## the same problem. Verified rather than assumed.
-  .resolvePermutationObjective(object, cts, scalePCs, supports_sumcor = FALSE)
+  .resolvePermutationObjective(
+    object, cts, scalePCs, supports_sumcor = FALSE, verbose = verbose
+  )
   if (length(nCC) == 0 || nCC < 1) {
     stop("nCC must be >= 1; run runSkrCCA() with the desired number of axes.")
   }
@@ -2096,6 +2157,7 @@ runSkrCCAPermu_Conditional <- function(object,
   perm_stat <- matrix(NA_real_, nrow = nPermu, ncol = nCC)
   perm_sigma <- matrix(sigma_values[1], nrow = nPermu, ncol = nCC)
   n_failed <- 0L
+  failure_messages <- character()
 
   # These values are kernel/sigma-specific, not permutation/axis-specific.
   # Precomputing them removes nPermu * nCC repeated normalizer products.
@@ -2131,8 +2193,12 @@ runSkrCCAPermu_Conditional <- function(object,
   )
   for (tt in seq_len(nPermu)) {
     res <- permutation_results[[tt]]
-    if (is.null(res)) {
+    if (is.null(res) || !is.null(res$error)) {
       n_failed <- n_failed + 1L
+      failure_messages <- c(
+        failure_messages,
+        if (is.null(res)) "worker returned NULL" else res$error
+      )
     } else {
       perm_stat[tt, ] <- res$stat
       perm_sigma[tt, ] <- res$sigma
@@ -2141,9 +2207,15 @@ runSkrCCAPermu_Conditional <- function(object,
   if (verbose) cat(sprintf("  Completed %d permutations\n", nPermu))
 
   if (n_failed > 0) {
+    error_counts <- sort(table(failure_messages), decreasing = TRUE)
     warning(sprintf(paste0("%d of %d permutations failed to optimize and were ",
                           "dropped from the null. P-values use the remaining ",
-                          "permutations."), n_failed, nPermu))
+                          "permutations. Error counts: %s."), n_failed, nPermu,
+                    paste(paste0(names(error_counts), " (",
+                                 as.integer(error_counts), ")"),
+                          collapse = "; ")))
+  } else {
+    error_counts <- integer()
   }
 
   ## ---- step-down p-values ----
@@ -2200,6 +2272,7 @@ runSkrCCAPermu_Conditional <- function(object,
     sigma_values = sigma_values,
     nPermu = as.integer(nPermu),
     n_failed = n_failed,
+    error_counts = error_counts,
     permu_method = permu_method,
     permu_which = permu_which,
     num_bins = num_bins_out,
@@ -2489,7 +2562,11 @@ runSlideLevelInference <- function(object, cc_index = 1,
   }
   estimate <- mean(effects)
 
-  if (!is.null(seed)) set.seed(seed)
+  if (!is.null(seed)) {
+    rng_state <- .captureRNGState()
+    on.exit(.restoreRNGState(rng_state), add = TRUE)
+    set.seed(seed)
+  }
   stat_transform <- switch(
     alternative,
     greater = function(x) x,

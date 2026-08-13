@@ -222,7 +222,8 @@ br <- computeNormalizedCorrelationPermu(br)
 observed <- max(getNormCorr(br)$normalizedCorrelation)
 permu_values <- sapply(br@normalizedCorrelationPermu,
                        function(x) x$normalizedCorrelation[1])
-p_value <- mean(permu_values >= observed)
+p_value <- (1 + sum(permu_values >= observed)) /
+  (1 + length(permu_values))
 }
 
 }
