@@ -575,6 +575,7 @@ setGeneric(
   if (is_multi && !self_only) {
     invalid_sigmas <- !valid_multi_sigmas
   }
+  invalid_values <- numeric()
   if (any(invalid_sigmas)) {
     invalid_values <- as.numeric(names(invalid_sigmas)[invalid_sigmas])
     if (!is_multi && length(sigmaValues) == 1L) {
@@ -592,8 +593,10 @@ setGeneric(
   }
 
   object@kernelMatrices <- kernel_matrices
-  if (self_only && length(object@sigmaValues) > 0L) {
-    object@sigmaValues <- object@sigmaValues[object@sigmaValues %in% sigmaValues]
+  if (self_only) {
+    object <- .pruneSigmaValues(
+      object, surviving = sigmaValues, invalid = invalid_values
+    )
   } else {
     object@sigmaValues <- sigmaValues
   }

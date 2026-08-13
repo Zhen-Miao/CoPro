@@ -733,6 +733,14 @@ test_that("a permutation null matches the criterion the weights were fitted with
     ),
     "different maximizers"
   )
+
+  quiet_fit <- fit(two, "sumcor")
+  expect_silent(
+    quiet_resolution <- CoPro:::.resolvePermutationObjective(
+      quiet_fit, cts2, TRUE, verbose = FALSE
+    )
+  )
+  expect_equal(quiet_resolution$objective, "sumcov")
 })
 
 test_that("the SUMCOR permutation null is only used where it is needed", {
@@ -778,6 +786,22 @@ test_that("getCCAObjective() reports the criterion a gene-space fit used", {
                     verbose = FALSE, objective = "sumcov")
   ))
   expect_equal(getCCAObjective(fit_cov)$objective, "sumcov")
+})
+
+test_that("high-level PCA and gene-space routes validate optimizer controls", {
+  obj <- .sumcor_fixture(nct = 2L, n_slides = 2L)
+  expect_error(
+    runSkrCCA(obj, nCC = 1, maxIter = 1.5),
+    "maxIter must be a positive integer"
+  )
+  expect_error(
+    runSkrCCA(obj, nCC = 1, tol = Inf),
+    "tol must be a positive finite number"
+  )
+  expect_error(
+    runGeneSpaceCCA(obj, sigma = 0.1, nCC = 1, step_size = NA_real_),
+    "step_size must be a single numeric value"
+  )
 })
 
 test_that("a gene-space fit overwrites an earlier PCA-space provenance record", {
@@ -907,6 +931,35 @@ test_that("step_size reaches every axis of the SUMCOV warm start", {
   # A shorter step is a slower walk to the same fixed point. Every axis must
   # show it, not just the first.
   expect_true(all(damped > undamped))
+})
+
+test_that("SUMCOR warm starts forward caller convergence controls", {
+  ops <- .synthetic_one_slide_ops(
+    counts = c(80, 80, 80), nPC = 4L, seed = 23L
+  )
+  ops_w <- CoPro:::.whitenSlideOperators(ops, NULL)
+  calls <- list()
+  testthat::local_mocked_bindings(
+    bilinear_w_from_Y_resi = function(
+        w_list_new, Y_resi, n_features, max_iter, tol,
+        step_size = 1, sdev2_list = NULL) {
+      calls[[length(calls) + 1L]] <<- c(
+        max_iter = max_iter, tol = tol, step_size = step_size
+      )
+      w_list_new
+    },
+    .package = "CoPro"
+  )
+
+  out <- CoPro:::.sumcorWarmStart(
+    ops_w, ops$cell_types, NULL, nCC = 2L,
+    max_iter = 7L, tol = 0.123, step_size = 0.4
+  )
+  expect_length(calls, 2L)
+  for (call in calls) {
+    expect_equal(call, c(max_iter = 7, tol = 0.123, step_size = 0.4))
+  }
+  expect_true(all(vapply(out, ncol, integer(1)) == 2L))
 })
 
 test_that("a SUMCOR null refits each draw with that draw's own Gram matrices", {

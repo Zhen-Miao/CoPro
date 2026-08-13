@@ -344,10 +344,7 @@ solve_one_type_eigen <- function(Y_resi, cell_types, nCC = 1L,
   inv_sqrt_d <- NULL
   if (!is.null(sdev2_list)) {
     d <- sdev2_list[[ct]]
-    if (length(d) != nrow(Y) || any(!is.finite(d)) || any(d <= 0)) {
-      stop("sdev2_list for ", ct,
-           " must contain one finite positive value per PC")
-    }
+    .validateSdev2(d, nrow(Y), paste0("sdev2_list for ", ct))
     inv_sqrt_d <- 1 / sqrt(d)
     Y <- sweep(sweep(Y, 1L, inv_sqrt_d, "*"),
                2L, inv_sqrt_d, "*")

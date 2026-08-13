@@ -1158,11 +1158,10 @@
   }
 
   surviving <- sigmaValues[!sigma_invalid]
-  object@sigmaValues <- if (length(object@sigmaValues) == 0L) {
-    surviving
-  } else {
-    object@sigmaValues[object@sigmaValues %in% surviving]
-  }
+  object <- .pruneSigmaValues(
+    object, surviving,
+    invalid = sigmaValues[sigma_invalid]
+  )
   object@kernelMatrices <- kernel_matrices
   object
 }

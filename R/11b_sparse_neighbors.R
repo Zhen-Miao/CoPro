@@ -26,9 +26,17 @@
 #' @noRd
 .encodeCellKeys <- function(cells, G) {
   # Mixed-radix integer encoding overflows once the grid contains more than
-  # 2^31 cells. Character tuples are slower but this is the documented R
-  # reference/fallback path; correctness on large coordinate ranges wins.
-  apply(cells, 1L, paste, collapse = ":")
+  # 2^31 cells. Character tuples avoid that overflow. Build them one axis at a
+  # time so each paste is vectorized over rows; this keeps the R fallback fast
+  # without returning to a bounded numeric encoding.
+  if (nrow(cells) == 0L) return(character())
+  keys <- as.character(cells[, 1L])
+  if (ncol(cells) > 1L) {
+    for (axis in 2:ncol(cells)) {
+      keys <- paste0(keys, ":", cells[, axis])
+    }
+  }
+  keys
 }
 
 #' Assign points to grid cells of side `r` using a shared origin/grid

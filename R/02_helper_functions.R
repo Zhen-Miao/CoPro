@@ -228,6 +228,29 @@ normalize_gradient_weighted <- function(v, sdev2 = NULL) {
   invisible(NULL)
 }
 
+#' Update the object's usable sigma grid after building kernel blocks
+#'
+#' A kernel call may request only a subset of an existing bandwidth grid. Such
+#' a call must remove bandwidths it proved invalid, but it must not make the
+#' unrequested bandwidths unreachable. When no grid has been recorded yet, the
+#' valid bandwidths from this call establish it.
+#' @param object A `CoPro` object.
+#' @param surviving Valid bandwidths requested by the current call.
+#' @param invalid Bandwidths requested by the current call that produced no
+#'   usable kernel.
+#' @return The object with `@sigmaValues` updated.
+#' @noRd
+.pruneSigmaValues <- function(object, surviving, invalid = numeric()) {
+  surviving <- as.numeric(surviving)
+  invalid <- as.numeric(invalid)
+  if (length(object@sigmaValues) == 0L) {
+    object@sigmaValues <- surviving
+  } else if (length(invalid) > 0L) {
+    object@sigmaValues <- setdiff(object@sigmaValues, invalid)
+  }
+  object
+}
+
 #' Capture and restore the caller's global RNG state
 #'
 #' The returned value distinguishes an absent `.Random.seed` from an existing

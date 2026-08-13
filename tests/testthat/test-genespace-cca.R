@@ -334,6 +334,24 @@ test_that("step_size validation rejects out-of-range and non-numeric values", {
   expect_error(do.call(optimize_genespace_avg_corr,
                        c(args_base, list(step_size = c(0.5, 0.5)))),
                "step_size must be a single numeric value in \\(0, 1\\]")
+
+  args_bad_max <- args_base
+  args_bad_max$max_iter <- 1.5
+  expect_error(do.call(optimize_genespace_avg_corr, args_bad_max),
+               "max_iter must be a positive integer")
+  args_bad_tol <- args_base
+  args_bad_tol$tol <- Inf
+  expect_error(do.call(optimize_genespace_avg_corr, args_bad_tol),
+               "tol must be a positive finite number")
+
+  first <- CoPro:::.deterministicGeneSpaceInit(
+    nrow(dat$C_self[[dat$slides[[1L]]]][[dat$cell_types[[1L]]]]),
+    dat$cell_types, component = 1L
+  )
+  args_n <- c(args_base, list(w_list = first, nCC = 2L))
+  args_n$tol <- NA_real_
+  expect_error(do.call(optimize_genespace_avg_corr_n, args_n),
+               "tol must be a positive finite number")
 })
 
 test_that("mildly damped power iteration converges to the same fixed point as undamped", {

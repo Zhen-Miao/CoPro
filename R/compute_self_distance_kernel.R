@@ -713,11 +713,10 @@ setMethod("computeSelfKernel", "CoPro",
   }
 
   surviving <- sigmaValues[!sigmaValuesToRemove]
-  object@sigmaValues <- if (length(object@sigmaValues) == 0L) {
-    surviving
-  } else {
-    object@sigmaValues[object@sigmaValues %in% surviving]
-  }
+  object <- .pruneSigmaValues(
+    object, surviving,
+    invalid = sigmaValues[sigmaValuesToRemove]
+  )
   
   object@kernelMatrices <- kernel_matrices
   return(object)
@@ -866,11 +865,10 @@ setMethod("computeSelfKernel", "CoPro",
   }
 
   surviving <- sigmaValues[!sigmaValuesToRemove]
-  object@sigmaValues <- if (length(object@sigmaValues) == 0L) {
-    surviving
-  } else {
-    object@sigmaValues[object@sigmaValues %in% surviving]
-  }
+  object <- .pruneSigmaValues(
+    object, surviving,
+    invalid = sigmaValues[sigmaValuesToRemove]
+  )
   
   object@kernelMatrices <- kernel_matrices_all
   return(object)

@@ -1209,7 +1209,10 @@ compute_ground_truth_ncorr <- function(object,
 #'
 #' @param object A CoPro object with permutation results
 #' @param cc_index Which canonical correlation component to use (default: 1)
-#' @param alternative Direction of test: "greater" (default), "less", or "two.sided"
+#' @param alternative Direction of test: `"greater"` (default) or `"less"`.
+#'   A two-sided test is not defined here because the null distribution of the
+#'   optimized, max-aggregated normalized-correlation statistic is not symmetric
+#'   about zero; use `"greater"` for evidence of co-progression.
 #'
 #' @return List with the Phipson & Smyth (2010) permutation p-value (`p_value`,
 #'   never exactly zero), the Monte-Carlo floor `mc_floor = 1 / (n_permu + 1)`,
@@ -1232,6 +1235,14 @@ calculate_pvalue <- function(object, cc_index = 1, alternative = "greater") {
     stop("Input must be a CoPro object")
   }
   .rejectCellPermutationForMulti(object)
+  if (identical(alternative, "two.sided")) {
+    stop(
+      'alternative = "two.sided" is not defined because the optimized, ',
+      "max-aggregated normalized-correlation null is not symmetric about zero; use ",
+      'alternative = "greater" for evidence of co-progression.'
+    )
+  }
+  alternative <- match.arg(alternative, c("greater", "less"))
 
   if (length(object@normalizedCorrelationPermu) == 0) {
     stop("Run computeNormalizedCorrelationPermu() first")
@@ -1280,12 +1291,8 @@ calculate_pvalue <- function(object, cc_index = 1, alternative = "greater") {
   m <- length(permu_values)
   if (alternative == "greater") {
     p_value <- (1 + sum(permu_values >= observed)) / (1 + m)
-  } else if (alternative == "less") {
-    p_value <- (1 + sum(permu_values <= observed)) / (1 + m)
-  } else if (alternative == "two.sided") {
-    p_value <- (1 + sum(abs(permu_values) >= abs(observed))) / (1 + m)
   } else {
-    stop("alternative must be 'greater', 'less', or 'two.sided'")
+    p_value <- (1 + sum(permu_values <= observed)) / (1 + m)
   }
 
   result <- list(
