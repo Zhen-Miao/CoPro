@@ -19,13 +19,14 @@
 #' grid, and therefore which bandwidth `sigmaValueChoice` ends up at.
 #'
 #' \describe{
-#'   \item{`"legacy"` (default)}{The historical behaviour, kept so that stored
-#'     results reproduce: use the matched-sigma within-type kernels when the
+#'   \item{`"legacy"` (default)}{Use the historical selection rule: use the
+#'     matched-sigma within-type kernels when the
 #'     object happens to contain them, and \eqn{R = I} otherwise. Because
 #'     `computeKernelMatrix()` builds only cross-type kernels, this is normally
 #'     \eqn{\|K_c\|_F}; but it silently becomes the whitened norm on an object
-#'     that has been through `computeSelfKernel()`. Which one applied is now
-#'     reported, and recorded by [getNormalizerInfo()].}
+#'     that has been through `computeSelfKernel()`. The whitening copy always
+#'     has its unit diagonal restored so that it is a valid correlation
+#'     operator. Which path applied is reported by [getNormalizerInfo()].}
 #'   \item{`"unwhitened"`}{Force \eqn{R_x = R_y = I}, i.e. \eqn{\|K_c\|_F}. This
 #'     assumes spatially independent scores, so it under-counts noise at large
 #'     sigma and biases the selected bandwidth upward.}
@@ -342,7 +343,7 @@ setGeneric(
 
 .kernelNormalizerKey <- function(sigma, cellType1, cellType2, slide = NULL) {
   paste(
-    format(sigma, scientific = FALSE, trim = TRUE),
+    .formatSigmaValue(sigma),
     if (is.null(slide)) "single" else slide,
     cellType1, cellType2, sep = "|"
   )
@@ -414,9 +415,8 @@ setGeneric(
   whitened_pairs <- 0L
   whitened_cross_pairs <- 0L
   total_pairs <- 0L
-  example_R <- NULL
 
-  sigma_names <- paste("sigma", sigmaValues, sep = "_")
+  sigma_names <- .sigmaName(sigmaValues)
   norm_K12 <- setNames(vector(mode = "list", length = length(sigma_names)),
                        sigma_names)
   normalizer_cache <- attr(object, "kernelNormalizerCache", exact = TRUE)
@@ -447,7 +447,6 @@ setGeneric(
         if (cellType1 != cellType2) {
           whitened_cross_pairs <- whitened_cross_pairs + 1L
         }
-        if (is.null(example_R)) example_R <- Rx
       }
       cache_key <- .kernelNormalizerKey(
         sigma_val, cellType1, cellType2, slide = NULL
@@ -470,7 +469,6 @@ setGeneric(
   description <- .describeNormalizer(resolver, whitened_pairs, total_pairs)
   message("Normalizer: ", description)
   .warnSelfKernelUnits(resolver, whitened_cross_pairs)
-  .warnZeroDiagonalWhitening(resolver, example_R)
   if (resolver$mode == "variogram" && length(resolver$ranges) > 0) {
     message("  fitted autocorrelation ranges: ",
             paste(names(resolver$ranges),
@@ -502,7 +500,7 @@ setGeneric(
   
 
   correlation_value <- vector("list", length = length(sigmaValues))
-  sigma_names <- paste("sigma", sigmaValues, sep = "_")
+  sigma_names <- .sigmaName(sigmaValues)
   names(correlation_value) <- sigma_names
 
   resolver <- .makeWhiteningResolver(
@@ -522,7 +520,7 @@ setGeneric(
       cellType1 = rep(pair_cell_types[1, ], times = nCC),
       cellType2 = rep(pair_cell_types[2, ], times = nCC),
       CC_index = rep(x = 1:nCC, each = ncol(pair_cell_types)),
-      normalizedCorrelation = numeric(length = ncol(pair_cell_types) * nCC),
+      normalizedCorrelation = rep(NA_real_, ncol(pair_cell_types) * nCC),
       stringsAsFactors = FALSE
     )
     
@@ -659,7 +657,6 @@ setMethod(
   whitened_pairs <- 0L
   whitened_cross_pairs <- 0L
   total_pairs <- 0L
-  example_R <- NULL
   norm_K_all <- setNames(vector("list", length = length(sigmas_run)), sigmas_run)
   normalizer_cache <- attr(object, "kernelNormalizerCache", exact = TRUE)
   if (is.null(normalizer_cache)) normalizer_cache <- list()
@@ -724,7 +721,6 @@ setMethod(
   description <- .describeNormalizer(resolver, whitened_pairs, total_pairs)
   message("Normalizer: ", description)
   .warnSelfKernelUnits(resolver, whitened_cross_pairs)
-  .warnZeroDiagonalWhitening(resolver, example_R)
   message("Finished calculating whitened-Frobenius normalizers.")
   attr(norm_K_all, "kernelNormalizerCache") <- normalizer_cache
   attr(norm_K_all, "normalizerInfo") <- list(
@@ -894,11 +890,10 @@ setMethod(
         if (valid_slides_count == 0) next
         
         for (cc in 1:nCC) {
-          # Aggregate numerator and denominator components across slides
+          # Aggregate the independent per-slide statistics. The null SD of a
+          # sum is the root-sum-square of the per-slide SDs.
           total_numerator <- 0
-          total_norm_sum_i <- 0
-          total_norm_sum_j <- 0
-          total_K_norm <- 0
+          total_sd_squared <- 0
           w_i <- W_list_sigma[[ct_i]][, cc, drop = FALSE]
           w_j <- W_list_sigma[[ct_j]][, cc, drop = FALSE]
 
@@ -909,14 +904,13 @@ setMethod(
             
             total_numerator <- total_numerator +
               .kernelXKY(Xiw, slide_data$K_ij, Xjw)[1, 1]
-            total_norm_sum_i <- total_norm_sum_i + sum(Xiw^2)
-            total_norm_sum_j <- total_norm_sum_j + sum(Xjw^2)
-            total_K_norm <- total_K_norm + slide_data$norm_K_ij
+            slide_sd <- sqrt(sum(Xiw^2)) * sqrt(sum(Xjw^2)) *
+              slide_data$norm_K_ij
+            total_sd_squared <- total_sd_squared + slide_sd^2
           }
           
           if (valid_slides_count > 0) {
-            avg_K_norm <- total_K_norm / valid_slides_count
-            denom_norm <- sqrt(total_norm_sum_i) * sqrt(total_norm_sum_j) * avg_K_norm
+            denom_norm <- sqrt(total_sd_squared)
             
             agg_corr_val <- ifelse(abs(denom_norm) < 1e-9, 0, total_numerator / denom_norm)
             row_buffer[[row_idx]] <- list(

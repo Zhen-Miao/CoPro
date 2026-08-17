@@ -113,7 +113,7 @@ testGeneScores <- function(object, sigmaChoice,
   cts <- object@cellTypesOfInterest
   nCC <- object@nCC
 
-  sigmaName <- paste0("sigma_", sigmaChoice)
+  sigmaName <- .sigmaName(sigmaChoice)
   ccNames <- paste0("CC_", seq_len(nCC))
 
 
@@ -177,8 +177,19 @@ testGeneGLM <- function(
 
   m<-t(apply(X, MARGIN = 2,
              function(x){
-               fit <- lm(formula = stats::as.formula(frm), data = cbind(meta, x = x, y = Y))
-               coef(summary(fit))["x", c("Estimate", "Pr(>|t|)")]
+               fit <- tryCatch(
+                 stats::lm(formula = stats::as.formula(frm),
+                           data = cbind(meta, x = x, y = Y)),
+                 error = function(e) NULL
+               )
+               if (is.null(fit)) {
+                 return(c(Estimate = NA_real_, `Pr(>|t|)` = NA_real_))
+               }
+               coefficient_table <- stats::coef(summary(fit))
+               if (!"x" %in% rownames(coefficient_table)) {
+                 return(c(Estimate = NA_real_, `Pr(>|t|)` = NA_real_))
+               }
+               coefficient_table["x", c("Estimate", "Pr(>|t|)")]
              }))
   return(m)
 }
@@ -187,6 +198,11 @@ testGeneMixedEffect <- function(
     object, sigmaName,cellTypeChoice,
     CCChoice, frm = "y ~ (1 | samples) + x + nCount_Spatial"
     ){
+
+        if (!requireNamespace("lmerTest", quietly = TRUE)) {
+          stop("testGeneMixedEffect() requires the optional package 'lmerTest'. ",
+               "Install it with install.packages('lmerTest').")
+        }
 
         meta = object@metaDataSub[object@cellTypesSub == cellTypeChoice, , drop = FALSE]
         Y = getCellScores(object, sigma = as.numeric(gsub("sigma_", "", sigmaName)), 
@@ -204,7 +220,13 @@ testGeneMixedEffect <- function(
 }
 
 get.onesided.p.value<-function(c,p){
-  p[p==0] = min(p[p>0],na.rm = T)
+  positive <- p[is.finite(p) & p > 0]
+  zero_replacement <- if (length(positive) > 0L) {
+    min(positive)
+  } else {
+    .Machine$double.xmin
+  }
+  p[!is.na(p) & p == 0] <- zero_replacement
   p.one.side <- p
   p.one.side[] <- NA
   b<-c>0&!is.na(c)
@@ -253,10 +275,14 @@ apply.formula.HLM<-function(meta,X,Y,MARGIN = 2,formula = "y ~ (1 | samples) + x
 #' @noRd
 formula.HLM<-function(y,x,meta, formula = "y ~ (1 | samples) + x",
                       val = ifelse(is.numeric(x),"","TRUE"),return.all = F){
+  if (!requireNamespace("lmerTest", quietly = TRUE)) {
+    stop("Mixed-effect gene testing requires the optional package 'lmerTest'. ",
+         "Install it with install.packages('lmerTest').")
+  }
   meta$x<-x
   meta$y<-y
   f<-function(meta){
-    M1 <- with(meta, lmer (formula = formula))
+    M1 <- lmerTest::lmer(formula = stats::as.formula(formula), data = meta)
     if(return.all){
       c1<-summary(M1)$coef[,c("Estimate","Pr(>|t|)")]
     }else{
@@ -270,4 +296,3 @@ formula.HLM<-function(y,x,meta, formula = "y ~ (1 | samples) + x",
                error = function(err){return(c(NA,NA))})
   return(c1)
 }
-

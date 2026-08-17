@@ -29,9 +29,28 @@
     stop("Invalid float32 sparse-kernel payload.")
   }
   if (is.null(x$symmetric)) x$symmetric <- FALSE
-  if (length(x$p) != x$Dim[1] + 1L ||
-      length(x$j) * 4 != length(x$x)) {
+  if (!is.integer(x$p) || !is.integer(x$j) || !is.raw(x$x) ||
+      !is.integer(x$Dim) || length(x$Dim) != 2L || anyNA(x$Dim) ||
+      any(x$Dim < 0L)) {
+    stop("Invalid types in float32 sparse-kernel payload.")
+  }
+  if (!is.logical(x$transposed) || length(x$transposed) != 1L ||
+      is.na(x$transposed) || !is.logical(x$symmetric) ||
+      length(x$symmetric) != 1L || is.na(x$symmetric)) {
+    stop("Float32 orientation flags must be non-missing logical scalars.")
+  }
+  if (length(x$p) != as.double(x$Dim[1]) + 1 ||
+      as.double(length(x$j)) * 4 != length(x$x)) {
     stop("Inconsistent float32 sparse-kernel dimensions.")
+  }
+  if (anyNA(x$p) || length(x$p) == 0L || x$p[1L] != 0L ||
+      x$p[length(x$p)] != length(x$j) ||
+      any(x$p < 0L) || any(x$p > length(x$j)) ||
+      (length(x$p) > 1L && any(x$p[-1L] < x$p[-length(x$p)]))) {
+    stop("Invalid float32 CSR row pointer.")
+  }
+  if (anyNA(x$j) || any(x$j < 0L) || any(x$j >= x$Dim[2L])) {
+    stop("Float32 CSR column index is out of bounds.")
   }
   if (isTRUE(x$symmetric) && x$Dim[1] != x$Dim[2]) {
     stop("A symmetric float32 sparse kernel must be square.")
@@ -493,10 +512,10 @@ setGeneric(
     overwrite || length(object@kernelMatrices) == 0L
   ) list() else object@kernelMatrices
   invalid_sigmas <- stats::setNames(
-    logical(length(sigmaValues)), as.character(sigmaValues)
+    logical(length(sigmaValues)), .formatSigmaValue(sigmaValues)
   )
   valid_multi_sigmas <- stats::setNames(
-    logical(length(sigmaValues)), as.character(sigmaValues)
+    logical(length(sigmaValues)), .formatSigmaValue(sigmaValues)
   )
   written_names <- character()
 
@@ -522,9 +541,14 @@ setGeneric(
     } else {
       get_coordinates(block, "cellType2")
     }
+    percentile_arg <- if (is.finite(percentiles[index])) {
+      percentiles[index]
+    } else {
+      0
+    }
     built <- float32_csr_gaussian_kernels_cpp(
       coordinate_1, coordinate_2, sigmaValues,
-      percentiles[index], scaling_factor,
+      percentile_arg, scaling_factor,
       lowerLimit, upperQuantile, truncateLowDist,
       symmetric = block$symmetric,
       normalization = normalization,
@@ -543,7 +567,7 @@ setGeneric(
         minAveCellNeighor * min(block$n1, block$n2)
       if (!valid) {
         if (!is_multi || self_only) {
-          invalid_sigmas[as.character(sigma)] <- TRUE
+          invalid_sigmas[.formatSigmaValue(sigma)] <- TRUE
         }
         warning(sprintf(
           paste0(
@@ -555,7 +579,7 @@ setGeneric(
         ))
         if (is_multi) next
       } else if (is_multi && !self_only) {
-        valid_multi_sigmas[as.character(sigma)] <- TRUE
+        valid_multi_sigmas[.formatSigmaValue(sigma)] <- TRUE
       }
 
       kernel <- .newFloat32SparseKernel(

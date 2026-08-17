@@ -31,6 +31,9 @@ raw expression. That was already true under pooled preprocessing. Under the
 standardization is per (slide, cell type), so when the stored slide scales
 differ there is no single equivalent coefficient vector in raw units; the
 per-slide maps are kept on \code{pcaGlobal[[ct]]$slideCenter} and \verb{$slideScale}.
+Standard deviations below \code{1e-5} (and non-finite values) are treated as one
+during this inverse scaling, adding a final guard against unstable weights
+from a numerically rank-deficient PCA.
 
 For gene weights that do not depend on the PCA coordinate system, prefer
 \code{\link[=computeRegressionGeneScores]{computeRegressionGeneScores()}}, which regresses cell scores on expression

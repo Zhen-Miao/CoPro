@@ -543,7 +543,9 @@
 #' @param num_bins_x Number of bins in x direction for bin-wise permutation.
 #'   Default `NULL` sizes the grid automatically from the kernel bandwidth so
 #'   each patch is ~2*sigma wide on the normalized distance scale (see
-#'   [.sigmaAwareBins()]). Pass an explicit integer to override.
+#'   [.sigmaAwareBins()]). When that bandwidth is `object@@sigmaValueChoice`,
+#'   the null grid is mildly data-adaptive (a second-order circularity). Pass an
+#'   explicit integer, or a predeclared `sigma`, to avoid it.
 #'   Use `diagnose_bin_distribution()` to inspect a chosen grid.
 #'   **More bins = better preserve local structure = lower FPR.**
 #' @param num_bins_y Number of bins in y direction for bin-wise permutation.
@@ -714,7 +716,7 @@ runSkrCCAPermu <- function(object, tol = 1e-5, nPermu = 999,
     stop("sigmaValueChoice does not exist in the list of sigmaValues")
   }
 
-  s_name <- paste("sigma", sigmaValueChoice, sep = "_")
+  s_name <- .sigmaName(sigmaValueChoice)
 
   ## Resolve the bin grid for bin-wise permutation.
   ## When num_bins_x / num_bins_y are NULL (the default), size the patch grid
@@ -942,7 +944,7 @@ computeNormalizedCorrelationPermu <- function(
   correlation_value <- vector("list", length = nPermu)
   permu_names <- paste("permu", 1:nPermu, sep = "_")
   names(correlation_value) <- permu_names
-  s_name <- paste("sigma", sigmaValueChoice, sep = "_")
+  s_name <- .sigmaName(sigmaValueChoice)
 
   ## Calculate whitened-Frobenius normalizers (only need to do this once)
   if (verbose) cat("Calculating whitened-Frobenius normalizers...\n")
@@ -1470,7 +1472,8 @@ calculate_pvalue <- function(object, cc_index = 1, alternative = "greater") {
 #' @param num_bins_x Number of bins in x for bin-wise permutation. Default `NULL`
 #'   sizes the grid from the observed best bandwidth (`sigmaValueChoice`) via
 #'   [.sigmaAwareBins()]; the same grid (and hence the same permutation) is
-#'   shared across the sigma sweep. Pass an integer to override.
+#'   shared across the sigma sweep. This makes the grid mildly data-adaptive;
+#'   pass an integer to remove that second-order circularity.
 #' @param num_bins_y Number of bins in y for bin-wise permutation. Default `NULL`
 #'   (sigma-aware, as for `num_bins_x`).
 #' @param match_quantile Whether to use quantile matching for bin permutation
@@ -1992,7 +1995,9 @@ runSkrCCAPermu_FairSigma <- function(object,
 #'   "both", or "first_only".
 #' @param num_bins_x,num_bins_y Bin grid for `permu_method = "bin"`. Default
 #'   `NULL` is sigma-aware (see [.sigmaAwareBins()]); the same grid is shared
-#'   across the sigma sweep. Pass integers to override.
+#'   across the sigma sweep. Because it is sized from the observed selected
+#'   bandwidth, the default grid is mildly data-adaptive; pass integers to
+#'   remove that second-order circularity.
 #' @param match_quantile Whether to use quantile matching for bin permutation.
 #' @param alpha Family-wise significance level for the step-down rule (default 0.05).
 #' @param maxIter,tol Optimization controls passed to the axis optimizer.
@@ -2101,7 +2106,7 @@ runSkrCCAPermu_Conditional <- function(object,
   if (length(sigma_values) == 0) {
     stop("No valid sigma values available for the conditional permutation test.")
   }
-  sigma_names <- paste("sigma", sigma_values, sep = "_")
+  sigma_names <- .sigmaName(sigma_values)
 
   ## Keep only sigma values that have observed skrCCA weights.
   obs_W <- object@skrCCAOut[sigma_names]
@@ -2476,11 +2481,11 @@ runSlideLevelInference <- function(object, cc_index = 1,
   # Cache every small PC-space operator and kernel normalizer once. Subsequent
   # folds only add small matrices and multiply held-out score vectors.
   Y_by_sigma <- stats::setNames(vector("list", length(sigma_values)),
-                                as.character(sigma_values))
+                                .formatSigmaValue(sigma_values))
   kernel_info <- stats::setNames(vector("list", length(sigma_values)),
-                                 as.character(sigma_values))
+                                 .formatSigmaValue(sigma_values))
   for (sigma in sigma_values) {
-    skey <- as.character(sigma)
+    skey <- .formatSigmaValue(sigma)
     Y_by_sigma[[skey]] <- stats::setNames(lapply(slides, function(slide) {
       compute_Y_resi(X_all[[slide]], object@kernelMatrices, sigma, cts,
                      slide = slide)
@@ -2495,7 +2500,7 @@ runSlideLevelInference <- function(object, cc_index = 1,
   }
 
   score_slide <- function(slide, weights, sigma) {
-    info <- kernel_info[[as.character(sigma)]][[slide]]
+    info <- kernel_info[[.formatSigmaValue(sigma)]][[slide]]
     s1 <- X_all[[slide]][[cts[1L]]] %*%
       weights[[cts[1L]]][, cc_index, drop = FALSE]
     s2 <- X_all[[slide]][[cts[2L]]] %*%
@@ -2514,7 +2519,7 @@ runSlideLevelInference <- function(object, cc_index = 1,
     if (length(training) == 0L) stop("A fold has no training slides.")
 
     candidate <- lapply(sigma_values, function(sigma) {
-      skey <- as.character(sigma)
+      skey <- .formatSigmaValue(sigma)
       Y12 <- Reduce(
         "+",
         lapply(training, function(slide) {

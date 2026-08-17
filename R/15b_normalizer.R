@@ -261,17 +261,35 @@
     )
   }
 
+  restoreUnitDiagonal <- function(R) {
+    if (is.null(R)) return(NULL)
+    if (.isFloat32SparseKernel(R)) R <- asDoubleSparseMatrix(R)
+    if (inherits(R, "sparseMatrix")) {
+      d <- Matrix::diag(R)
+      if (any(d != 1)) R <- R + Matrix::Diagonal(nrow(R), 1 - d)
+    } else if (inherits(R, "Matrix")) {
+      R <- as.matrix(R)
+      diag(R) <- 1
+    } else if (is.matrix(R)) {
+      diag(R) <- 1
+    }
+    R
+  }
+
   if (normalizer == "unwhitened") {
     return(list(mode = normalizer, ranges = NULL,
                 get = function(sigma, cellType, slide = NULL) NULL))
   }
 
   if (normalizer == "legacy") {
-    ## Historical behaviour, preserved bit for bit: use the matched-sigma
-    ## self-kernel when the object happens to contain one, otherwise R = I.
-    ## Which of the two applies is reported by the caller rather than left
-    ## silent, because the two are different statistics.
-    return(list(mode = normalizer, ranges = NULL, get = selfKernel))
+    ## Preserve the historical selection rule (matched-sigma self-kernel when
+    ## present, otherwise R = I), but repair the self-kernel's diagonal before
+    ## treating it as a correlation operator. The stored analysis kernel keeps
+    ## its zero diagonal; only the whitening copy receives R_ii = 1.
+    getter <- function(sigma, cellType, slide = NULL) {
+      restoreUnitDiagonal(selfKernel(sigma, cellType, slide))
+    }
+    return(list(mode = normalizer, ranges = NULL, get = getter))
   }
 
   if (normalizer == "kernel") {
@@ -288,15 +306,8 @@
       ## .frnnGrid() and the dense path both leave a zero diagonal on a
       ## self-kernel, but a correlation operator has R_ii = 1. Restore it, so
       ## that the null variance this normalizer claims to compute is the one it
-      ## actually computes. (This is why "kernel" is not identical to "legacy"
-      ## on an object that does carry self-kernels.)
-      if (inherits(R, "sparseMatrix")) {
-        d <- Matrix::diag(R)
-        if (any(d == 0)) R <- R + Matrix::Diagonal(nrow(R), 1 - d)
-      } else if (is.matrix(R)) {
-        diag(R) <- 1
-      }
-      R
+      ## actually computes.
+      restoreUnitDiagonal(R)
     }
     return(list(mode = normalizer, ranges = NULL, get = getter))
   }
@@ -350,52 +361,6 @@
     "factor rather than the one computeDistance() recorded, so those kernels ",
     "are generally at a different physical bandwidth from the cross-kernel at ",
     "the same nominal sigma. Prefer normalizer = \"variogram\".",
-    call. = FALSE
-  )
-  invisible(NULL)
-}
-
-#' Warn when the whitening operator has a zeroed diagonal
-#'
-#' Self-kernels are stored with a zero diagonal on purpose: in the numerator
-#' that is the right modelling choice, because a cell should not weight itself
-#' as its own neighbour (the same convention as `w_ii = 0` in Moran's I). But
-#' `R_x` plays a different role. It is the correlation operator of the score
-#' vector, so `R_ii` is the variance of cell i's score divided by itself, i.e.
-#' 1. Zeroing it asserts every cell's score has zero variance, and forces
-#' `trace(R) = 0`; a nonzero symmetric matrix with zero trace necessarily has
-#' negative eigenvalues, so `R^{1/2}` does not exist and
-#' `||R_x^{1/2} K_c R_y^{1/2}||_F` is not a norm. The `max(., 0)` guards inside
-#' `.whitenedFrobNorm()` are what keeps that from surfacing as `NaN`.
-#'
-#' @param R A resolved whitening operator, or `NULL`.
-#' @noRd
-.hasZeroedDiagonal <- function(R) {
-  if (is.null(R)) return(FALSE)
-  d <- if (.isFloat32SparseKernel(R)) {
-    Matrix::diag(asDoubleSparseMatrix(R))
-  } else if (inherits(R, "Matrix")) {
-    Matrix::diag(R)
-  } else if (is.matrix(R)) {
-    diag(R)
-  } else {
-    return(FALSE)
-  }
-  length(d) > 0L && all(d == 0)
-}
-
-#' @noRd
-.warnZeroDiagonalWhitening <- function(resolver, R) {
-  if (!identical(resolver$mode, "legacy")) return(invisible(NULL))
-  if (!.hasZeroedDiagonal(R)) return(invisible(NULL))
-  warning(
-    "The whitening operator R has an all-zero diagonal (a stored self-kernel). ",
-    "A correlation operator has R_ii = 1; with a zero diagonal trace(R) = 0, ",
-    "so R has negative eigenvalues, R^(1/2) does not exist, and the ",
-    "whitened-Frobenius denominator is not a norm. The zero diagonal is ",
-    "correct in the numerator's kernel and wrong here. Use ",
-    "normalizer = \"variogram\", or \"kernel\", which restores the unit ",
-    "diagonal.",
     call. = FALSE
   )
   invisible(NULL)

@@ -626,7 +626,7 @@ setMethod("computeSelfKernel", "CoPro",
   }
   
   # Track sigma values to remove
-  sigma_names <- paste("sigma", sigmaValues, sep = "_")
+  sigma_names <- .sigmaName(sigmaValues)
   sigmaValuesToRemove <- vector(mode = "logical", length = length(sigmaValues))
   names(sigmaValuesToRemove) <- sigma_names
   
@@ -784,7 +784,7 @@ setMethod("computeSelfKernel", "CoPro",
   }
   
   # Track sigma values to remove
-  sigma_names <- paste("sigma", sigmaValues, sep = "_")
+  sigma_names <- .sigmaName(sigmaValues)
   sigmaValuesToRemove <- vector(mode = "logical", length = length(sigmaValues))
   names(sigmaValuesToRemove) <- sigma_names
   

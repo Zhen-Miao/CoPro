@@ -69,13 +69,14 @@ The whitening operators decide how the criterion behaves across the sigma
 grid, and therefore which bandwidth \code{sigmaValueChoice} ends up at.
 
 \describe{
-\item{\code{"legacy"} (default)}{The historical behaviour, kept so that stored
-results reproduce: use the matched-sigma within-type kernels when the
+\item{\code{"legacy"} (default)}{Use the historical selection rule: use the
+matched-sigma within-type kernels when the
 object happens to contain them, and \eqn{R = I} otherwise. Because
 \code{computeKernelMatrix()} builds only cross-type kernels, this is normally
 \eqn{\|K_c\|_F}; but it silently becomes the whitened norm on an object
-that has been through \code{computeSelfKernel()}. Which one applied is now
-reported, and recorded by \code{\link[=getNormalizerInfo]{getNormalizerInfo()}}.}
+that has been through \code{computeSelfKernel()}. The whitening copy always
+has its unit diagonal restored so that it is a valid correlation
+operator. Which path applied is reported by \code{\link[=getNormalizerInfo]{getNormalizerInfo()}}.}
 \item{\code{"unwhitened"}}{Force \eqn{R_x = R_y = I}, i.e. \eqn{\|K_c\|_F}. This
 assumes spatially independent scores, so it under-counts noise at large
 sigma and biases the selected bandwidth upward.}

@@ -28,6 +28,9 @@ quantile_normalize <- function(A, B, save_Sparse = FALSE,
   if(n_features != ncol(B)){
     stop("The number of features (columns) must match between A and B")
   }
+  if (any(!is.finite(A)) || any(!is.finite(B))) {
+    stop("A and B must contain only finite values.")
+  }
 
   ## number of rows
   if (nrow(A) < 2 || nrow(B) < 2) {
@@ -65,9 +68,18 @@ quantile_normalize <- function(A, B, save_Sparse = FALSE,
       message(sprintf("Processing feature %d/%d", i, n_features))
     }
 
-    # Use approx to interpolate quantiles
+    xout <- prob_B[, i]
+    if (any(xout < min(prob_A) | xout > max(prob_A))) {
+      stop("Target quantiles fall outside the reference probability support; ",
+           "refusing to clamp them.")
+    }
+    # Interpolate only within the declared support. rule = 1 returns NA rather
+    # than silently clamping if a future ranking method violates that contract.
     result <- approx(x = prob_A, y = A[, i],
-                     xout = prob_B[, i], method = "linear", rule = 2)
+                     xout = xout, method = "linear", rule = 1)
+    if (anyNA(result$y)) {
+      stop("Quantile interpolation left the reference support.")
+    }
     result$y
   }, numeric(nrow(B)))
 
@@ -158,8 +170,7 @@ transfer_scores <- function(mat_A, mat_B, gs_ct,
   A_mean  <- apply(mat_A, MARGIN = 2, mean)
   A_sd  <- apply(mat_A, MARGIN = 2, sd)
   # guard against zero (or near-zero) sd to avoid division by zero
-  A_sd_safe <- A_sd
-  A_sd_safe[is.na(A_sd_safe) | A_sd_safe < 1e-8] <- 1.0
+  A_sd_safe <- .safeStandardDeviations(A_sd)
   B_qn_cs <- scale(B_qn, center = A_mean, scale = A_sd_safe)
 
   # fitler gs_ct by column. Look at each column, and get the elements that are greater than the threshold
@@ -195,6 +206,10 @@ transfer_scores <- function(mat_A, mat_B, gs_ct,
     genes_sel <- intersect(ref_geneList, tar_geneList)
   }else{
     genes_sel <- ref_geneList
+  }
+
+  if (length(genes_sel) == 0L) {
+    stop("Reference and target objects have no overlapping genes.")
   }
 
   # select genes by weight 
@@ -265,11 +280,6 @@ getTransferCellScores <- function(ref_obj, tar_obj, sigma_choice,
   ## make sure gene names match
   genes_sel <- .trans_gene_sel(ref_geneList = ref_obj@geneList,
    tar_geneList = tar_obj@geneList)
-  if(length(genes_sel) == 0){
-    stop("No overlapping genes between reference and target objects after matching")
-  }
-
-
   ## check number of cell types
   cts <- ref_obj@cellTypesOfInterest
   cts_tar <- tar_obj@cellTypesOfInterest
@@ -457,8 +467,8 @@ getTransferNormCorr <- function(tar_obj,
     pair_cell_types <- combn(cts, 2)
   }
 
-  sigma_name <- paste0("sigma_", sigma_choice)
-  sigma_name_tar <- paste0("sigma_", sigma_choice_tar)
+  sigma_name <- .sigmaName(sigma_choice)
+  sigma_name_tar <- .sigmaName(sigma_choice_tar)
 
   # Helper: align a score vector to matrix dimension names if available
   .align_scores <- function(scores_mat, target_names) {
@@ -619,9 +629,7 @@ getTransferNormCorr <- function(tar_obj,
 
       for (cc in seq_len(nCC)) {
         total_numerator <- 0
-        total_norm_sum_i <- 0
-        total_norm_sum_j <- 0
-        total_K_norm <- 0
+        total_sd_squared <- 0
         valid_slides <- 0
 
         for (sID in slides) {
@@ -646,15 +654,13 @@ getTransferNormCorr <- function(tar_obj,
           A_w1 <- A_scores[, cc, drop = FALSE]
           B_w2 <- B_scores[, cc, drop = FALSE]
           total_numerator <- total_numerator + as.numeric(t(A_w1) %*% K_ij %*% B_w2)
-          total_norm_sum_i <- total_norm_sum_i + sum(A_w1^2)
-          total_norm_sum_j <- total_norm_sum_j + sum(B_w2^2)
-          total_K_norm <- total_K_norm + norm_K_ij
+          slide_sd <- sqrt(sum(A_w1^2)) * sqrt(sum(B_w2^2)) * norm_K_ij
+          total_sd_squared <- total_sd_squared + slide_sd^2
           valid_slides <- valid_slides + 1
         }
 
         if (valid_slides > 0) {
-          avg_K_norm <- total_K_norm / valid_slides
-          denom <- sqrt(total_norm_sum_i) * sqrt(total_norm_sum_j) * avg_K_norm
+          denom <- sqrt(total_sd_squared)
           agg_val <- ifelse(is.na(denom) || abs(denom) < 1e-9, 0, total_numerator / denom)
           df_agg <- rbind(df_agg, data.frame(
             sigmaValue = sigma_choice,
@@ -786,8 +792,8 @@ getTransferBidirCorr <- function(tar_obj,
     pair_cell_types <- combn(cts, 2)
   }
 
-  sigma_name <- paste0("sigma_", sigma_choice)
-  sigma_name_tar <- paste0("sigma_", sigma_choice_tar)
+  sigma_name <- .sigmaName(sigma_choice)
+  sigma_name_tar <- .sigmaName(sigma_choice_tar)
 
   # Helper: align a score vector to matrix dimension names if available
   .align_scores <- function(scores_mat, target_names) {

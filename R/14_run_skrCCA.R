@@ -242,7 +242,7 @@
       }
     } else {
       # Check if any kernel matrix name contains this sigma value
-      sigma_prefix <- paste0("sigma", sigmaChoice)
+      sigma_prefix <- .sigmaName(sigmaChoice, separator = "")
       has_sigma <- any(grepl(paste0("(^|\\|)", sigma_prefix, "(\\||$)"),
                              names(object@kernelMatrices)))
       if (!has_sigma) {
@@ -725,7 +725,7 @@
   is_multi <- validation_result$is_multi
 
   # Determine sigma names to run
-  sigma_names_run <- paste("sigma", sigmas_to_run, sep = "_")
+  sigma_names_run <- .sigmaName(sigmas_to_run)
 
   # Prepare data matrices
   data_matrices <- .prepareDataMatrices(object, is_multi, scalePCs, cts)

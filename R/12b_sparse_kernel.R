@@ -436,13 +436,23 @@
   d <- tri$d
   # zero distances -> smallest non-zero distance (mirrors .processDistanceMatrix)
   if (any(d == 0)) {
+    warning(paste("Zero distances detected; applying dense-compatible",
+                  "nearest-distance handling, please",
+                  "consider checking the location of cells",
+                  "for potential errors"))
     nz <- d[d > 0]
     if (length(nz) > 0) {
-      warning(paste("Zero distances detected, replacing with",
-                    "the smallest non-zero distances, please",
-                    "consider checking the location of cells",
-                    "for potential errors"))
       d[d == 0] <- min(nz)
+    } else {
+      # Every nonzero pair is beyond the largest kernel's retained support.
+      # The block-global minimum used by the dense path is therefore also
+      # beyond support, so the coincident pairs must be dropped rather than
+      # retained at distance zero with weight one.
+      keep <- d != 0
+      tri$i <- tri$i[keep]
+      tri$j <- tri$j[keep]
+      d <- d[keep]
+      if (length(d) == 0L) return(NULL)
     }
   }
   # floor small distances
@@ -749,7 +759,7 @@
 
   # PASS 2b: sigma-outer (matches dense ordering for sigma-removal semantics)
   kernel_mat <- list()
-  sigma_names <- paste("sigma", sigmaValues, sep = "_")
+  sigma_names <- .sigmaName(sigmaValues)
   sigmaValuesToRemove <- stats::setNames(logical(length(sigmaValues)), sigma_names)
 
   for (tt in seq_along(sigmaValues)) {
@@ -910,7 +920,7 @@
 
   # PASS 2b: sigma-outer; drop a sigma only if NO valid kernel across all blocks
   kernel_mat <- list()
-  sigma_names <- paste("sigma", sigmaValues, sep = "_")
+  sigma_names <- .sigmaName(sigmaValues)
   sigmaValuesToRemove <- stats::setNames(logical(length(sigmaValues)), sigma_names)
 
   for (tt in seq_along(sigmaValues)) {
@@ -1095,7 +1105,7 @@
   } else {
     object@kernelMatrices
   }
-  sigma_names <- paste("sigma", sigmaValues, sep = "_")
+  sigma_names <- .sigmaName(sigmaValues)
   sigma_invalid <- stats::setNames(logical(length(sigmaValues)), sigma_names)
 
   for (tt in seq_along(sigmaValues)) {

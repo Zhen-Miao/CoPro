@@ -401,7 +401,33 @@ test_that("computeNormalizedCorrelation works for CoProMulti aggregate mode", {
   obj <- computeKernelMatrix(obj, sigmaValues = c(0.1), verbose = FALSE, normalizeDistance = TRUE)
   obj <- runSkrCCA(obj, scalePCs = TRUE, nCC = 2, maxIter = 100)
 
-  obj <- computeNormalizedCorrelation(obj, calculationMode = "aggregate")
+  slides <- getSlideList(obj)
+  cts <- c("CellTypeA", "CellTypeB")
+  X_scaled <- CoPro:::.preparePCMatrices(
+    pc_data = obj@pcaResults, pca_global = obj@pcaGlobal,
+    scalePCs = obj@scalePCs, slides = slides, cts = cts
+  )
+  weights <- obj@skrCCAOut[[CoPro:::.sigmaName(0.1)]]
+  components <- lapply(slides, function(slide) {
+    K <- getKernelMatrix(
+      obj, 0.1, "CellTypeA", "CellTypeB", slide = slide, verbose = FALSE
+    )
+    A_w <- X_scaled[[slide]][["CellTypeA"]] %*%
+      weights[["CellTypeA"]][, 1, drop = FALSE]
+    B_w <- X_scaled[[slide]][["CellTypeB"]] %*%
+      weights[["CellTypeB"]][, 1, drop = FALSE]
+    list(
+      numerator = CoPro:::.kernelXKY(A_w, K, B_w)[1, 1],
+      null_sd = sqrt(sum(A_w^2)) * sqrt(sum(B_w^2)) *
+        CoPro:::.whitenedFrobNorm(K)
+    )
+  })
+  expected <- sum(vapply(components, `[[`, numeric(1), "numerator")) /
+    sqrt(sum(vapply(components, `[[`, numeric(1), "null_sd")^2))
+
+  obj <- computeNormalizedCorrelation(
+    obj, calculationMode = "aggregate", normalizer = "unwhitened"
+  )
 
   expect_true(length(obj@normalizedCorrelation) > 0)
   agg_df <- obj@normalizedCorrelation[[1]]
@@ -409,6 +435,11 @@ test_that("computeNormalizedCorrelation works for CoProMulti aggregate mode", {
   expect_true("sigmaValue" %in% colnames(agg_df))
   expect_true("aggregateCorrelation" %in% colnames(agg_df))
   expect_true(is.numeric(agg_df$sigmaValue))
+  observed <- agg_df$aggregateCorrelation[
+    agg_df$cellType1 == "CellTypeA" &
+      agg_df$cellType2 == "CellTypeB" & agg_df$CC_index == 1
+  ]
+  expect_equal(observed, expected, tolerance = 1e-10)
 })
 
 test_that("column statistics and centering helpers match what they replaced", {

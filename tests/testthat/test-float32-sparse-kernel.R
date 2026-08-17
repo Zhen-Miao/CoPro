@@ -799,3 +799,38 @@ test_that("nThreads wins over the legacy option, and NULL falls back to it", {
 
   expect_error(CoPro:::.float32KernelThreads(0L), "positive integer")
 })
+
+test_that("float32 CSR validation rejects malformed payloads", {
+  payload <- list(
+    p = c(0L, 1L, 1L), j = 0L,
+    x = writeBin(1, raw(), size = 4), Dim = c(2L, 2L),
+    transposed = FALSE, symmetric = FALSE
+  )
+
+  bad_pointer <- payload
+  bad_pointer$p <- c(0L, 1L, 0L)
+  expect_error(.newFloat32SparseKernel(bad_pointer), "row pointer")
+
+  bad_column <- payload
+  bad_column$j <- 2L
+  expect_error(.newFloat32SparseKernel(bad_column), "out of bounds")
+  expect_error(
+    float32_csr_sums_cpp(
+      payload$p, 2L, payload$x, payload$Dim, symmetric = FALSE
+    ),
+    "out of bounds"
+  )
+})
+
+test_that("float32 construction rejects non-finite percentiles", {
+  coords <- matrix(c(0, 0, 1, 1), 2, 2, byrow = TRUE)
+  expect_error(
+    float32_csr_gaussian_kernels_cpp(
+      coords, coords, sigmas = 1, percentile = NaN,
+      scaling_factor = 1, lower_limit = 1e-7, upper_quantile = 0.85,
+      truncate_low_distance = FALSE, symmetric = TRUE,
+      normalization = 0L
+    ),
+    "percentile"
+  )
+})

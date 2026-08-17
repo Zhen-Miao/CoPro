@@ -55,7 +55,9 @@ fixed, so that type is permuted and the null is the within-type one.}
 \item{num_bins_x}{Number of bins in x direction for bin-wise permutation.
 Default \code{NULL} sizes the grid automatically from the kernel bandwidth so
 each patch is ~2*sigma wide on the normalized distance scale (see
-\code{\link[=.sigmaAwareBins]{.sigmaAwareBins()}}). Pass an explicit integer to override.
+\code{\link[=.sigmaAwareBins]{.sigmaAwareBins()}}). When that bandwidth is \code{object@sigmaValueChoice},
+the null grid is mildly data-adaptive (a second-order circularity). Pass an
+explicit integer, or a predeclared \code{sigma}, to avoid it.
 Use \code{diagnose_bin_distribution()} to inspect a chosen grid.
 \strong{More bins = better preserve local structure = lower FPR.}}
 

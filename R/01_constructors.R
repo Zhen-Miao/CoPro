@@ -266,18 +266,33 @@ setMethod(
   loc <- locationData[, match(cols, cn), drop = FALSE]
   loc <- as.matrix(loc)
   storage.mode(loc) <- "double"
+  if (any(!is.finite(loc))) {
+    stop("locationData coordinates must be finite.")
+  }
 
   m <- nrow(loc)
   if (m == 0) return(character(0))
   if (n <= 1L || m <= maxCell) return(rep("1", m))
 
   # Scale coords so kmeans isn't dominated by one axis
-  loc_sc <- scale(loc)
+  loc_sd <- apply(loc, 2L, stats::sd)
+  loc_sd[!is.finite(loc_sd) | loc_sd <= .Machine$double.eps] <- 1
+  loc_sc <- scale(loc, center = TRUE, scale = loc_sd)
+
+  # kmeans cannot request more centers than distinct coordinate rows. If all
+  # cells are coincident there is no spatial split to infer, so use a stable,
+  # balanced row-order partition that still honors maxCell.
+  distinct_locations <- nrow(unique(as.data.frame(loc_sc)))
+  centers <- min(as.integer(n), distinct_locations)
+  if (centers <= 1L) {
+    n_blocks <- min(m, max(as.integer(n), ceiling(m / maxCell)))
+    return(as.character(rep(seq_len(n_blocks), length.out = m)))
+  }
 
   # seed is set once by the caller (CreateCoPro) before partitioning begins;
   # do not call set.seed() here so that recursive calls consume the RNG
   # naturally and the global seed is only set once.
-  km <- stats::kmeans(loc_sc, centers = n, iter.max = 50, nstart = 5)
+  km <- stats::kmeans(loc_sc, centers = centers, iter.max = 50, nstart = 5)
   lab <- as.character(km$cluster)
 
   # Recursive refinement: split any cluster that still exceeds maxCell

@@ -58,7 +58,7 @@ coloc_score <- function(
   stopifnot(all(c("x","y") %in% names(A)), all(c("x","y") %in% names(B)))
 
   # Convert inputs to microns (standardized units)
-  s <- 1 / pixel_size_um  # Conversion factor: coordinate_units -> microns
+  s <- pixel_size_um  # microns per coordinate unit
   Au <- data.frame(x = A$x * s, y = A$y * s)
   Bu <- data.frame(x = B$x * s, y = B$y * s)
 
@@ -170,7 +170,7 @@ coloc_score <- function(
 # Bounded in [0,1]; ~0.5 under random labelling (balanced abundances).
 
 nn_cross_fraction <- function(A, B, window_range, pixel_size_um = 1) {
-  s <- 1 / pixel_size_um  # Conversion factor: coordinate_units -> microns
+  s <- pixel_size_um  # microns per coordinate unit
   Au <- data.frame(x = A$x * s, y = A$y * s)
   Bu <- data.frame(x = B$x * s, y = B$y * s)
   win <- spatstat.geom::owin(xrange = window_range$xrange * s, yrange = window_range$yrange * s)

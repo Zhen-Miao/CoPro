@@ -526,7 +526,7 @@
                                       cts, nCC, genes, slides,
                                       objective = "sumcor",
                                       sweep = "gauss-seidel") {
-  sigma_name <- paste("sigma", sigma, sep = "_")
+  sigma_name <- .sigmaName(sigma)
   # Gene-space CCA stores its weights in @skrCCAOut under a "gscca_"-prefixed
   # key so they cannot collide with runSkrCCA's "sigma_"-prefixed keys. The
   # two CCA flavors live in different spaces (PCA vs gene), so feeding

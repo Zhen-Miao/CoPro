@@ -39,7 +39,9 @@ uses all \code{object@sigmaValues} that have kernels and weights.}
 
 \item{num_bins_x, num_bins_y}{Bin grid for \code{permu_method = "bin"}. Default
 \code{NULL} is sigma-aware (see \code{\link[=.sigmaAwareBins]{.sigmaAwareBins()}}); the same grid is shared
-across the sigma sweep. Pass integers to override.}
+across the sigma sweep. Because it is sized from the observed selected
+bandwidth, the default grid is mildly data-adaptive; pass integers to
+remove that second-order circularity.}
 
 \item{match_quantile}{Whether to use quantile matching for bin permutation.}
 

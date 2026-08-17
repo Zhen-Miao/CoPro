@@ -364,7 +364,7 @@ plotG12Functions <- function(object,
   nB <- nrow(B)
   
   # Convert inputs to microns (standardized units)
-  s <- 1 / pixel_size_um  # Conversion factor: coordinate_units -> microns
+  s <- pixel_size_um  # microns per coordinate unit
   Au <- data.frame(x = A$x * s, y = A$y * s)
   Bu <- data.frame(x = B$x * s, y = B$y * s)
   

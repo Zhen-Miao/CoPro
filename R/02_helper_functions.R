@@ -593,3 +593,15 @@ setMethod("isMultiSlide", "CoProMulti", function(object) {
     dropped = dropped
   )
 }
+# Standard deviations below this point are numerically unsafe as divisors in
+# score transfer and PCA back-projection. Replacing them by one drops the
+# unstable rescaling while retaining the corresponding unscaled coefficient.
+.COPRO_SD_GUARD <- 1e-5
+
+#' Replace unsafe standard deviations before division
+#' @noRd
+.safeStandardDeviations <- function(x, threshold = .COPRO_SD_GUARD) {
+  unsafe <- !is.finite(x) | x < threshold
+  x[unsafe] <- 1
+  x
+}

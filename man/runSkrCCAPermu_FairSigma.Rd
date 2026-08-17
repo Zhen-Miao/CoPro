@@ -38,7 +38,8 @@ sigma values from the original analysis (object@sigmaValues)}
 \item{num_bins_x}{Number of bins in x for bin-wise permutation. Default \code{NULL}
 sizes the grid from the observed best bandwidth (\code{sigmaValueChoice}) via
 \code{\link[=.sigmaAwareBins]{.sigmaAwareBins()}}; the same grid (and hence the same permutation) is
-shared across the sigma sweep. Pass an integer to override.}
+shared across the sigma sweep. This makes the grid mildly data-adaptive;
+pass an integer to remove that second-order circularity.}
 
 \item{num_bins_y}{Number of bins in y for bin-wise permutation. Default \code{NULL}
 (sigma-aware, as for \code{num_bins_x}).}
