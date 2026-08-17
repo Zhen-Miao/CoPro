@@ -194,15 +194,21 @@ testGeneGLM <- function(
   return(m)
 }
 
+.requireLmerTest <- function(error_message,
+                             available = requireNamespace("lmerTest", quietly = TRUE)) {
+  if (!isTRUE(available)) stop(error_message)
+  invisible(TRUE)
+}
+
 testGeneMixedEffect <- function(
     object, sigmaName,cellTypeChoice,
     CCChoice, frm = "y ~ (1 | samples) + x + nCount_Spatial"
     ){
 
-        if (!requireNamespace("lmerTest", quietly = TRUE)) {
-          stop("testGeneMixedEffect() requires the optional package 'lmerTest'. ",
-               "Install it with install.packages('lmerTest').")
-        }
+        .requireLmerTest(paste0(
+          "testGeneMixedEffect() requires the optional package 'lmerTest'. ",
+          "Install it with install.packages('lmerTest')."
+        ))
 
         meta = object@metaDataSub[object@cellTypesSub == cellTypeChoice, , drop = FALSE]
         Y = getCellScores(object, sigma = as.numeric(gsub("sigma_", "", sigmaName)), 
@@ -275,10 +281,10 @@ apply.formula.HLM<-function(meta,X,Y,MARGIN = 2,formula = "y ~ (1 | samples) + x
 #' @noRd
 formula.HLM<-function(y,x,meta, formula = "y ~ (1 | samples) + x",
                       val = ifelse(is.numeric(x),"","TRUE"),return.all = F){
-  if (!requireNamespace("lmerTest", quietly = TRUE)) {
-    stop("Mixed-effect gene testing requires the optional package 'lmerTest'. ",
-         "Install it with install.packages('lmerTest').")
-  }
+  .requireLmerTest(paste0(
+    "Mixed-effect gene testing requires the optional package 'lmerTest'. ",
+    "Install it with install.packages('lmerTest')."
+  ))
   meta$x<-x
   meta$y<-y
   f<-function(meta){

@@ -820,6 +820,44 @@ test_that("float32 CSR validation rejects malformed payloads", {
     ),
     "out of bounds"
   )
+
+  diagonal_symmetric <- payload
+  diagonal_symmetric$symmetric <- TRUE
+  expect_error(
+    .newFloat32SparseKernel(diagonal_symmetric),
+    "strict upper triangle"
+  )
+  expect_error(
+    float32_csr_sums_cpp(
+      payload$p, payload$j, payload$x, payload$Dim, symmetric = TRUE
+    ),
+    "strict upper triangle"
+  )
+
+  lower_symmetric <- list(
+    p = c(0L, 0L, 1L, 1L), j = 0L,
+    x = writeBin(1, raw(), size = 4), Dim = c(3L, 3L),
+    transposed = FALSE, symmetric = TRUE
+  )
+  expect_error(
+    .newFloat32SparseKernel(lower_symmetric),
+    "strict upper triangle"
+  )
+})
+
+test_that("float32 coincident-cell handling warns without aborting", {
+  A <- matrix(c(0, 0, 0, 0, 1, 1), ncol = 2, byrow = TRUE)
+  B <- matrix(c(0, 0, 1, 1, 2, 2), ncol = 2, byrow = TRUE)
+  expect_warning(
+    built <- float32_csr_gaussian_kernels_cpp(
+      A, B, sigmas = 1, percentile = 0, scaling_factor = 1,
+      lower_limit = 1e-6, upper_quantile = 0.99,
+      truncate_low_distance = TRUE, symmetric = FALSE,
+      normalization = 0L, n_threads = 1L
+    ),
+    "Zero distances detected"
+  )
+  expect_length(built$kernels, 1L)
 })
 
 test_that("float32 construction rejects non-finite percentiles", {

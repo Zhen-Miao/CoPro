@@ -386,7 +386,8 @@ getTransferCellScores <- function(ref_obj, tar_obj, sigma_choice,
 #'   columns `sigmaValue`, `cellType1`, `cellType2`, `CC_index`, `normalizedCorrelation`.
 #'   For multi-slide objects in `perSlide` mode, the data.frame additionally includes
 #'   `slideID`. For `aggregate` mode, the correlation column is named
-#'   `aggregateCorrelation`.
+#'   `aggregateCorrelation`, and the selected `aggregateDenominator` is attached
+#'   to the returned list as an attribute.
 #'
 #' @examples
 #' # Assuming `tar_obj` is prepared and `trans_scores` was computed with
@@ -399,6 +400,11 @@ getTransferCellScores <- function(ref_obj, tar_obj, sigma_choice,
 #'   will not be on the same scale. The autocorrelation range for `"variogram"`
 #'   is fitted from the target object's PC scores, never from the transferred
 #'   canonical scores, which would leak signal into the denominator.
+#' @param aggregateDenominator For multi-slide aggregate mode, either `"sum"`
+#'   (default; \eqn{\sum_s T_s / \sum_s d_s}) or `"rss"` (the independent-slide
+#'   null-standardized statistic \eqn{\sum_s T_s / \sqrt{\sum_s d_s^2}}).
+#'   Ignored for single-slide and per-slide calculations. See
+#'   [computeNormalizedCorrelation()].
 #' @importFrom utils combn
 #' @export
 getTransferNormCorr <- function(tar_obj,
@@ -410,8 +416,10 @@ getTransferNormCorr <- function(tar_obj,
                                 normalizer = c("legacy", "unwhitened", "kernel",
                                                "variogram"),
                                 normalizerControl = list(),
-                                verbose = TRUE) {
+                                verbose = TRUE,
+                                aggregateDenominator = c("sum", "rss")) {
   normalizer <- match.arg(normalizer)
+  aggregateDenominator <- match.arg(aggregateDenominator)
   # --- Input validation ---
   if (!(is(tar_obj, "CoProMulti") || is(tar_obj, "CoProSingle"))) {
     stop("tar_obj must be a CoProSingle or CoProMulti object")
@@ -628,9 +636,9 @@ getTransferNormCorr <- function(tar_obj,
       ct_j <- pair_cell_types[2, pp]
 
       for (cc in seq_len(nCC)) {
-        total_numerator <- 0
-        total_sd_squared <- 0
-        valid_slides <- 0
+        slide_numerators <- numeric(length(slides))
+        slide_denominators <- numeric(length(slides))
+        valid_slides <- 0L
 
         for (sID in slides) {
           K_ij <- tryCatch({
@@ -653,15 +661,19 @@ getTransferNormCorr <- function(tar_obj,
 
           A_w1 <- A_scores[, cc, drop = FALSE]
           B_w2 <- B_scores[, cc, drop = FALSE]
-          total_numerator <- total_numerator + as.numeric(t(A_w1) %*% K_ij %*% B_w2)
-          slide_sd <- sqrt(sum(A_w1^2)) * sqrt(sum(B_w2^2)) * norm_K_ij
-          total_sd_squared <- total_sd_squared + slide_sd^2
-          valid_slides <- valid_slides + 1
+          valid_slides <- valid_slides + 1L
+          slide_numerators[valid_slides] <-
+            as.numeric(t(A_w1) %*% K_ij %*% B_w2)
+          slide_denominators[valid_slides] <-
+            sqrt(sum(A_w1^2)) * sqrt(sum(B_w2^2)) * norm_K_ij
         }
 
         if (valid_slides > 0) {
-          denom <- sqrt(total_sd_squared)
-          agg_val <- ifelse(is.na(denom) || abs(denom) < 1e-9, 0, total_numerator / denom)
+          keep <- seq_len(valid_slides)
+          agg_val <- .aggregateNormCorr(
+            slide_numerators[keep], slide_denominators[keep],
+            denominator = aggregateDenominator
+          )
           df_agg <- rbind(df_agg, data.frame(
             sigmaValue = sigma_choice,
             cellType1 = ct_i, cellType2 = ct_j,
@@ -672,7 +684,9 @@ getTransferNormCorr <- function(tar_obj,
       }
     }
 
-    return(setNames(list(df_agg), sigma_name))
+    result <- setNames(list(df_agg), sigma_name)
+    attr(result, "aggregateDenominator") <- aggregateDenominator
+    return(result)
   }
 }
 

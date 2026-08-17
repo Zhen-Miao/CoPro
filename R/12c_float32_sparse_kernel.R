@@ -55,6 +55,15 @@
   if (isTRUE(x$symmetric) && x$Dim[1] != x$Dim[2]) {
     stop("A symmetric float32 sparse kernel must be square.")
   }
+  if (isTRUE(x$symmetric)) {
+    for (row in seq_len(x$Dim[1])) {
+      first <- x$p[row] + 1L
+      last <- x$p[row + 1L]
+      if (first <= last && any(x$j[first:last] <= row - 1L)) {
+        stop("A symmetric float32 sparse kernel must store only its strict upper triangle.")
+      }
+    }
+  }
   x$Dimnames <- dimnames
   class(x) <- c("CoProFloat32SparseMatrix", "list")
   # The normalizer cache validates entries by a content signature, and

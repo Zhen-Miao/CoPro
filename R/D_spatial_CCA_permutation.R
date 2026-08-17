@@ -1762,7 +1762,12 @@ runSkrCCAPermu_FairSigma <- function(object,
   )
 
   # Get observed value for comparison
-  observed_ncorr <- max(getNormCorr(object)$normalizedCorrelation)
+  observed_values <- getNormCorr(object)$normalizedCorrelation
+  observed_ncorr <- if (any(is.finite(observed_values))) {
+    max(observed_values[is.finite(observed_values)])
+  } else {
+    NA_real_
+  }
 
   if (verbose) {
     cat("\n=== Fair Sigma Permutation Complete ===\n")

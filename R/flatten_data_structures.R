@@ -4,24 +4,20 @@
 #' to improve memory efficiency and reduce complexity while maintaining 
 #' backward compatibility through accessor functions.
 
-#' Shortest displayed sigma that round-trips to the same double
+#' Parse-stable display for sigma values used in object keys
 #'
-#' R's default character conversion can map adjacent floating-point values to
-#' the same 15-significant-digit string. Keep the familiar short form when it
-#' round-trips exactly (for example, `0.1`); otherwise use 17 digits, which is
-#' sufficient to identify an IEEE-754 double uniquely.
+#' Use R's standard numeric representation because many legacy accessors parse
+#' sigma names back to numeric values. This representation is stable under that
+#' round trip for the practical sigma grids supported by the package.
 #' @noRd
 .formatSigmaValue <- function(sigma) {
   if (!is.numeric(sigma) || any(!is.finite(sigma))) {
     stop("sigma values used in object keys must be finite numeric values.")
   }
-  vapply(as.numeric(sigma), function(value) {
-    short <- as.character(value)
-    if (identical(as.numeric(short), value)) short else sprintf("%.17g", value)
-  }, character(1), USE.NAMES = FALSE)
+  as.character(as.numeric(sigma))
 }
 
-#' Construct a collision-free sigma list name
+#' Construct a parse-stable sigma list name
 #' @noRd
 .sigmaName <- function(sigma, separator = "_") {
   paste0("sigma", separator, .formatSigmaValue(sigma))

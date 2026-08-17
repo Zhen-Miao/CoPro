@@ -422,24 +422,72 @@ test_that("computeNormalizedCorrelation works for CoProMulti aggregate mode", {
         CoPro:::.whitenedFrobNorm(K)
     )
   })
-  expected <- sum(vapply(components, `[[`, numeric(1), "numerator")) /
-    sqrt(sum(vapply(components, `[[`, numeric(1), "null_sd")^2))
+  numerators <- vapply(components, `[[`, numeric(1), "numerator")
+  slide_denominators <- vapply(components, `[[`, numeric(1), "null_sd")
+  expected_sum <- sum(numerators) / sum(slide_denominators)
+  expected_rss <- sum(numerators) / sqrt(sum(slide_denominators^2))
 
-  obj <- computeNormalizedCorrelation(
+  sum_obj <- computeNormalizedCorrelation(
     obj, calculationMode = "aggregate", normalizer = "unwhitened"
   )
+  rss_obj <- computeNormalizedCorrelation(
+    obj, calculationMode = "aggregate", normalizer = "unwhitened",
+    aggregateDenominator = "rss"
+  )
 
-  expect_true(length(obj@normalizedCorrelation) > 0)
-  agg_df <- obj@normalizedCorrelation[[1]]
+  expect_true(length(sum_obj@normalizedCorrelation) > 0)
+  agg_df <- sum_obj@normalizedCorrelation[[1]]
   expect_true(nrow(agg_df) > 0)
   expect_true("sigmaValue" %in% colnames(agg_df))
   expect_true("aggregateCorrelation" %in% colnames(agg_df))
   expect_true(is.numeric(agg_df$sigmaValue))
-  observed <- agg_df$aggregateCorrelation[
+  observed_sum <- agg_df$aggregateCorrelation[
     agg_df$cellType1 == "CellTypeA" &
       agg_df$cellType2 == "CellTypeB" & agg_df$CC_index == 1
   ]
-  expect_equal(observed, expected, tolerance = 1e-10)
+  rss_df <- rss_obj@normalizedCorrelation[[1]]
+  observed_rss <- rss_df$aggregateCorrelation[
+    rss_df$cellType1 == "CellTypeA" &
+      rss_df$cellType2 == "CellTypeB" & rss_df$CC_index == 1
+  ]
+  expect_equal(observed_sum, expected_sum, tolerance = 1e-10)
+  expect_equal(observed_rss, expected_rss, tolerance = 1e-10)
+  expect_identical(
+    attr(sum_obj@normalizedCorrelation, "aggregateDenominator"), "sum"
+  )
+  expect_identical(
+    attr(rss_obj@normalizedCorrelation, "aggregateDenominator"), "rss"
+  )
+
+  transferred_scores <- setNames(lapply(cts, function(ct) {
+    score <- do.call(rbind, lapply(slides, function(slide) {
+      X_scaled[[slide]][[ct]] %*% weights[[ct]]
+    }))
+    colnames(score) <- paste0("CC_", seq_len(ncol(score)))
+    score
+  }), cts)
+  transfer_sum <- getTransferNormCorr(
+    obj, transferred_scores, sigma_choice = 0.1,
+    calculationMode = "aggregate", normalizer = "unwhitened",
+    verbose = FALSE
+  )
+  transfer_rss <- getTransferNormCorr(
+    obj, transferred_scores, sigma_choice = 0.1,
+    calculationMode = "aggregate", normalizer = "unwhitened",
+    aggregateDenominator = "rss", verbose = FALSE
+  )
+  expect_equal(
+    transfer_sum[[1]]$aggregateCorrelation,
+    sum_obj@normalizedCorrelation[[1]]$aggregateCorrelation,
+    tolerance = 1e-10
+  )
+  expect_equal(
+    transfer_rss[[1]]$aggregateCorrelation,
+    rss_obj@normalizedCorrelation[[1]]$aggregateCorrelation,
+    tolerance = 1e-10
+  )
+  expect_identical(attr(transfer_sum, "aggregateDenominator"), "sum")
+  expect_identical(attr(transfer_rss, "aggregateDenominator"), "rss")
 })
 
 test_that("column statistics and centering helpers match what they replaced", {

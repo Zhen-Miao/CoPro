@@ -61,6 +61,21 @@
 #'   selected bandwidth matters.}
 #' }
 #'
+#' @section Multi-slide aggregation:
+#' In `calculationMode = "aggregate"`, let \eqn{T_s} be the numerator and
+#' \eqn{d_s} its per-slide denominator. `aggregateDenominator = "sum"` returns
+#' \eqn{\sum_s T_s / \sum_s d_s}, the \eqn{d_s}-weighted mean of the per-slide
+#' normalized correlations. `aggregateDenominator = "rss"` instead returns
+#' \eqn{\sum_s T_s / \sqrt{\sum_s d_s^2}}, the null-standardized summed
+#' statistic when slides are independent. The latter is not an aggregate
+#' correlation and can grow with the number of concordant slides.
+#'
+#' The numerator is not centered again here. Its correlation interpretation
+#' relies on the PC scores already being centered; objects fitted with
+#' `computePCA(center = FALSE)` retain score-mean coupling in the numerator.
+#' Sigma selection averages the available pair/slide rows with `na.rm = TRUE`,
+#' so users should inspect missingness when valid-pair coverage varies by sigma.
+#'
 #' @param object A `CoPro` or `CoProMulti` object containing CCA results and kernel matrices.
 #' @param tol tolerance for approximate SVD calculation
 #' @param calculationMode (for CoProMulti only) either "perSlide" or "aggregate",
@@ -74,10 +89,16 @@
 #'   normalized distance units, to skip estimation. Remaining entries
 #'   (`maxCells`, `nBins`, `maxLagQuantile`, `minCorrelation`, `minBins`,
 #'   `lowerLimit`) tune the fit and the operator's truncation.
+#' @param aggregateDenominator For multi-slide aggregate mode, either `"sum"`
+#'   (default; a denominator-weighted aggregate correlation) or `"rss"` (a
+#'   null-standardized summed statistic under independent slides). Ignored for
+#'   single-slide and per-slide calculations.
 #' @return The object with the normalized correlation value
 #' between any pair of cell types
 #' added as a new slot, `normalizedCorrelation`. The resolved normalizer is
-#' attached as an attribute and can be read back with [getNormalizerInfo()].
+#' attached as an attribute and can be read back with [getNormalizerInfo()]. In
+#' aggregate mode the selected `aggregateDenominator` is also attached to that
+#' result list.
 #' @family scores-and-correlation
 #' @seealso [runSkrCCA()], [computeBidirCorrelation()],
 #'   [computeGeneAndCellScores()], [getNormalizerInfo()]
@@ -87,8 +108,33 @@ setGeneric(
   "computeNormalizedCorrelation",
   function(object, tol = 1e-4, calculationMode = "perSlide",
            normalizer = c("legacy", "unwhitened", "kernel", "variogram"),
-           normalizerControl = list()) standardGeneric("computeNormalizedCorrelation")
+           normalizerControl = list(),
+           aggregateDenominator = c("sum", "rss")) {
+    standardGeneric("computeNormalizedCorrelation")
+  }
 )
+
+#' Combine per-slide normalized-correlation components
+#' @noRd
+.aggregateNormCorr <- function(numerators, slideDenominators,
+                               denominator = c("sum", "rss")) {
+  denominator <- match.arg(denominator)
+  if (length(numerators) != length(slideDenominators)) {
+    stop("numerators and slideDenominators must have the same length")
+  }
+  if (length(numerators) == 0L) return(NA_real_)
+  if (any(!is.finite(numerators)) || any(!is.finite(slideDenominators)) ||
+      any(slideDenominators < 0)) {
+    return(NA_real_)
+  }
+  aggregate_denominator <- switch(
+    denominator,
+    sum = sum(slideDenominators),
+    rss = sqrt(sum(slideDenominators^2))
+  )
+  if (abs(aggregate_denominator) < 1e-9) return(0)
+  sum(numerators) / aggregate_denominator
+}
 
 
 .checkInputNormCorr <- function(object) {
@@ -604,8 +650,10 @@ setMethod(
   "computeNormalizedCorrelation", "CoPro",
   function(object, tol = 1e-4, calculationMode = "perSlide",
            normalizer = c("legacy", "unwhitened", "kernel", "variogram"),
-           normalizerControl = list()) {
+           normalizerControl = list(),
+           aggregateDenominator = c("sum", "rss")) {
     normalizer <- match.arg(normalizer)
+    aggregateDenominator <- match.arg(aggregateDenominator)
     input_check <- .checkInputNormCorr(object)
     cts <- input_check$cts
     scalePCs <- input_check$scalePCs
@@ -731,7 +779,8 @@ setMethod(
 
 .computeNormCorrCoreMulti <- function(object, tol = 1e-4, cts, slides, sigmas_run, nCC, scalePCs, calculationMode = "perSlide",
                                       normalizer = "legacy",
-                                      normalizerControl = list()) {
+                                      normalizerControl = list(),
+                                      aggregateDenominator = "sum") {
 
   if (length(cts) == 1) {
     pair_cell_types <- matrix(c(cts, cts), nrow = 2, ncol = 1)
@@ -890,10 +939,8 @@ setMethod(
         if (valid_slides_count == 0) next
         
         for (cc in 1:nCC) {
-          # Aggregate the independent per-slide statistics. The null SD of a
-          # sum is the root-sum-square of the per-slide SDs.
-          total_numerator <- 0
-          total_sd_squared <- 0
+          slide_numerators <- numeric(valid_slides_count)
+          slide_denominators <- numeric(valid_slides_count)
           w_i <- W_list_sigma[[ct_i]][, cc, drop = FALSE]
           w_j <- W_list_sigma[[ct_j]][, cc, drop = FALSE]
 
@@ -902,17 +949,18 @@ setMethod(
             Xiw <- slide_data$X_i %*% w_i
             Xjw <- slide_data$X_j %*% w_j
             
-            total_numerator <- total_numerator +
+            slide_numerators[slide_idx] <-
               .kernelXKY(Xiw, slide_data$K_ij, Xjw)[1, 1]
-            slide_sd <- sqrt(sum(Xiw^2)) * sqrt(sum(Xjw^2)) *
+            slide_denominators[slide_idx] <-
+              sqrt(sum(Xiw^2)) * sqrt(sum(Xjw^2)) *
               slide_data$norm_K_ij
-            total_sd_squared <- total_sd_squared + slide_sd^2
           }
           
           if (valid_slides_count > 0) {
-            denom_norm <- sqrt(total_sd_squared)
-            
-            agg_corr_val <- ifelse(abs(denom_norm) < 1e-9, 0, total_numerator / denom_norm)
+            agg_corr_val <- .aggregateNormCorr(
+              slide_numerators, slide_denominators,
+              denominator = aggregateDenominator
+            )
             row_buffer[[row_idx]] <- list(
               sigmaValue = sigma_val,
               cellType1 = ct_i,
@@ -939,6 +987,9 @@ setMethod(
   } # End sigma loop
 
   attr(correlation_results, "normalizer") <- normalizer_info
+  if (calculationMode == "aggregate") {
+    attr(correlation_results, "aggregateDenominator") <- aggregateDenominator
+  }
   object@normalizedCorrelation <- correlation_results
 
   # --- Choose Optimal Sigma (based on aggregate or mean per-slide CC1 correlation) ---
@@ -981,9 +1032,11 @@ setMethod(
 setMethod("computeNormalizedCorrelation", "CoProMulti", function(
     object, tol = 1e-4, calculationMode = "perSlide",
     normalizer = c("legacy", "unwhitened", "kernel", "variogram"),
-    normalizerControl = list()) {
+    normalizerControl = list(),
+    aggregateDenominator = c("sum", "rss")) {
 
   normalizer <- match.arg(normalizer)
+  aggregateDenominator <- match.arg(aggregateDenominator)
 
   # Validate calculationMode
   if (!calculationMode %in% c("perSlide", "aggregate")) {
@@ -1001,6 +1054,7 @@ setMethod("computeNormalizedCorrelation", "CoProMulti", function(
                                       sigmas_run = sigmas_run, nCC = nCC, scalePCs = scalePCs,
                                       calculationMode = calculationMode,
                                       normalizer = normalizer,
-                                      normalizerControl = normalizerControl)
+                                      normalizerControl = normalizerControl,
+                                      aggregateDenominator = aggregateDenominator)
   return(object)
 })

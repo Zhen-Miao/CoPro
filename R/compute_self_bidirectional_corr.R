@@ -350,6 +350,10 @@ getTransferSelfBidirCorr <- function(tar_obj,
 #' @param A_w Cell score vector/matrix (cells x 1)
 #' @param K_self Self-kernel matrix (cells x cells) for the same cell type
 #' @param normalize_K Character; method for normalizing the kernel matrix
+#'   `"none"` and `"row_or_col"` use the single nonredundant direction for a
+#'   symmetric self-kernel. `"sinkhorn_knopp"` averages both directions because
+#'   finite-tolerance scaling, especially a nonconverged fit, need not remain
+#'   exactly symmetric.
 #' @param filter_kernel Logical; whether to filter the kernel matrix
 #' @param K_row_sum_cutoff Numeric; cutoff for row sums when filtering
 #' @param K_col_sum_cutoff Numeric; cutoff for column sums when filtering
@@ -398,6 +402,7 @@ getTransferSelfBidirCorr <- function(tar_obj,
   } else if (normalize_K == "sinkhorn_knopp") {
     K_self <- sinkhorn_knopp(K_self)  # Use the optimized version
     KA <- crossprod(K_self, A_w)  # More efficient transpose multiplication
+    KB <- K_self %*% A_w
   }
 
   if (length(KA) < 2L || length(A_w) < 2L) {
@@ -406,15 +411,21 @@ getTransferSelfBidirCorr <- function(tar_obj,
     return(NA_real_)
   }
 
-  correlation <- suppressWarnings(
+  correlations <- suppressWarnings(
     stats::cor(as.vector(KA), as.vector(A_w))
   )
-  if (!is.finite(correlation)) {
+  if (normalize_K == "sinkhorn_knopp") {
+    correlations <- c(
+      correlations,
+      suppressWarnings(stats::cor(as.vector(KB), as.vector(A_w)))
+    )
+  }
+  if (any(!is.finite(correlations))) {
     warning("Self-correlation is undefined because a score vector has zero ",
             "variance; returning NA.", call. = FALSE)
     return(NA_real_)
   }
-  correlation
+  mean(correlations)
 }
 
 #' Filter Self-Kernel Matrix (Square Matrix)

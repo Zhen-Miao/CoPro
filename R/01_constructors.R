@@ -282,7 +282,7 @@ setMethod(
   # kmeans cannot request more centers than distinct coordinate rows. If all
   # cells are coincident there is no spatial split to infer, so use a stable,
   # balanced row-order partition that still honors maxCell.
-  distinct_locations <- nrow(unique(as.data.frame(loc_sc)))
+  distinct_locations <- nrow(unique(loc_sc))
   centers <- min(as.integer(n), distinct_locations)
   if (centers <= 1L) {
     n_blocks <- min(m, max(as.integer(n), ceiling(m / maxCell)))

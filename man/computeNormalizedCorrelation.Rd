@@ -11,7 +11,8 @@ computeNormalizedCorrelation(
   tol = 1e-04,
   calculationMode = "perSlide",
   normalizer = c("legacy", "unwhitened", "kernel", "variogram"),
-  normalizerControl = list()
+  normalizerControl = list(),
+  aggregateDenominator = c("sum", "rss")
 )
 
 \S4method{computeNormalizedCorrelation}{CoPro}(
@@ -19,7 +20,8 @@ computeNormalizedCorrelation(
   tol = 1e-04,
   calculationMode = "perSlide",
   normalizer = c("legacy", "unwhitened", "kernel", "variogram"),
-  normalizerControl = list()
+  normalizerControl = list(),
+  aggregateDenominator = c("sum", "rss")
 )
 
 \S4method{computeNormalizedCorrelation}{CoProMulti}(
@@ -27,7 +29,8 @@ computeNormalizedCorrelation(
   tol = 1e-04,
   calculationMode = "perSlide",
   normalizer = c("legacy", "unwhitened", "kernel", "variogram"),
-  normalizerControl = list()
+  normalizerControl = list(),
+  aggregateDenominator = c("sum", "rss")
 )
 }
 \arguments{
@@ -48,12 +51,19 @@ passed to \code{\link[=computeDistance]{computeDistance()}} (they are not stored
 normalized distance units, to skip estimation. Remaining entries
 (\code{maxCells}, \code{nBins}, \code{maxLagQuantile}, \code{minCorrelation}, \code{minBins},
 \code{lowerLimit}) tune the fit and the operator's truncation.}
+
+\item{aggregateDenominator}{For multi-slide aggregate mode, either \code{"sum"}
+(default; a denominator-weighted aggregate correlation) or \code{"rss"} (a
+null-standardized summed statistic under independent slides). Ignored for
+single-slide and per-slide calculations.}
 }
 \value{
 The object with the normalized correlation value
 between any pair of cell types
 added as a new slot, \code{normalizedCorrelation}. The resolved normalizer is
-attached as an attribute and can be read back with \code{\link[=getNormalizerInfo]{getNormalizerInfo()}}.
+attached as an attribute and can be read back with \code{\link[=getNormalizerInfo]{getNormalizerInfo()}}. In
+aggregate mode the selected \code{aggregateDenominator} is also attached to that
+result list.
 }
 \description{
 This method calculates the normalized correlation between pairs of cell types
@@ -110,6 +120,23 @@ what you believe about the tissue, supply \code{normalizerControl$range}
 if you have a better estimate, and prefer a permutation null when the
 selected bandwidth matters.}
 }
+}
+
+\section{Multi-slide aggregation}{
+
+In \code{calculationMode = "aggregate"}, let \eqn{T_s} be the numerator and
+\eqn{d_s} its per-slide denominator. \code{aggregateDenominator = "sum"} returns
+\eqn{\sum_s T_s / \sum_s d_s}, the \eqn{d_s}-weighted mean of the per-slide
+normalized correlations. \code{aggregateDenominator = "rss"} instead returns
+\eqn{\sum_s T_s / \sqrt{\sum_s d_s^2}}, the null-standardized summed
+statistic when slides are independent. The latter is not an aggregate
+correlation and can grow with the number of concordant slides.
+
+The numerator is not centered again here. Its correlation interpretation
+relies on the PC scores already being centered; objects fitted with
+\code{computePCA(center = FALSE)} retain score-mean coupling in the numerator.
+Sigma selection averages the available pair/slide rows with \code{na.rm = TRUE},
+so users should inspect missingness when valid-pair coverage varies by sigma.
 }
 
 \seealso{

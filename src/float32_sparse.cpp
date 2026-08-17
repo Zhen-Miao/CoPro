@@ -357,6 +357,15 @@ void validate_csr(
   if (symmetric && dims[0] != dims[1]) {
     stop("A symmetric CSR kernel must be square.");
   }
+  if (symmetric) {
+    for (int row = 0; row < dims[0]; ++row) {
+      for (int position = p[row]; position < p[row + 1]; ++position) {
+        if (j[position] <= row) {
+          stop("A symmetric CSR kernel must store only its strict upper triangle.");
+        }
+      }
+    }
+  }
 }
 
 }  // namespace
@@ -474,8 +483,7 @@ List float32_csr_gaussian_kernels_cpp(
     std::ceil(estimated * 1.15)
   );
   if (reserve_double > static_cast<double>(std::numeric_limits<int>::max())) {
-    stop("A single float32 sparse kernel block would exceed the 32-bit ",
-         "compressed-index limit.");
+    stop("A single float32 sparse kernel block would exceed the 32-bit compressed-index limit.");
   }
 
   // Enumerate neighbours in parallel over disjoint row ranges. Each worker
@@ -562,8 +570,7 @@ List float32_csr_gaussian_kernels_cpp(
       thread_edges[index].capacity() * sizeof(FloatEdge);
   }
   if (total_edges > static_cast<std::size_t>(std::numeric_limits<int>::max())) {
-    stop("A single float32 sparse kernel block exceeds the 32-bit ",
-         "compressed-index limit.");
+    stop("A single float32 sparse kernel block exceeds the 32-bit compressed-index limit.");
   }
 
   // Concatenating k private buffers into one contiguous array costs a transient
@@ -604,8 +611,7 @@ List float32_csr_gaussian_kernels_cpp(
   }
 
   if (zero_distance_count > 0U) {
-    warning("Zero distances detected in a float32 kernel block; applying ",
-            "dense-compatible nearest-distance handling.");
+    warning("Zero distances detected in a float32 kernel block; applying dense-compatible nearest-distance handling.");
     for (FloatEdge& edge : edges) {
       if (edge.distance == 0.0f) {
         // If no nonzero pair lies inside the retained support, the true
@@ -771,8 +777,7 @@ List float32_csr_gaussian_kernels_cpp(
           static_cast<std::int64_t>(output_pointer[row]) +
             row_counts[row];
         if (next > std::numeric_limits<int>::max()) {
-          stop("A normalized float32 sparse kernel exceeds the 32-bit ",
-               "index limit.");
+          stop("A normalized float32 sparse kernel exceeds the 32-bit index limit.");
         }
         output_pointer[row + 1] = static_cast<int>(next);
       }

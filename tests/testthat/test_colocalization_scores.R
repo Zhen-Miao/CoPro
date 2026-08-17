@@ -57,3 +57,27 @@ test_that("pixel_size_um converts coordinate units by multiplication", {
   expect_equal(captured$window_x, c(0, 10) * 50)
   expect_equal(captured$window_y, c(0, 12) * 50)
 })
+
+test_that("all colocalization routes share the micron conversion guard", {
+  A <- data.frame(x = c(1, 2), y = c(3, 4))
+  B <- data.frame(x = c(5, 6), y = c(7, 8))
+  window_range <- list(xrange = c(0, 10), yrange = c(0, 12))
+
+  geometry <- .scaleColocGeometry(A, B, window_range, pixel_size_um = 50)
+  expect_equal(geometry$A$x, A$x * 50)
+  expect_equal(geometry$B$y, B$y * 50)
+  expect_equal(geometry$window_range$xrange, window_range$xrange * 50)
+
+  expect_error(
+    nn_cross_fraction(A, B, window_range, pixel_size_um = 0),
+    "positive finite"
+  )
+  expect_error(
+    .computeDetailedG12(
+      A, B, window_range, r_um_range = c(10, 20), pixel_size_um = 0,
+      cell_diam_um = 10, nsim = 1, r_step_um = 2,
+      include_confidence = FALSE, confidence_level = 0.95
+    ),
+    "positive finite"
+  )
+})
