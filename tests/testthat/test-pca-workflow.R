@@ -434,6 +434,30 @@ test_that("column statistics and centering helpers match what they replaced", {
   expect_identical(CoPro:::.apply_centering_scaling(m, TRUE, FALSE),
                    t(t(m) - colMeans(m)))
 
+  # Scaling without centering must guard degenerate genes the way every other
+  # route into PCA does. Bare scale(center = FALSE, scale = TRUE) divides by a
+  # zero root-mean-square and hands prcomp_irlba() a column of NaNs.
+  deg <- m[, seq_len(4), drop = FALSE]
+  colnames(deg) <- paste0("g", seq_len(4))
+  deg[, 2] <- 0                        # never detected: divisor would be 0
+  deg[, 3] <- 0; deg[seq_len(2), 3] <- 5  # detected in 2/600 cells
+  scaled_only <- CoPro:::.apply_centering_scaling(deg, FALSE, TRUE)
+  expect_false(anyNA(scaled_only))
+  expect_identical(unname(attr(scaled_only, "scaled:scale")[c(2, 3)]), c(1, 1))
+  # Undegenerate columns keep the exact divisor base::scale() would have used.
+  expect_equal(
+    unname(attr(scaled_only, "scaled:scale")[c(1, 4)]),
+    unname(attr(scale(deg, center = FALSE, scale = TRUE),
+                "scaled:scale")[c(1, 4)])
+  )
+  # ...and the guard agrees with the sparse route on the same matrix.
+  deg_sp <- as(as(as(Matrix::Matrix(deg, sparse = TRUE), "generalMatrix"),
+                  "CsparseMatrix"), "dMatrix")
+  expect_equal(
+    unname(attr(scaled_only, "scaled:scale")),
+    unname(CoPro:::.sparse_pca_parameters(deg_sp, FALSE, TRUE)$scale)
+  )
+
   # .columnSds() falls back to apply() for anything that is not a dense
   # numeric matrix, because matrixStats::colSds() does not accept one.
   expect_identical(CoPro:::.columnSds(sp), apply(sp, 2, stats::sd))

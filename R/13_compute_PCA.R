@@ -105,8 +105,17 @@ setGeneric("computePCA",
     ))
     return(mat)
   } else {
-    # Only scaling without centering
-    return(scale(mat, center = FALSE, scale = TRUE))
+    # Only scaling without centering. scale(scale = TRUE) divides by an
+    # unguarded root-mean-square, so an all-zero gene turns its whole column
+    # into NaN and a near-constant one gets amplified -- the degeneracy the
+    # centered path (center_scale_matrix_opt()), the sparse path
+    # (.sparse_pca_parameters()) and the within-slide path all already guard.
+    col_scales <- .uncenteredColumnScales(mat)
+    if (.is_bpcells(mat)) {
+      # base::scale() would materialize the whole matrix densely.
+      return(BPCells::multiply_cols(mat, 1 / col_scales))
+    }
+    return(scale(mat, center = FALSE, scale = col_scales))
   }
 }
 

@@ -2,6 +2,14 @@
 
 ## Package-review hardening
 
+* `computePCA(center = FALSE, scale. = TRUE)` no longer divides by an
+  unguarded root-mean-square on the dense path. A gene that is never
+  detected has divisor zero there, which turned its whole column into `NaN`
+  and propagated into the PCA; a near-constant gene had its noise amplified.
+  That branch now applies the same degeneracy guard the centered dense,
+  sparse, and within-slide paths already used -- divisor pinned to 1 when a
+  gene's scale is below `1e-3` or its nonzero fraction below 1%. Genes that
+  are not degenerate keep exactly the divisor they had.
 * Sparse and float32 kernel construction now honors
   `normalizeDistance = "inherit"` on cross-type paths and rejects non-finite
   coordinates with cell IDs in the error. The R nearest-neighbor fallback also

@@ -80,6 +80,45 @@
   apply(x, 2, sd)
 }
 
+#' Guarded root-mean-square column scales for uncentered scaling
+#'
+#' `scale(x, center = FALSE, scale = TRUE)` divides every column by
+#' `sqrt(colSums(x^2) / (n - 1))` and does nothing about a zero divisor: an
+#' all-zero gene yields a column of `NaN`s, and a near-constant one gets its
+#' noise amplified. This is the uncentered twin of the guard in
+#' [center_scale_matrix_opt()] and `.sparse_pca_parameters()` -- same two
+#' thresholds, same response of pinning the divisor at 1 -- so a degenerate
+#' gene is carried through unscaled on every route into PCA rather than only
+#' on the centered and the sparse ones.
+#'
+#' The divisor is the root-mean-square, not the standard deviation, because
+#' that is what `scale()` and the uncentered sparse branch already use; only
+#' guarded columns change value.
+#' @noRd
+.uncenteredColumnScales <- function(x,
+                                    zero_sd_threshold = 1e-3,
+                                    nz_proportion_threshold = 0.01) {
+  n <- nrow(x)
+  if (.is_bpcells(x)) {
+    # BPCells has no elementwise `^`, so recover sum(x^2) from the centered
+    # variance: sum(x^2) = (n - 1) * var + n * mean^2.
+    col_means <- colMeans(x)
+    sumsq <- BPCells::colVars(x) * max(1, n - 1L) + n * col_means^2
+    col_nz <- colSums(BPCells::binarize(x)) / n
+  } else {
+    sumsq <- colSums(x^2)
+    col_nz <- .columnNonzeroFraction(x)
+  }
+
+  col_scales <- sqrt(pmax(as.numeric(sumsq), 0) / max(1, n - 1L))
+  names(col_scales) <- colnames(x)
+  unsafe <- !is.finite(col_scales) |
+    col_scales < zero_sd_threshold |
+    col_nz < nz_proportion_threshold
+  col_scales[unsafe] <- 1.0
+  col_scales
+}
+
 #' centering and scaling the matrix
 #' @importFrom stats sd
 #' @param matrix Input matrix to be column-centered
