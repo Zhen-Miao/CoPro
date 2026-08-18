@@ -40,10 +40,17 @@
 #' pointer counts roughly half the nonzeros. No caller passes one today; the
 #' guard is here so that a future one falls back to the slow-but-correct path
 #' instead of silently undercounting.
+#'
+#' `IterableMatrix` supports no comparison operator at all -- `x != 0` errors
+#' with "comparison (!=) is possible only for atomic and list types" -- so
+#' BPCells input needs `binarize()`, which is the lazy equivalent.
 #' @noRd
 .columnNonzeroFraction <- function(x) {
   if (inherits(x, "CsparseMatrix") && !inherits(x, "symmetricMatrix")) {
     return(diff(Matrix::drop0(x)@p) / nrow(x))
+  }
+  if (.is_bpcells(x)) {
+    return(colSums(BPCells::binarize(x)) / nrow(x))
   }
   colSums(x != 0) / nrow(x)
 }
@@ -99,18 +106,8 @@
                                     zero_sd_threshold = 1e-3,
                                     nz_proportion_threshold = 0.01) {
   n <- nrow(x)
-  if (.is_bpcells(x)) {
-    # BPCells has no elementwise `^`, so recover sum(x^2) from the centered
-    # variance: sum(x^2) = (n - 1) * var + n * mean^2.
-    col_means <- colMeans(x)
-    sumsq <- BPCells::colVars(x) * max(1, n - 1L) + n * col_means^2
-    col_nz <- colSums(BPCells::binarize(x)) / n
-  } else {
-    sumsq <- colSums(x^2)
-    col_nz <- .columnNonzeroFraction(x)
-  }
-
-  col_scales <- sqrt(pmax(as.numeric(sumsq), 0) / max(1, n - 1L))
+  col_nz <- .columnNonzeroFraction(x)
+  col_scales <- sqrt(pmax(as.numeric(colSums(x^2)), 0) / max(1, n - 1L))
   names(col_scales) <- colnames(x)
   unsafe <- !is.finite(col_scales) |
     col_scales < zero_sd_threshold |
@@ -146,7 +143,7 @@ center_scale_matrix_opt <- function(input_matrix,
 
   col_means <- colMeans(input_matrix)
   col_sds <- sqrt(BPCells::colVars(input_matrix))
-  col_nz <- colSums(BPCells::binarize(input_matrix)) / nrow(input_matrix)
+  col_nz <- .columnNonzeroFraction(input_matrix)
   zero_sd_cols <- which(col_sds < zero_sd_threshold | col_nz < nz_proportion_threshold)
   col_sds_safe <- col_sds
   if (length(zero_sd_cols) > 0) col_sds_safe[zero_sd_cols] <- 1.0

@@ -796,6 +796,47 @@ test_that("matrix-free BPCells within-slide PCA matches dense preprocessing", {
   }
 })
 
+test_that(".apply_centering_scaling() keeps BPCells input out of core", {
+  # computePCA() routes IterableMatrix input through this helper for every
+  # combination of center/scale., but only the center = scale. = TRUE branch
+  # was ever taught about BPCells. sweep() errored outright ("non-numeric
+  # argument to binary operator") and base::scale() silently densified the
+  # matrix, which is what BPCells exists to avoid.
+  skip_if_not_installed("BPCells")
+  set.seed(9)
+  dense <- matrix(rpois(800, lambda = 0.6), nrow = 200, ncol = 4,
+                  dimnames = list(paste0("c", seq_len(200)),
+                                  paste0("g", seq_len(4))))
+  dense[, 2] <- 0                    # never detected: zero divisor
+  dense[, 3] <- 0; dense[1, 3] <- 5  # detected in 1 of 200 cells: under 1%
+  bp <- BPCells::write_matrix_memory(
+    methods::as(Matrix::Matrix(dense, sparse = TRUE), "dgCMatrix"),
+    compress = FALSE
+  )
+
+  for (scale. in c(FALSE, TRUE)) {
+    center <- !scale.
+    out_bp <- CoPro:::.apply_centering_scaling(bp, center, scale.)
+    out_dense <- CoPro:::.apply_centering_scaling(dense, center, scale.)
+    expect_true(CoPro:::.is_bpcells(out_bp))
+    # BPCells prints a "converting to a dense matrix" notice here. Densifying
+    # is exactly what the helper must not do; the test does it deliberately on
+    # a 200 x 4 fixture to compare values, and the notice is printed rather
+    # than signaled, so it cannot be suppressed.
+    expect_equal(as.matrix(out_bp), as.matrix(out_dense),
+                 ignore_attr = TRUE, tolerance = 1e-12)
+  }
+
+  # .columnNonzeroFraction() feeds every degeneracy guard in the package, and
+  # `x != 0` is not defined for an IterableMatrix at all.
+  expect_equal(unname(CoPro:::.columnNonzeroFraction(bp)),
+               unname(colSums(dense != 0) / nrow(dense)))
+  expect_equal(unname(CoPro:::.uncenteredColumnScales(bp)),
+               unname(CoPro:::.uncenteredColumnScales(dense)))
+  expect_identical(unname(CoPro:::.uncenteredColumnScales(bp)[c(2, 3)]),
+                   c(1, 1))
+})
+
 test_that("the legacy multi-slide combination still runs the legacy path", {
   # NEWS and ?runSkrCCA both promise center_per_slide = FALSE plus
   # objective = "sumcov" reproduces the pre-1.3.0 workflow. Nothing else
