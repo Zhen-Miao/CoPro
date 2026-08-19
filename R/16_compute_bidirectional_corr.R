@@ -20,6 +20,7 @@ sinkhorn_knopp <- function(A, tol = 1e-8, max_iter = 1000) {
   # Pre-allocate
   Av <- numeric(n)
   Atu <- numeric(m)
+  converged <- FALSE
   
   for (i in seq_len(max_iter)) {
     u_prev <- u
@@ -35,8 +36,14 @@ sinkhorn_knopp <- function(A, tol = 1e-8, max_iter = 1000) {
 
     # Simple convergence check (like fast1)
     if (max(abs(u - u_prev), abs(v - v_prev)) < tol) {
+      converged <- TRUE
       break
     }
+  }
+
+  if (!converged) {
+    warning("Sinkhorn-Knopp scaling did not converge within ", max_iter,
+            " iterations (tol = ", tol, ").", call. = FALSE)
   }
 
   # Scale rows by u and columns by v. Diagonal scaling keeps sparse inputs
@@ -122,15 +129,20 @@ sinkhorn_knopp <- function(A, tol = 1e-8, max_iter = 1000) {
       # Correlation = sum(x*y) / sqrt(sum(x^2) * sum(y^2))
       denom1 <- sqrt(sum(ka^2) * sum(b2^2))
       denom2 <- sqrt(sum(a1^2) * sum(kb^2))
-      cor1_all[cc] <- if (denom1 < 1e-12) 0 else sum(ka * b2) / denom1
-      cor2_all[cc] <- if (denom2 < 1e-12) 0 else sum(a1 * kb) / denom2
+      cor1_all[cc] <- if (denom1 < 1e-12) NA_real_ else sum(ka * b2) / denom1
+      cor2_all[cc] <- if (denom2 < 1e-12) NA_real_ else sum(a1 * kb) / denom2
     }
     
     corr_values <- (cor1_all + cor2_all) * 0.5
     
+    if (anyNA(corr_values)) {
+      warning("Bidirectional correlation is undefined for one or more ",
+              "constant score vectors; returning NA.", call. = FALSE)
+    }
   } else {
-    # Fallback for edge cases
-    corr_values[] <- 1.0
+    warning("Bidirectional correlation requires at least two retained cells ",
+            "per type; returning NA.", call. = FALSE)
+    corr_values[] <- NA_real_
   }
   
   return(corr_values)
@@ -148,9 +160,6 @@ sinkhorn_knopp <- function(A, tol = 1e-8, max_iter = 1000) {
     if (any(!row_keep)) {
         K <- K[row_keep, , drop = FALSE]
         A_w1 <- A_w1[row_keep, , drop = FALSE]
-        if (length(row_keep) > 0) {
-            cat("After row filtering: kept", sum(row_keep), "of", length(row_keep), "rows\n")
-        }
     }
     
     # Vectorized column filtering
@@ -160,9 +169,6 @@ sinkhorn_knopp <- function(A, tol = 1e-8, max_iter = 1000) {
     if (any(!col_keep)) {
         K <- K[, col_keep, drop = FALSE]
         B_w2 <- B_w2[col_keep, , drop = FALSE]
-        if (length(col_keep) > 0) {
-            cat("After column filtering: kept", sum(col_keep), "of", length(col_keep), "columns\n")
-        }
     }
 
     return(list(K = K, A_w1 = A_w1, B_w2 = B_w2))
@@ -234,21 +240,19 @@ normalize_K = c("row_or_col", "sinkhorn_knopp", "none"), filter_kernel = TRUE,
     KB <- K %*% B_w2
   }
 
-  # Optimized correlation computation using covariance
-  # For vectors, correlation can be computed more efficiently
-  if (length(KA) == 1 && length(B_w2) == 1) {
-    # Single values case
-    cor1 <- 1.0
-  } else {
-    # Use more efficient correlation calculation
-    cor1 <- stats::cor(as.vector(KA), as.vector(B_w2))
+  if (length(KA) < 2L || length(B_w2) < 2L ||
+      length(A_w1) < 2L || length(KB) < 2L) {
+    warning("Bidirectional correlation requires at least two retained cells ",
+            "per type; returning NA.", call. = FALSE)
+    return(NA_real_)
   }
-  
-  if (length(A_w1) == 1 && length(KB) == 1) {
-    # Single values case  
-    cor2 <- 1.0
-  } else {
-    cor2 <- stats::cor(as.vector(A_w1), as.vector(KB))
+
+  cor1 <- suppressWarnings(stats::cor(as.vector(KA), as.vector(B_w2)))
+  cor2 <- suppressWarnings(stats::cor(as.vector(A_w1), as.vector(KB)))
+  if (!is.finite(cor1) || !is.finite(cor2)) {
+    warning("Bidirectional correlation is undefined because a score vector ",
+            "has zero variance; returning NA.", call. = FALSE)
+    return(NA_real_)
   }
   
   return((cor1 + cor2) * 0.5)  # Multiplication is faster than division
@@ -339,7 +343,7 @@ setGeneric(
   }
 
   correlation_value <- vector("list", length = length(sigmaValues))
-  sigma_names <- paste("sigma", sigmaValues, sep = "_")
+  sigma_names <- .sigmaName(sigmaValues)
   names(correlation_value) <- sigma_names
   n_pairs <- ncol(pair_cell_types)
 
@@ -349,7 +353,7 @@ setGeneric(
     
     # Pre-allocate results as vectors (much faster than dataframe indexing)
     n_total <- n_pairs * nCC
-    result_corr <- numeric(n_total)
+    result_corr <- rep(NA_real_, n_total)
     result_idx <- 0L
     
     # Cache kernel matrices for this sigma
@@ -396,17 +400,16 @@ setGeneric(
       }
 
       # Guard against degenerate kernels (e.g. all mass filtered away) which
-      # would otherwise crash downstream correlation computation. Return zero
-      # correlation for this pair and warn the user.
+      # would otherwise crash downstream correlation computation.
       if (nrow(K) == 0 || ncol(K) == 0 ||
           nrow(A_W1_all) == 0 || nrow(B_W2_all) == 0) {
         warning(sprintf(
           paste0("Empty kernel matrix after filtering for pair '%s' x '%s' ",
-                 "at sigma=%g. Returning 0 correlations for this pair. ",
+                 "at sigma=%g. Returning NA correlations for this pair. ",
                  "Consider lowering K_row_sum_cutoff / K_col_sum_cutoff."),
           cellType1, cellType2, sigma_val
         ))
-        corr_values <- numeric(nCC)
+        corr_values <- rep(NA_real_, nCC)
       } else {
         # Vectorized correlation calculation for all CC at once
         corr_values <- .computeAllCCCorrelations(A_W1_all, B_W2_all, K, normalize_K)
@@ -596,8 +599,6 @@ setMethod(
             Xiw <- X_i %*% w_i
             Xjw <- X_j %*% w_j
 
-            cat("current cell type pair: ", ct_i, " and ", ct_j, "\n")
-
             corr_val <- .computeSpatialCrossCorrelation(Xiw, Xjw, K_ij, normalize_K = normalize_K, filter_kernel = filter_kernel, K_row_sum_cutoff = K_row_sum_cutoff, K_col_sum_cutoff = K_col_sum_cutoff)
 
             if (is.finite(corr_val) && !is.na(corr_val)) {
@@ -697,4 +698,3 @@ ensureBidirCorrelationSlot <- function(object) {
 
   return(new_obj)
 }
-

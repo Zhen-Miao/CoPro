@@ -97,9 +97,8 @@ test_that("legacy silently whitens once self-kernels are present", {
   expect_match(getNormalizerInfo(legacy)$description, "self-kernel")
   expect_match(getNormalizerInfo(unwh)$description, "R = I")
 
-  ## Whitening a cross-type kernel with self-kernels is wrong twice over, and
-  ## both are reported: the self-kernel is on its own distance scale, and its
-  ## zeroed diagonal makes it an invalid correlation operator.
+  ## A cross-type self-kernel still carries the physical-units caveat, but its
+  ## diagonal is repaired in the private whitening copy before use.
   seen <- character(0)
   withCallingHandlers(
     suppressMessages(computeNormalizedCorrelation(obj)),
@@ -109,10 +108,10 @@ test_that("legacy silently whitens once self-kernels are present", {
     }
   )
   expect_true(any(grepl("different physical bandwidth", seen)))
-  expect_true(any(grepl("all-zero diagonal", seen)))
+  expect_false(any(grepl("all-zero diagonal", seen)))
 })
 
-test_that("a zero-diagonal whitening operator is flagged as indefinite", {
+test_that("a zero-diagonal stored kernel gets a unit-diagonal whitening copy", {
   ## Self-kernels are stored with a zero diagonal on purpose -- correct in the
   ## numerator, where a cell should not be its own neighbour. But R_x is a
   ## correlation operator, so R_ii = 1; zeroing it forces trace(R) = 0, which
@@ -128,18 +127,17 @@ test_that("a zero-diagonal whitening operator is flagged as indefinite", {
   eigenvalues <- eigen(K, symmetric = TRUE, only.values = TRUE)$values
   expect_lt(min(eigenvalues), 0)
 
-  expect_warning(
-    suppressMessages(computeNormalizedCorrelation(obj)),
-    "all-zero diagonal"
-  )
-  ## the explicit modes build a valid correlation operator, so no warning
+  ## Both the legacy and explicit self-kernel modes now build a valid
+  ## correlation operator without mutating the stored analysis kernel.
+  expect_no_warning(
+    suppressMessages(computeNormalizedCorrelation(obj)))
   expect_no_warning(
     suppressMessages(computeNormalizedCorrelation(obj, normalizer = "kernel")))
   expect_no_warning(
     suppressMessages(computeNormalizedCorrelation(obj, normalizer = "unwhitened")))
 })
 
-test_that("restoring the unit diagonal materially changes the denominator", {
+test_that("legacy and kernel modes use the same repaired self-kernel", {
   obj <- quiet(make_smooth_object(n_per_type = 150, n_genes = 40,
                                   subset_to = "TypeA", n_pca = 6))
   obj <- quiet(computeKernelMatrix(obj, sigmaValues = 0.05, verbose = FALSE))
@@ -147,8 +145,7 @@ test_that("restoring the unit diagonal materially changes the denominator", {
 
   legacy <- quiet(computeNormalizedCorrelation(obj))
   fixed <- quiet(computeNormalizedCorrelation(obj, normalizer = "kernel"))
-  expect_false(isTRUE(all.equal(cc1(legacy, "sigma_0.05"),
-                                cc1(fixed, "sigma_0.05"))))
+  expect_equal(cc1(legacy, "sigma_0.05"), cc1(fixed, "sigma_0.05"))
 })
 
 test_that("a within-type analysis is exempt from the self-kernel units warning", {
@@ -160,10 +157,9 @@ test_that("a within-type analysis is exempt from the self-kernel units warning",
   obj <- quiet(computeKernelMatrix(obj, sigmaValues = 0.05, verbose = FALSE))
   obj <- quiet(runSkrCCA(obj, scalePCs = TRUE, nCC = 1))
 
-  ## The zero-diagonal warning does apply here and is asserted elsewhere; what
-  ## must not fire is the units warning, which is about mixing a self-kernel
-  ## built by computeSelfDistance() with a cross-kernel built by
-  ## computeDistance(). There is no cross-kernel in a within-type analysis.
+  ## The units warning is about mixing a self-kernel built by
+  ## computeSelfDistance() with a cross-kernel built by computeDistance().
+  ## There is no cross-kernel in a within-type analysis.
   seen <- character(0)
   withCallingHandlers(
     suppressMessages(computeNormalizedCorrelation(obj)),

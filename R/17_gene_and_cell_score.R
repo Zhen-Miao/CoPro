@@ -8,6 +8,9 @@
 #' standardization is per (slide, cell type), so when the stored slide scales
 #' differ there is no single equivalent coefficient vector in raw units; the
 #' per-slide maps are kept on `pcaGlobal[[ct]]$slideCenter` and `$slideScale`.
+#' Standard deviations below `1e-5` (and non-finite values) are treated as one
+#' during this inverse scaling, adding a final guard against unstable weights
+#' from a numerically rank-deficient PCA.
 #'
 #' For gene weights that do not depend on the PCA coordinate system, prefer
 #' [computeRegressionGeneScores()], which regresses cell scores on expression
@@ -191,7 +194,7 @@ setGeneric(
     # some values that are needed
     nCC <- object@nCC
     PCmats <- .getAllPCMats(allPCs = object@pcaGlobal, scalePCs = scalePCs)
-    sigma_names <- paste("sigma", sigmaValues, sep = "_")
+    sigma_names <- .sigmaName(sigmaValues)
 
     csgs <- .initializeCSGS(cts, sigma_names, nCC, object)
 
@@ -202,10 +205,23 @@ setGeneric(
     ## go over all cell types, then over all sigma values
     for (tt in seq_along(sigmaValues)) {
       t <- sigma_names[tt]
+      W_list <- object@skrCCAOut[[t]]
+      if (is.null(W_list)) {
+        warning("CCA weights are unavailable for sigma = ", sigmaValues[tt],
+                "; leaving its gene and cell scores as NA.", call. = FALSE)
+        next
+      }
       for (i in cts) {
+        W_i <- W_list[[i]]
+        if (is.null(W_i) || ncol(W_i) < nCC) {
+          warning("CCA weights are unavailable or incomplete for cell type '",
+                  i, "' at sigma = ", sigmaValues[tt],
+                  "; leaving its gene and cell scores as NA.", call. = FALSE)
+          next
+        }
         for (cc_index in seq_len(nCC)) {
           cc_name <- paste0("CC_", cc_index)
-          w_1 <- object@skrCCAOut[[t]][[i]][, cc_index, drop = FALSE]
+          w_1 <- W_i[, cc_index, drop = FALSE]
 
           ## Map CCA weight from PC space back to gene space.
           ## gene_score = R %*% diag(1/sdev) %*% w  (regression coefficient)
@@ -214,7 +230,9 @@ setGeneric(
           if(!scalePCs) {
             sdev_use <- 1L
           } else {
-            sdev_use <- 1 / object@pcaGlobal[[i]]$sdev
+            sdev_use <- 1 / .safeStandardDeviations(
+              object@pcaGlobal[[i]]$sdev
+            )
           }
 
           ## compute the gene scores
@@ -287,7 +305,7 @@ setGeneric(
       if (!scalePCs) {
         sdev_use <- 1L
       } else {
-        sdev_use <- 1 / sdev
+        sdev_use <- 1 / .safeStandardDeviations(sdev)
       }
       
       ## compute the gene scores
@@ -305,7 +323,7 @@ setGeneric(
 
   # Initialize variables
   nCC <- object@nCC
-  sigma_names <- paste("sigma", sigmaValues, sep = "_")
+  sigma_names <- .sigmaName(sigmaValues)
 
   # Initialize data structures - now aggregated across slides
     csgs <- .initializeCSGS(cts, sigma_names, nCC, object)
@@ -325,6 +343,11 @@ setGeneric(
   for (tt in seq_along(sigmaValues)) {
     t <- sigma_names[tt]
     W_list <- object@skrCCAOut[[t]] # Shared weights for this sigma
+    if (is.null(W_list)) {
+      warning("CCA weights are unavailable for sigma = ", sigmaValues[tt],
+              "; leaving its gene and cell scores as NA.", call. = FALSE)
+      next
+    }
 
     # Calculate Cell Scores (Slide-Specific, then aggregated)
     for (sID in slides) {
@@ -356,6 +379,12 @@ setGeneric(
     for (ct in cts) {
       pca_obj_ct <- object@pcaGlobal[[ct]]
       W_ct <- W_list[[ct]]
+      if (is.null(W_ct) || ncol(W_ct) < nCC) {
+        warning("CCA weights are unavailable or incomplete for cell type '",
+                ct, "' at sigma = ", sigmaValues[tt],
+                "; leaving its gene and cell scores as NA.", call. = FALSE)
+        next
+      }
       gene_score_mat <- .computeGeneScores(W_ct, pca_obj_ct, scalePCs, nCC, object@geneList)
       gene_flat_name <- .createGeneScoresName(sigmaValues[tt], ct, slide = NULL)
       geneScores[[gene_flat_name]] <- gene_score_mat
@@ -456,7 +485,7 @@ setGeneric(
 )
 
 .computeRegGSCore <- function(object, cts, sigmaValues, nCC, verbose) {
-  sigma_names <- paste("sigma", sigmaValues, sep = "_")
+  sigma_names <- .sigmaName(sigmaValues)
 
   ## Determine gene names
   geneNames <- if (length(object@geneList) > 0) {
@@ -492,10 +521,29 @@ setGeneric(
         cc_name <- paste0("CC_", cc_index)
 
         ## Get cell scores
-        cs <- object@cellScores[[cell_flat_name]][, cc_name]
+        score_matrix <- object@cellScores[[cell_flat_name]]
+        if (is.null(score_matrix) || !cc_name %in% colnames(score_matrix)) {
+          stop("Cell scores are missing for sigma=", sigmaValues[tt],
+               ", cellType='", ct, "', ", cc_name, ".")
+        }
+        cs <- score_matrix[, cc_name]
 
         ## Align expression rows to cell score names
-        cs <- cs[rownames(X)]
+        expression_names <- rownames(X)
+        score_names <- names(cs)
+        if (is.null(expression_names) || is.null(score_names) ||
+            anyDuplicated(expression_names) || anyDuplicated(score_names) ||
+            !setequal(expression_names, score_names)) {
+          stop("Cell-score names do not match expression row names for sigma=",
+               sigmaValues[tt], ", cellType='", ct, "', ", cc_name, ".")
+        }
+        cs <- cs[expression_names]
+        if (any(!is.finite(cs))) {
+          warning("Non-finite cell scores for sigma=", sigmaValues[tt],
+                  ", cellType='", ct, "', ", cc_name,
+                  "; leaving regression gene scores as NA.", call. = FALSE)
+          next
+        }
 
         ## Center
         cs_c <- cs - mean(cs)

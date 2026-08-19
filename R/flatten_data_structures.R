@@ -4,6 +4,25 @@
 #' to improve memory efficiency and reduce complexity while maintaining 
 #' backward compatibility through accessor functions.
 
+#' Parse-stable display for sigma values used in object keys
+#'
+#' Use R's standard numeric representation because many legacy accessors parse
+#' sigma names back to numeric values. This representation is stable under that
+#' round trip for the practical sigma grids supported by the package.
+#' @noRd
+.formatSigmaValue <- function(sigma) {
+  if (!is.numeric(sigma) || any(!is.finite(sigma))) {
+    stop("sigma values used in object keys must be finite numeric values.")
+  }
+  as.character(as.numeric(sigma))
+}
+
+#' Construct a parse-stable sigma list name
+#' @noRd
+.sigmaName <- function(sigma, separator = "_") {
+  paste0("sigma", separator, .formatSigmaValue(sigma))
+}
+
 #' Create informative names for kernel matrices
 #' @param sigma Sigma value
 #' @param cellType1 First cell type  
@@ -14,10 +33,10 @@
 .createKernelMatrixName <- function(sigma, cellType1, cellType2, slide = NULL) {
   if (is.null(slide)) {
     # Single slide: "kernel|sigma0.1|TypeA|TypeB"
-    paste("kernel", paste0("sigma", sigma), cellType1, cellType2, sep = "|")
+    paste("kernel", .sigmaName(sigma, separator = ""), cellType1, cellType2, sep = "|")
   } else {
     # Multi slide: "kernel|sigma0.1|slide1|TypeA|TypeB"  
-    paste("kernel", paste0("sigma", sigma), slide, cellType1, cellType2, sep = "|")
+    paste("kernel", .sigmaName(sigma, separator = ""), slide, cellType1, cellType2, sep = "|")
   }
 }
 
@@ -46,10 +65,10 @@
 .createCellScoresName <- function(sigma, cellType, slide = NULL) {
   if (is.null(slide)) {
     # "cellScores|sigma0.1|TypeA"
-    paste("cellScores", paste0("sigma", sigma), cellType, sep = "|")
+    paste("cellScores", .sigmaName(sigma, separator = ""), cellType, sep = "|")
   } else {
     # "cellScores|sigma0.1|slide1|TypeA" (if we need slide-specific access)
-    paste("cellScores", paste0("sigma", sigma), slide, cellType, sep = "|")
+    paste("cellScores", .sigmaName(sigma, separator = ""), slide, cellType, sep = "|")
   }
 }
 
@@ -62,10 +81,10 @@
 .createGeneScoresName <- function(sigma, cellType, slide = NULL) {
   if (is.null(slide)) {
     # "geneScores|sigma0.1|TypeA"
-    paste("geneScores", paste0("sigma", sigma), cellType, sep = "|")
+    paste("geneScores", .sigmaName(sigma, separator = ""), cellType, sep = "|")
   } else {
     # "geneScores|sigma0.1|slide1|TypeA" (if we need slide-specific access)
-    paste("geneScores", paste0("sigma", sigma), slide, cellType, sep = "|")
+    paste("geneScores", .sigmaName(sigma, separator = ""), slide, cellType, sep = "|")
   }
 }
 
@@ -183,7 +202,7 @@
 #' @return Nested list structure
 #' @noRd
 .flatToNestedKernels <- function(flat_kernels, sigmaValues, cellTypes, slides = NULL) {
-  sigma_names <- paste("sigma", sigmaValues, sep = "_")
+  sigma_names <- .sigmaName(sigmaValues)
   
   if (is.null(slides)) {
     # Single slide structure
@@ -199,7 +218,7 @@
     for (name in names(flat_kernels)) {
       parsed <- .parseKernelMatrixName(name)
       if (is.null(parsed$slide)) {  # Only process single-slide entries
-        sigma_name <- paste("sigma", parsed$sigma, sep = "_")
+        sigma_name <- .sigmaName(parsed$sigma)
         nested[[sigma_name]][[parsed$cellType1]][[parsed$cellType2]] <- flat_kernels[[name]]
       }
     }
@@ -220,7 +239,7 @@
     for (name in names(flat_kernels)) {
       parsed <- .parseKernelMatrixName(name)
       if (!is.null(parsed$slide)) {  # Only process multi-slide entries
-        sigma_name <- paste("sigma", parsed$sigma, sep = "_")
+        sigma_name <- .sigmaName(parsed$sigma)
         nested[[sigma_name]][[parsed$slide]][[parsed$cellType1]][[parsed$cellType2]] <- flat_kernels[[name]]
       }
     }
@@ -236,7 +255,7 @@
 #' @return Nested list structure
 #' @noRd
 .flatToNestedCellScores <- function(flat_scores, sigmaValues, cellTypes) {
-  sigma_names <- paste("sigma", sigmaValues, sep = "_")
+  sigma_names <- .sigmaName(sigmaValues)
   
   nested <- setNames(vector("list", length(sigmaValues)), sigma_names)
   for (sigma_name in sigma_names) {
@@ -247,7 +266,7 @@
   for (name in names(flat_scores)) {
     parsed <- .parseCellScoresName(name)
     if (is.null(parsed$slide)) {  # Only process aggregated entries
-      sigma_name <- paste("sigma", parsed$sigma, sep = "_")
+      sigma_name <- .sigmaName(parsed$sigma)
       nested[[sigma_name]][[parsed$cellType]] <- flat_scores[[name]]
     }
   }
@@ -334,4 +353,4 @@
   # when the accessor functions are called.
   
   message("Accessor functions updated for flat structure compatibility")
-} 
+}

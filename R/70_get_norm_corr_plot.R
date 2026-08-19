@@ -212,7 +212,7 @@ setGeneric("getCorrTwoTypes",
                             sigmaValueChoice) {
 
   ## load the cellScores and kernel matrix
-  sigma_name <- paste("sigma", sigmaValueChoice, sep = "_")
+  sigma_name <- .sigmaName(sigmaValueChoice)
 
   # Get the cell scores data for cellTypeA
   cell_score_data_a <- getCellScores(object, sigma = sigmaValueChoice, 
@@ -240,7 +240,7 @@ setGeneric("getCorrTwoTypes",
                             sigmaValueChoice) {
 
   ## load the cellScores and kernel matrix
-  sigma_name <- paste("sigma", sigmaValueChoice, sep = "_")
+  sigma_name <- .sigmaName(sigmaValueChoice)
     df_q <- rep(list(), length = length(getSlideList(object)))
   names(df_q) <- getSlideList(object)
   
@@ -416,7 +416,7 @@ setGeneric("getCorrOneType",
 .getCorrOneTypeCoreSingle <- function(object, cellTypeA, ccIndex = 1,
                             sigmaValueChoice) {
   ## load the cellScores and kernel matrix
-  sigma_name <- paste("sigma", sigmaValueChoice, sep = "_")
+  sigma_name <- .sigmaName(sigmaValueChoice)
 
   # Get the cell scores data
   cell_score_data <- getCellScores(object, sigma = sigmaValueChoice, 
@@ -444,7 +444,7 @@ setGeneric("getCorrOneType",
                             sigmaValueChoice) {
   df_q <- rep(list(), length = length(getSlideList(object)))
   names(df_q) <- getSlideList(object)
-  sigma_name <- paste("sigma", sigmaValueChoice, sep = "_")
+  sigma_name <- .sigmaName(sigmaValueChoice)
   
   for (q in getSlideList(object)) {
     # Get the cell scores data for this slide - now using aggregated structure

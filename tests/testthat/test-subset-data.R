@@ -72,6 +72,16 @@ test_that("subsetData clears original data when saveOriginal = FALSE", {
                         saveOriginal = FALSE)
   
   expect_equal(nrow(obj_sub@normalizedData), 1)  # matrix(0) is 1x1
+
+  shown <- utils::capture.output(show(obj_sub))
+  expect_true(any(grepl(
+    paste0("Number of cells: ", length(obj_sub@cellTypesSub)), shown,
+    fixed = TRUE
+  )))
+  expect_true(any(grepl(
+    paste0("Number of genes: ", length(obj_sub@geneList)), shown,
+    fixed = TRUE
+  )))
 })
 
 test_that("subsetData rejects if too few cells remain", {
@@ -85,4 +95,3 @@ test_that("subsetData rejects if too few cells remain", {
     "Fewer than"
   )
 })
-

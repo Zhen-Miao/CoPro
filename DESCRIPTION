@@ -47,7 +47,8 @@ Suggests:
     piggyback,
     scales,
     ggrepel,
-    patchwork
+    patchwork,
+    lmerTest
 Remotes:
     bnprks/BPCells/r
 VignetteBuilder: knitr

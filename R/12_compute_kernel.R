@@ -293,7 +293,7 @@ kernel_from_distance <- function(
                                colNormalizeKernel, verbose) {
   
   kernel_mat <- .initializeKernelStructure(sigmaValues, cts)
-  sigma_names <- paste("sigma", sigmaValues, sep = "_")
+  sigma_names <- .sigmaName(sigmaValues)
   pair_cell_types <- combn(cts, 2)
   
   # Track sigma values to remove
@@ -361,7 +361,7 @@ kernel_from_distance <- function(
                                 colNormalizeKernel, verbose) {
   
   kernel_mat <- .initializeKernelStructure(sigmaValues, cts)
-  sigma_names <- paste("sigma", sigmaValues, sep = "_")
+  sigma_names <- .sigmaName(sigmaValues)
   
   # Track sigma values to remove
   sigmaValuesToRemove <- vector(mode = "logical", length = length(sigmaValues))
@@ -701,7 +701,7 @@ setMethod("computeKernelMatrix", "CoPro",
   
   slides <- getSlideList(object)
   kernel_matrices_all <- .initializeKernelStructureMulti(sigmaValues, slides, cts)
-  sigma_names <- paste("sigma", sigmaValues, sep = "_")
+  sigma_names <- .sigmaName(sigmaValues)
   
   # Track sigma values to remove
   sigmaValuesToRemove <- vector(mode = "logical", length = length(sigmaValues))
@@ -776,7 +776,7 @@ setMethod("computeKernelMatrix", "CoPro",
   
   slides <- getSlideList(object)
   kernel_matrices_all <- .initializeKernelStructureMulti(sigmaValues, slides, cts)
-  sigma_names <- paste("sigma", sigmaValues, sep = "_")
+  sigma_names <- .sigmaName(sigmaValues)
   pair_cell_types <- combn(cts, 2)
   
   # Track sigma values to remove

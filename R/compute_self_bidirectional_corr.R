@@ -16,9 +16,12 @@ NULL
 #' within each cell type using transferred scores, complementing the cross-type analysis 
 #' provided by `getTransferBidirCorr()`.
 #'
-#' The self-bidirectional correlation is computed as the mean of two correlations:
-#' cor(t(K) %*% A_w, A_w) and cor(A_w, K %*% A_w), where A_w is the transferred cell score
-#' vector for a cell type and K is the self-kernel matrix for that cell type.
+#' The self-bidirectional correlation is `cor(t(K) %*% A_w, A_w)`, where
+#' `A_w` is the transferred cell score vector and `K` is the self-kernel. For a
+#' symmetric self-kernel the nominal reverse direction is algebraically
+#' identical, so it is not calculated a second time. This within-type spatial
+#' autocorrelation is not calibrated to the same scale as the cross-type
+#' bidirectional statistic; compare self values within the same analysis only.
 #'
 #' @param tar_obj A `CoProSingle` or `CoProMulti` object containing self-kernel matrices
 #'   and metadata needed for alignment. Must have self-kernel matrices computed using
@@ -164,7 +167,7 @@ getTransferSelfBidirCorr <- function(tar_obj,
     }
   }
 
-  sigma_name <- paste0("sigma_", sigma_choice)
+  sigma_name <- .sigmaName(sigma_choice)
 
   # Helper: align a score vector to matrix dimension names if available
   .align_scores <- function(scores_mat, target_names) {
@@ -340,19 +343,22 @@ getTransferSelfBidirCorr <- function(tar_obj,
 
 #' Compute Spatial Self-Correlation (Within Cell Type)
 #'
-#' This is the core function that computes bidirectional correlation within a single
-#' cell type using its self-kernel matrix. It computes the mean of two correlations:
-#' cor(t(K) %*% A_w, A_w) and cor(A_w, K %*% A_w), where A_w is the cell score
-#' vector and K is the self-kernel matrix.
+#' This is the core function that computes spatial correlation within a single
+#' cell type as `cor(t(K) %*% A_w, A_w)`. The reverse expression is identical
+#' for the symmetric self-kernel and its paired row/column normalization.
 #'
 #' @param A_w Cell score vector/matrix (cells x 1)
 #' @param K_self Self-kernel matrix (cells x cells) for the same cell type
 #' @param normalize_K Character; method for normalizing the kernel matrix
+#'   `"none"` and `"row_or_col"` use the single nonredundant direction for a
+#'   symmetric self-kernel. `"sinkhorn_knopp"` averages both directions because
+#'   finite-tolerance scaling, especially a nonconverged fit, need not remain
+#'   exactly symmetric.
 #' @param filter_kernel Logical; whether to filter the kernel matrix
 #' @param K_row_sum_cutoff Numeric; cutoff for row sums when filtering
 #' @param K_col_sum_cutoff Numeric; cutoff for column sums when filtering
 #'
-#' @return A single numeric value: the mean of the two self-correlations
+#' @return A single numeric value: the self-correlation
 #' @keywords internal
 #' @noRd
 .computeSpatialSelfCorrelation <- function(A_w, K_self, 
@@ -376,28 +382,22 @@ getTransferSelfBidirCorr <- function(tar_obj,
   if (normalize_K == "row_or_col") {
     # Optimized row/column normalization
     K_row_sum <- rowSums(K_self)
-    K_col_sum <- colSums(K_self)
     K_row_sum[K_row_sum == 0] <- 1
-    K_col_sum[K_col_sum == 0] <- 1
 
     # Diagonal scaling preserves sparse storage, including triangular dsCMatrix
     # self-kernels. Division/sweep would materialize a dense matrix.
     if (inherits(K_self, "sparseMatrix")) {
       K_row_norm <- Matrix::Diagonal(x = 1 / K_row_sum) %*% K_self
-      K_col_norm <- K_self %*% Matrix::Diagonal(x = 1 / K_col_sum)
     } else {
       K_row_norm <- K_self / K_row_sum
-      K_col_norm <- sweep(K_self, 2, K_col_sum, "/")
     }
 
     # Use crossprod for more efficient matrix multiplication
     KA <- crossprod(K_row_norm, A_w)  # Equivalent to t(K_row_norm) %*% A_w
-    KB <- K_col_norm %*% A_w
 
   } else if (normalize_K == "none") {
     # Compute kernel-weighted vectors - use crossprod for efficiency
     KA <- crossprod(K_self, A_w)  # Equivalent to t(K_self) %*% A_w but faster
-    KB <- K_self %*% A_w
     
   } else if (normalize_K == "sinkhorn_knopp") {
     K_self <- sinkhorn_knopp(K_self)  # Use the optimized version
@@ -405,24 +405,27 @@ getTransferSelfBidirCorr <- function(tar_obj,
     KB <- K_self %*% A_w
   }
 
-  # Optimized correlation computation
-  # For self-correlation: cor(t(K) %*% A_w, A_w) and cor(A_w, K %*% A_w)
-  if (length(KA) == 1 && length(A_w) == 1) {
-    # Single values case
-    cor1 <- 1.0
-  } else {
-    # Use more efficient correlation calculation
-    cor1 <- stats::cor(as.vector(KA), as.vector(A_w))
+  if (length(KA) < 2L || length(A_w) < 2L) {
+    warning("Self-correlation requires at least two retained cells; returning NA.",
+            call. = FALSE)
+    return(NA_real_)
   }
-  
-  if (length(A_w) == 1 && length(KB) == 1) {
-    # Single values case  
-    cor2 <- 1.0
-  } else {
-    cor2 <- stats::cor(as.vector(A_w), as.vector(KB))
+
+  correlations <- suppressWarnings(
+    stats::cor(as.vector(KA), as.vector(A_w))
+  )
+  if (normalize_K == "sinkhorn_knopp") {
+    correlations <- c(
+      correlations,
+      suppressWarnings(stats::cor(as.vector(KB), as.vector(A_w)))
+    )
   }
-  
-  return((cor1 + cor2) * 0.5)  # Multiplication is faster than division
+  if (any(!is.finite(correlations))) {
+    warning("Self-correlation is undefined because a score vector has zero ",
+            "variance; returning NA.", call. = FALSE)
+    return(NA_real_)
+  }
+  mean(correlations)
 }
 
 #' Filter Self-Kernel Matrix (Square Matrix)
@@ -459,14 +462,17 @@ getTransferSelfBidirCorr <- function(tar_obj,
     K_self <- K_self[cells_keep, cells_keep, drop = FALSE]
     A_w <- A_w[cells_keep, , drop = FALSE]
     
-    cat("After row filtering: kept", n_kept, "of", n_original, "rows\n")
-    cat("After column filtering: kept", n_kept, "of", n_original, "columns\n")
   }
   
   return(list(K = K_self, A_w = A_w))
 }
 
 #' Compute Self-Bidirectional Correlation using skrCCA Results
+#'
+#' For a symmetric self-kernel the two nominal directions are algebraically
+#' identical, so this function computes the self-correlation once. The result
+#' is a within-type autocorrelation and is not calibrated to the same scale as
+#' the cross-type bidirectional statistic.
 #'
 #' This function computes self-bidirectional correlation directly from a CoPro object
 #' that has skrCCA results, using the object's own cell scores rather than transferred
@@ -534,7 +540,7 @@ computeSelfBidirCorr <- function(object,
     stop("No cell types of interest specified")
   }
   
-  sigma_name <- paste0("sigma_", sigma_choice)
+  sigma_name <- .sigmaName(sigma_choice)
   if (!sigma_name %in% names(object@skrCCAOut)) {
     stop(paste("Sigma value", sigma_choice, "not found in skrCCA results"))
   }

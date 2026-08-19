@@ -45,6 +45,21 @@ utils::globalVariables(c("getSlideList", "density.ppp", "pcfcross.inhom", "rlabe
 # ----------------------------------------------
 # Main: compute standardized colocalization score
 # ----------------------------------------------
+.scaleColocGeometry <- function(A, B, window_range, pixel_size_um) {
+  if (!is.numeric(pixel_size_um) || length(pixel_size_um) != 1L ||
+      !is.finite(pixel_size_um) || pixel_size_um <= 0) {
+    stop("pixel_size_um must be a positive finite numeric scalar")
+  }
+  list(
+    A = data.frame(x = A$x * pixel_size_um, y = A$y * pixel_size_um),
+    B = data.frame(x = B$x * pixel_size_um, y = B$y * pixel_size_um),
+    window_range = list(
+      xrange = window_range$xrange * pixel_size_um,
+      yrange = window_range$yrange * pixel_size_um
+    )
+  )
+}
+
 coloc_score <- function(
   A, B,                    # data.frames with columns x, y (in microns or pixels; see `units`)
   window_range,            # list(xrange = c(xmin,xmax), yrange = c(ymin,ymax)) in same units as A/B
@@ -58,12 +73,15 @@ coloc_score <- function(
   stopifnot(all(c("x","y") %in% names(A)), all(c("x","y") %in% names(B)))
 
   # Convert inputs to microns (standardized units)
-  s <- 1 / pixel_size_um  # Conversion factor: coordinate_units -> microns
-  Au <- data.frame(x = A$x * s, y = A$y * s)
-  Bu <- data.frame(x = B$x * s, y = B$y * s)
+  geometry <- .scaleColocGeometry(A, B, window_range, pixel_size_um)
+  Au <- geometry$A
+  Bu <- geometry$B
 
   # Window in microns (same units as converted coordinates)
-  win <- spatstat.geom::owin(xrange = window_range$xrange * s, yrange = window_range$yrange * s)
+  win <- spatstat.geom::owin(
+    xrange = geometry$window_range$xrange,
+    yrange = geometry$window_range$yrange
+  )
 
   # Build multitype pattern
   X <- spatstat.geom::superimpose(
@@ -170,10 +188,13 @@ coloc_score <- function(
 # Bounded in [0,1]; ~0.5 under random labelling (balanced abundances).
 
 nn_cross_fraction <- function(A, B, window_range, pixel_size_um = 1) {
-  s <- 1 / pixel_size_um  # Conversion factor: coordinate_units -> microns
-  Au <- data.frame(x = A$x * s, y = A$y * s)
-  Bu <- data.frame(x = B$x * s, y = B$y * s)
-  win <- spatstat.geom::owin(xrange = window_range$xrange * s, yrange = window_range$yrange * s)
+  geometry <- .scaleColocGeometry(A, B, window_range, pixel_size_um)
+  Au <- geometry$A
+  Bu <- geometry$B
+  win <- spatstat.geom::owin(
+    xrange = geometry$window_range$xrange,
+    yrange = geometry$window_range$yrange
+  )
   X <- spatstat.geom::superimpose(
     A = spatstat.geom::ppp(Au$x, Au$y, window = win, check = FALSE),
     B = spatstat.geom::ppp(Bu$x, Bu$y, window = win, check = FALSE),

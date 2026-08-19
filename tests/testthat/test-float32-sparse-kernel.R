@@ -799,3 +799,76 @@ test_that("nThreads wins over the legacy option, and NULL falls back to it", {
 
   expect_error(CoPro:::.float32KernelThreads(0L), "positive integer")
 })
+
+test_that("float32 CSR validation rejects malformed payloads", {
+  payload <- list(
+    p = c(0L, 1L, 1L), j = 0L,
+    x = writeBin(1, raw(), size = 4), Dim = c(2L, 2L),
+    transposed = FALSE, symmetric = FALSE
+  )
+
+  bad_pointer <- payload
+  bad_pointer$p <- c(0L, 1L, 0L)
+  expect_error(.newFloat32SparseKernel(bad_pointer), "row pointer")
+
+  bad_column <- payload
+  bad_column$j <- 2L
+  expect_error(.newFloat32SparseKernel(bad_column), "out of bounds")
+  expect_error(
+    float32_csr_sums_cpp(
+      payload$p, 2L, payload$x, payload$Dim, symmetric = FALSE
+    ),
+    "out of bounds"
+  )
+
+  diagonal_symmetric <- payload
+  diagonal_symmetric$symmetric <- TRUE
+  expect_error(
+    .newFloat32SparseKernel(diagonal_symmetric),
+    "strict upper triangle"
+  )
+  expect_error(
+    float32_csr_sums_cpp(
+      payload$p, payload$j, payload$x, payload$Dim, symmetric = TRUE
+    ),
+    "strict upper triangle"
+  )
+
+  lower_symmetric <- list(
+    p = c(0L, 0L, 1L, 1L), j = 0L,
+    x = writeBin(1, raw(), size = 4), Dim = c(3L, 3L),
+    transposed = FALSE, symmetric = TRUE
+  )
+  expect_error(
+    .newFloat32SparseKernel(lower_symmetric),
+    "strict upper triangle"
+  )
+})
+
+test_that("float32 coincident-cell handling warns without aborting", {
+  A <- matrix(c(0, 0, 0, 0, 1, 1), ncol = 2, byrow = TRUE)
+  B <- matrix(c(0, 0, 1, 1, 2, 2), ncol = 2, byrow = TRUE)
+  expect_warning(
+    built <- float32_csr_gaussian_kernels_cpp(
+      A, B, sigmas = 1, percentile = 0, scaling_factor = 1,
+      lower_limit = 1e-6, upper_quantile = 0.99,
+      truncate_low_distance = TRUE, symmetric = FALSE,
+      normalization = 0L, n_threads = 1L
+    ),
+    "Zero distances detected"
+  )
+  expect_length(built$kernels, 1L)
+})
+
+test_that("float32 construction rejects non-finite percentiles", {
+  coords <- matrix(c(0, 0, 1, 1), 2, 2, byrow = TRUE)
+  expect_error(
+    float32_csr_gaussian_kernels_cpp(
+      coords, coords, sigmas = 1, percentile = NaN,
+      scaling_factor = 1, lower_limit = 1e-7, upper_quantile = 0.85,
+      truncate_low_distance = FALSE, symmetric = TRUE,
+      normalization = 0L
+    ),
+    "percentile"
+  )
+})

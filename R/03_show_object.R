@@ -24,8 +24,21 @@ setMethod("show", "CoPro",
             cat("------------------------\n")
 
             # Main metrics
-            cat(sprintf("Number of cells: %d\n", nrow(object@normalizedData)))
-            cat(sprintf("Number of genes: %d\n", ncol(object@normalizedData)))
+            has_subset <- length(object@cellTypesSub) > 0L
+            data_for_summary <- if (has_subset) {
+              object@normalizedDataSub
+            } else {
+              object@normalizedData
+            }
+            n_cells <- if (has_subset) length(object@cellTypesSub) else
+              nrow(data_for_summary)
+            n_genes <- if (length(object@geneList) > 0L) {
+              length(object@geneList)
+            } else {
+              ncol(data_for_summary)
+            }
+            cat(sprintf("Number of cells: %d\n", n_cells))
+            cat(sprintf("Number of genes: %d\n", n_genes))
             
             # Handle slide information appropriately
             if (is_multi) {
@@ -103,7 +116,7 @@ setMethod("show", "CoPro",
             }
 
             # Approximate in-memory size
-            if (inherits(object@normalizedData, "IterableMatrix")) {
+            if (inherits(data_for_summary, "IterableMatrix")) {
               cat("\nApprox. object size: not reported (on-disk BPCells matrix)\n")
             } else {
               obj_size_bytes <- as.numeric(utils::object.size(object))

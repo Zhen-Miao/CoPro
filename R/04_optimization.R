@@ -9,9 +9,9 @@
 get_kernel_matrix_flat <- function(flat_kernels, sigma, ct_i, ct_j, slide = NULL) {
   # Create the expected flat name using the same logic as .createKernelMatrixName
   if (is.null(slide)) {
-    flat_name <- paste("kernel", paste0("sigma", sigma), ct_i, ct_j, sep = "|")
+    flat_name <- .createKernelMatrixName(sigma, ct_i, ct_j)
   } else {
-    flat_name <- paste("kernel", paste0("sigma", sigma), slide, ct_i, ct_j, sep = "|")
+    flat_name <- .createKernelMatrixName(sigma, ct_i, ct_j, slide = slide)
   }
   
   # Try direct access
@@ -21,9 +21,9 @@ get_kernel_matrix_flat <- function(flat_kernels, sigma, ct_i, ct_j, slide = NULL
   
   # Try symmetric access (swap ct_i and ct_j)
   if (is.null(slide)) {
-    symmetric_name <- paste("kernel", paste0("sigma", sigma), ct_j, ct_i, sep = "|")
+    symmetric_name <- .createKernelMatrixName(sigma, ct_j, ct_i)
   } else {
-    symmetric_name <- paste("kernel", paste0("sigma", sigma), slide, ct_j, ct_i, sep = "|")
+    symmetric_name <- .createKernelMatrixName(sigma, ct_j, ct_i, slide = slide)
   }
   
   if (symmetric_name %in% names(flat_kernels)) {

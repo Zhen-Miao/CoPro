@@ -11,7 +11,8 @@ computeNormalizedCorrelation(
   tol = 1e-04,
   calculationMode = "perSlide",
   normalizer = c("legacy", "unwhitened", "kernel", "variogram"),
-  normalizerControl = list()
+  normalizerControl = list(),
+  aggregateDenominator = c("sum", "rss")
 )
 
 \S4method{computeNormalizedCorrelation}{CoPro}(
@@ -19,7 +20,8 @@ computeNormalizedCorrelation(
   tol = 1e-04,
   calculationMode = "perSlide",
   normalizer = c("legacy", "unwhitened", "kernel", "variogram"),
-  normalizerControl = list()
+  normalizerControl = list(),
+  aggregateDenominator = c("sum", "rss")
 )
 
 \S4method{computeNormalizedCorrelation}{CoProMulti}(
@@ -27,7 +29,8 @@ computeNormalizedCorrelation(
   tol = 1e-04,
   calculationMode = "perSlide",
   normalizer = c("legacy", "unwhitened", "kernel", "variogram"),
-  normalizerControl = list()
+  normalizerControl = list(),
+  aggregateDenominator = c("sum", "rss")
 )
 }
 \arguments{
@@ -48,12 +51,19 @@ passed to \code{\link[=computeDistance]{computeDistance()}} (they are not stored
 normalized distance units, to skip estimation. Remaining entries
 (\code{maxCells}, \code{nBins}, \code{maxLagQuantile}, \code{minCorrelation}, \code{minBins},
 \code{lowerLimit}) tune the fit and the operator's truncation.}
+
+\item{aggregateDenominator}{For multi-slide aggregate mode, either \code{"sum"}
+(default; a denominator-weighted aggregate correlation) or \code{"rss"} (a
+null-standardized summed statistic under independent slides). Ignored for
+single-slide and per-slide calculations.}
 }
 \value{
 The object with the normalized correlation value
 between any pair of cell types
 added as a new slot, \code{normalizedCorrelation}. The resolved normalizer is
-attached as an attribute and can be read back with \code{\link[=getNormalizerInfo]{getNormalizerInfo()}}.
+attached as an attribute and can be read back with \code{\link[=getNormalizerInfo]{getNormalizerInfo()}}. In
+aggregate mode the selected \code{aggregateDenominator} is also attached to that
+result list.
 }
 \description{
 This method calculates the normalized correlation between pairs of cell types
@@ -69,13 +79,14 @@ The whitening operators decide how the criterion behaves across the sigma
 grid, and therefore which bandwidth \code{sigmaValueChoice} ends up at.
 
 \describe{
-\item{\code{"legacy"} (default)}{The historical behaviour, kept so that stored
-results reproduce: use the matched-sigma within-type kernels when the
+\item{\code{"legacy"} (default)}{Use the historical selection rule: use the
+matched-sigma within-type kernels when the
 object happens to contain them, and \eqn{R = I} otherwise. Because
 \code{computeKernelMatrix()} builds only cross-type kernels, this is normally
 \eqn{\|K_c\|_F}; but it silently becomes the whitened norm on an object
-that has been through \code{computeSelfKernel()}. Which one applied is now
-reported, and recorded by \code{\link[=getNormalizerInfo]{getNormalizerInfo()}}.}
+that has been through \code{computeSelfKernel()}. The whitening copy always
+has its unit diagonal restored so that it is a valid correlation
+operator. Which path applied is reported by \code{\link[=getNormalizerInfo]{getNormalizerInfo()}}.}
 \item{\code{"unwhitened"}}{Force \eqn{R_x = R_y = I}, i.e. \eqn{\|K_c\|_F}. This
 assumes spatially independent scores, so it under-counts noise at large
 sigma and biases the selected bandwidth upward.}
@@ -109,6 +120,23 @@ what you believe about the tissue, supply \code{normalizerControl$range}
 if you have a better estimate, and prefer a permutation null when the
 selected bandwidth matters.}
 }
+}
+
+\section{Multi-slide aggregation}{
+
+In \code{calculationMode = "aggregate"}, let \eqn{T_s} be the numerator and
+\eqn{d_s} its per-slide denominator. \code{aggregateDenominator = "sum"} returns
+\eqn{\sum_s T_s / \sum_s d_s}, the \eqn{d_s}-weighted mean of the per-slide
+normalized correlations. \code{aggregateDenominator = "rss"} instead returns
+\eqn{\sum_s T_s / \sqrt{\sum_s d_s^2}}, the null-standardized summed
+statistic when slides are independent. The latter is not an aggregate
+correlation and can grow with the number of concordant slides.
+
+The numerator is not centered again here. Its correlation interpretation
+relies on the PC scores already being centered; objects fitted with
+\code{computePCA(center = FALSE)} retain score-mean coupling in the numerator.
+Sigma selection averages the available pair/slide rows with \code{na.rm = TRUE},
+so users should inspect missingness when valid-pair coverage varies by sigma.
 }
 
 \seealso{

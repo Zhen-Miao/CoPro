@@ -13,7 +13,8 @@ getTransferNormCorr(
   sigma_choice_tar = NULL,
   normalizer = c("legacy", "unwhitened", "kernel", "variogram"),
   normalizerControl = list(),
-  verbose = TRUE
+  verbose = TRUE,
+  aggregateDenominator = c("sum", "rss")
 )
 }
 \arguments{
@@ -45,6 +46,12 @@ is fitted from the target object's PC scores, never from the transferred
 canonical scores, which would leak signal into the denominator.}
 
 \item{verbose}{Logical; whether to print progress messages.}
+
+\item{aggregateDenominator}{For multi-slide aggregate mode, either \code{"sum"}
+(default; \eqn{\sum_s T_s / \sum_s d_s}) or \code{"rss"} (the independent-slide
+null-standardized statistic \eqn{\sum_s T_s / \sqrt{\sum_s d_s^2}}).
+Ignored for single-slide and per-slide calculations. See
+\code{\link[=computeNormalizedCorrelation]{computeNormalizedCorrelation()}}.}
 }
 \value{
 A list with one element named \code{paste0("sigma_", sigma_choice)}, whose
@@ -52,7 +59,8 @@ value is a data.frame of results. For single-slide objects, the data.frame has
 columns \code{sigmaValue}, \code{cellType1}, \code{cellType2}, \code{CC_index}, \code{normalizedCorrelation}.
 For multi-slide objects in \code{perSlide} mode, the data.frame additionally includes
 \code{slideID}. For \code{aggregate} mode, the correlation column is named
-\code{aggregateCorrelation}.
+\code{aggregateCorrelation}, and the selected \code{aggregateDenominator} is attached
+to the returned list as an attribute.
 }
 \description{
 Given a target object and a list of transferred cell scores (per cell type),

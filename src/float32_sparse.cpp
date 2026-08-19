@@ -331,17 +331,40 @@ void validate_csr(
     bool symmetric = false) {
   if (dims.size() != 2) stop("dims must have length two.");
   if (dims[0] < 0 || dims[1] < 0) stop("dims must be nonnegative.");
-  if (p.size() != dims[0] + 1) {
+  if (p.size() != static_cast<R_xlen_t>(dims[0]) + 1) {
     stop("CSR row pointer length does not match nrow.");
+  }
+  if (j.size() > std::numeric_limits<int>::max()) {
+    stop("CSR nonzero count exceeds the 32-bit index limit.");
   }
   if (p[0] != 0 || p[p.size() - 1] != j.size()) {
     stop("Invalid CSR row pointer.");
+  }
+  for (R_xlen_t index = 0; index < p.size(); ++index) {
+    if (p[index] < 0 || p[index] > j.size() ||
+        (index > 0 && p[index] < p[index - 1])) {
+      stop("CSR row pointers must be nonnegative and non-decreasing.");
+    }
+  }
+  for (R_xlen_t index = 0; index < j.size(); ++index) {
+    if (j[index] < 0 || j[index] >= dims[1]) {
+      stop("CSR column index is out of bounds.");
+    }
   }
   if (x.size() != static_cast<R_xlen_t>(j.size()) * 4) {
     stop("Float32 value buffer does not match the CSR nonzero count.");
   }
   if (symmetric && dims[0] != dims[1]) {
     stop("A symmetric CSR kernel must be square.");
+  }
+  if (symmetric) {
+    for (int row = 0; row < dims[0]; ++row) {
+      for (int position = p[row]; position < p[row + 1]; ++position) {
+        if (j[position] <= row) {
+          stop("A symmetric CSR kernel must store only its strict upper triangle.");
+        }
+      }
+    }
   }
 }
 
@@ -380,6 +403,9 @@ List float32_csr_gaussian_kernels_cpp(
   }
   if (n_a == 0 || n_b == 0) stop("Coordinate blocks must be nonempty.");
   if (sigmas.size() == 0) stop("At least one sigma is required.");
+  if (!R_finite(percentile) || percentile < 0.0) {
+    stop("percentile must be nonnegative and finite.");
+  }
   if (!R_finite(scaling_factor) || scaling_factor <= 0.0) {
     stop("scaling_factor must be positive and finite.");
   }
@@ -457,8 +483,7 @@ List float32_csr_gaussian_kernels_cpp(
     std::ceil(estimated * 1.15)
   );
   if (reserve_double > static_cast<double>(std::numeric_limits<int>::max())) {
-    stop("A single float32 sparse kernel block would exceed the 32-bit ",
-         "compressed-index limit.");
+    stop("A single float32 sparse kernel block would exceed the 32-bit compressed-index limit.");
   }
 
   // Enumerate neighbours in parallel over disjoint row ranges. Each worker
@@ -474,7 +499,9 @@ List float32_csr_gaussian_kernels_cpp(
   const int enumeration_threads =
     normalized_thread_count(n_threads, std::max(1, n_a));
   std::vector<std::vector<FloatEdge> > thread_edges(enumeration_threads);
-  std::vector<int> edge_pointer(static_cast<std::size_t>(n_a) + 1U, 0);
+  std::vector<std::size_t> edge_pointer(
+    static_cast<std::size_t>(n_a) + 1U, 0U
+  );
   std::vector<std::size_t> thread_zero_counts(enumeration_threads, 0U);
   std::vector<float> thread_minimum(
     enumeration_threads, std::numeric_limits<float>::infinity());
@@ -515,7 +542,7 @@ List float32_csr_gaussian_kernels_cpp(
             );
             // Per-row counts now; turned into global offsets after the join.
             edge_pointer[static_cast<std::size_t>(row) + 1U] =
-              static_cast<int>(local.size());
+              local.size();
           }
           thread_zero_counts[index] = zeros;
           thread_minimum[index] = minimum;
@@ -543,8 +570,7 @@ List float32_csr_gaussian_kernels_cpp(
       thread_edges[index].capacity() * sizeof(FloatEdge);
   }
   if (total_edges > static_cast<std::size_t>(std::numeric_limits<int>::max())) {
-    stop("A single float32 sparse kernel block exceeds the 32-bit ",
-         "compressed-index limit.");
+    stop("A single float32 sparse kernel block exceeds the 32-bit compressed-index limit.");
   }
 
   // Concatenating k private buffers into one contiguous array costs a transient
@@ -577,17 +603,24 @@ List float32_csr_gaussian_kernels_cpp(
       // the concatenated one.
       for (int row = range_begin[index]; row < range_begin[index + 1]; ++row) {
         edge_pointer[static_cast<std::size_t>(row) + 1U] +=
-          static_cast<int>(offset);
+          offset;
       }
       offset += local.size();
       std::vector<FloatEdge>().swap(local);  // release as we go
     }
   }
 
-  if (zero_distance_count > 0U &&
-      std::isfinite(static_cast<double>(minimum_nonzero))) {
+  if (zero_distance_count > 0U) {
+    warning("Zero distances detected in a float32 kernel block; applying dense-compatible nearest-distance handling.");
     for (FloatEdge& edge : edges) {
-      if (edge.distance == 0.0f) edge.distance = minimum_nonzero;
+      if (edge.distance == 0.0f) {
+        // If no nonzero pair lies inside the retained support, the true
+        // block-global minimum lies outside it and would be dropped by every
+        // requested kernel. Infinity represents that drop without an O(n*m)
+        // fallback scan.
+        edge.distance = std::isfinite(static_cast<double>(minimum_nonzero)) ?
+          minimum_nonzero : std::numeric_limits<float>::infinity();
+      }
     }
   }
 
@@ -604,7 +637,7 @@ List float32_csr_gaussian_kernels_cpp(
 
     for (int row = 0; row < n_a; ++row) {
       int row_count = 0;
-      for (int position = edge_pointer[row];
+      for (std::size_t position = edge_pointer[row];
            position < edge_pointer[row + 1]; ++position) {
         const float scaled = edges[position].distance * inverse_sigma;
         const float weight = std::exp(-0.5f * scaled * scaled);
@@ -656,7 +689,7 @@ List float32_csr_gaussian_kernels_cpp(
     );
     if (normalization != 0) {
       for (int row = 0; row < n_a; ++row) {
-        for (int position = edge_pointer[row];
+        for (std::size_t position = edge_pointer[row];
              position < edge_pointer[row + 1]; ++position) {
           const float scaled = edges[position].distance * inverse_sigma;
           float weight = std::exp(-0.5f * scaled * scaled);
@@ -720,7 +753,7 @@ List float32_csr_gaussian_kernels_cpp(
         static_cast<std::size_t>(n_a), 0
       );
       for (int row = 0; row < n_a; ++row) {
-        for (int position = edge_pointer[row];
+        for (std::size_t position = edge_pointer[row];
              position < edge_pointer[row + 1]; ++position) {
           const float scaled = edges[position].distance * inverse_sigma;
           float weight = std::exp(-0.5f * scaled * scaled);
@@ -744,8 +777,7 @@ List float32_csr_gaussian_kernels_cpp(
           static_cast<std::int64_t>(output_pointer[row]) +
             row_counts[row];
         if (next > std::numeric_limits<int>::max()) {
-          stop("A normalized float32 sparse kernel exceeds the 32-bit ",
-               "index limit.");
+          stop("A normalized float32 sparse kernel exceeds the 32-bit index limit.");
         }
         output_pointer[row + 1] = static_cast<int>(next);
       }
@@ -762,7 +794,7 @@ List float32_csr_gaussian_kernels_cpp(
         cursor[row] = output_pointer[row];
       }
       for (int row = 0; row < n_a; ++row) {
-        for (int position = edge_pointer[row];
+        for (std::size_t position = edge_pointer[row];
              position < edge_pointer[row + 1]; ++position) {
           const float scaled = edges[position].distance * inverse_sigma;
           float weight = std::exp(-0.5f * scaled * scaled);
@@ -786,7 +818,7 @@ List float32_csr_gaussian_kernels_cpp(
     } else {
       int output_position = 0;
       for (int row = 0; row < n_a; ++row) {
-        for (int position = edge_pointer[row];
+        for (std::size_t position = edge_pointer[row];
              position < edge_pointer[row + 1]; ++position) {
           const float scaled = edges[position].distance * inverse_sigma;
           float weight = std::exp(-0.5f * scaled * scaled);
@@ -825,7 +857,7 @@ List float32_csr_gaussian_kernels_cpp(
     // consumed, so measured RSS stays far below it (see RESULTS.md).
     _["temporary_bytes"] =
       static_cast<double>(peak_edge_bytes) +
-      static_cast<double>(edge_pointer.capacity() * sizeof(int)),
+      static_cast<double>(edge_pointer.capacity() * sizeof(std::size_t)),
     _["zero_distances_replaced"] =
       static_cast<double>(zero_distance_count)
   );

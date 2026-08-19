@@ -364,13 +364,13 @@ plotG12Functions <- function(object,
   nB <- nrow(B)
   
   # Convert inputs to microns (standardized units)
-  s <- 1 / pixel_size_um  # Conversion factor: coordinate_units -> microns
-  Au <- data.frame(x = A$x * s, y = A$y * s)
-  Bu <- data.frame(x = B$x * s, y = B$y * s)
+  geometry <- .scaleColocGeometry(A, B, window_range, pixel_size_um)
+  Au <- geometry$A
+  Bu <- geometry$B
   
   # Window in microns (same units as converted coordinates)
-  win <- spatstat.geom::owin(xrange = window_range$xrange * s, 
-                            yrange = window_range$yrange * s)
+  win <- spatstat.geom::owin(xrange = geometry$window_range$xrange,
+                            yrange = geometry$window_range$yrange)
   
   # Build multitype pattern
   all_coords <- rbind(
