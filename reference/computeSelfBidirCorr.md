@@ -1,10 +1,9 @@
 # Compute Self-Bidirectional Correlation using skrCCA Results
 
-This function computes self-bidirectional correlation directly from a
-CoPro object that has skrCCA results, using the object's own cell scores
-rather than transferred scores. This is useful for computing spatial
-autocorrelation patterns within each cell type using the object's native
-skrCCA results.
+For a symmetric self-kernel the two nominal directions are algebraically
+identical, so this function computes the self-correlation once. The
+result is a within-type autocorrelation and is not calibrated to the
+same scale as the cross-type bidirectional statistic.
 
 ## Usage
 
@@ -66,6 +65,14 @@ computeSelfBidirCorr(
 A list with one element named `paste0("sigma_", sigma_choice)`, whose
 value is a data.frame of results with the same structure as
 [`getTransferSelfBidirCorr()`](https://zhen-miao.github.io/CoPro/reference/getTransferSelfBidirCorr.md).
+
+## Details
+
+This function computes self-bidirectional correlation directly from a
+CoPro object that has skrCCA results, using the object's own cell scores
+rather than transferred scores. This is useful for computing spatial
+autocorrelation patterns within each cell type using the object's native
+skrCCA results.
 
 ## Examples
 

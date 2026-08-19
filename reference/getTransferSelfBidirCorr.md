@@ -89,10 +89,13 @@ correlation column is named `aggregateSelfCorrelation`.
 
 ## Details
 
-The self-bidirectional correlation is computed as the mean of two
-correlations: cor(t(K) %*% A_w, A_w) and cor(A_w, K %*% A_w), where A_w
-is the transferred cell score vector for a cell type and K is the
-self-kernel matrix for that cell type.
+The self-bidirectional correlation is `cor(t(K) %*% A_w, A_w)`, where
+`A_w` is the transferred cell score vector and `K` is the self-kernel.
+For a symmetric self-kernel the nominal reverse direction is
+algebraically identical, so it is not calculated a second time. This
+within-type spatial autocorrelation is not calibrated to the same scale
+as the cross-type bidirectional statistic; compare self values within
+the same analysis only.
 
 ## Examples
 

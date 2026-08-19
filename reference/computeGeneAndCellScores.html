@@ -86,7 +86,10 @@ raw expression. That was already true under pooled preprocessing. Under the
 <code>CoProMulti</code> default (<code>computePCA(center_per_slide = TRUE)</code>) the
 standardization is per (slide, cell type), so when the stored slide scales
 differ there is no single equivalent coefficient vector in raw units; the
-per-slide maps are kept on <code>pcaGlobal[[ct]]$slideCenter</code> and <code>$slideScale</code>.</p>
+per-slide maps are kept on <code>pcaGlobal[[ct]]$slideCenter</code> and <code>$slideScale</code>.
+Standard deviations below <code>1e-5</code> (and non-finite values) are treated as one
+during this inverse scaling, adding a final guard against unstable weights
+from a numerically rank-deficient PCA.</p>
 <p>For gene weights that do not depend on the PCA coordinate system, prefer
 <code><a href="computeRegressionGeneScores.html">computeRegressionGeneScores()</a></code>, which regresses cell scores on expression
 directly. Those are also more robust to <code>nPCA</code> and reproduce better across

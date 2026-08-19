@@ -123,7 +123,9 @@ uses all <code>object@sigmaValues</code> that have kernels and weights.</p></dd>
 <dt id="arg-num-bins-x-num-bins-y">num_bins_x, num_bins_y<a class="anchor" aria-label="anchor" href="#arg-num-bins-x-num-bins-y"></a></dt>
 <dd><p>Bin grid for <code>permu_method = "bin"</code>. Default
 <code>NULL</code> is sigma-aware (see <code><a href="dot-sigmaAwareBins.html">.sigmaAwareBins()</a></code>); the same grid is shared
-across the sigma sweep. Pass integers to override.</p></dd>
+across the sigma sweep. Because it is sized from the observed selected
+bandwidth, the default grid is mildly data-adaptive; pass integers to
+remove that second-order circularity.</p></dd>
 
 
 <dt id="arg-match-quantile">match_quantile<a class="anchor" aria-label="anchor" href="#arg-match-quantile"></a></dt>

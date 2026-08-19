@@ -85,7 +85,9 @@ runSkrCCAPermu(
   sizes the grid automatically from the kernel bandwidth so each patch
   is ~2\*sigma wide on the normalized distance scale (see
   [`.sigmaAwareBins()`](https://zhen-miao.github.io/CoPro/reference/dot-sigmaAwareBins.md)).
-  Pass an explicit integer to override. Use
+  When that bandwidth is `object@sigmaValueChoice`, the null grid is
+  mildly data-adaptive (a second-order circularity). Pass an explicit
+  integer, or a predeclared `sigma`, to avoid it. Use
   [`diagnose_bin_distribution()`](https://zhen-miao.github.io/CoPro/reference/diagnose_bin_distribution.md)
   to inspect a chosen grid. **More bins = better preserve local
   structure = lower FPR.**

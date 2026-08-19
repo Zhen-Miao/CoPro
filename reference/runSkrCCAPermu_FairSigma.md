@@ -59,7 +59,8 @@ runSkrCCAPermu_FairSigma(
   grid from the observed best bandwidth (`sigmaValueChoice`) via
   [`.sigmaAwareBins()`](https://zhen-miao.github.io/CoPro/reference/dot-sigmaAwareBins.md);
   the same grid (and hence the same permutation) is shared across the
-  sigma sweep. Pass an integer to override.
+  sigma sweep. This makes the grid mildly data-adaptive; pass an integer
+  to remove that second-order circularity.
 
 - num_bins_y:
 

@@ -15,7 +15,8 @@ computeNormalizedCorrelation(
   tol = 1e-04,
   calculationMode = "perSlide",
   normalizer = c("legacy", "unwhitened", "kernel", "variogram"),
-  normalizerControl = list()
+  normalizerControl = list(),
+  aggregateDenominator = c("sum", "rss")
 )
 
 # S4 method for class 'CoPro'
@@ -24,7 +25,8 @@ computeNormalizedCorrelation(
   tol = 1e-04,
   calculationMode = "perSlide",
   normalizer = c("legacy", "unwhitened", "kernel", "variogram"),
-  normalizerControl = list()
+  normalizerControl = list(),
+  aggregateDenominator = c("sum", "rss")
 )
 
 # S4 method for class 'CoProMulti'
@@ -33,7 +35,8 @@ computeNormalizedCorrelation(
   tol = 1e-04,
   calculationMode = "perSlide",
   normalizer = c("legacy", "unwhitened", "kernel", "variogram"),
-  normalizerControl = list()
+  normalizerControl = list(),
+  aggregateDenominator = c("sum", "rss")
 )
 ```
 
@@ -69,12 +72,21 @@ computeNormalizedCorrelation(
   `minCorrelation`, `minBins`, `lowerLimit`) tune the fit and the
   operator's truncation.
 
+- aggregateDenominator:
+
+  For multi-slide aggregate mode, either `"sum"` (default; a
+  denominator-weighted aggregate correlation) or `"rss"` (a
+  null-standardized summed statistic under independent slides). Ignored
+  for single-slide and per-slide calculations.
+
 ## Value
 
 The object with the normalized correlation value between any pair of
 cell types added as a new slot, `normalizedCorrelation`. The resolved
 normalizer is attached as an attribute and can be read back with
 [`getNormalizerInfo()`](https://zhen-miao.github.io/CoPro/reference/getNormalizerInfo.md).
+In aggregate mode the selected `aggregateDenominator` is also attached
+to that result list.
 
 ## Choosing the normalizer
 
@@ -83,15 +95,16 @@ sigma grid, and therefore which bandwidth `sigmaValueChoice` ends up at.
 
 - `"legacy"` (default):
 
-  The historical behaviour, kept so that stored results reproduce: use
-  the matched-sigma within-type kernels when the object happens to
-  contain them, and \\R = I\\ otherwise. Because
+  Use the historical selection rule: use the matched-sigma within-type
+  kernels when the object happens to contain them, and \\R = I\\
+  otherwise. Because
   [`computeKernelMatrix()`](https://zhen-miao.github.io/CoPro/reference/computeKernelMatrix.md)
   builds only cross-type kernels, this is normally \\\\K_c\\\_F\\; but
   it silently becomes the whitened norm on an object that has been
   through
   [`computeSelfKernel()`](https://zhen-miao.github.io/CoPro/reference/computeSelfKernel.md).
-  Which one applied is now reported, and recorded by
+  The whitening copy always has its unit diagonal restored so that it is
+  a valid correlation operator. Which path applied is reported by
   [`getNormalizerInfo()`](https://zhen-miao.github.io/CoPro/reference/getNormalizerInfo.md).
 
 - `"unwhitened"`:
@@ -137,6 +150,24 @@ sigma grid, and therefore which bandwidth `sigmaValueChoice` ends up at.
   what you believe about the tissue, supply `normalizerControl$range` if
   you have a better estimate, and prefer a permutation null when the
   selected bandwidth matters.
+
+## Multi-slide aggregation
+
+In `calculationMode = "aggregate"`, let \\T_s\\ be the numerator and
+\\d_s\\ its per-slide denominator. `aggregateDenominator = "sum"`
+returns \\\sum_s T_s / \sum_s d_s\\, the \\d_s\\-weighted mean of the
+per-slide normalized correlations. `aggregateDenominator = "rss"`
+instead returns \\\sum_s T_s / \sqrt{\sum_s d_s^2}\\, the
+null-standardized summed statistic when slides are independent. The
+latter is not an aggregate correlation and can grow with the number of
+concordant slides.
+
+The numerator is not centered again here. Its correlation interpretation
+relies on the PC scores already being centered; objects fitted with
+`computePCA(center = FALSE)` retain score-mean coupling in the
+numerator. Sigma selection averages the available pair/slide rows with
+`na.rm = TRUE`, so users should inspect missingness when valid-pair
+coverage varies by sigma.
 
 ## See also
 

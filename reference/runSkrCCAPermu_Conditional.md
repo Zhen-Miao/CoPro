@@ -65,8 +65,9 @@ runSkrCCAPermu_Conditional(
   Bin grid for `permu_method = "bin"`. Default `NULL` is sigma-aware
   (see
   [`.sigmaAwareBins()`](https://zhen-miao.github.io/CoPro/reference/dot-sigmaAwareBins.md));
-  the same grid is shared across the sigma sweep. Pass integers to
-  override.
+  the same grid is shared across the sigma sweep. Because it is sized
+  from the observed selected bandwidth, the default grid is mildly
+  data-adaptive; pass integers to remove that second-order circularity.
 
 - match_quantile:
 

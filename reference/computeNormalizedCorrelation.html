@@ -75,7 +75,8 @@ bilinear statistic \(T = a' K b\) by the whitened-Frobenius norm
 <span>  tol <span class="op">=</span> <span class="fl">1e-04</span>,</span>
 <span>  calculationMode <span class="op">=</span> <span class="st">"perSlide"</span>,</span>
 <span>  normalizer <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"legacy"</span>, <span class="st">"unwhitened"</span>, <span class="st">"kernel"</span>, <span class="st">"variogram"</span><span class="op">)</span>,</span>
-<span>  normalizerControl <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span><span class="op">)</span></span>
+<span>  normalizerControl <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span><span class="op">)</span>,</span>
+<span>  aggregateDenominator <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"sum"</span>, <span class="st">"rss"</span><span class="op">)</span></span>
 <span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># S4 method for class 'CoPro'</span></span>
@@ -84,7 +85,8 @@ bilinear statistic \(T = a' K b\) by the whitened-Frobenius norm
 <span>  tol <span class="op">=</span> <span class="fl">1e-04</span>,</span>
 <span>  calculationMode <span class="op">=</span> <span class="st">"perSlide"</span>,</span>
 <span>  normalizer <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"legacy"</span>, <span class="st">"unwhitened"</span>, <span class="st">"kernel"</span>, <span class="st">"variogram"</span><span class="op">)</span>,</span>
-<span>  normalizerControl <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span><span class="op">)</span></span>
+<span>  normalizerControl <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span><span class="op">)</span>,</span>
+<span>  aggregateDenominator <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"sum"</span>, <span class="st">"rss"</span><span class="op">)</span></span>
 <span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># S4 method for class 'CoProMulti'</span></span>
@@ -93,7 +95,8 @@ bilinear statistic \(T = a' K b\) by the whitened-Frobenius norm
 <span>  tol <span class="op">=</span> <span class="fl">1e-04</span>,</span>
 <span>  calculationMode <span class="op">=</span> <span class="st">"perSlide"</span>,</span>
 <span>  normalizer <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"legacy"</span>, <span class="st">"unwhitened"</span>, <span class="st">"kernel"</span>, <span class="st">"variogram"</span><span class="op">)</span>,</span>
-<span>  normalizerControl <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span><span class="op">)</span></span>
+<span>  normalizerControl <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span><span class="op">)</span>,</span>
+<span>  aggregateDenominator <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"sum"</span>, <span class="st">"rss"</span><span class="op">)</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -128,13 +131,22 @@ normalized distance units, to skip estimation. Remaining entries
 (<code>maxCells</code>, <code>nBins</code>, <code>maxLagQuantile</code>, <code>minCorrelation</code>, <code>minBins</code>,
 <code>lowerLimit</code>) tune the fit and the operator's truncation.</p></dd>
 
+
+<dt id="arg-aggregatedenominator">aggregateDenominator<a class="anchor" aria-label="anchor" href="#arg-aggregatedenominator"></a></dt>
+<dd><p>For multi-slide aggregate mode, either <code>"sum"</code>
+(default; a denominator-weighted aggregate correlation) or <code>"rss"</code> (a
+null-standardized summed statistic under independent slides). Ignored for
+single-slide and per-slide calculations.</p></dd>
+
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
     <p>The object with the normalized correlation value
 between any pair of cell types
 added as a new slot, <code>normalizedCorrelation</code>. The resolved normalizer is
-attached as an attribute and can be read back with <code><a href="getNormalizerInfo.html">getNormalizerInfo()</a></code>.</p>
+attached as an attribute and can be read back with <code><a href="getNormalizerInfo.html">getNormalizerInfo()</a></code>. In
+aggregate mode the selected <code>aggregateDenominator</code> is also attached to that
+result list.</p>
     </div>
     <div class="section level2">
     <h2 id="choosing-the-normalizer">Choosing the normalizer<a class="anchor" aria-label="anchor" href="#choosing-the-normalizer"></a></h2>
@@ -143,13 +155,14 @@ attached as an attribute and can be read back with <code><a href="getNormalizerI
 <p>The whitening operators decide how the criterion behaves across the sigma
 grid, and therefore which bandwidth <code>sigmaValueChoice</code> ends up at.</p>
 <dl><dt><code>"legacy"</code> (default)</dt>
-<dd><p>The historical behaviour, kept so that stored
-results reproduce: use the matched-sigma within-type kernels when the
+<dd><p>Use the historical selection rule: use the
+matched-sigma within-type kernels when the
 object happens to contain them, and \(R = I\) otherwise. Because
 <code><a href="computeKernelMatrix.html">computeKernelMatrix()</a></code> builds only cross-type kernels, this is normally
 \(\|K_c\|_F\); but it silently becomes the whitened norm on an object
-that has been through <code><a href="computeSelfKernel.html">computeSelfKernel()</a></code>. Which one applied is now
-reported, and recorded by <code><a href="getNormalizerInfo.html">getNormalizerInfo()</a></code>.</p></dd>
+that has been through <code><a href="computeSelfKernel.html">computeSelfKernel()</a></code>. The whitening copy always
+has its unit diagonal restored so that it is a valid correlation
+operator. Which path applied is reported by <code><a href="getNormalizerInfo.html">getNormalizerInfo()</a></code>.</p></dd>
 
 <dt><code>"unwhitened"</code></dt>
 <dd><p>Force \(R_x = R_y = I\), i.e. \(\|K_c\|_F\). This
@@ -190,6 +203,23 @@ selected bandwidth matters.</p></dd>
 
 
 </dl></div>
+    <div class="section level2">
+    <h2 id="multi-slide-aggregation">Multi-slide aggregation<a class="anchor" aria-label="anchor" href="#multi-slide-aggregation"></a></h2>
+
+
+<p>In <code>calculationMode = "aggregate"</code>, let \(T_s\) be the numerator and
+\(d_s\) its per-slide denominator. <code>aggregateDenominator = "sum"</code> returns
+\(\sum_s T_s / \sum_s d_s\), the \(d_s\)-weighted mean of the per-slide
+normalized correlations. <code>aggregateDenominator = "rss"</code> instead returns
+\(\sum_s T_s / \sqrt{\sum_s d_s^2}\), the null-standardized summed
+statistic when slides are independent. The latter is not an aggregate
+correlation and can grow with the number of concordant slides.</p>
+<p>The numerator is not centered again here. Its correlation interpretation
+relies on the PC scores already being centered; objects fitted with
+<code>computePCA(center = FALSE)</code> retain score-mean coupling in the numerator.
+Sigma selection averages the available pair/slide rows with <code>na.rm = TRUE</code>,
+so users should inspect missingness when valid-pair coverage varies by sigma.</p>
+    </div>
     <div class="section level2">
     <h2 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a></h2>
     <div class="dont-index"><p><code><a href="runSkrCCA.html">runSkrCCA()</a></code>, <code><a href="computeBidirCorrelation.html">computeBidirCorrelation()</a></code>,

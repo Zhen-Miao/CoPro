@@ -16,7 +16,8 @@ getTransferNormCorr(
   sigma_choice_tar = NULL,
   normalizer = c("legacy", "unwhitened", "kernel", "variogram"),
   normalizerControl = list(),
-  verbose = TRUE
+  verbose = TRUE,
+  aggregateDenominator = c("sum", "rss")
 )
 ```
 
@@ -70,6 +71,14 @@ getTransferNormCorr(
 
   Logical; whether to print progress messages.
 
+- aggregateDenominator:
+
+  For multi-slide aggregate mode, either `"sum"` (default; \\\sum_s T_s
+  / \sum_s d_s\\) or `"rss"` (the independent-slide null-standardized
+  statistic \\\sum_s T_s / \sqrt{\sum_s d_s^2}\\). Ignored for
+  single-slide and per-slide calculations. See
+  [`computeNormalizedCorrelation()`](https://zhen-miao.github.io/CoPro/reference/computeNormalizedCorrelation.md).
+
 ## Value
 
 A list with one element named `paste0("sigma_", sigma_choice)`, whose
@@ -78,7 +87,8 @@ data.frame has columns `sigmaValue`, `cellType1`, `cellType2`,
 `CC_index`, `normalizedCorrelation`. For multi-slide objects in
 `perSlide` mode, the data.frame additionally includes `slideID`. For
 `aggregate` mode, the correlation column is named
-`aggregateCorrelation`.
+`aggregateCorrelation`, and the selected `aggregateDenominator` is
+attached to the returned list as an attribute.
 
 ## Details
 

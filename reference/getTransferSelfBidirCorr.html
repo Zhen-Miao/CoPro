@@ -144,9 +144,12 @@ For multi-slide objects in <code>perSlide</code> mode, the data.frame additional
     </div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
-    <p>The self-bidirectional correlation is computed as the mean of two correlations:
-cor(t(K) %<em>% A_w, A_w) and cor(A_w, K %</em>% A_w), where A_w is the transferred cell score
-vector for a cell type and K is the self-kernel matrix for that cell type.</p>
+    <p>The self-bidirectional correlation is <code>cor(t(K) %*% A_w, A_w)</code>, where
+<code>A_w</code> is the transferred cell score vector and <code>K</code> is the self-kernel. For a
+symmetric self-kernel the nominal reverse direction is algebraically
+identical, so it is not calculated a second time. This within-type spatial
+autocorrelation is not calibrated to the same scale as the cross-type
+bidirectional statistic; compare self values within the same analysis only.</p>
     </div>
 
     <div class="section level2">

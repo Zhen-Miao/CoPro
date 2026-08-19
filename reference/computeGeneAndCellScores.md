@@ -35,7 +35,9 @@ the `CoProMulti` default (`computePCA(center_per_slide = TRUE)`) the
 standardization is per (slide, cell type), so when the stored slide
 scales differ there is no single equivalent coefficient vector in raw
 units; the per-slide maps are kept on `pcaGlobal[[ct]]$slideCenter` and
-`$slideScale`.
+`$slideScale`. Standard deviations below `1e-5` (and non-finite values)
+are treated as one during this inverse scaling, adding a final guard
+against unstable weights from a numerically rank-deficient PCA.
 
 For gene weights that do not depend on the PCA coordinate system, prefer
 [`computeRegressionGeneScores()`](https://zhen-miao.github.io/CoPro/reference/computeRegressionGeneScores.md),

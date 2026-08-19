@@ -124,7 +124,9 @@ fixed, so that type is permuted and the null is the within-type one.</p></dd>
 <dd><p>Number of bins in x direction for bin-wise permutation.
 Default <code>NULL</code> sizes the grid automatically from the kernel bandwidth so
 each patch is ~2*sigma wide on the normalized distance scale (see
-<code><a href="dot-sigmaAwareBins.html">.sigmaAwareBins()</a></code>). Pass an explicit integer to override.
+<code><a href="dot-sigmaAwareBins.html">.sigmaAwareBins()</a></code>). When that bandwidth is <code>object@sigmaValueChoice</code>,
+the null grid is mildly data-adaptive (a second-order circularity). Pass an
+explicit integer, or a predeclared <code>sigma</code>, to avoid it.
 Use <code><a href="diagnose_bin_distribution.html">diagnose_bin_distribution()</a></code> to inspect a chosen grid.
 <strong>More bins = better preserve local structure = lower FPR.</strong></p></dd>
 
