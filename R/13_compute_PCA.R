@@ -94,10 +94,18 @@ setGeneric("computePCA",
   if (center && scale.) {
     return(center_scale_matrix_opt(mat))
   } else if (center) {
+    col_means <- colMeans(mat)
+    if (.is_bpcells(mat)) {
+      # sweep() builds a dense cells-by-genes array of the means to subtract,
+      # which both defeats out-of-core storage and is not an operand any
+      # IterableMatrix method accepts. add_cols() broadcasts lazily instead,
+      # exactly as center_scale_matrix_opt() does on the centered path.
+      return(BPCells::add_cols(mat, -col_means))
+    }
     # sweep() subtracts in place over one pass. The previous
     # t(t(mat) - colMeans(mat)) spelling made two full transposed copies of a
     # cells-by-genes matrix to achieve the same thing.
-    return(sweep(mat, 2L, colMeans(mat), "-"))
+    return(sweep(mat, 2L, col_means, "-"))
   } else if (!scale.) {
     warning(paste(
       "It is not recommended to skip both centering and scaling of the data,",
@@ -105,8 +113,17 @@ setGeneric("computePCA",
     ))
     return(mat)
   } else {
-    # Only scaling without centering
-    return(scale(mat, center = FALSE, scale = TRUE))
+    # Only scaling without centering. scale(scale = TRUE) divides by an
+    # unguarded root-mean-square, so an all-zero gene turns its whole column
+    # into NaN and a near-constant one gets amplified -- the degeneracy the
+    # centered path (center_scale_matrix_opt()), the sparse path
+    # (.sparse_pca_parameters()) and the within-slide path all already guard.
+    col_scales <- .uncenteredColumnScales(mat)
+    if (.is_bpcells(mat)) {
+      # base::scale() would materialize the whole matrix densely.
+      return(BPCells::multiply_cols(mat, 1 / col_scales))
+    }
+    return(scale(mat, center = FALSE, scale = col_scales))
   }
 }
 

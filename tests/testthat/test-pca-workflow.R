@@ -513,6 +513,30 @@ test_that("column statistics and centering helpers match what they replaced", {
   expect_identical(CoPro:::.apply_centering_scaling(m, TRUE, FALSE),
                    t(t(m) - colMeans(m)))
 
+  # Scaling without centering must guard degenerate genes the way every other
+  # route into PCA does. Bare scale(center = FALSE, scale = TRUE) divides by a
+  # zero root-mean-square and hands prcomp_irlba() a column of NaNs.
+  deg <- m[, seq_len(4), drop = FALSE]
+  colnames(deg) <- paste0("g", seq_len(4))
+  deg[, 2] <- 0                        # never detected: divisor would be 0
+  deg[, 3] <- 0; deg[seq_len(2), 3] <- 5  # detected in 2/600 cells
+  scaled_only <- CoPro:::.apply_centering_scaling(deg, FALSE, TRUE)
+  expect_false(anyNA(scaled_only))
+  expect_identical(unname(attr(scaled_only, "scaled:scale")[c(2, 3)]), c(1, 1))
+  # Undegenerate columns keep the exact divisor base::scale() would have used.
+  expect_equal(
+    unname(attr(scaled_only, "scaled:scale")[c(1, 4)]),
+    unname(attr(scale(deg, center = FALSE, scale = TRUE),
+                "scaled:scale")[c(1, 4)])
+  )
+  # ...and the guard agrees with the sparse route on the same matrix.
+  deg_sp <- as(as(as(Matrix::Matrix(deg, sparse = TRUE), "generalMatrix"),
+                  "CsparseMatrix"), "dMatrix")
+  expect_equal(
+    unname(attr(scaled_only, "scaled:scale")),
+    unname(CoPro:::.sparse_pca_parameters(deg_sp, FALSE, TRUE)$scale)
+  )
+
   # .columnSds() falls back to apply() for anything that is not a dense
   # numeric matrix, because matrixStats::colSds() does not accept one.
   expect_identical(CoPro:::.columnSds(sp), apply(sp, 2, stats::sd))
@@ -849,6 +873,47 @@ test_that("matrix-free BPCells within-slide PCA matches dense preprocessing", {
     expect_equal(a$rotation[, pc], sign * b$rotation[, pc], tolerance = 2e-4)
     expect_equal(a$x[, pc], sign * b$x[, pc], tolerance = 2e-4)
   }
+})
+
+test_that(".apply_centering_scaling() keeps BPCells input out of core", {
+  # computePCA() routes IterableMatrix input through this helper for every
+  # combination of center/scale., but only the center = scale. = TRUE branch
+  # was ever taught about BPCells. sweep() errored outright ("non-numeric
+  # argument to binary operator") and base::scale() silently densified the
+  # matrix, which is what BPCells exists to avoid.
+  skip_if_not_installed("BPCells")
+  set.seed(9)
+  dense <- matrix(rpois(800, lambda = 0.6), nrow = 200, ncol = 4,
+                  dimnames = list(paste0("c", seq_len(200)),
+                                  paste0("g", seq_len(4))))
+  dense[, 2] <- 0                    # never detected: zero divisor
+  dense[, 3] <- 0; dense[1, 3] <- 5  # detected in 1 of 200 cells: under 1%
+  bp <- BPCells::write_matrix_memory(
+    methods::as(Matrix::Matrix(dense, sparse = TRUE), "dgCMatrix"),
+    compress = FALSE
+  )
+
+  for (scale. in c(FALSE, TRUE)) {
+    center <- !scale.
+    out_bp <- CoPro:::.apply_centering_scaling(bp, center, scale.)
+    out_dense <- CoPro:::.apply_centering_scaling(dense, center, scale.)
+    expect_true(CoPro:::.is_bpcells(out_bp))
+    # BPCells prints a "converting to a dense matrix" notice here. Densifying
+    # is exactly what the helper must not do; the test does it deliberately on
+    # a 200 x 4 fixture to compare values, and the notice is printed rather
+    # than signaled, so it cannot be suppressed.
+    expect_equal(as.matrix(out_bp), as.matrix(out_dense),
+                 ignore_attr = TRUE, tolerance = 1e-12)
+  }
+
+  # .columnNonzeroFraction() feeds every degeneracy guard in the package, and
+  # `x != 0` is not defined for an IterableMatrix at all.
+  expect_equal(unname(CoPro:::.columnNonzeroFraction(bp)),
+               unname(colSums(dense != 0) / nrow(dense)))
+  expect_equal(unname(CoPro:::.uncenteredColumnScales(bp)),
+               unname(CoPro:::.uncenteredColumnScales(dense)))
+  expect_identical(unname(CoPro:::.uncenteredColumnScales(bp)[c(2, 3)]),
+                   c(1, 1))
 })
 
 test_that("the legacy multi-slide combination still runs the legacy path", {

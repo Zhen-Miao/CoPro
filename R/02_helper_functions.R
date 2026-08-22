@@ -40,10 +40,17 @@
 #' pointer counts roughly half the nonzeros. No caller passes one today; the
 #' guard is here so that a future one falls back to the slow-but-correct path
 #' instead of silently undercounting.
+#'
+#' `IterableMatrix` supports no comparison operator at all -- `x != 0` errors
+#' with "comparison (!=) is possible only for atomic and list types" -- so
+#' BPCells input needs `binarize()`, which is the lazy equivalent.
 #' @noRd
 .columnNonzeroFraction <- function(x) {
   if (inherits(x, "CsparseMatrix") && !inherits(x, "symmetricMatrix")) {
     return(diff(Matrix::drop0(x)@p) / nrow(x))
+  }
+  if (.is_bpcells(x)) {
+    return(colSums(BPCells::binarize(x)) / nrow(x))
   }
   colSums(x != 0) / nrow(x)
 }
@@ -80,6 +87,35 @@
   apply(x, 2, sd)
 }
 
+#' Guarded root-mean-square column scales for uncentered scaling
+#'
+#' `scale(x, center = FALSE, scale = TRUE)` divides every column by
+#' `sqrt(colSums(x^2) / (n - 1))` and does nothing about a zero divisor: an
+#' all-zero gene yields a column of `NaN`s, and a near-constant one gets its
+#' noise amplified. This is the uncentered twin of the guard in
+#' [center_scale_matrix_opt()] and `.sparse_pca_parameters()` -- same two
+#' thresholds, same response of pinning the divisor at 1 -- so a degenerate
+#' gene is carried through unscaled on every route into PCA rather than only
+#' on the centered and the sparse ones.
+#'
+#' The divisor is the root-mean-square, not the standard deviation, because
+#' that is what `scale()` and the uncentered sparse branch already use; only
+#' guarded columns change value.
+#' @noRd
+.uncenteredColumnScales <- function(x,
+                                    zero_sd_threshold = 1e-3,
+                                    nz_proportion_threshold = 0.01) {
+  n <- nrow(x)
+  col_nz <- .columnNonzeroFraction(x)
+  col_scales <- sqrt(pmax(as.numeric(colSums(x^2)), 0) / max(1, n - 1L))
+  names(col_scales) <- colnames(x)
+  unsafe <- !is.finite(col_scales) |
+    col_scales < zero_sd_threshold |
+    col_nz < nz_proportion_threshold
+  col_scales[unsafe] <- 1.0
+  col_scales
+}
+
 #' centering and scaling the matrix
 #' @importFrom stats sd
 #' @param matrix Input matrix to be column-centered
@@ -107,7 +143,7 @@ center_scale_matrix_opt <- function(input_matrix,
 
   col_means <- colMeans(input_matrix)
   col_sds <- sqrt(BPCells::colVars(input_matrix))
-  col_nz <- colSums(BPCells::binarize(input_matrix)) / nrow(input_matrix)
+  col_nz <- .columnNonzeroFraction(input_matrix)
   zero_sd_cols <- which(col_sds < zero_sd_threshold | col_nz < nz_proportion_threshold)
   col_sds_safe <- col_sds
   if (length(zero_sd_cols) > 0) col_sds_safe[zero_sd_cols] <- 1.0
