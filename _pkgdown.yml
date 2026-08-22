@@ -60,6 +60,7 @@ reference:
   - title: "Score Transfer"
     desc: "Transfer learned patterns to new slides or datasets"
     contents:
+      - fit_score_reference
       - getTransferCellScores
       - getTransferNormCorr
       - getTransferBidirCorr

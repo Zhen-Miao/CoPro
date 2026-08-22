@@ -81,6 +81,23 @@ one shared PCA is fit, and `runSkrCCA()` optimizes equal-slide SUMCOR.
 Pass `center_per_slide = FALSE` and `objective = "sumcov"` only when
 reproducing the legacy pooled workflow.
 
+For comparable scores on new slides, freeze the fitted training
+reference and apply it unchanged to a subsetted target object:
+
+``` r
+score_reference <- fit_score_reference(obj)
+target_obj <- subsetData(target_obj, c("TypeA", "TypeB"))
+target_scores <- predict(score_reference, target_obj)
+```
+
+This target-invariant frozen log-expression transfer is the recommended
+default after an internal benchmark. Use `getTransferCellScores()` when
+cross-platform quantile normalization is specifically intended. Under
+the multi-slide default `center_per_slide = TRUE`, a frozen reference
+collapses the per-slide block moments to one center and scale per cell
+type, so transferred scores are comparable to each other but not to
+`getCellScores()` on the fitted object; see `?fit_score_reference`.
+
 See the **[Getting Started
 vignettes](https://zhen-miao.github.io/CoPro/articles/)** for complete
 walkthroughs with real spatial transcriptomics datasets, including
@@ -97,8 +114,8 @@ utility layer — functions that work on plain matrices and data frames
 with no CoPro object involved (`optimize_bilinear()`,
 `optimize_sumcor_pca()`, `resample_spatial()`, `quantile_normalize()`).
 Reach for the latter when you want the numerical core without the object
-wrapper. See `?CoPro` for the full rule and its two documented
-exceptions.
+wrapper. See `?CoPro` for the full rule and documented exceptions,
+including fitted score references.
 
 ## Citation
 
