@@ -42,17 +42,22 @@
 #' instead of silently undercounting.
 #'
 #' `IterableMatrix` supports no comparison operator at all -- `x != 0` errors
-#' with "comparison (!=) is possible only for atomic and list types". BPCells'
-#' column statistics provide the actual nonzero count without materializing a
-#' logical matrix, and count both positive and negative entries.
+#' with "comparison (!=) is possible only for atomic and list types" -- and the
+#' two obvious BPCells substitutes are both wrong. `binarize(x)` is `x > 0`, so
+#' it drops negative entries; `matrix_stats(col_stats = "nonzero")` counts
+#' *stored* entries, so an explicitly stored zero counts as a nonzero (the
+#' `drop0()` problem again). `binarize(x^2)` is `x^2 > 0`, which is `x != 0`
+#' for either sign and every storage type (`^` evaluates in double, so integer
+#' matrices cannot wrap), streams the matrix once, and never materializes a
+#' logical copy. Only magnitudes below ~1.5e-162 square to zero, far outside
+#' anything normalized expression produces.
 #' @noRd
 .columnNonzeroFraction <- function(x) {
   if (inherits(x, "CsparseMatrix") && !inherits(x, "symmetricMatrix")) {
     return(diff(Matrix::drop0(x)@p) / nrow(x))
   }
   if (.is_bpcells(x)) {
-    stats <- BPCells::matrix_stats(x, col_stats = "nonzero")$col_stats
-    return(stats["nonzero", ] / nrow(x))
+    return(colSums(BPCells::binarize(x^2)) / nrow(x))
   }
   colSums(x != 0) / nrow(x)
 }

@@ -41,9 +41,10 @@
   `center = scale. = TRUE` branch. `.columnNonzeroFraction()` used
   `colSums(x != 0)`, and `IterableMatrix` defines no comparison operator, so
   the *default* multi-slide path (`center_per_slide = TRUE`) errored with
-  "comparison (!=) is possible only for atomic and list types"; it now uses
-  BPCells' streamed column statistics and counts negative entries as nonzero,
-  matching dense and sparse matrices. `center = TRUE, scale. = FALSE` errored
+  "comparison (!=) is possible only for atomic and list types"; it now streams
+  `binarize(x^2)`, which counts negative entries as nonzero and explicitly
+  stored zeros as zero, matching dense and sparse matrices. `center = TRUE,
+  scale. = FALSE` errored
   in `sweep()` and now broadcasts through `add_cols()`, and `center = FALSE,
   scale. = TRUE` silently materialized the matrix densely and now uses
   `multiply_cols()`. BPCells input is also checked for non-finite values during

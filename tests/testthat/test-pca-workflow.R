@@ -926,7 +926,7 @@ test_that(".apply_centering_scaling() keeps BPCells input out of core", {
                    c(1, 1))
 })
 
-test_that("BPCells nonzero fractions count negative entries", {
+test_that("BPCells nonzero fractions count negatives, not stored zeros", {
   skip_if_not_installed("BPCells")
   set.seed(4)
   dense <- cbind(
@@ -957,6 +957,39 @@ test_that("BPCells nonzero fractions count negative entries", {
   )
   expect_identical(
     CoPro:::.frozen_column_nonzero_fraction(bp), expected
+  )
+
+  # An explicitly stored zero is still a zero. Matrix::Matrix() drops stored
+  # zeros on conversion, so build the fixture with sparseMatrix(), which keeps
+  # them, and confirm BPCells carries the stored pattern through before
+  # trusting the count: matrix_stats(col_stats = "nonzero") reports stored
+  # entries, which is exactly why .columnNonzeroFraction() cannot use it.
+  stored <- Matrix::sparseMatrix(
+    i = c(1, 2, 3, 4, 1, 2, 1, 3),
+    j = c(1, 1, 1, 1, 2, 2, 3, 3),
+    x = c(-1, -2, 0, 3, 0, 0, 5, 7),
+    dims = c(4, 4)
+  )
+  expect_identical(diff(stored@p), c(4L, 2L, 2L, 0L))
+  stored_bp <- BPCells::write_matrix_memory(stored, compress = FALSE)
+  stored_counts <- BPCells::matrix_stats(stored_bp, col_stats = "nonzero")
+  expect_identical(
+    as.numeric(stored_counts$col_stats["nonzero", ]), c(4, 2, 2, 0)
+  )
+
+  stored_expected <- c(3, 0, 2, 0) / 4
+  expect_identical(
+    as.numeric(CoPro:::.columnNonzeroFraction(as.matrix(stored))),
+    stored_expected
+  )
+  expect_identical(
+    as.numeric(CoPro:::.columnNonzeroFraction(stored)), stored_expected
+  )
+  expect_identical(
+    as.numeric(CoPro:::.columnNonzeroFraction(stored_bp)), stored_expected
+  )
+  expect_identical(
+    CoPro:::.frozen_column_nonzero_fraction(stored_bp), stored_expected
   )
 })
 
