@@ -39,6 +39,27 @@
 
 ### Package-review hardening
 
+- `computePCA(center = FALSE, scale. = TRUE)` no longer divides by an
+  unguarded root-mean-square on the dense path. A gene that is never
+  detected has divisor zero there, which turned its whole column into
+  `NaN` and propagated into the PCA; a near-constant gene had its noise
+  amplified. That branch now applies the same degeneracy guard the
+  centered dense, sparse, and within-slide paths already used – divisor
+  pinned to 1 when a gene’s scale is below `1e-3` or its nonzero
+  fraction below 1%. Genes that are not degenerate keep exactly the
+  divisor they had.
+- [`computePCA()`](https://zhen-miao.github.io/CoPro/reference/computePCA.md)
+  no longer breaks on out-of-core `BPCells` input outside the
+  `center = scale. = TRUE` branch. `.columnNonzeroFraction()` used
+  `colSums(x != 0)`, and `IterableMatrix` defines no comparison
+  operator, so the *default* multi-slide path
+  (`center_per_slide = TRUE`) errored with “comparison (!=) is possible
+  only for atomic and list types”; it now uses `BPCells::binarize()`.
+  `center = TRUE, scale. = FALSE` errored in
+  [`sweep()`](https://rdrr.io/r/base/sweep.html) and now broadcasts
+  through `add_cols()`, and `center = FALSE, scale. = TRUE` silently
+  materialized the matrix densely and now uses `multiply_cols()`.
+  Results are unchanged wherever these paths previously ran at all.
 - Sparse and float32 kernel construction now honors
   `normalizeDistance = "inherit"` on cross-type paths and rejects
   non-finite coordinates with cell IDs in the error. The R
