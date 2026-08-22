@@ -62,6 +62,30 @@
   colSums(x != 0) / nrow(x)
 }
 
+#' Which columns are numerically unsafe to divide by
+#'
+#' The one degeneracy rule shared by every route into PCA and by the frozen
+#' score reference: a column's scale cannot serve as a divisor when it is not
+#' finite, is below `zero_sd_threshold`, or belongs to a gene detected in fewer
+#' than `nz_proportion_threshold` of the cells. Callers pin the scale of every
+#' flagged column at 1, which carries a degenerate gene through unscaled
+#' rather than amplifying its noise or turning the column into `NaN`.
+#'
+#' The rule is written as the conjunction of the *safe* conditions and then
+#' negated so that a missing value on either input comes out `TRUE`, never
+#' `NA`: `NA | FALSE` is `NA`, and `x[NA] <- 1` silently skips that element,
+#' which is how a per-site `which()` or `|` chain could let a column through.
+#' @noRd
+.unsafeScaleColumns <- function(scale_values, nonzero_fraction,
+                                zero_sd_threshold = 1e-3,
+                                nz_proportion_threshold = 0.01) {
+  safe <- is.finite(scale_values) &
+    scale_values >= zero_sd_threshold &
+    is.finite(nonzero_fraction) &
+    nonzero_fraction >= nz_proportion_threshold
+  !safe
+}
+
 #' Per-column standard deviations
 #'
 #' `apply(x, 2, sd)` pays an R-level closure call per column;
@@ -116,9 +140,8 @@
   col_nz <- .columnNonzeroFraction(x)
   col_scales <- sqrt(pmax(as.numeric(colSums(x^2)), 0) / max(1, n - 1L))
   names(col_scales) <- colnames(x)
-  unsafe <- !is.finite(col_scales) |
-    col_scales < zero_sd_threshold |
-    col_nz < nz_proportion_threshold
+  unsafe <- .unsafeScaleColumns(col_scales, col_nz,
+                                zero_sd_threshold, nz_proportion_threshold)
   col_scales[unsafe] <- 1.0
   col_scales
 }
@@ -139,9 +162,8 @@ center_scale_matrix_opt <- function(input_matrix,
     col_sds <- .columnSds(input_matrix)
     col_nz <- .columnNonzeroFraction(input_matrix)
 
-    unsafe <- !is.finite(col_sds) |
-      col_sds < zero_sd_threshold |
-      col_nz < nz_proportion_threshold
+    unsafe <- .unsafeScaleColumns(col_sds, col_nz,
+                                  zero_sd_threshold, nz_proportion_threshold)
     col_sds_safe <- col_sds
     col_sds_safe[unsafe] <- 1.0
 
@@ -153,9 +175,8 @@ center_scale_matrix_opt <- function(input_matrix,
   col_means <- colMeans(input_matrix)
   col_sds <- sqrt(BPCells::colVars(input_matrix))
   col_nz <- .columnNonzeroFraction(input_matrix)
-  unsafe <- !is.finite(col_sds) |
-    col_sds < zero_sd_threshold |
-    col_nz < nz_proportion_threshold
+  unsafe <- .unsafeScaleColumns(col_sds, col_nz,
+                                zero_sd_threshold, nz_proportion_threshold)
   col_sds_safe <- col_sds
   col_sds_safe[unsafe] <- 1.0
 

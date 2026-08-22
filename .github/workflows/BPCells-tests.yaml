@@ -15,7 +15,6 @@ jobs:
     timeout-minutes: 90
     env:
       GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
-      _R_CHECK_FORCE_SUGGESTS_: false
     steps:
       - uses: actions/checkout@v6
 
@@ -35,7 +34,6 @@ jobs:
             github::bnprks/BPCells/r
             local::.
           dependencies: '"hard"'
-          needs: check
 
       - name: Verify BPCells installation
         run: stopifnot(requireNamespace("BPCells", quietly = TRUE))

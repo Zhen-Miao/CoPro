@@ -36,7 +36,11 @@
   That branch now applies the same degeneracy guard the centered dense,
   sparse, and within-slide paths already used -- divisor pinned to 1 when a
   gene's scale is below `1e-3` or its nonzero fraction below 1%. Genes that
-  are not degenerate keep exactly the divisor they had.
+  are not degenerate keep exactly the divisor they had. The rule itself now
+  lives in one internal predicate, `.unsafeScaleColumns()`, shared by every
+  route into PCA and by the frozen score reference, and a missing scale or
+  nonzero fraction counts as degenerate instead of slipping through an `NA`
+  in the mask.
 * `computePCA()` no longer breaks on out-of-core `BPCells` input outside the
   `center = scale. = TRUE` branch. `.columnNonzeroFraction()` used
   `colSums(x != 0)`, and `IterableMatrix` defines no comparison operator, so
@@ -49,6 +53,11 @@
   scale. = TRUE` silently materialized the matrix densely and now uses
   `multiply_cols()`. BPCells input is also checked for non-finite values during
   object construction instead of letting them propagate into PCA.
+* A dedicated `BPCells-tests` GitHub Actions job installs BPCells, with the
+  HDF5 system library it links against, and runs the full test suite on pushes
+  to `main`, weekly, and on demand, so the `IterableMatrix` branches are
+  exercised in CI rather than only on machines that happen to have BPCells.
+  The lint workflow, which had never run, is gone.
 * Sparse and float32 kernel construction now honors
   `normalizeDistance = "inherit"` on cross-type paths and rejects non-finite
   coordinates with cell IDs in the error. The R nearest-neighbor fallback also

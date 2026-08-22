@@ -210,9 +210,8 @@ setGeneric("computePCA",
     }
     scale_values <- sqrt(variance)
     nz_prop <- .columnNonzeroFraction(mat)
-    unsafe <- !is.finite(scale_values) |
-      scale_values < zero_sd_threshold |
-      nz_prop < nz_proportion_threshold
+    unsafe <- .unsafeScaleColumns(scale_values, nz_prop,
+                                  zero_sd_threshold, nz_proportion_threshold)
     scale_values[unsafe] <- 1
     scale_arg <- scale_values
   }
@@ -357,9 +356,8 @@ methods::setMethod(
       }
       nz_prop <- .columnNonzeroFraction(block)
       unsafe_any <- unsafe_any |
-        !is.finite(block_scale) |
-        block_scale < zero_sd_threshold |
-        nz_prop < nz_proportion_threshold
+        .unsafeScaleColumns(block_scale, nz_prop,
+                            zero_sd_threshold, nz_proportion_threshold)
       scales[k, ] <- block_scale
     }
   }
