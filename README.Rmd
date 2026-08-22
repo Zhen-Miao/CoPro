@@ -94,7 +94,11 @@ target_scores <- predict(score_reference, target_obj)
 
 This target-invariant frozen log-expression transfer is the recommended default
 after an internal benchmark. Use `getTransferCellScores()` when cross-platform
-quantile normalization is specifically intended.
+quantile normalization is specifically intended. Under the multi-slide default
+`center_per_slide = TRUE`, a frozen reference collapses the per-slide block
+moments to one center and scale per cell type, so transferred scores are
+comparable to each other but not to `getCellScores()` on the fitted object; see
+`?fit_score_reference`.
 
 See the **[Getting Started vignettes](https://zhen-miao.github.io/CoPro/articles/)** for complete walkthroughs with real spatial transcriptomics datasets, including within-cell-type analysis, cross-cell-type co-progression, and multi-slide experiments.
 

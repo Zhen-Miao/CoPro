@@ -197,8 +197,11 @@ test_that("frozen reference retains the PCA low-variance scale guard", {
     A = list(preprocessing = "within_slide"),
     B = list(preprocessing = "within_slide")
   )
-  multi_reference <- fit_score_reference(
-    multi, reference_weight = "equal_slide"
+  expect_message(
+    multi_reference <- fit_score_reference(
+      multi, reference_weight = "equal_slide"
+    ),
+    "within-slide PCA preprocessing"
   )
   expect_identical(unname(multi_reference$references$A$scale["g3"]), 1)
 })
@@ -261,6 +264,9 @@ test_that("frozen reference validates fitted and target contracts", {
     fit_score_reference(gene_space),
     "requires PCA-space weights"
   )
+  stale_pca <- fixture$object
+  stale_pca@pcaGlobal <- list(Z = list(preprocessing = "pooled"))
+  expect_error(fit_score_reference(stale_pca), "No PCA fit is stored")
 
   reference <- fit_score_reference(fixture$object)
   target_x <- matrix(
@@ -270,6 +276,9 @@ test_that("frozen reference validates fitted and target contracts", {
   target <- make_score_target(target_x, rep(c("A", "B"), each = 6))
   expect_error(predict(reference, target), "missing frozen-reference genes")
   expect_error(predict(reference, target, chunk_size = 1.5), "positive integer")
+  expect_error(
+    predict(reference, target, verbose = TRUE), "takes no further arguments"
+  )
 
   target@cellTypesOfInterest <- "A"
   expect_error(predict(reference, target), "same cell types")
@@ -281,7 +290,108 @@ test_that("frozen reference has concise print and provenance", {
   expect_s3_class(reference, "CoProScoreReference")
   expect_identical(reference$transform, "frozen_log_center_scale")
   expect_identical(reference$training_slides, c("s1", "s2"))
+  expect_identical(reference$n_training_cells, 24L)
+  expect_true(all(is.na(reference$preprocessing)))
   printed <- capture.output(returned <- print(reference))
   expect_match(printed[[1L]], "CoPro frozen score reference", fixed = TRUE)
+  expect_true(
+    any(grepl("PCA preprocessing: unrecorded", printed, fixed = TRUE))
+  )
   expect_identical(returned, reference)
+})
+
+test_that("cell-pooled and equal-slide differ by the Bessel factor", {
+  single <- make_score_reference_fixture()$object
+  single@metaDataSub$slideID <- "s1"
+  pooled <- fit_score_reference(single, reference_weight = "cell_pooled")
+  equal <- fit_score_reference(single, reference_weight = "equal_slide")
+  for (cell_type in c("A", "B")) {
+    n <- pooled$references[[cell_type]]$n_training_cells
+    expect_equal(
+      unname(
+        pooled$references[[cell_type]]$scale /
+          equal$references[[cell_type]]$scale
+      ),
+      rep(sqrt(n / (n - 1)), length(pooled$references[[cell_type]]$scale)),
+      tolerance = 1e-12
+    )
+  }
+})
+
+test_that("frozen self-transfer is exact only under pooled preprocessing", {
+  fit_multi <- function(center_per_slide) {
+    obj <- create_test_copro_multi(
+      n_cells_per_slide = 80, n_slides = 2, n_genes = 12, n_cell_types = 2,
+      seed = 4242
+    )
+    obj <- subsetData(obj, c("CellTypeA", "CellTypeB"))
+    # Give the second slide a location and scale shift, so the per-slide blocks
+    # genuinely differ and the two preprocessing modes cannot coincide.
+    slides <- as.character(getSlideID(obj))
+    shifted <- slides == unique(slides)[2L]
+    obj@normalizedDataSub[shifted, ] <-
+      obj@normalizedDataSub[shifted, ] * 1.6 + 0.8
+    obj <- computePCA(obj, nPCA = 4, center_per_slide = center_per_slide)
+    obj <- computeKernelMatrix(
+      obj, sigmaValues = 0.5, method = "sparse", normalizeDistance = FALSE,
+      verbose = FALSE
+    )
+    obj <- runSkrCCA(obj, scalePCs = TRUE, nCC = 1, maxIter = 100)
+    computeGeneAndCellScores(obj)
+  }
+
+  self_transfer_gap <- function(object, scores) {
+    vapply(object@cellTypesOfInterest, function(cell_type) {
+      native <- getCellScores(
+        object, sigma = 0.5, cellType = cell_type, verbose = FALSE
+      )
+      max(abs(scores[[cell_type]][rownames(native), , drop = FALSE] - native))
+    }, numeric(1))
+  }
+
+  set.seed(4242)
+  pooled <- suppressMessages(fit_multi(FALSE))
+  pooled_reference <- fit_score_reference(pooled, sigma = 0.5)
+  expect_identical(unname(pooled_reference$preprocessing), "pooled")
+  expect_lt(
+    max(self_transfer_gap(pooled, predict(pooled_reference, pooled))), 1e-8
+  )
+
+  set.seed(4242)
+  within <- suppressMessages(fit_multi(TRUE))
+  expect_message(
+    within_reference <- fit_score_reference(within, sigma = 0.5),
+    "within-slide PCA preprocessing"
+  )
+  expect_identical(unname(within_reference$preprocessing), "within_slide")
+
+  # The frozen map still evaluates its declared formula exactly; what it does
+  # not do is reproduce scores the PCA built from per-slide block moments.
+  within_scores <- predict(within_reference, within)
+  for (cell_type in within@cellTypesOfInterest) {
+    fitted <- within_reference$references[[cell_type]]
+    rows <- which(as.character(within@cellTypesSub) == cell_type)
+    z <- sweep(
+      within@normalizedDataSub[rows, fitted$genes, drop = FALSE], 2L,
+      fitted$center, "-"
+    )
+    expect_equal(
+      within_scores[[cell_type]],
+      sweep(z, 2L, fitted$scale, "/") %*% fitted$weights,
+      tolerance = 1e-12
+    )
+  }
+  expect_gt(min(self_transfer_gap(within, within_scores)), 0.05)
+
+  # equal_slide reweights the moments but still yields one shared center and
+  # scale, so it does not close that gap.
+  expect_message(
+    equal_reference <- fit_score_reference(
+      within, sigma = 0.5, reference_weight = "equal_slide"
+    ),
+    "within-slide PCA preprocessing"
+  )
+  expect_gt(
+    min(self_transfer_gap(within, predict(equal_reference, within))), 0.05
+  )
 })

@@ -31,7 +31,14 @@ By default, uses the single value in \code{object@sigmaValueChoice}.}
 deviations. \code{"equal_slide"} averages each training slide's first and
 second moments with equal weight. Both routes retain CoPro's PCA safety
 guard: scales are pinned to 1 for genes with standard deviation below
-\code{1e-3} or nonzero fraction below 1 percent.}
+\code{1e-3} or nonzero fraction below 1 percent.
+
+The two routes use different variance conventions. \code{"cell_pooled"} divides
+by \code{n - 1}; \code{"equal_slide"} is the population second moment of the
+equal-weight slide mixture. On a single training slide they therefore
+differ by a factor of \code{sqrt(n / (n - 1))} rather than coinciding. Both
+conventions are the ones the selection benchmark used, so they are kept
+as they are.}
 
 \item{newdata}{A subsetted \code{CoProSingle} or \code{CoProMulti} target object using
 the same normalized-expression representation and genes as the reference.
@@ -75,6 +82,27 @@ cross-platform quantile normalization, use \code{\link[=getTransferCellScores]{g
 Regression gene scores are useful for interpretation, but they are not the
 canonical scoring map. This function therefore always uses the exact
 back-projected weights from \code{\link[=computeGeneAndCellScores]{computeGeneAndCellScores()}}.
+
+\strong{Frozen scores and the fitted object's own scores.} Under the \code{CoProMulti}
+default, \code{\link[=computePCA]{computePCA()}} standardizes each (slide, cell type) block with its
+own center and scale (\code{center_per_slide = TRUE}, recorded as
+\code{preprocessing = "within_slide"}). A frozen reference must collapse to one
+center and scale per cell type, because an unseen target slide has no stored
+block moments. Transferred scores stay mutually comparable and
+target-invariant, but they are not on the same affine footing as
+\code{\link[=getCellScores]{getCellScores()}} on the fitted object, so the two should not be pooled onto
+one axis without care. Applying the frozen map back to the training cells
+reproduces \code{\link[=getCellScores]{getCellScores()}} exactly only under pooled preprocessing --
+\code{CoProSingle}, or \code{computePCA(center_per_slide = FALSE)}.
+\code{reference_weight = "equal_slide"} does not change this, since it still
+yields a single shared center and scale. \code{fit_score_reference()} emits a
+message when it detects within-slide preprocessing, and records what it saw
+in the returned object's \code{preprocessing} field.
+
+The scale guard is CoPro's PCA preprocessing rule -- low variance \emph{or} low
+prevalence -- rather than a bare floor against division by zero, so a frozen
+reference guards exactly the genes the PCA behind its weights guarded. That
+correspondence is what makes self-transfer exact under pooled preprocessing.
 
 For a sparse target, prediction evaluates the affine map as a sparse matrix
 multiplication plus a component-level offset. It does not materialize a

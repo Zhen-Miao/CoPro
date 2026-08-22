@@ -26,6 +26,13 @@
 #'   guard: scales are pinned to 1 for genes with standard deviation below
 #'   `1e-3` or nonzero fraction below 1 percent.
 #'
+#'   The two routes use different variance conventions. `"cell_pooled"` divides
+#'   by `n - 1`; `"equal_slide"` is the population second moment of the
+#'   equal-weight slide mixture. On a single training slide they therefore
+#'   differ by a factor of `sqrt(n / (n - 1))` rather than coinciding. Both
+#'   conventions are the ones the selection benchmark used, so they are kept
+#'   as they are.
+#'
 #' @return `fit_score_reference()` returns a `CoProScoreReference` object
 #'   containing the frozen transform, weights, and training provenance.
 #'
@@ -38,6 +45,27 @@
 #' Regression gene scores are useful for interpretation, but they are not the
 #' canonical scoring map. This function therefore always uses the exact
 #' back-projected weights from [computeGeneAndCellScores()].
+#'
+#' **Frozen scores and the fitted object's own scores.** Under the `CoProMulti`
+#' default, [computePCA()] standardizes each (slide, cell type) block with its
+#' own center and scale (`center_per_slide = TRUE`, recorded as
+#' `preprocessing = "within_slide"`). A frozen reference must collapse to one
+#' center and scale per cell type, because an unseen target slide has no stored
+#' block moments. Transferred scores stay mutually comparable and
+#' target-invariant, but they are not on the same affine footing as
+#' [getCellScores()] on the fitted object, so the two should not be pooled onto
+#' one axis without care. Applying the frozen map back to the training cells
+#' reproduces [getCellScores()] exactly only under pooled preprocessing --
+#' `CoProSingle`, or `computePCA(center_per_slide = FALSE)`.
+#' `reference_weight = "equal_slide"` does not change this, since it still
+#' yields a single shared center and scale. `fit_score_reference()` emits a
+#' message when it detects within-slide preprocessing, and records what it saw
+#' in the returned object's `preprocessing` field.
+#'
+#' The scale guard is CoPro's PCA preprocessing rule -- low variance *or* low
+#' prevalence -- rather than a bare floor against division by zero, so a frozen
+#' reference guards exactly the genes the PCA behind its weights guarded. That
+#' correspondence is what makes self-transfer exact under pooled preprocessing.
 #'
 #' For a sparse target, prediction evaluates the affine map as a sparse matrix
 #' multiplication plus a component-level offset. It does not materialize a
@@ -126,7 +154,8 @@ fit_score_reference <- function(
   }
   if (length(slide_id) != nrow(object@normalizedDataSub)) {
     stop(
-      "Slide IDs are not aligned with the fitted expression rows.",
+      "Slide IDs are unavailable or not aligned with the fitted expression ",
+      "rows. A CoProMulti object needs a 'slideID' column in metaDataSub.",
       call. = FALSE
     )
   }
@@ -162,16 +191,17 @@ fit_score_reference <- function(
     expression <- object@normalizedDataSub[
       rows, rownames(weights), drop = FALSE
     ]
-    pca_preprocessing <- object@pcaGlobal[[cell_type]]$preprocessing
+    preprocessing <- .frozen_score_preprocessing(object, cell_type)
     moments <- .frozen_score_moments(
       expression, slide_id[rows], reference_weight,
-      guard_by_slide = identical(pca_preprocessing, "within_slide")
+      guard_by_slide = identical(preprocessing, "within_slide")
     )
     list(
       genes = rownames(weights),
       center = moments$center,
       scale = moments$scale,
       weights = weights,
+      preprocessing = preprocessing,
       n_training_cells = length(rows),
       training_slides = unique(slide_id[rows])
     )
@@ -193,6 +223,19 @@ fit_score_reference <- function(
     )
   }
 
+  preprocessing <- unname(unique(vapply(
+    references, function(reference) reference$preprocessing, character(1)
+  )))
+  if (any(preprocessing == "within_slide", na.rm = TRUE)) {
+    message(
+      "The fitted object uses within-slide PCA preprocessing, which ",
+      "standardizes each (slide, cell type) block separately. A frozen ",
+      "reference collapses to one center and scale per cell type, so its ",
+      "scores are target-invariant but are not on the same affine footing as ",
+      "getCellScores() on this object. See ?fit_score_reference."
+    )
+  }
+
   structure(
     list(
       version = "1.0.0",
@@ -201,7 +244,8 @@ fit_score_reference <- function(
       reference_weight = reference_weight,
       cell_types = cell_types,
       references = references,
-      training_cell_ids = rownames(object@normalizedDataSub),
+      preprocessing = preprocessing,
+      n_training_cells = nrow(object@normalizedDataSub),
       training_slides = unique(slide_id),
       package_version = as.character(utils::packageVersion("CoPro")),
       fitted_at = format(Sys.time(), tz = "UTC", usetz = TRUE)
@@ -231,8 +275,45 @@ fit_score_reference <- function(
   as.numeric(sigma)
 }
 
+.frozen_column_sds <- function(x) {
+  if (.is_bpcells(x)) {
+    sqrt(as.numeric(BPCells::colVars(x)))
+  } else {
+    as.numeric(.columnSds(x))
+  }
+}
+
+.frozen_column_nonzero_fraction <- function(x) {
+  if (.is_bpcells(x)) {
+    as.numeric(colSums(BPCells::binarize(x)) / nrow(x))
+  } else {
+    as.numeric(.columnNonzeroFraction(x))
+  }
+}
+
+# `pcaGlobal` is keyed by the cell types present when computePCA() ran. A later
+# subsetData() can leave cellTypesOfInterest pointing at a type that is not a
+# key, where `[[` raises an opaque "subscript out of bounds"; name the stale fit
+# instead. An object with no PCA at all reports NA.
+.frozen_score_preprocessing <- function(object, cell_type) {
+  pca <- object@pcaGlobal
+  if (!length(pca)) return(NA_character_)
+  if (!cell_type %in% names(pca)) {
+    stop(
+      "No PCA fit is stored for cell type ", cell_type,
+      ". Re-run computePCA() after changing the cell-type subset.",
+      call. = FALSE
+    )
+  }
+  preprocessing <- pca[[cell_type]]$preprocessing
+  if (is.null(preprocessing)) NA_character_ else as.character(preprocessing)
+}
+
+# `pooled_scale` lets the caller hand over column standard deviations it has
+# already computed over the whole block, so the default cell-pooled route makes
+# one pass over the training expression instead of two.
 .frozen_score_guard <- function(
-    expression, slide_id, guard_by_slide,
+    expression, slide_id, guard_by_slide, pooled_scale = NULL,
     zero_sd_threshold = 1e-3, nz_proportion_threshold = 0.01) {
   blocks <- if (guard_by_slide) unique(slide_id) else "all_cells"
   unsafe <- rep(FALSE, ncol(expression))
@@ -242,16 +323,12 @@ fit_score_reference <- function(
     } else {
       expression
     }
-    block_scale <- if (.is_bpcells(block)) {
-      sqrt(as.numeric(BPCells::colVars(block)))
+    block_scale <- if (!guard_by_slide && !is.null(pooled_scale)) {
+      pooled_scale
     } else {
-      as.numeric(.columnSds(block))
+      .frozen_column_sds(block)
     }
-    nonzero_fraction <- if (.is_bpcells(block)) {
-      as.numeric(colSums(BPCells::binarize(block)) / nrow(block))
-    } else {
-      as.numeric(.columnNonzeroFraction(block))
-    }
+    nonzero_fraction <- .frozen_column_nonzero_fraction(block)
     unsafe <- unsafe |
       !is.finite(block_scale) |
       block_scale < zero_sd_threshold |
@@ -262,13 +339,13 @@ fit_score_reference <- function(
 
 .frozen_score_moments <- function(
     expression, slide_id, reference_weight, guard_by_slide = FALSE) {
+  pooled_scale <- NULL
   if (identical(reference_weight, "cell_pooled")) {
     center <- as.numeric(colMeans(expression))
-    scale <- if (.is_bpcells(expression)) {
-      sqrt(as.numeric(BPCells::colVars(expression)))
-    } else {
-      as.numeric(.columnSds(expression))
-    }
+    scale <- .frozen_column_sds(expression)
+    # The guard's only block is this same matrix unless it splits by slide, so
+    # the sds just computed are exactly the ones it would recompute.
+    if (!guard_by_slide) pooled_scale <- scale
   } else {
     slides <- unique(slide_id)
     first <- vapply(slides, function(slide) {
@@ -285,7 +362,9 @@ fit_score_reference <- function(
     center <- rowMeans(first)
     scale <- sqrt(pmax(rowMeans(second) - center ^ 2, 0))
   }
-  unsafe <- .frozen_score_guard(expression, slide_id, guard_by_slide)
+  unsafe <- .frozen_score_guard(
+    expression, slide_id, guard_by_slide, pooled_scale = pooled_scale
+  )
   scale[unsafe | !is.finite(scale) | scale < 1e-3] <- 1
   names(center) <- names(scale) <- colnames(expression)
   list(center = center, scale = scale)
@@ -299,7 +378,8 @@ fit_score_reference <- function(
 #' @param aggregate If `FALSE` (default), return a named list of score matrices
 #'   by cell type. If `TRUE`, return one matrix in target-cell order.
 #' @param chunk_size Positive integer number of target cells scored at once.
-#' @param ... Unused.
+#' @param ... Not used; must be empty. Supplying anything here is an error
+#'   rather than a silently ignored argument.
 #'
 #' @return `predict.CoProScoreReference()` returns target cell scores as a named
 #'   list or an aggregated matrix.
@@ -311,6 +391,12 @@ predict.CoProScoreReference <- function(
     object, newdata, aggregate = FALSE, chunk_size = 20000L, ...) {
   if (!inherits(object, "CoProScoreReference")) {
     stop("object must be a CoProScoreReference", call. = FALSE)
+  }
+  if (...length() > 0L) {
+    stop(
+      "predict() for a CoProScoreReference takes no further arguments.",
+      call. = FALSE
+    )
   }
   if (!(methods::is(newdata, "CoProSingle") ||
           methods::is(newdata, "CoProMulti"))) {
@@ -366,10 +452,14 @@ predict.CoProScoreReference <- function(
     )
     if (!length(rows)) return(result)
 
+    # Index the frozen moments by gene name, not position: the target block is
+    # reordered to reference$genes, so the moments must follow that order too.
     scaled_weights <- sweep(
-      reference$weights, 1L, reference$scale, "/"
+      reference$weights, 1L, reference$scale[reference$genes], "/"
     )
-    center_offset <- as.numeric(reference$center %*% scaled_weights)
+    center_offset <- as.numeric(
+      reference$center[reference$genes] %*% scaled_weights
+    )
     starts <- seq.int(1L, length(rows), by = chunk_size)
     for (start in starts) {
       last <- min(as.double(start) + chunk_size - 1, length(rows))
@@ -399,12 +489,16 @@ predict.CoProScoreReference <- function(
 #' @method print CoProScoreReference
 #' @export
 print.CoProScoreReference <- function(x, ...) {
+  preprocessing <- unique(x$preprocessing[!is.na(x$preprocessing)])
+  if (!length(preprocessing)) preprocessing <- "unrecorded"
   cat(
     "CoPro frozen score reference\n",
     "  sigma: ", format(x$sigma), "\n",
     "  cell types: ", paste(x$cell_types, collapse = ", "), "\n",
     "  reference weighting: ", x$reference_weight, "\n",
-    "  training cells: ", length(x$training_cell_ids), "\n",
+    "  training cells: ", x$n_training_cells, "\n",
+    "  training slides: ", length(x$training_slides), "\n",
+    "  PCA preprocessing: ", paste(preprocessing, collapse = ", "), "\n",
     sep = ""
   )
   invisible(x)

@@ -12,6 +12,20 @@
   available for cross-platform use. Frozen references preserve the PCA
   low-variance/prevalence scale guard, reject gene-space weights, and score
   sparse targets without densifying cells-by-genes chunks.
+* The benchmark behind that recommendation was a leave-one-sample-out
+  comparison of frozen against target-adaptive scoring maps over four spatial
+  datasets (kidney seqFISH, lung Xenium, colon MERFISH, and liver Xenium); it
+  did not justify replacing the frozen route. Note that the packaged guard is
+  CoPro's PCA preprocessing rule -- low variance *or* low prevalence -- which
+  is stricter than a bare floor against division by zero, and is what makes
+  frozen self-transfer reproduce `getCellScores()` exactly under pooled
+  preprocessing.
+* A frozen reference collapses to one center and scale per cell type. Under
+  the `CoProMulti` default `computePCA(center_per_slide = TRUE)`, which
+  standardizes each (slide, cell type) block separately, transferred scores are
+  therefore target-invariant but are not on the same affine footing as
+  `getCellScores()` on the fitted object. `fit_score_reference()` now says so
+  with a message and records `preprocessing` in the returned reference.
 
 ## Package-review hardening
 
