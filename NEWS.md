@@ -42,11 +42,12 @@
   `colSums(x != 0)`, and `IterableMatrix` defines no comparison operator, so
   the *default* multi-slide path (`center_per_slide = TRUE`) errored with
   "comparison (!=) is possible only for atomic and list types"; it now uses
-  `BPCells::binarize()`. `center = TRUE, scale. = FALSE` errored in `sweep()`
-  and now broadcasts through `add_cols()`, and `center = FALSE,
+  BPCells' streamed column statistics and counts negative entries as nonzero,
+  matching dense and sparse matrices. `center = TRUE, scale. = FALSE` errored
+  in `sweep()` and now broadcasts through `add_cols()`, and `center = FALSE,
   scale. = TRUE` silently materialized the matrix densely and now uses
-  `multiply_cols()`. Results are unchanged wherever these paths previously
-  ran at all.
+  `multiply_cols()`. BPCells input is also checked for non-finite values during
+  object construction instead of letting them propagate into PCA.
 * Sparse and float32 kernel construction now honors
   `normalizeDistance = "inherit"` on cross-type paths and rejects non-finite
   coordinates with cell IDs in the error. The R nearest-neighbor fallback also

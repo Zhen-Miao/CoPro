@@ -284,11 +284,7 @@ fit_score_reference <- function(
 }
 
 .frozen_column_nonzero_fraction <- function(x) {
-  if (.is_bpcells(x)) {
-    as.numeric(colSums(BPCells::binarize(x)) / nrow(x))
-  } else {
-    as.numeric(.columnNonzeroFraction(x))
-  }
+  as.numeric(.columnNonzeroFraction(x))
 }
 
 # `pcaGlobal` is keyed by the cell types present when computePCA() ran. A later

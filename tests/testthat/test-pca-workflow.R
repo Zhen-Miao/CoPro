@@ -523,6 +523,10 @@ test_that("column statistics and centering helpers match what they replaced", {
   scaled_only <- CoPro:::.apply_centering_scaling(deg, FALSE, TRUE)
   expect_false(anyNA(scaled_only))
   expect_identical(unname(attr(scaled_only, "scaled:scale")[c(2, 3)]), c(1, 1))
+  centered_scaled <- CoPro:::center_scale_matrix_opt(deg)
+  expect_identical(
+    unname(attr(centered_scaled, "scaled:scale")[c(2, 3)]), c(1, 1)
+  )
   # Undegenerate columns keep the exact divisor base::scale() would have used.
   expect_equal(
     unname(attr(scaled_only, "scaled:scale")[c(1, 4)]),
@@ -536,6 +540,12 @@ test_that("column statistics and centering helpers match what they replaced", {
     unname(attr(scaled_only, "scaled:scale")),
     unname(CoPro:::.sparse_pca_parameters(deg_sp, FALSE, TRUE)$scale)
   )
+  within <- CoPro:::.withinSlidePCAParameters(
+    deg, rep(c("s1", "s2"), each = 300), c("s1", "s2"),
+    center = TRUE, scale. = TRUE
+  )
+  expect_identical(unname(within$scales[, c(2, 3)]),
+                   matrix(1, nrow = 2, ncol = 2))
 
   # .columnSds() falls back to apply() for anything that is not a dense
   # numeric matrix, because matrixStats::colSds() does not accept one.
@@ -843,9 +853,9 @@ test_that("matrix-free sparse within-slide PCA matches dense preprocessing", {
 })
 
 test_that("matrix-free BPCells within-slide PCA matches dense preprocessing", {
-  # BPCells is Suggests and CI installs hard dependencies only, so this cannot
-  # run everywhere. It is still the only coverage of the IterableMatrix branch
-  # of .run_within_slide_pca(), which the multi-slide default now routes
+  # BPCells remains optional for local installs. The dedicated BPCells CI job
+  # installs it and makes this required coverage of the IterableMatrix branch
+  # of .run_within_slide_pca(), which the multi-slide default routes
   # out-of-core input through.
   skip_if_not_installed("BPCells")
   set.seed(4242)
@@ -914,6 +924,40 @@ test_that(".apply_centering_scaling() keeps BPCells input out of core", {
                unname(CoPro:::.uncenteredColumnScales(dense)))
   expect_identical(unname(CoPro:::.uncenteredColumnScales(bp)[c(2, 3)]),
                    c(1, 1))
+})
+
+test_that("BPCells nonzero fractions count negative entries", {
+  skip_if_not_installed("BPCells")
+  set.seed(4)
+  dense <- cbind(
+    pos = abs(rnorm(200)) + 0.5,
+    neg = -abs(rnorm(200)) - 0.5,
+    mixed = c(rep(-1, 100), rep(1, 100))
+  )
+  sparse <- methods::as(
+    methods::as(Matrix::Matrix(dense, sparse = TRUE), "generalMatrix"),
+    "CsparseMatrix"
+  )
+  bp <- BPCells::write_matrix_memory(sparse, compress = FALSE)
+
+  expected <- rep(1, ncol(dense))
+  expect_identical(
+    as.numeric(CoPro:::.columnNonzeroFraction(dense)), expected
+  )
+  expect_identical(
+    as.numeric(CoPro:::.columnNonzeroFraction(sparse)), expected
+  )
+  expect_identical(
+    as.numeric(CoPro:::.columnNonzeroFraction(bp)), expected
+  )
+  expect_equal(
+    as.numeric(CoPro:::.uncenteredColumnScales(bp)),
+    as.numeric(CoPro:::.uncenteredColumnScales(dense)),
+    tolerance = 1e-12
+  )
+  expect_identical(
+    CoPro:::.frozen_column_nonzero_fraction(bp), expected
+  )
 })
 
 test_that("the legacy multi-slide combination still runs the legacy path", {

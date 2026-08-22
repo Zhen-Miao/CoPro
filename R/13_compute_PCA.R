@@ -209,7 +209,7 @@ setGeneric("computePCA",
       sumsq / max(1, n - 1L)
     }
     scale_values <- sqrt(variance)
-    nz_prop <- as.numeric(Matrix::colSums(mat != 0)) / n
+    nz_prop <- .columnNonzeroFraction(mat)
     unsafe <- !is.finite(scale_values) |
       scale_values < zero_sd_threshold |
       nz_prop < nz_proportion_threshold
