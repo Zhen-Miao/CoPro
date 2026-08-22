@@ -29,7 +29,9 @@ By default, uses the single value in \code{object@sigmaValueChoice}.}
 \item{reference_weight}{How training moments are combined. \code{"cell_pooled"}
 (default) computes ordinary cell-pooled means and sample standard
 deviations. \code{"equal_slide"} averages each training slide's first and
-second moments with equal weight.}
+second moments with equal weight. Both routes retain CoPro's PCA safety
+guard: scales are pinned to 1 for genes with standard deviation below
+\code{1e-3} or nonzero fraction below 1 percent.}
 
 \item{newdata}{A subsetted \code{CoProSingle} or \code{CoProMulti} target object using
 the same normalized-expression representation and genes as the reference.
@@ -73,6 +75,10 @@ cross-platform quantile normalization, use \code{\link[=getTransferCellScores]{g
 Regression gene scores are useful for interpretation, but they are not the
 canonical scoring map. This function therefore always uses the exact
 back-projected weights from \code{\link[=computeGeneAndCellScores]{computeGeneAndCellScores()}}.
+
+For a sparse target, prediction evaluates the affine map as a sparse matrix
+multiplication plus a component-level offset. It does not materialize a
+dense cells-by-genes chunk.
 }
 \examples{
 genes <- c("g1", "g2")

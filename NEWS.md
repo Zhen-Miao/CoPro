@@ -9,7 +9,9 @@
   invariant to which other target slides are supplied. This frozen
   log-expression workflow is the recommended default after an internal
   benchmark; the existing quantile-normalized transfer helpers remain
-  available for cross-platform use.
+  available for cross-platform use. Frozen references preserve the PCA
+  low-variance/prevalence scale guard, reject gene-space weights, and score
+  sparse targets without densifying cells-by-genes chunks.
 
 ## Package-review hardening
 

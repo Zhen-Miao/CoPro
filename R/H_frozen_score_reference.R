@@ -22,7 +22,9 @@
 #' @param reference_weight How training moments are combined. `"cell_pooled"`
 #'   (default) computes ordinary cell-pooled means and sample standard
 #'   deviations. `"equal_slide"` averages each training slide's first and
-#'   second moments with equal weight.
+#'   second moments with equal weight. Both routes retain CoPro's PCA safety
+#'   guard: scales are pinned to 1 for genes with standard deviation below
+#'   `1e-3` or nonzero fraction below 1 percent.
 #'
 #' @return `fit_score_reference()` returns a `CoProScoreReference` object
 #'   containing the frozen transform, weights, and training provenance.
@@ -36,6 +38,10 @@
 #' Regression gene scores are useful for interpretation, but they are not the
 #' canonical scoring map. This function therefore always uses the exact
 #' back-projected weights from [computeGeneAndCellScores()].
+#'
+#' For a sparse target, prediction evaluates the affine map as a sparse matrix
+#' multiplication plus a component-level offset. It does not materialize a
+#' dense cells-by-genes chunk.
 #'
 #' @seealso [computeGeneAndCellScores()], [getTransferCellScores()]
 #' @export
@@ -102,6 +108,15 @@ fit_score_reference <- function(
       call. = FALSE
     )
   }
+  if (identical(getCCAObjective(object)$space, "gene")) {
+    stop(
+      paste(
+        "fit_score_reference() requires PCA-space weights from runSkrCCA().",
+        "Gene-space CCA uses a different preprocessing and scoring map."
+      ),
+      call. = FALSE
+    )
+  }
 
   sigma <- .resolve_frozen_score_sigma(object, sigma)
   slide_id <- if (methods::is(object, "CoProMulti")) {
@@ -147,8 +162,10 @@ fit_score_reference <- function(
     expression <- object@normalizedDataSub[
       rows, rownames(weights), drop = FALSE
     ]
+    pca_preprocessing <- object@pcaGlobal[[cell_type]]$preprocessing
     moments <- .frozen_score_moments(
-      expression, slide_id[rows], reference_weight
+      expression, slide_id[rows], reference_weight,
+      guard_by_slide = identical(pca_preprocessing, "within_slide")
     )
     list(
       genes = rownames(weights),
@@ -214,7 +231,37 @@ fit_score_reference <- function(
   as.numeric(sigma)
 }
 
-.frozen_score_moments <- function(expression, slide_id, reference_weight) {
+.frozen_score_guard <- function(
+    expression, slide_id, guard_by_slide,
+    zero_sd_threshold = 1e-3, nz_proportion_threshold = 0.01) {
+  blocks <- if (guard_by_slide) unique(slide_id) else "all_cells"
+  unsafe <- rep(FALSE, ncol(expression))
+  for (block_id in blocks) {
+    block <- if (guard_by_slide) {
+      expression[which(slide_id == block_id), , drop = FALSE]
+    } else {
+      expression
+    }
+    block_scale <- if (.is_bpcells(block)) {
+      sqrt(as.numeric(BPCells::colVars(block)))
+    } else {
+      as.numeric(.columnSds(block))
+    }
+    nonzero_fraction <- if (.is_bpcells(block)) {
+      as.numeric(colSums(BPCells::binarize(block)) / nrow(block))
+    } else {
+      as.numeric(.columnNonzeroFraction(block))
+    }
+    unsafe <- unsafe |
+      !is.finite(block_scale) |
+      block_scale < zero_sd_threshold |
+      nonzero_fraction < nz_proportion_threshold
+  }
+  unsafe
+}
+
+.frozen_score_moments <- function(
+    expression, slide_id, reference_weight, guard_by_slide = FALSE) {
   if (identical(reference_weight, "cell_pooled")) {
     center <- as.numeric(colMeans(expression))
     scale <- if (.is_bpcells(expression)) {
@@ -238,7 +285,8 @@ fit_score_reference <- function(
     center <- rowMeans(first)
     scale <- sqrt(pmax(rowMeans(second) - center ^ 2, 0))
   }
-  scale[!is.finite(scale) | scale <= sqrt(.Machine$double.eps)] <- 1
+  unsafe <- .frozen_score_guard(expression, slide_id, guard_by_slide)
+  scale[unsafe | !is.finite(scale) | scale < 1e-3] <- 1
   names(center) <- names(scale) <- colnames(expression)
   list(center = center, scale = scale)
 }
@@ -318,16 +366,20 @@ predict.CoProScoreReference <- function(
     )
     if (!length(rows)) return(result)
 
+    scaled_weights <- sweep(
+      reference$weights, 1L, reference$scale, "/"
+    )
+    center_offset <- as.numeric(reference$center %*% scaled_weights)
     starts <- seq.int(1L, length(rows), by = chunk_size)
     for (start in starts) {
-      local <- start:min(start + chunk_size - 1L, length(rows))
+      last <- min(as.double(start) + chunk_size - 1, length(rows))
+      local <- seq.int(start, last)
       block_rows <- rows[local]
-      block <- as.matrix(expression[
+      block <- expression[
         block_rows, reference$genes, drop = FALSE
-      ])
-      block <- sweep(block, 2L, reference$center, "-")
-      block <- sweep(block, 2L, reference$scale, "/")
-      result[local, ] <- block %*% reference$weights
+      ]
+      projected <- as.matrix(block %*% scaled_weights)
+      result[local, ] <- sweep(projected, 2L, center_offset, "-")
     }
     result
   }), object$cell_types)

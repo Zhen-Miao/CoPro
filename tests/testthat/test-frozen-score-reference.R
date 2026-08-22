@@ -100,7 +100,7 @@ test_that("frozen scores are target-addition and chunk invariant", {
   expect_equal(
     as.numeric(score_alone),
     as.numeric(score_together[rownames(base_x), , drop = FALSE]),
-    tolerance = 0
+    tolerance = 1e-14
   )
 })
 
@@ -123,11 +123,22 @@ test_that("dense and sparse references and targets agree", {
     sparse_target@normalizedDataSub, "CsparseMatrix"
   )
 
+  sparse_input_coercions <- 0L
+  testthat::local_mocked_bindings(
+    as.matrix = function(x, ...) {
+      if (inherits(x, "sparseMatrix")) {
+        sparse_input_coercions <<- sparse_input_coercions + 1L
+      }
+      base::as.matrix(x, ...)
+    },
+    .package = "CoPro"
+  )
   dense_scores <- predict(dense_reference, target, aggregate = TRUE)
   sparse_scores <- predict(sparse_reference, sparse_target, aggregate = TRUE)
   expect_equal(
     as.numeric(sparse_scores), as.numeric(dense_scores), tolerance = 1e-14
   )
+  expect_identical(sparse_input_coercions, 0L)
 })
 
 test_that("frozen reference integrates with a fitted CoPro object", {
@@ -153,6 +164,43 @@ test_that("frozen reference integrates with a fitted CoPro object", {
     )
     expect_equal(transferred[[cell_type]], native, tolerance = 1e-8)
   }
+})
+
+test_that("frozen reference retains the PCA low-variance scale guard", {
+  fitted <- create_test_copro_single(
+    n_cells = 60, n_genes = 6, n_cell_types = 2, seed = 809
+  )
+  fitted <- subsetData(fitted, c("CellTypeA", "CellTypeB"))
+  fitted@normalizedDataSub <- fitted@normalizedDataSub * 1e-4
+  fitted <- suppressWarnings(computePCA(fitted, nPCA = 3))
+  fitted <- computeKernelMatrix(
+    fitted, sigmaValues = 0.5, method = "sparse",
+    normalizeDistance = FALSE, verbose = FALSE
+  )
+  fitted <- runSkrCCA(
+    fitted, scalePCs = TRUE, nCC = 1, maxIter = 100
+  )
+  fitted <- computeGeneAndCellScores(fitted)
+
+  reference <- fit_score_reference(fitted, sigma = 0.5)
+  transferred <- predict(reference, fitted)
+  for (cell_type in fitted@cellTypesOfInterest) {
+    expect_true(all(reference$references[[cell_type]]$scale == 1))
+    native <- getCellScores(
+      fitted, sigma = 0.5, cellType = cell_type, verbose = FALSE
+    )
+    expect_equal(transferred[[cell_type]], native, tolerance = 1e-8)
+  }
+
+  multi <- make_score_reference_fixture()$object
+  multi@pcaGlobal <- list(
+    A = list(preprocessing = "within_slide"),
+    B = list(preprocessing = "within_slide")
+  )
+  multi_reference <- fit_score_reference(
+    multi, reference_weight = "equal_slide"
+  )
+  expect_identical(unname(multi_reference$references$A$scale["g3"]), 1)
 })
 
 test_that("equal-slide references weight slide moments equally", {
@@ -204,6 +252,14 @@ test_that("frozen reference validates fitted and target contracts", {
   expect_error(
     fit_score_reference(fixture$object, sigma = -1),
     "positive finite"
+  )
+  gene_space <- fixture$object
+  cca_out <- list("gscca_sigma_0.1" = list())
+  attr(cca_out, "ccaObjective") <- list(space = "gene")
+  gene_space@skrCCAOut <- cca_out
+  expect_error(
+    fit_score_reference(gene_space),
+    "requires PCA-space weights"
   )
 
   reference <- fit_score_reference(fixture$object)
