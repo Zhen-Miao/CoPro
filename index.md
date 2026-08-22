@@ -79,6 +79,28 @@ one shared PCA is fit, and
 optimizes equal-slide SUMCOR. Pass `center_per_slide = FALSE` and
 `objective = "sumcov"` only when reproducing the legacy pooled workflow.
 
+For comparable scores on new slides, freeze the fitted training
+reference and apply it unchanged to a subsetted target object:
+
+``` r
+
+score_reference <- fit_score_reference(obj)
+target_obj <- subsetData(target_obj, c("TypeA", "TypeB"))
+target_scores <- predict(score_reference, target_obj)
+```
+
+This target-invariant frozen log-expression transfer is the recommended
+default after an internal benchmark. Use
+[`getTransferCellScores()`](https://zhen-miao.github.io/CoPro/reference/getTransferCellScores.md)
+when cross-platform quantile normalization is specifically intended.
+Under the multi-slide default `center_per_slide = TRUE`, a frozen
+reference collapses the per-slide block moments to one center and scale
+per cell type, so transferred scores are comparable to each other but
+not to
+[`getCellScores()`](https://zhen-miao.github.io/CoPro/reference/getCellScores.md)
+on the fitted object; see
+[`?fit_score_reference`](https://zhen-miao.github.io/CoPro/reference/fit_score_reference.md).
+
 See the **[Getting Started
 vignettes](https://zhen-miao.github.io/CoPro/articles/)** for complete
 walkthroughs with real spatial transcriptomics datasets, including
@@ -103,7 +125,8 @@ plain matrices and data frames with no CoPro object involved
 Reach for the latter when you want the numerical core without the object
 wrapper. See
 [`?CoPro`](https://zhen-miao.github.io/CoPro/reference/CoPro-package.md)
-for the full rule and its two documented exceptions.
+for the full rule and documented exceptions, including fitted score
+references.
 
 ## Citation
 

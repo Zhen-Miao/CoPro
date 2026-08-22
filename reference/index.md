@@ -90,6 +90,10 @@ Retrieve analysis results
 
 Transfer learned patterns to new slides or datasets
 
+- [`fit_score_reference()`](https://zhen-miao.github.io/CoPro/reference/fit_score_reference.md)
+  [`predict(`*`<CoProScoreReference>`*`)`](https://zhen-miao.github.io/CoPro/reference/fit_score_reference.md)
+  [`print(`*`<CoProScoreReference>`*`)`](https://zhen-miao.github.io/CoPro/reference/fit_score_reference.md)
+  : Fit a frozen CoPro score-transfer reference
 - [`getTransferCellScores()`](https://zhen-miao.github.io/CoPro/reference/getTransferCellScores.md)
   : Get cell score by transferring gene weights from another slide By
   default, quantile normalization is used to ensure distribution match

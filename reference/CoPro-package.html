@@ -78,15 +78,14 @@ involved: the CCA solvers (<code><a href="optimize_bilinear.html">optimize_bilin
 standalone helpers (<code><a href="quantile_normalize.html">quantile_normalize()</a></code>, <code><a href="transfer_scores.html">transfer_scores()</a></code>,
 <code><a href="copro_download_data.html">copro_download_data()</a></code>). Call these directly when you want the numerical
 core without the object wrapper.</p></li>
-</ul><p>Two sets of exports sit outside that rule and are kept as they are for
-back-compatibility:</p>
+</ul><p>A few exports sit outside that rule:</p>
 <ul><li><p><code><a href="runSkrCCAPermu_FairSigma.html">runSkrCCAPermu_FairSigma()</a></code> and <code><a href="runSkrCCAPermu_Conditional.html">runSkrCCAPermu_Conditional()</a></code> keep
 the <code>camelCase</code> stem of <code><a href="runSkrCCAPermu.html">runSkrCCAPermu()</a></code> with a <code>_Variant</code> suffix, so
 the three permutation entry points sort together.</p></li>
-<li><p><code><a href="calculate_pvalue.html">calculate_pvalue()</a></code>, <code><a href="calculate_pvalue_stepdown.html">calculate_pvalue_stepdown()</a></code>, and
-<code><a href="compute_ground_truth_ncorr.html">compute_ground_truth_ncorr()</a></code> take a <code>CoPro</code> object but are
-<code>snake_case</code>. They read inference results out of an object rather than
-advancing the pipeline.</p></li>
+<li><p><code><a href="calculate_pvalue.html">calculate_pvalue()</a></code>, <code><a href="calculate_pvalue_stepdown.html">calculate_pvalue_stepdown()</a></code>,
+<code><a href="compute_ground_truth_ncorr.html">compute_ground_truth_ncorr()</a></code>, and <code><a href="fit_score_reference.html">fit_score_reference()</a></code> take a
+<code>CoPro</code> object but are <code>snake_case</code>. They derive standalone inference or
+transfer results rather than advancing and returning the object pipeline.</p></li>
 </ul></div>
     <div class="section level2">
     <h2 id="package-options">Package options<a class="anchor" aria-label="anchor" href="#package-options"></a></h2>

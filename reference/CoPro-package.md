@@ -41,8 +41,7 @@ The exported API deliberately uses two naming styles, split by layer:
   Call these directly when you want the numerical core without the
   object wrapper.
 
-Two sets of exports sit outside that rule and are kept as they are for
-back-compatibility:
+A few exports sit outside that rule:
 
 - [`runSkrCCAPermu_FairSigma()`](https://zhen-miao.github.io/CoPro/reference/runSkrCCAPermu_FairSigma.md)
   and
@@ -54,10 +53,12 @@ back-compatibility:
 
 - [`calculate_pvalue()`](https://zhen-miao.github.io/CoPro/reference/calculate_pvalue.md),
   [`calculate_pvalue_stepdown()`](https://zhen-miao.github.io/CoPro/reference/calculate_pvalue_stepdown.md),
+  [`compute_ground_truth_ncorr()`](https://zhen-miao.github.io/CoPro/reference/compute_ground_truth_ncorr.md),
   and
-  [`compute_ground_truth_ncorr()`](https://zhen-miao.github.io/CoPro/reference/compute_ground_truth_ncorr.md)
-  take a `CoPro` object but are `snake_case`. They read inference
-  results out of an object rather than advancing the pipeline.
+  [`fit_score_reference()`](https://zhen-miao.github.io/CoPro/reference/fit_score_reference.md)
+  take a `CoPro` object but are `snake_case`. They derive standalone
+  inference or transfer results rather than advancing and returning the
+  object pipeline.
 
 ## Package options
 
