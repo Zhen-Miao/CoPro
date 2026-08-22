@@ -1,5 +1,16 @@
 # CoPro (development version)
 
+## Frozen cross-slide score transfer
+
+* `fit_score_reference()` freezes cell-type-specific training means,
+  standard deviations, and exact PCA back-projected CoPro weights in a
+  self-contained reference. Its `predict()` method scores new slides without
+  target quantile normalization or target-derived parameters, so scores are
+  invariant to which other target slides are supplied. This frozen
+  log-expression workflow is the recommended default after an internal
+  benchmark; the existing quantile-normalized transfer helpers remain
+  available for cross-platform use.
+
 ## Package-review hardening
 
 * Sparse and float32 kernel construction now honors

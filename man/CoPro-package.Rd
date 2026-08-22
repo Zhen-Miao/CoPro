@@ -34,17 +34,16 @@ standalone helpers (\code{\link[=quantile_normalize]{quantile_normalize()}}, \co
 core without the object wrapper.
 }
 
-Two sets of exports sit outside that rule and are kept as they are for
-back-compatibility:
+A few exports sit outside that rule:
 
 \itemize{
 \item \code{\link[=runSkrCCAPermu_FairSigma]{runSkrCCAPermu_FairSigma()}} and \code{\link[=runSkrCCAPermu_Conditional]{runSkrCCAPermu_Conditional()}} keep
 the \code{camelCase} stem of \code{\link[=runSkrCCAPermu]{runSkrCCAPermu()}} with a \verb{_Variant} suffix, so
 the three permutation entry points sort together.
-\item \code{\link[=calculate_pvalue]{calculate_pvalue()}}, \code{\link[=calculate_pvalue_stepdown]{calculate_pvalue_stepdown()}}, and
-\code{\link[=compute_ground_truth_ncorr]{compute_ground_truth_ncorr()}} take a \code{CoPro} object but are
-\code{snake_case}. They read inference results out of an object rather than
-advancing the pipeline.
+\item \code{\link[=calculate_pvalue]{calculate_pvalue()}}, \code{\link[=calculate_pvalue_stepdown]{calculate_pvalue_stepdown()}},
+\code{\link[=compute_ground_truth_ncorr]{compute_ground_truth_ncorr()}}, and \code{\link[=fit_score_reference]{fit_score_reference()}} take a
+\code{CoPro} object but are \code{snake_case}. They derive standalone inference or
+transfer results rather than advancing and returning the object pipeline.
 }
 }
 

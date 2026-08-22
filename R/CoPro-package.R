@@ -26,17 +26,16 @@
 #'     core without the object wrapper.
 #' }
 #'
-#' Two sets of exports sit outside that rule and are kept as they are for
-#' back-compatibility:
+#' A few exports sit outside that rule:
 #'
 #' \itemize{
 #'   \item [runSkrCCAPermu_FairSigma()] and [runSkrCCAPermu_Conditional()] keep
 #'     the `camelCase` stem of [runSkrCCAPermu()] with a `_Variant` suffix, so
 #'     the three permutation entry points sort together.
-#'   \item [calculate_pvalue()], [calculate_pvalue_stepdown()], and
-#'     [compute_ground_truth_ncorr()] take a `CoPro` object but are
-#'     `snake_case`. They read inference results out of an object rather than
-#'     advancing the pipeline.
+#'   \item [calculate_pvalue()], [calculate_pvalue_stepdown()],
+#'     [compute_ground_truth_ncorr()], and [fit_score_reference()] take a
+#'     `CoPro` object but are `snake_case`. They derive standalone inference or
+#'     transfer results rather than advancing and returning the object pipeline.
 #' }
 #'
 #' @section Package options:
