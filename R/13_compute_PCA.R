@@ -347,7 +347,7 @@ methods::setMethod(
     if (scale.) {
       block_scale <- if (center) {
         if (.is_bpcells(block)) {
-          sqrt(as.numeric(BPCells::colVars(block)))
+          sqrt(as.numeric(.bpcellsColumnVariances(block)))
         } else {
           as.numeric(.columnSds(block))
         }

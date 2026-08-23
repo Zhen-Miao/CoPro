@@ -1041,11 +1041,47 @@ test_that("the degeneracy guard pins a one-cell BPCells block to unit scale", {
     "CsparseMatrix"
   )
   bp_one <- BPCells::write_matrix_memory(sparse_one, compress = FALSE)
-  # BPCells::colVars() of one row is NaN, the non-finite arm of the guard.
-  expect_true(all(is.nan(as.numeric(BPCells::colVars(bp_one)))))
+  # The variance of one row is NaN, the non-finite arm of the guard.
+  expect_true(all(is.nan(as.numeric(CoPro:::.bpcellsColumnVariances(bp_one)))))
   scaled <- CoPro:::center_scale_matrix_opt(bp_one)
   expect_s4_class(scaled, "IterableMatrix")
   expect_identical(as.numeric(as.matrix(scaled)), c(0, 0, 0))
+})
+
+test_that("BPCells column variances never dispatch through colVars()", {
+  skip_if_not_installed("BPCells")
+  # BPCells::colVars() only reaches its IterableMatrix method when BPCells is
+  # attached or MatrixGenerics is installed; the BPCells CI job has neither
+  # and failed on every BPCells route through PCA the first time it ran. The
+  # helper reads the same streamed statistic through matrix_stats() instead.
+  set.seed(11)
+  dense <- matrix(rpois(300 * 4, 2) * rnorm(1200), 300, 4,
+                  dimnames = list(NULL, paste0("g", 1:4)))
+  dense[, 4] <- 0
+  sparse <- methods::as(
+    methods::as(Matrix::Matrix(dense, sparse = TRUE), "generalMatrix"),
+    "CsparseMatrix"
+  )
+  bp <- BPCells::write_matrix_memory(sparse, compress = FALSE)
+  vars <- CoPro:::.bpcellsColumnVariances(bp)
+  expect_identical(names(vars), colnames(dense))
+  expect_equal(unname(vars), unname(apply(dense, 2, stats::var)),
+               tolerance = 1e-12)
+  expect_identical(length(CoPro:::.bpcellsColumnVariances(bp[, integer(0)])),
+                   0L)
+  expect_equal(
+    unname(CoPro:::.bpcellsColumnVariances(bp[, 2, drop = FALSE])),
+    stats::var(dense[, 2]), tolerance = 1e-12
+  )
+
+  # Pin the fix at the source: none of the functions that standardize BPCells
+  # input may mention colVars, whichever library this suite runs in.
+  for (fn in c(".bpcellsColumnVariances", "center_scale_matrix_opt",
+               ".withinSlidePCAParameters", ".frozen_column_sds")) {
+    code <- paste(deparse(get(fn, envir = asNamespace("CoPro"))),
+                  collapse = "\n")
+    expect_false(grepl("colVars", code, fixed = TRUE), label = fn)
+  }
 })
 
 test_that("the legacy multi-slide combination still runs the legacy path", {

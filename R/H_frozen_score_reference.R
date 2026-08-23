@@ -277,7 +277,7 @@ fit_score_reference <- function(
 
 .frozen_column_sds <- function(x) {
   if (.is_bpcells(x)) {
-    sqrt(as.numeric(BPCells::colVars(x)))
+    sqrt(as.numeric(.bpcellsColumnVariances(x)))
   } else {
     as.numeric(.columnSds(x))
   }

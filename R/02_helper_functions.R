@@ -62,6 +62,24 @@
   colSums(x != 0) / nrow(x)
 }
 
+#' Column variances of a BPCells matrix without `BPCells::colVars()`
+#'
+#' `BPCells::colVars()` is an S3 generic whose `IterableMatrix` method is
+#' exported but not registered, so a call from another namespace dispatches
+#' only when BPCells is attached or when the Bioconductor package
+#' MatrixGenerics is installed (BPCells then re-registers the method on that
+#' S4 generic at load time). A library with neither -- a CI runner holding
+#' hard dependencies only, or a user who never ran `library(BPCells)` --
+#' fails with "no applicable method for 'colVars'". `matrix_stats()` is the
+#' plain exported function the method itself calls, so this is the identical
+#' streamed computation (sample variance with an `n - 1` denominator, `NaN`
+#' for a single row) without the dispatch hazard. Names are kept so callers
+#' see exactly what `colVars()` returned.
+#' @noRd
+.bpcellsColumnVariances <- function(x) {
+  BPCells::matrix_stats(x, col_stats = "variance")$col_stats["variance", ]
+}
+
 #' Which columns are numerically unsafe to divide by
 #'
 #' The one degeneracy rule shared by every route into PCA and by the frozen
@@ -173,7 +191,7 @@ center_scale_matrix_opt <- function(input_matrix,
   # ---- BPCells path ----
 
   col_means <- colMeans(input_matrix)
-  col_sds <- sqrt(BPCells::colVars(input_matrix))
+  col_sds <- sqrt(.bpcellsColumnVariances(input_matrix))
   col_nz <- .columnNonzeroFraction(input_matrix)
   unsafe <- .unsafeScaleColumns(col_sds, col_nz,
                                 zero_sd_threshold, nz_proportion_threshold)
