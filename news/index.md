@@ -66,6 +66,19 @@
   materialized the matrix densely and now uses `multiply_cols()`.
   BPCells input is also checked for non-finite values during object
   construction instead of letting them propagate into PCA.
+- BPCells input no longer needs the Bioconductor package
+  `MatrixGenerics` to be installed. `BPCells::colVars()` is an S3
+  generic whose `IterableMatrix` method is exported but not registered,
+  so called from CoPro it dispatched only when MatrixGenerics was
+  present (BPCells then re-registers the method as S4) or BPCells was
+  attached; in any other library every BPCells route through
+  [`computePCA()`](https://zhen-miao.github.io/CoPro/reference/computePCA.md)
+  and
+  [`fit_score_reference()`](https://zhen-miao.github.io/CoPro/reference/fit_score_reference.md)
+  stopped with “no applicable method for ‘colVars’”. Column variances
+  now come from `BPCells::matrix_stats()`, the same streamed computation
+  the method itself performs, so results are unchanged. Caught by the
+  BPCells CI job on its first run.
 - A dedicated `BPCells-tests` GitHub Actions job installs BPCells, with
   the HDF5 system library it links against, and runs the full test suite
   on pushes to `main`, weekly, and on demand, so the `IterableMatrix`
