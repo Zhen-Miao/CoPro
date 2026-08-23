@@ -106,7 +106,7 @@ plot(locationData$x, locationData$y, pch = ".", asp = 1)
 - Coordinates should look like tissue, not a random cloud
 - Check for obvious batch shifts (e.g., two slides plotted on top of each other)
 - For multi-slide: confirm `slideID` correctly partitions cells---`plot(x, y, col = as.factor(slideID))` should show non-overlapping groups. Kernels are always built *within* a slide; cells on different slides are never neighbors.
-- **Units matter for sigma, not for CoPro.** `sigma` is a distance in whatever units `locationData` uses (microns, pixels, Visium spots). Never carry a sigma value between datasets; get the grid from `detectSigmaRange()` (next section). Since 1.2.0 distances are **not** rescaled by default (`normalizeDistance = FALSE`).
+- **Units matter for sigma, not for CoPro.** `sigma` is a distance in whatever units `locationData` uses (microns, pixels, Visium spots). Never carry a sigma value between datasets; get the grid from `detectSigmaRange()` (next section). Since 1.2.0 distances are **not** rescaled by default (`normalizeDistance = FALSE`); the one rescaling worth recommending is `normalizeDistance = TRUE, normalizeMethod = "global"` (see *normalizeDistance* under Key parameters).
 
 ## Pipeline function order
 
@@ -142,14 +142,23 @@ obj <- computeRegressionGeneScores(obj)           # regression gene weights (use
 
 `runSkrCCA()` defaults: `maxIter = 200`, `tol = 1e-5`, `step_size = 1`. For one or two cell types under `"sumcov"` the solution is an exact SVD/eigendecomposition, so those settings do not matter; they matter for three or more cell types, for a transferred first axis, and under `"sumcor"`.
 
-**Legacy dense route** (what the shipped vignettes still do, and what reproduces pre-1.2.0 numbers): build a dense distance matrix with rescaled units, then hand-pick a grid in those units.
+**Global-normalized variant** (the only rescaling to recommend): same sparse route, but distances are first put on a unit-free scale, so the sigma grid can be written down without looking at the data and reused across datasets.
+
+```r
+obj <- computeKernelMatrix(obj, sigmaValues = c(0.01, 0.02, 0.05, 0.1),        # 1, 2, 5, 10 neighbor spacings
+                           normalizeDistance = TRUE, normalizeMethod = "global")
+```
+
+Under `"global"` the median nearest-neighbor distance over all cells of interest becomes `normalizeTarget = 0.01`, so `sigma = 0.01 * k` reads as "k neighbor spacings". `detectSigmaRange()` still reports raw units: after the first normalized call it warns and prints the factor, and `rng$sigmaValues * obj@distanceScaleFactor` converts. Either choice---raw units (default) or `"global"`---is fine; pick one per object (the geometry is recorded, and a contradicting call errors).
+
+**Legacy dense route** (what the colon and kidney vignettes still do): build a dense distance matrix, then kernels from it.
 
 ```r
 obj <- computeDistance(obj, distType = "Euclidean2D", normalizeDistance = TRUE)   # normalizeMethod = "global"
-obj <- computeKernelMatrix(obj, sigmaValues = c(0.01, 0.02, 0.05, 0.1))          # grid in normalized units
+obj <- computeKernelMatrix(obj, sigmaValues = c(0.01, 0.02, 0.05, 0.1))          # grid in global units
 ```
 
-Only use this for small data (dense `n x n` per block) or to reproduce an existing analysis. `normalizeMethod = "percentile"` reproduces the pre-1.2.0 unit exactly.
+Only for small data (dense `n x n` per block) or to reproduce an existing analysis; the sparse route matches it to ~1e-6 in normalized correlation. `normalizeMethod = "percentile"` reproduces the pre-1.2.0 unit exactly and exists for reproduction only.
 
 ### Multi-slide pipeline, PC space (the 1.3.0 default)
 
@@ -190,7 +199,7 @@ Gene-space CCA operates directly on expression: it z-standardizes per (slide, ce
 
 ### Reference + transfer pipeline
 
-Two routes. The **frozen reference** is the recommended default (internal leave-one-slide-out benchmark); `getTransferCellScores()` is for cross-platform transfer where quantile normalization against the reference is specifically wanted (this is what the D9 vignette shows).
+Two routes and two weight types. **Default and first attempt: PCA back-projection weights.** `fit_score_reference()` freezes exactly those, and `getTransferCellScores()` uses them under `gene_score_type = "PCA"` (its default). Regression weights (`gene_score_type = "regression"`, what the D9 vignette shows) are the second attempt, tried only after the back-projection transfer has been checked. Between routes: the **frozen reference** is the default (internal leave-one-slide-out benchmark); `getTransferCellScores()` is for cross-platform transfer where quantile normalization against the reference is specifically wanted, or when the gene panels differ.
 
 ```r
 # 1. Run the full standard pipeline on the reference slide, through computeGeneAndCellScores().
@@ -214,10 +223,16 @@ tar_obj <- computePCA(tar_obj, nPCA = 15)
 tar_obj <- computeKernelMatrix(tar_obj, sigmaValues = sigma_opt)      # or sigma_choice_tar if target units differ
 tar_scores <- getTransferCellScores(ref_obj = ref_obj, tar_obj = tar_obj,
                                     sigma_choice = sigma_opt,
-                                    gene_score_type = "PCA")           # "PCA" (default) is the canonical scoring map;
-                                                                       # "regression" is what the D9 vignette uses
+                                    gene_score_type = "PCA")           # first attempt: back-projection (default)
 tar_ncorr <- getTransferNormCorr(tar_obj = tar_obj, transfer_cell_scores = tar_scores,
                                  sigma_choice = sigma_opt)
+# Second attempt, only if the transfer checks on the PCA transfer disappoint
+# (needs computeRegressionGeneScores() on ref_obj):
+tar_scores_reg <- getTransferCellScores(ref_obj = ref_obj, tar_obj = tar_obj,
+                                        sigma_choice = sigma_opt,
+                                        gene_score_type = "regression")
+tar_ncorr_reg  <- getTransferNormCorr(tar_obj = tar_obj, transfer_cell_scores = tar_scores_reg,
+                                      sigma_choice = sigma_opt)
 ```
 
 A frozen reference collapses to one center and scale per cell type. On a `CoProMulti` fitted with the default `center_per_slide = TRUE`, transferred scores are target-invariant and mutually comparable but **not** on the same affine footing as `getCellScores()` on the fitted object (the function says so with a message and records `preprocessing` in the reference). Self-transfer reproduces `getCellScores()` exactly only under pooled preprocessing (`CoProSingle`, or `center_per_slide = FALSE`). Gene-space weights are rejected by `fit_score_reference()`.
@@ -258,11 +273,16 @@ Works under both objectives (a 1.3.x fix: the one-slide SUMCOR shortcut used to 
 
 Sigma also drives memory: retained kernel pairs grow as `sigma^d`. `method = "auto"` predicts density and warns (with a suggested sigma) when a sparse kernel would save nothing---the fix is a smaller sigma, not more RAM.
 
-Grids in the shipped vignettes (`c(0.01, 0.02, 0.05, 0.1, ...)`, brain `c(0.1, 0.14, 0.2, 0.5)`) are in **normalized** units (`normalizeDistance = TRUE`). They are not transferable to raw coordinates.
+Grids in the shipped vignettes are hand-picked and unit-specific: the colon and kidney vignettes (`c(0.005, 0.01, 0.02, 0.05, 0.1)`) use `normalizeDistance = TRUE`, i.e. global units since 1.2.0; the brain (`c(0.1, 0.14, 0.2, 0.5)`) and organoid (`c(0.01, ..., 0.2)`) vignettes use raw coordinate units. Neither kind transfers to another dataset as-is; use `detectSigmaRange()`, or the global unit.
 
 ### normalizeDistance
 
-**`FALSE` by default since 1.2.0** (was `TRUE`). Pass `TRUE` explicitly to reproduce 1.1.x results or vignette grids. With `TRUE`, `normalizeMethod = "global"` (default) sets the unit from the median nearest-neighbor distance over all cells of interest; `"spacing"` measures per cell-type block; `"percentile"` is the pre-1.2.0 rule (the densest block set the unit for everything). The geometry used is recorded on the object (`getDistanceGeometry(obj)`); kernel calls inherit it, and contradicting it is an error.
+Two settings are recommended; everything else exists to reproduce old results.
+
+- **`FALSE` (default since 1.2.0; was `TRUE`)** --- no rescaling. Sigma is in raw coordinate units and comes from `detectSigmaRange()`. Use this unless there is a reason not to.
+- **`TRUE` with `normalizeMethod = "global"`** (the code default for `normalizeMethod`) --- one tissue-wide reference, the median nearest-neighbor distance over all cells of interest regardless of type, is mapped to `normalizeTarget = 0.01`. Cross-type and within-type steps derive the identical unit in either order, so it is safe on objects that mix `computeKernelMatrix()` and `computeSelfKernel()`. Choose it for a grid that reads in neighbor spacings (`c(0.01, 0.02, 0.05, 0.1)` = 1-10 spacings) and is portable between datasets, or to match the colon/kidney vignettes. Accepted by both the sparse route (`computeKernelMatrix(..., normalizeDistance = TRUE, normalizeMethod = "global")`) and the dense route (`computeDistance()`).
+
+Do not suggest `"spacing"` (per-block reference: the unit then depends on cell-type abundance and colocalization, and cross-type vs within-type steps can disagree) or `"percentile"` (pre-1.2.0 rule: the densest block set the unit for the whole object). Both remain only so that older analyses can be reproduced. The geometry used is recorded on the object (`getDistanceGeometry(obj)`, `@distanceScaleFactor`); later kernel and sigma-detection calls inherit it, and contradicting it is an error.
 
 ### nCC
 
@@ -360,7 +380,7 @@ CoPro provides two gene weight methods:
 - `@geneScores` via `computeGeneAndCellScores()` --- PCA back-projection. This **is** the scoring functional (cell score = standardized expression x these weights), so it is what `fit_score_reference()` freezes for transfer.
 - `@geneScoresRegression` via `computeRegressionGeneScores()` --- per-gene regression of expression on the cell score (marginal association).
 
-**Report regression weights** (figures, tables, gene lists): they avoid PCA collinearity splitting weight between correlated genes, are insensitive to `nPCA`, and reproduce better across replicates. **Transfer with back-projection weights** (the default of both transfer routes). Regression weights used as a scoring map are lossy even on the training slide.
+**Report regression weights** (figures, tables, gene lists): they avoid PCA collinearity splitting weight between correlated genes, are insensitive to `nPCA`, and reproduce better across replicates. **Transfer with back-projection weights first** (the default of both transfer routes); regression weights are the second thing to try (`getTransferCellScores(gene_score_type = "regression")`, or `gs_ct` from `@geneScoresRegression` for scRNA-seq), judged on the same transfer checks. Regression weights are not the scoring functional, so even self-transfer with them is only approximately faithful, whereas back-projection self-transfer is exact.
 
 Both slots use the same key format: `"geneScores|sigma{X}|{CellType}"`, each a genes x nCC matrix. `computeRegressionGeneScores(sigma = NULL)` uses `obj@sigmaValueChoice`.
 
@@ -369,6 +389,9 @@ Both slots use the same key format: `"geneScores|sigma{X}|{CellType}"`, each a g
 Transfer spatial gene weights to scRNA-seq for full-transcriptome analysis:
 
 ```r
+key <- paste0("geneScores|sigma", obj@sigmaValueChoice, "|TypeA")
+gene_weights <- obj@geneScores[[key]][, 1, drop = FALSE]             # first attempt: back-projection
+# gene_weights <- obj@geneScoresRegression[[key]][, 1, drop = FALSE] # second attempt (the kidney vignette uses this)
 transferred <- transfer_scores(
   mat_A = spatial_expr,      # reference spatial data (cells x shared genes)
   mat_B = scrna_expr,        # target scRNA-seq (cells x shared genes)
@@ -530,6 +553,8 @@ tar_ncorr <- getTransferNormCorr(tar_obj = tar_obj, transfer_cell_scores = tar_s
 
 4. **Self-transfer sanity**: `predict(ref, ref_obj)` must reproduce `getCellScores(ref_obj, ...)` exactly on a `CoProSingle`. If it does not, the target preprocessing differs from the reference's.
 
+5. **Weight type**: the back-projection transfer comes first. If checks 1-2 disappoint, repeat with `gene_score_type = "regression"` (or `@geneScoresRegression` as `gs_ct`) and compare the two on transferred normalized correlation and in-situ pattern; keep whichever passes and state which was used.
+
 ### Transfer to scRNA-seq
 
 ```r
@@ -560,7 +585,7 @@ sum(reg_results$fdr < 0.05)    # expect thousands if the axis is real; only pane
 - **Too few shared genes**: if <100 genes overlap between reference and target, the transfer is underpowered. Consider a broader spatial panel or a different reference.
 - **Batch effects in scRNA-seq**: quantile normalization helps, but large batch effects can still distort transferred scores. Check whether scores correlate with batch labels.
 - **Mixing routes**: frozen-reference scores and quantile-normalized scores are on different scales; do not pool them on one axis. Likewise, frozen scores from a `center_per_slide = TRUE` multi-slide fit are not on the fitted object's own score scale.
-- **Regression weights as a scoring map**: larger magnitude and lossy; relative ordering is preserved but absolute values are not comparable with PCA-weight scores.
+- **Comparing weight types**: back-projection and regression scores sit on different scales (regression weights have larger magnitude). Compare the two transfers by transferred normalized correlation and in-situ pattern, never by score values, and do not pool them on one axis.
 
 ## Available example datasets
 
@@ -583,7 +608,7 @@ A tiny bundled object for smoke tests: `readRDS(system.file("extdata", "toy_copr
 - **"No kernel for sigma ..."** / kernel lookup errors: every sigma passed to `runSkrCCA(sigmaChoice=)`, `runGeneSpaceCCA(sigma=)`, `getCellScores(sigma=)`, etc. must be one of the values `computeKernelMatrix()` was given. Use `rng$sigmaValues` consistently, and note `obj@sigmaValueChoice` is a single numeric.
 - **`method = "auto"` warns "predicted density ..."**: sigma is too large for a sparse kernel at this cell density. Use the smaller sigma it suggests; do not add RAM.
 - **Geometry contradiction error** (`distType`/`xDistScale` disagree with the record): kernel steps inherit what `computeDistance()` recorded. Pass the same values or leave them `NULL`.
-- **Results differ from an older analysis**: (i) `normalizeDistance` now defaults to `FALSE`; (ii) `CoProMulti` now defaults to `center_per_slide = TRUE` + `objective = "sumcor"`; (iii) gene-space `sweep` defaults to `"gauss-seidel"`. Pass the legacy values explicitly to reproduce (`normalizeDistance = TRUE, normalizeMethod = "percentile"`, `center_per_slide = FALSE, objective = "sumcov"`, `sweep = "jacobi"`).
+- **Results differ from an older analysis**: (i) `normalizeDistance` now defaults to `FALSE`; (ii) `CoProMulti` now defaults to `center_per_slide = TRUE` + `objective = "sumcor"`; (iii) gene-space `sweep` defaults to `"gauss-seidel"`. Pass the legacy values explicitly, and only to reproduce (`normalizeDistance = TRUE, normalizeMethod = "percentile"`, `center_per_slide = FALSE, objective = "sumcov"`, `sweep = "jacobi"`). For a new analysis stay with the default (no rescaling) or `normalizeMethod = "global"`.
 - **Permutation on `CoProMulti` errors**: intended. Use `runSlideLevelInference()`.
 - **`calculate_pvalue(alternative = "two.sided")` errors**: intended; the statistic's null is one-sided.
 - **Convergence notices flood the console**: they are `message()`s now; wrap in `suppressMessages()` or capture with `capture.output(type = "message")`.
@@ -595,6 +620,6 @@ A tiny bundled object for smoke tests: `readRDS(system.file("extdata", "toy_copr
 
 ## What changed recently (for reconciling older scripts)
 
-- **1.2.0**: `detectSigmaRange()`; `normalizeDistance` default `FALSE` with `normalizeMethod = "global"/"spacing"/"percentile"`; `method = "auto"` uses float32 sparse kernels and predicts density; `@distanceGeometry` record; `computeSelfKernel(normalizeDistance = "inherit")`.
+- **1.2.0**: `detectSigmaRange()`; `normalizeDistance` default `FALSE` with `normalizeMethod = "global"/"spacing"/"percentile"` (recommend only the default or `"global"`); `method = "auto"` uses float32 sparse kernels and predicts density; `@distanceGeometry` record; `computeSelfKernel(normalizeDistance = "inherit")`.
 - **1.3.0**: `runSkrCCA(objective=, slideWeight=, space=, minCellsPerSlide=)`; `CoProMulti` defaults `center_per_slide = TRUE` + `"sumcor"`/`"equal"`; `getCCAObjective()`; `runGeneSpaceCCA(sweep=, step_size=, objective=)`; `selectSigmaByPermutation()`; within-type permutation fixed; SUMCOR null refits per draw; `transferred_weight_1` survives `"sumcor"`; permutation null matches the fitted criterion.
 - **Development (post-1.3.0)**: `fit_score_reference()` / `predict()` frozen transfer; `options(CoPro.*)` became arguments (`factorize`, `compactPermutation`, `nThreads`); one S4 method per accessor on the `CoPro` base class; convergence notices are messages; `computePCA()` degeneracy guard on every branch and full BPCells support; `computeNormalizedCorrelation(normalizer=)` exposes the denominator (`"legacy"` default).
