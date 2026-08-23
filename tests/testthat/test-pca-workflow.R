@@ -523,6 +523,10 @@ test_that("column statistics and centering helpers match what they replaced", {
   scaled_only <- CoPro:::.apply_centering_scaling(deg, FALSE, TRUE)
   expect_false(anyNA(scaled_only))
   expect_identical(unname(attr(scaled_only, "scaled:scale")[c(2, 3)]), c(1, 1))
+  centered_scaled <- CoPro:::center_scale_matrix_opt(deg)
+  expect_identical(
+    unname(attr(centered_scaled, "scaled:scale")[c(2, 3)]), c(1, 1)
+  )
   # Undegenerate columns keep the exact divisor base::scale() would have used.
   expect_equal(
     unname(attr(scaled_only, "scaled:scale")[c(1, 4)]),
@@ -536,6 +540,12 @@ test_that("column statistics and centering helpers match what they replaced", {
     unname(attr(scaled_only, "scaled:scale")),
     unname(CoPro:::.sparse_pca_parameters(deg_sp, FALSE, TRUE)$scale)
   )
+  within <- CoPro:::.withinSlidePCAParameters(
+    deg, rep(c("s1", "s2"), each = 300), c("s1", "s2"),
+    center = TRUE, scale. = TRUE
+  )
+  expect_identical(unname(within$scales[, c(2, 3)]),
+                   matrix(1, nrow = 2, ncol = 2))
 
   # .columnSds() falls back to apply() for anything that is not a dense
   # numeric matrix, because matrixStats::colSds() does not accept one.
@@ -843,9 +853,9 @@ test_that("matrix-free sparse within-slide PCA matches dense preprocessing", {
 })
 
 test_that("matrix-free BPCells within-slide PCA matches dense preprocessing", {
-  # BPCells is Suggests and CI installs hard dependencies only, so this cannot
-  # run everywhere. It is still the only coverage of the IterableMatrix branch
-  # of .run_within_slide_pca(), which the multi-slide default now routes
+  # BPCells remains optional for local installs. The dedicated BPCells CI job
+  # installs it and makes this required coverage of the IterableMatrix branch
+  # of .run_within_slide_pca(), which the multi-slide default routes
   # out-of-core input through.
   skip_if_not_installed("BPCells")
   set.seed(4242)
@@ -914,6 +924,128 @@ test_that(".apply_centering_scaling() keeps BPCells input out of core", {
                unname(CoPro:::.uncenteredColumnScales(dense)))
   expect_identical(unname(CoPro:::.uncenteredColumnScales(bp)[c(2, 3)]),
                    c(1, 1))
+})
+
+test_that("BPCells nonzero fractions count negatives, not stored zeros", {
+  skip_if_not_installed("BPCells")
+  set.seed(4)
+  dense <- cbind(
+    pos = abs(rnorm(200)) + 0.5,
+    neg = -abs(rnorm(200)) - 0.5,
+    mixed = c(rep(-1, 100), rep(1, 100))
+  )
+  sparse <- methods::as(
+    methods::as(Matrix::Matrix(dense, sparse = TRUE), "generalMatrix"),
+    "CsparseMatrix"
+  )
+  bp <- BPCells::write_matrix_memory(sparse, compress = FALSE)
+
+  expected <- rep(1, ncol(dense))
+  expect_identical(
+    as.numeric(CoPro:::.columnNonzeroFraction(dense)), expected
+  )
+  expect_identical(
+    as.numeric(CoPro:::.columnNonzeroFraction(sparse)), expected
+  )
+  expect_identical(
+    as.numeric(CoPro:::.columnNonzeroFraction(bp)), expected
+  )
+  expect_equal(
+    as.numeric(CoPro:::.uncenteredColumnScales(bp)),
+    as.numeric(CoPro:::.uncenteredColumnScales(dense)),
+    tolerance = 1e-12
+  )
+  # The frozen-reference guard rides on the same helper: nothing here is
+  # degenerate, so no gene is flagged (binarize() would have flagged `neg`).
+  expect_identical(
+    unname(CoPro:::.frozen_score_guard(bp, rep("s1", nrow(dense)), FALSE)),
+    c(FALSE, FALSE, FALSE)
+  )
+
+  # An explicitly stored zero is still a zero. Matrix::Matrix() drops stored
+  # zeros on conversion, so build the fixture with sparseMatrix(), which keeps
+  # them, and confirm BPCells carries the stored pattern through before
+  # trusting the count: matrix_stats(col_stats = "nonzero") reports stored
+  # entries, which is exactly why .columnNonzeroFraction() cannot use it.
+  stored <- Matrix::sparseMatrix(
+    i = c(1, 2, 3, 4, 1, 2, 1, 3),
+    j = c(1, 1, 1, 1, 2, 2, 3, 3),
+    x = c(-1, -2, 0, 3, 0, 0, 5, 7),
+    dims = c(4, 4)
+  )
+  expect_identical(diff(stored@p), c(4L, 2L, 2L, 0L))
+  stored_bp <- BPCells::write_matrix_memory(stored, compress = FALSE)
+  stored_counts <- BPCells::matrix_stats(stored_bp, col_stats = "nonzero")
+  expect_identical(
+    as.numeric(stored_counts$col_stats["nonzero", ]), c(4, 2, 2, 0)
+  )
+
+  stored_expected <- c(3, 0, 2, 0) / 4
+  expect_identical(
+    as.numeric(CoPro:::.columnNonzeroFraction(as.matrix(stored))),
+    stored_expected
+  )
+  expect_identical(
+    as.numeric(CoPro:::.columnNonzeroFraction(stored)), stored_expected
+  )
+  expect_identical(
+    as.numeric(CoPro:::.columnNonzeroFraction(stored_bp)), stored_expected
+  )
+  # Through the frozen-reference guard only the all-zero and the empty column
+  # are degenerate; the columns carrying stored zeros are not.
+  expect_identical(
+    unname(CoPro:::.frozen_score_guard(stored_bp, rep("s1", 4), FALSE)),
+    c(FALSE, TRUE, FALSE, TRUE)
+  )
+})
+
+test_that("the degeneracy guard treats a non-finite or NA scale as unsafe", {
+  # Every route into PCA and the frozen-reference guard share one predicate.
+  # A finite scale at or above threshold with a nonzero fraction at or above
+  # threshold is the only safe case; an NA on either input must come out TRUE,
+  # never NA, because `x[NA] <- 1` silently skips that element.
+  unsafe <- CoPro:::.unsafeScaleColumns(
+    scale_values = c(2, NaN, Inf, NA, 1e-4, 1e-3, 2, 2),
+    nonzero_fraction = c(0.5, 0.5, 0.5, 0.5, 0.5, 0.01, 0.001, NA)
+  )
+  expect_identical(
+    unsafe, c(FALSE, TRUE, TRUE, TRUE, TRUE, FALSE, TRUE, TRUE)
+  )
+  expect_false(anyNA(unsafe))
+
+  # The non-finite arm is what a one-cell block hits: the sd of a single row
+  # is NA on the dense path, and the divisor must still come out as 1.
+  one <- matrix(c(1, 2, 3), nrow = 1,
+                dimnames = list("c1", c("g1", "g2", "g3")))
+  expect_identical(unname(CoPro:::.columnSds(one)), rep(NA_real_, 3))
+  dense_one <- CoPro:::center_scale_matrix_opt(one)
+  expect_identical(unname(attr(dense_one, "scaled:scale")), c(1, 1, 1))
+  expect_identical(as.numeric(dense_one), c(0, 0, 0))
+
+  # A slide holding one cell guards every gene on every slide.
+  set.seed(7)
+  m <- matrix(rnorm(15), 5, 3, dimnames = list(NULL, c("g1", "g2", "g3")))
+  within <- CoPro:::.withinSlidePCAParameters(
+    m, c("a", "a", "a", "a", "b"), c("a", "b"), center = TRUE, scale. = TRUE
+  )
+  expect_identical(unname(within$guarded), c(TRUE, TRUE, TRUE))
+  expect_identical(unname(within$scales), matrix(1, nrow = 2, ncol = 3))
+})
+
+test_that("the degeneracy guard pins a one-cell BPCells block to unit scale", {
+  skip_if_not_installed("BPCells")
+  one <- matrix(c(1, 2, 3), nrow = 1,
+                dimnames = list("c1", c("g1", "g2", "g3")))
+  sparse_one <- methods::as(
+    methods::as(Matrix::Matrix(one, sparse = TRUE), "generalMatrix"),
+    "CsparseMatrix"
+  )
+  bp_one <- BPCells::write_matrix_memory(sparse_one, compress = FALSE)
+  # BPCells::colVars() of one row is NaN, the non-finite arm of the guard.
+  expect_true(all(is.nan(as.numeric(BPCells::colVars(bp_one)))))
+  scaled <- CoPro:::center_scale_matrix_opt(bp_one)
+  expect_s4_class(scaled, "IterableMatrix")
+  expect_identical(as.numeric(as.matrix(scaled)), c(0, 0, 0))
 })
 
 test_that("the legacy multi-slide combination still runs the legacy path", {

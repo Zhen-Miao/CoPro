@@ -283,14 +283,6 @@ fit_score_reference <- function(
   }
 }
 
-.frozen_column_nonzero_fraction <- function(x) {
-  if (.is_bpcells(x)) {
-    as.numeric(colSums(BPCells::binarize(x)) / nrow(x))
-  } else {
-    as.numeric(.columnNonzeroFraction(x))
-  }
-}
-
 # `pcaGlobal` is keyed by the cell types present when computePCA() ran. A later
 # subsetData() can leave cellTypesOfInterest pointing at a type that is not a
 # key, where `[[` raises an opaque "subscript out of bounds"; name the stale fit
@@ -328,11 +320,10 @@ fit_score_reference <- function(
     } else {
       .frozen_column_sds(block)
     }
-    nonzero_fraction <- .frozen_column_nonzero_fraction(block)
+    nonzero_fraction <- as.numeric(.columnNonzeroFraction(block))
     unsafe <- unsafe |
-      !is.finite(block_scale) |
-      block_scale < zero_sd_threshold |
-      nonzero_fraction < nz_proportion_threshold
+      .unsafeScaleColumns(block_scale, nonzero_fraction,
+                          zero_sd_threshold, nz_proportion_threshold)
   }
   unsafe
 }

@@ -42,17 +42,48 @@
 #' instead of silently undercounting.
 #'
 #' `IterableMatrix` supports no comparison operator at all -- `x != 0` errors
-#' with "comparison (!=) is possible only for atomic and list types" -- so
-#' BPCells input needs `binarize()`, which is the lazy equivalent.
+#' with "comparison (!=) is possible only for atomic and list types" -- and the
+#' two obvious BPCells substitutes are both wrong. `binarize(x)` is `x > 0`, so
+#' it drops negative entries; `matrix_stats(col_stats = "nonzero")` counts
+#' *stored* entries, so an explicitly stored zero counts as a nonzero (the
+#' `drop0()` problem again). `binarize(x^2)` is `x^2 > 0`, which is `x != 0`
+#' for either sign and every storage type (`^` evaluates in double, so integer
+#' matrices cannot wrap), streams the matrix once, and never materializes a
+#' logical copy. Only magnitudes below ~1.5e-162 square to zero, far outside
+#' anything normalized expression produces.
 #' @noRd
 .columnNonzeroFraction <- function(x) {
   if (inherits(x, "CsparseMatrix") && !inherits(x, "symmetricMatrix")) {
     return(diff(Matrix::drop0(x)@p) / nrow(x))
   }
   if (.is_bpcells(x)) {
-    return(colSums(BPCells::binarize(x)) / nrow(x))
+    return(colSums(BPCells::binarize(x^2)) / nrow(x))
   }
   colSums(x != 0) / nrow(x)
+}
+
+#' Which columns are numerically unsafe to divide by
+#'
+#' The one degeneracy rule shared by every route into PCA and by the frozen
+#' score reference: a column's scale cannot serve as a divisor when it is not
+#' finite, is below `zero_sd_threshold`, or belongs to a gene detected in fewer
+#' than `nz_proportion_threshold` of the cells. Callers pin the scale of every
+#' flagged column at 1, which carries a degenerate gene through unscaled
+#' rather than amplifying its noise or turning the column into `NaN`.
+#'
+#' The rule is written as the conjunction of the *safe* conditions and then
+#' negated so that a missing value on either input comes out `TRUE`, never
+#' `NA`: `NA | FALSE` is `NA`, and `x[NA] <- 1` silently skips that element,
+#' which is how a per-site `which()` or `|` chain could let a column through.
+#' @noRd
+.unsafeScaleColumns <- function(scale_values, nonzero_fraction,
+                                zero_sd_threshold = 1e-3,
+                                nz_proportion_threshold = 0.01) {
+  safe <- is.finite(scale_values) &
+    scale_values >= zero_sd_threshold &
+    is.finite(nonzero_fraction) &
+    nonzero_fraction >= nz_proportion_threshold
+  !safe
 }
 
 #' Per-column standard deviations
@@ -109,9 +140,8 @@
   col_nz <- .columnNonzeroFraction(x)
   col_scales <- sqrt(pmax(as.numeric(colSums(x^2)), 0) / max(1, n - 1L))
   names(col_scales) <- colnames(x)
-  unsafe <- !is.finite(col_scales) |
-    col_scales < zero_sd_threshold |
-    col_nz < nz_proportion_threshold
+  unsafe <- .unsafeScaleColumns(col_scales, col_nz,
+                                zero_sd_threshold, nz_proportion_threshold)
   col_scales[unsafe] <- 1.0
   col_scales
 }
@@ -132,9 +162,10 @@ center_scale_matrix_opt <- function(input_matrix,
     col_sds <- .columnSds(input_matrix)
     col_nz <- .columnNonzeroFraction(input_matrix)
 
-    zero_sd_cols <- which(col_sds < zero_sd_threshold | col_nz < nz_proportion_threshold)
+    unsafe <- .unsafeScaleColumns(col_sds, col_nz,
+                                  zero_sd_threshold, nz_proportion_threshold)
     col_sds_safe <- col_sds
-    if (length(zero_sd_cols) > 0) col_sds_safe[zero_sd_cols] <- 1.0
+    col_sds_safe[unsafe] <- 1.0
 
     return(scale(input_matrix, center = col_means, scale = col_sds_safe))
   }
@@ -144,9 +175,10 @@ center_scale_matrix_opt <- function(input_matrix,
   col_means <- colMeans(input_matrix)
   col_sds <- sqrt(BPCells::colVars(input_matrix))
   col_nz <- .columnNonzeroFraction(input_matrix)
-  zero_sd_cols <- which(col_sds < zero_sd_threshold | col_nz < nz_proportion_threshold)
+  unsafe <- .unsafeScaleColumns(col_sds, col_nz,
+                                zero_sd_threshold, nz_proportion_threshold)
   col_sds_safe <- col_sds
-  if (length(zero_sd_cols) > 0) col_sds_safe[zero_sd_cols] <- 1.0
+  col_sds_safe[unsafe] <- 1.0
 
   # Center then scale using BPCells broadcasting (no base::scale())
   centered <- BPCells::add_cols(input_matrix, -col_means)
@@ -325,15 +357,28 @@ utils::globalVariables(c(
 #'
 #' Fails fast with a targeted error naming the offending column(s) rather
 #' than letting the data flow into PCA or kernel computation where the
-#' failure mode is cryptic. BPCells `IterableMatrix` inputs are skipped
-#' because scanning on-disk data here would defeat their purpose; users of
-#' BPCells are expected to have validated their on-disk normalization.
+#' failure mode is cryptic. BPCells `IterableMatrix` inputs are checked with a
+#' streaming column-mean pass. This reads the on-disk values once without
+#' materializing the matrix, so the same finite-data contract applies to every
+#' storage backend.
 #'
 #' @param x A matrix, sparse matrix, or BPCells IterableMatrix.
 #' @return TRUE invisibly if valid, stops with an informative error otherwise.
 #' @noRd
 .validateNormalizedData <- function(x) {
   if (inherits(x, "IterableMatrix")) {
+    if (nrow(x) == 0L || ncol(x) == 0L) return(invisible(TRUE))
+    bad_cols <- which(!is.finite(as.numeric(colMeans(x))))
+    if (length(bad_cols) > 0L) {
+      preview <- utils::head(bad_cols, 5)
+      stop(
+        "normalizedData contains NA, NaN, or Inf values in ",
+        length(bad_cols), " column(s) (e.g. ",
+        paste(preview, collapse = ", "),
+        "). Please remove or impute these before constructing a CoPro object.",
+        call. = FALSE
+      )
+    }
     return(invisible(TRUE))
   }
 

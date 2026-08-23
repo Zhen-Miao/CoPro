@@ -232,6 +232,32 @@ test_that("newCoProSingle rejects NA / NaN / Inf in normalizedData", {
   )
 })
 
+test_that("newCoProSingle rejects non-finite BPCells normalizedData", {
+  skip_if_not_installed("BPCells")
+  test_data <- generate_test_data_single(n_cells = 50, n_genes = 20, seed = 1)
+  dense <- matrix(
+    rpois(50 * 20, 3) + 0.5,
+    nrow = 50,
+    dimnames = dimnames(test_data$normalizedData)
+  )
+  dense[7, 3] <- NaN
+  sparse <- methods::as(
+    methods::as(Matrix::Matrix(dense, sparse = TRUE), "generalMatrix"),
+    "CsparseMatrix"
+  )
+  bp <- BPCells::write_matrix_memory(sparse, compress = FALSE)
+
+  expect_error(
+    newCoProSingle(
+      normalizedData = bp,
+      locationData = test_data$locationData,
+      metaData = test_data$metaData,
+      cellTypes = test_data$cellTypes
+    ),
+    "NA, NaN, or Inf"
+  )
+})
+
 test_that("newCoProMulti rejects NA / NaN / Inf in normalizedData", {
   test_data <- generate_test_data_multi(
     n_cells_per_slide = 25, n_slides = 2, n_genes = 15, seed = 12
@@ -242,6 +268,35 @@ test_that("newCoProMulti rejects NA / NaN / Inf in normalizedData", {
   expect_error(
     newCoProMulti(
       normalizedData = bad_na,
+      locationData   = test_data$locationData,
+      metaData       = test_data$metaData,
+      cellTypes      = test_data$cellTypes,
+      slideID        = test_data$slideID
+    ),
+    "NA, NaN, or Inf"
+  )
+})
+
+test_that("newCoProMulti rejects non-finite BPCells normalizedData", {
+  skip_if_not_installed("BPCells")
+  test_data <- generate_test_data_multi(
+    n_cells_per_slide = 25, n_slides = 2, n_genes = 15, seed = 12
+  )
+  dense <- matrix(
+    rpois(length(test_data$normalizedData), 3) + 0.5,
+    nrow = nrow(test_data$normalizedData),
+    dimnames = dimnames(test_data$normalizedData)
+  )
+  dense[30, 4] <- Inf
+  sparse <- methods::as(
+    methods::as(Matrix::Matrix(dense, sparse = TRUE), "generalMatrix"),
+    "CsparseMatrix"
+  )
+  bp <- BPCells::write_matrix_memory(sparse, compress = FALSE)
+
+  expect_error(
+    newCoProMulti(
+      normalizedData = bp,
       locationData   = test_data$locationData,
       metaData       = test_data$metaData,
       cellTypes      = test_data$cellTypes,
@@ -314,4 +369,3 @@ test_that("getSlideList returns correct values", {
   expect_length(getSlideList(multi_obj), 2)
   expect_equal(getSlideList(multi_obj), c("Slide1", "Slide2"))
 })
-
