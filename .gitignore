@@ -15,8 +15,10 @@ src/*.o
 src/*.so
 
 # Coding-agent session state and its instruction file, kept alongside the
-# already-ignored CLAUDE.md so a fresh clone carries neither.
-.claude/
+# already-ignored CLAUDE.md so a fresh clone carries neither. The project
+# skills under .claude/skills/ are shared with the repo and stay tracked.
+.claude/*
+!.claude/skills/
 .workbuddy/
 AGENTS.md
 
