@@ -267,3 +267,63 @@ test_that("additive self-kernels preserve CCA weights and scores", {
   expect_length(object@normalizedCorrelation, 0)
   expect_length(object@normalizedCorrelationPermu, 0)
 })
+
+test_that("additive float32 kernels preserve CCA state at existing sigmas", {
+  object <- .state_test_object(seed = 817)
+  object <- suppressMessages(computePCA(object, nPCA = 5))
+  object <- computeDistance(
+    object, distType = "Euclidean2D", normalizeDistance = FALSE,
+    verbose = FALSE
+  )
+  object <- computeKernelMatrix(
+    object, sigmaValues = 3, method = "dense", dropDistances = FALSE,
+    verbose = FALSE
+  )
+  existing_kernels <- names(object@kernelMatrices)
+  object <- .seed_cca_dependents(object)
+  cca_before <- object@skrCCAOut
+  preserved_slots <- c(
+    "cellScores", "geneScores", "geneScoresRegression", "geneScoresTest"
+  )
+  scores_before <- lapply(
+    preserved_slots, function(slot_name) methods::slot(object, slot_name)
+  )
+
+  object <- suppressWarnings(computeSparseKernelFloat32(
+    object, sigmaValues = 4, overwrite = FALSE,
+    minAveCellNeighor = 1, verbose = FALSE
+  ))
+
+  expect_true(all(existing_kernels %in% names(object@kernelMatrices)))
+  expect_setequal(object@sigmaValues, c(3, 4))
+  expect_identical(object@skrCCAOut, cca_before)
+  expect_identical(object@nCC, 2)
+  for (index in seq_along(preserved_slots)) {
+    expect_identical(
+      methods::slot(object, preserved_slots[[index]]), scores_before[[index]]
+    )
+  }
+  expect_true(any(grepl("^cellScore_", colnames(object@metaDataSub))))
+
+  invalidated_slots <- c(
+    "normalizedCorrelation", "bidirCorrelation", "sigmaValueChoice",
+    "nPermu", "skrCCAPermuOut", "cellPermu",
+    "normalizedCorrelationPermu", "bidirCorrelationPermu", "conditionalPermu"
+  )
+  for (slot_name in invalidated_slots) {
+    expect_length(methods::slot(object, slot_name), 0)
+  }
+  expect_null(attr(object, "kernelNormalizerCache", exact = TRUE))
+  expect_null(attr(object, "permutationProvenance", exact = TRUE))
+  expect_null(attr(object, "fairSigmaPermu", exact = TRUE))
+
+  # overwrite = TRUE remains a full kernel rebuild that clears CCA state.
+  object <- .seed_cca_dependents(object)
+  object <- suppressWarnings(computeSparseKernelFloat32(
+    object, sigmaValues = 4, overwrite = TRUE,
+    minAveCellNeighor = 1, verbose = FALSE
+  ))
+  expect_length(object@skrCCAOut, 0)
+  expect_identical(object@sigmaValues, 4)
+  .expect_cca_dependents_empty(object)
+})

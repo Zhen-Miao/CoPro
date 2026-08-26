@@ -11,6 +11,11 @@
   distance = "kernel",
   self_distance = "self_kernel",
   kernel = c("kernel_cache", "cca"),
+  # Adding kernel blocks for new sigmas leaves CCA weights and scores fitted
+  # at the existing sigmas valid; only the normalizer cache, the correlation
+  # summaries (whose sigma choice ranges over the grid), and permutation
+  # results must be rebuilt over the grown grid.
+  additive_kernel = c("kernel_cache", "correlation", "permutation"),
   self_kernel = c("kernel_cache", "correlation", "permutation"),
   kernel_cache = character(0),
   cca = c("correlation", "scores", "permutation"),

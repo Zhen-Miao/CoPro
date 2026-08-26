@@ -85,7 +85,11 @@ behavior). See \code{\link[=computeDistance]{computeDistance()}}.}
 
 \item{truncateLowDist}{Whether to floor very small distances.}
 
-\item{overwrite}{Whether to replace existing kernel matrices.}
+\item{overwrite}{Whether to replace existing kernel matrices. With \code{FALSE},
+newly built blocks are merged into the existing set and the sigma grid
+grows to match; CCA weights and scores fitted at the untouched sigmas
+survive, while cached kernel normalizers, normalized correlations, and
+permutation results are cleared for recomputation over the grown grid.}
 
 \item{verbose}{Whether to report progress.}
 

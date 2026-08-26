@@ -344,7 +344,11 @@ materializeFloat32Kernels <- function(object, verbose = TRUE) {
 #'   behavior). See [computeDistance()].
 #' @param normalizeTarget Target low distance percentile after normalization.
 #' @param truncateLowDist Whether to floor very small distances.
-#' @param overwrite Whether to replace existing kernel matrices.
+#' @param overwrite Whether to replace existing kernel matrices. With `FALSE`,
+#'   newly built blocks are merged into the existing set and the sigma grid
+#'   grows to match; CCA weights and scores fitted at the untouched sigmas
+#'   survive, while cached kernel normalizers, normalized correlations, and
+#'   permutation results are cleared for recomputation over the grown grid.
 #' @param verbose Whether to report progress.
 #' @param nThreads Worker threads for the compiled kernel builder. Pass a
 #'   positive integer to fix the count, including to raise the ceiling for very
@@ -633,8 +637,12 @@ setGeneric(
     object <- .pruneSigmaValues(
       object, surviving = sigmaValues, invalid = invalid_values
     )
-  } else {
+  } else if (overwrite) {
     object@sigmaValues <- sigmaValues
+  } else {
+    # Additive builds keep the existing kernels, so the grid must keep their
+    # bandwidths reachable too (same principle as .pruneSigmaValues()).
+    object@sigmaValues <- sort(unique(c(object@sigmaValues, sigmaValues)))
   }
   # Only a normalizing run has a factor to record. Writing the `scaling_factor
   # <- 1` of a non-normalizing run would erase a factor computeDistance() had
@@ -668,7 +676,9 @@ setMethod(
       normalizeDistance, normalizeMethod, normalizeTarget, truncateLowDist,
       "computeSparseKernelFloat32", verbose
     )
-    object <- .invalidateCoProState(object, "kernel")
+    object <- .invalidateCoProState(
+      object, if (isTRUE(overwrite)) "kernel" else "additive_kernel"
+    )
     .computeSparseKernelFloat32Core(
       object, sigmaValues, lowerLimit, upperQuantile,
       normalizeKernel, minAveCellNeighor,
