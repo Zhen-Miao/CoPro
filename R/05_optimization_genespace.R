@@ -181,6 +181,208 @@ NULL
   obj / S
 }
 
+#' Project a gene-space update away from accepted canonical axes
+#' @param x Candidate single-column weight vector.
+#' @param previous_axes Matrix whose columns are accepted axes, or `NULL`.
+#' @return The projected candidate.
+#' @noRd
+.projectGeneSpaceAxes <- function(x, previous_axes = NULL) {
+  if (is.null(previous_axes)) return(x)
+  for (prev_cc in seq_len(ncol(previous_axes))) {
+    prev_w <- previous_axes[, prev_cc, drop = FALSE]
+    x <- x - as.numeric(crossprod(x, prev_w)) * prev_w
+  }
+  x
+}
+
+#' Optimize one gene-space canonical axis
+#'
+#' CC1 and CC2+ use the same frozen-sigma block iteration. Their only
+#' mathematical difference is that later-axis candidates are projected away
+#' from accepted directions. Centralizing the sweep here keeps damping,
+#' convergence, scale refreshes, degeneracy handling, and the legacy Jacobi
+#' sign rule identical across axes.
+#'
+#' @param component One-based canonical-axis index.
+#' @param previous_weights Named matrices of accepted axes, or `NULL` for CC1.
+#' @inheritParams optimize_genespace_avg_corr
+#' @return Named list of single-column weight matrices.
+#' @noRd
+.optimizeGeneSpaceAxis <- function(C_self_slide, C_cross_slide,
+                                   slides, cell_types, component,
+                                   previous_weights = NULL,
+                                   max_iter = 3000, tol = 1e-6,
+                                   step_size = 1, verbose = TRUE,
+                                   sweep = "gauss-seidel",
+                                   objective = "sumcor") {
+  S <- length(slides)
+  n_genes <- .genespace_n_genes(
+    C_self_slide[[slides[[1L]]]][[cell_types[[1L]]]]
+  )
+  w_current <- .deterministicGeneSpaceInit(
+    n_genes, cell_types, component = component
+  )
+
+  for (iter in seq_len(max_iter)) {
+    w_old <- w_current
+    sigma_all <- .compute_per_slide_sigma(
+      w_current, C_self_slide, slides, cell_types, objective
+    )
+
+    # The update is the gradient of the frozen-sigma surrogate. Gauss-Seidel
+    # reads already updated blocks; Jacobi reads the previous full iterate.
+    for (ct_i in cell_types) {
+      update <- matrix(0, nrow = n_genes, ncol = 1L)
+      w_source <- if (identical(sweep, "gauss-seidel")) w_current else w_old
+
+      for (s in slides) {
+        sig_i <- sigma_all[[s]][[ct_i]]
+        for (ct_j in cell_types) {
+          if (ct_j == ct_i) next
+          sig_j <- sigma_all[[s]][[ct_j]]
+          C_ij <- .get_C_cross(C_cross_slide[[s]], ct_i, ct_j)
+          update <- update + (1 / sig_i) *
+            .genespace_cross_mult(C_ij, w_source[[ct_j]] / sig_j)
+        }
+      }
+      update <- update / S
+      previous_axes <- if (is.null(previous_weights)) {
+        NULL
+      } else {
+        previous_weights[[ct_i]]
+      }
+      update <- .projectGeneSpaceAxes(update, previous_axes)
+
+      norm_val <- sqrt(sum(update^2))
+      if (norm_val > 0) {
+        if (step_size < 1) {
+          blended <- (1 - step_size) * w_old[[ct_i]] +
+            step_size * (update / norm_val)
+          blended_norm <- sqrt(sum(blended^2))
+          if (blended_norm > 0) {
+            # Damping can reintroduce an accepted direction numerically.
+            blended <- .projectGeneSpaceAxes(blended, previous_axes)
+            blended_norm <- sqrt(sum(blended^2))
+            if (blended_norm > 0) {
+              w_current[[ct_i]] <- blended / blended_norm
+            } else {
+              w_current[[ct_i]] <- update / norm_val
+            }
+          } else {
+            w_current[[ct_i]] <- update / norm_val
+          }
+        } else {
+          w_current[[ct_i]] <- update / norm_val
+        }
+        if (identical(sweep, "gauss-seidel")) {
+          sigma_all <- .refresh_slide_sigma(
+            sigma_all, w_current, C_self_slide, slides, ct_i, objective
+          )
+        }
+      } else if (component == 1L) {
+        warning(sprintf(
+          "Zero gradient norm for cell type '%s' at iter %d; keeping previous weight.",
+          ct_i, iter
+        ))
+      } else {
+        warning(sprintf(
+          paste0("Zero norm after Gram-Schmidt deflation for cell type '%s' ",
+                 "at CC %d; signal subspace likely exhausted."),
+          ct_i, component
+        ))
+        w_current[[ct_i]] <- matrix(0, nrow = n_genes, ncol = 1L)
+      }
+    }
+
+    max_diff <- check_convergence(w_current, w_old, cell_types)
+    if (verbose && (iter %% 500L == 0L || iter == 1L)) {
+      if (component == 1L) {
+        obj <- .compute_p1b_objective(
+          w_current, C_self_slide, C_cross_slide,
+          slides, cell_types, objective
+        )
+        message(sprintf(
+          "  Iter %d: max_diff = %.2e, objective = %.4f",
+          iter, max_diff, obj
+        ))
+      } else {
+        message(sprintf("    Iter %d: max_diff = %.2e", iter, max_diff))
+      }
+    }
+
+    if (max_diff <= tol) {
+      if (verbose) {
+        if (component == 1L) {
+          obj <- .compute_p1b_objective(
+            w_current, C_self_slide, C_cross_slide,
+            slides, cell_types, objective
+          )
+          message(sprintf(
+            paste0("  Converged at iteration %d (max_diff = %.2e, ",
+                   "objective = %.4f)"),
+            iter, max_diff, obj
+          ))
+        } else {
+          message(sprintf(
+            "    CC %d converged at iteration %d", component, iter
+          ))
+        }
+      }
+      break
+    }
+  }
+
+  if (iter == max_iter && max_diff > tol) {
+    if (component == 1L) {
+      warning(sprintf(
+        "Did not converge after %d iterations (max_diff = %.2e)",
+        max_iter, max_diff
+      ))
+    } else {
+      warning(sprintf(
+        "CC %d did not converge after %d iterations (max_diff = %.2e)",
+        component, max_iter, max_diff
+      ))
+    }
+  }
+
+  for (ct in cell_types) {
+    if (!is.matrix(w_current[[ct]])) {
+      w_current[[ct]] <- matrix(w_current[[ct]], ncol = 1L)
+    }
+  }
+
+  if (identical(sweep, "jacobi")) {
+    obj <- .compute_p1b_objective(
+      w_current, C_self_slide, C_cross_slide,
+      slides, cell_types, objective
+    )
+    if (obj < 0) {
+      w_current[[cell_types[[1L]]]] <- -w_current[[cell_types[[1L]]]]
+      if (length(cell_types) > 2L) {
+        if (component == 1L) {
+          warning(sprintf(
+            paste0("sweep = \"jacobi\" converged to a negative objective ",
+                   "(%.6f) with %d cell types. Flipping one block negates ",
+                   "only the pairs touching it, so this repair can lower the ",
+                   "objective. Use sweep = \"gauss-seidel\"."),
+            obj, length(cell_types)
+          ), call. = FALSE)
+        } else {
+          warning(sprintf(
+            paste0("sweep = \"jacobi\" gave CC %d a negative objective ",
+                   "(%.6f) with %d cell types; the one-block flip can lower ",
+                   "it. Use sweep = \"gauss-seidel\"."),
+            component, obj, length(cell_types)
+          ), call. = FALSE)
+        }
+      }
+    }
+  }
+
+  w_current
+}
+
 # ============================================================================
 # Exported Optimization Functions
 # ============================================================================
@@ -253,137 +455,19 @@ optimize_genespace_avg_corr <- function(C_self_slide, C_cross_slide,
          paste(cell_types, collapse = ", "))
   }
   .validateOptimizerParams(max_iter, tol, step_size)
-
-  S <- length(slides)
-  n_genes <- .genespace_n_genes(
-    C_self_slide[[slides[1]]][[cell_types[1]]]
+  .optimizeGeneSpaceAxis(
+    C_self_slide = C_self_slide,
+    C_cross_slide = C_cross_slide,
+    slides = slides,
+    cell_types = cell_types,
+    component = 1L,
+    max_iter = max_iter,
+    tol = tol,
+    step_size = step_size,
+    verbose = verbose,
+    sweep = sweep,
+    objective = objective
   )
-
-  # A fixed local seed makes the low-level optimizer deterministic without
-  # changing the caller's RNG stream.
-  w_list <- .deterministicGeneSpaceInit(n_genes, cell_types, component = 1L)
-
-  for (iter in seq_len(max_iter)) {
-    w_list_old <- w_list
-
-    # Compute per-slide sigmas
-    sigma_all <- .compute_per_slide_sigma(w_list, C_self_slide, slides,
-                                          cell_types, objective)
-
-    # Update each cell type. The update below is the gradient of f_avg w.r.t.
-    # w_i evaluated with sigma_i, sigma_j held FIXED at their current values
-    # (frozen-sigma surrogate). The full gradient would also include
-    # a -rho * C_ii * w_i / sigma_i^2 correction term from differentiating
-    # 1/sigma_i; omitting it makes this an ALS-style alternating maximization,
-    # not exact coordinate ascent. Standard for generalized power methods
-    # (NIPALS treats denominators as fixed within a sweep).
-    #
-    # Which iterate the cross term reads is the sweep choice: `w_source` is the
-    # in-progress `w_list` under Gauss-Seidel and the frozen `w_list_old` under
-    # Jacobi. See the `sweep` argument for why that decides whether a sign
-    # repair is needed at all.
-    for (ct_i in cell_types) {
-      update <- matrix(0, nrow = n_genes, ncol = 1)
-      w_source <- if (identical(sweep, "gauss-seidel")) w_list else w_list_old
-
-      for (s in slides) {
-        sig_i <- sigma_all[[s]][[ct_i]]
-
-        for (ct_j in cell_types) {
-          if (ct_j == ct_i) next
-          sig_j <- sigma_all[[s]][[ct_j]]
-          C_ij <- .get_C_cross(C_cross_slide[[s]], ct_i, ct_j)
-          update <- update + (1 / sig_i) *
-            .genespace_cross_mult(C_ij, w_source[[ct_j]] / sig_j)
-        }
-      }
-      update <- update / S
-
-      # Normalize. Zero-norm means the cross-covariance with all other cell
-      # types vanished for w_i (degenerate). Keeping the previous iterate
-      # rather than overwriting with random noise; we warn so the user knows.
-      norm_val <- sqrt(sum(update^2))
-      if (norm_val > 0) {
-        # Damped update: blend the new direction with the previous iterate.
-        # step_size = 1 is pure power iteration (the historical behavior).
-        # w_list[[ct_i]] has not been reassigned yet this sweep, so
-        # w_list_old[[ct_i]] is the previous iterate under both sweeps.
-        if (step_size < 1) {
-          blended <- (1 - step_size) * w_list_old[[ct_i]] +
-                     step_size * (update / norm_val)
-          blended_norm <- sqrt(sum(blended^2))
-          # Defensive: if the blend cancels to zero (impossible for
-          # step_size in (0, 1] with a non-degenerate update, but guard
-          # anyway), fall back to the un-damped direction.
-          if (blended_norm > 0) {
-            w_list[[ct_i]] <- blended / blended_norm
-          } else {
-            w_list[[ct_i]] <- update / norm_val
-          }
-        } else {
-          w_list[[ct_i]] <- update / norm_val
-        }
-        if (identical(sweep, "gauss-seidel")) {
-          sigma_all <- .refresh_slide_sigma(sigma_all, w_list, C_self_slide,
-                                            slides, ct_i, objective)
-        }
-      } else {
-        warning(sprintf(
-          "Zero gradient norm for cell type '%s' at iter %d; keeping previous weight.",
-          ct_i, iter
-        ))
-      }
-    }
-
-    # Check convergence
-    max_diff <- check_convergence(w_list, w_list_old, cell_types)
-
-    if (verbose && (iter %% 500 == 0 || iter == 1)) {
-      obj <- .compute_p1b_objective(w_list, C_self_slide, C_cross_slide,
-                                    slides, cell_types, objective)
-      message(sprintf("  Iter %d: max_diff = %.2e, objective = %.4f", iter, max_diff, obj))
-    }
-
-    if (max_diff <= tol) {
-      if (verbose) {
-        obj <- .compute_p1b_objective(w_list, C_self_slide, C_cross_slide,
-                                      slides, cell_types, objective)
-        message(sprintf("  Converged at iteration %d (max_diff = %.2e, objective = %.4f)",
-                        iter, max_diff, obj))
-      }
-      break
-    }
-  }
-
-  if (iter == max_iter && max_diff > tol) {
-    warning(sprintf("Did not converge after %d iterations (max_diff = %.2e)", max_iter, max_diff))
-  }
-
-  # Ensure matrix format
-  for (ct in cell_types) {
-    if (!is.matrix(w_list[[ct]])) w_list[[ct]] <- matrix(w_list[[ct]], ncol = 1)
-  }
-
-  if (identical(sweep, "jacobi")) {
-    # Legacy sign repair. Only correct for two cell types; see the `sweep`
-    # argument. Gauss-Seidel needs none, because it cannot converge here.
-    obj <- .compute_p1b_objective(w_list, C_self_slide, C_cross_slide,
-                                  slides, cell_types, objective)
-    if (obj < 0) {
-      w_list[[cell_types[1]]] <- -w_list[[cell_types[1]]]
-      if (length(cell_types) > 2) {
-        warning(sprintf(
-          paste0("sweep = \"jacobi\" converged to a negative objective (%.6f) ",
-                 "with %d cell types. Flipping one block negates only the ",
-                 "pairs touching it, so this repair can lower the objective. ",
-                 "Use sweep = \"gauss-seidel\"."),
-          obj, length(cell_types)
-        ), call. = FALSE)
-      }
-    }
-  }
-
-  w_list
 }
 
 #' Gene-space average per-slide CCA — subsequent components
@@ -420,10 +504,6 @@ optimize_genespace_avg_corr_n <- function(C_self_slide, C_cross_slide,
   sweep <- match.arg(sweep)
   objective <- match.arg(objective)
   .validateOptimizerParams(max_iter, tol, step_size)
-  S <- length(slides)
-  n_genes <- .genespace_n_genes(
-    C_self_slide[[slides[1]]][[cell_types[1]]]
-  )
   k_start <- ncol(w_list[[cell_types[1]]])
 
   if (nCC <= k_start) {
@@ -432,131 +512,20 @@ optimize_genespace_avg_corr_n <- function(C_self_slide, C_cross_slide,
 
   for (cc in (k_start + 1):nCC) {
     if (verbose) message(sprintf("  Finding CC %d ...", cc))
-
-    w_current <- .deterministicGeneSpaceInit(
-      n_genes, cell_types, component = cc
+    w_current <- .optimizeGeneSpaceAxis(
+      C_self_slide = C_self_slide,
+      C_cross_slide = C_cross_slide,
+      slides = slides,
+      cell_types = cell_types,
+      component = cc,
+      previous_weights = w_list,
+      max_iter = max_iter,
+      tol = tol,
+      step_size = step_size,
+      verbose = verbose,
+      sweep = sweep,
+      objective = objective
     )
-
-    for (iter in seq_len(max_iter)) {
-      w_current_old <- w_current
-
-      # Compute per-slide sigmas using current weights
-      sigma_all <- .compute_per_slide_sigma(w_current, C_self_slide, slides,
-                                            cell_types, objective)
-
-      # Update each cell type. Same frozen-sigma surrogate and same sweep
-      # choice as the first component; see optimize_genespace_avg_corr().
-      for (ct_i in cell_types) {
-        update <- matrix(0, nrow = n_genes, ncol = 1)
-        w_source <- if (identical(sweep, "gauss-seidel")) {
-          w_current
-        } else {
-          w_current_old
-        }
-
-        for (s in slides) {
-          sig_i <- sigma_all[[s]][[ct_i]]
-          for (ct_j in cell_types) {
-            if (ct_j == ct_i) next
-            sig_j <- sigma_all[[s]][[ct_j]]
-            C_ij <- .get_C_cross(C_cross_slide[[s]], ct_i, ct_j)
-            update <- update + (1 / sig_i) *
-              .genespace_cross_mult(C_ij, w_source[[ct_j]] / sig_j)
-          }
-        }
-        update <- update / S
-
-        # Gram-Schmidt: project out all previous CC directions
-        for (prev_cc in seq_len(cc - 1)) {
-          prev_w <- w_list[[ct_i]][, prev_cc, drop = FALSE]
-          proj <- as.numeric(t(update) %*% prev_w)
-          update <- update - proj * prev_w
-        }
-
-        # Normalize. Zero-norm here means deflation has exhausted the signal
-        # subspace for this cell type — the random init from the start of
-        # this cc would otherwise be silently appended as a "canonical
-        # component". Warn and keep the deflated update at zero so the
-        # caller can detect the degenerate component (weight is all-zero).
-        norm_val <- sqrt(sum(update^2))
-        if (norm_val > 0) {
-          # Damped update: blend the new direction with the previous iterate.
-          if (step_size < 1) {
-            blended <- (1 - step_size) * w_current_old[[ct_i]] +
-                       step_size * (update / norm_val)
-            blended_norm <- sqrt(sum(blended^2))
-            if (blended_norm > 0) {
-              # Re-project against previous CCs. The blend can reintroduce
-              # components we just deflated, since w_current_old is also a
-              # post-deflation iterate, but Gram-Schmidt is idempotent so
-              # this only matters numerically.
-              for (prev_cc in seq_len(cc - 1)) {
-                prev_w <- w_list[[ct_i]][, prev_cc, drop = FALSE]
-                proj <- as.numeric(t(blended) %*% prev_w)
-                blended <- blended - proj * prev_w
-              }
-              blended_norm <- sqrt(sum(blended^2))
-              if (blended_norm > 0) {
-                w_current[[ct_i]] <- blended / blended_norm
-              } else {
-                w_current[[ct_i]] <- update / norm_val
-              }
-            } else {
-              w_current[[ct_i]] <- update / norm_val
-            }
-          } else {
-            w_current[[ct_i]] <- update / norm_val
-          }
-          if (identical(sweep, "gauss-seidel")) {
-            sigma_all <- .refresh_slide_sigma(sigma_all, w_current, C_self_slide,
-                                              slides, ct_i, objective)
-          }
-        } else {
-          warning(sprintf(
-            "Zero norm after Gram-Schmidt deflation for cell type '%s' at CC %d; signal subspace likely exhausted.",
-            ct_i, cc
-          ))
-          w_current[[ct_i]] <- matrix(0, nrow = n_genes, ncol = 1)
-        }
-      }
-
-      # Check convergence
-      max_diff <- check_convergence(w_current, w_current_old, cell_types)
-
-      if (verbose && (iter %% 500 == 0 || iter == 1)) {
-        message(sprintf("    Iter %d: max_diff = %.2e", iter, max_diff))
-      }
-
-      if (max_diff <= tol) {
-        if (verbose) {
-          message(sprintf("    CC %d converged at iteration %d", cc, iter))
-        }
-        break
-      }
-    }
-
-    if (iter == max_iter && max_diff > tol) {
-      warning(sprintf("CC %d did not converge after %d iterations (max_diff = %.2e)",
-                      cc, max_iter, max_diff))
-    }
-
-    if (identical(sweep, "jacobi")) {
-      # Legacy sign repair; see optimize_genespace_avg_corr(). Not applied under
-      # Gauss-Seidel, which cannot converge to a negative objective.
-      obj_cc <- .compute_p1b_objective(w_current, C_self_slide, C_cross_slide,
-                                       slides, cell_types, objective)
-      if (obj_cc < 0) {
-        w_current[[cell_types[1]]] <- -w_current[[cell_types[1]]]
-        if (length(cell_types) > 2) {
-          warning(sprintf(
-            paste0("sweep = \"jacobi\" gave CC %d a negative objective (%.6f) ",
-                   "with %d cell types; the one-block flip can lower it. ",
-                   "Use sweep = \"gauss-seidel\"."),
-            cc, obj_cc, length(cell_types)
-          ), call. = FALSE)
-        }
-      }
-    }
 
     # Append this component to w_list
     for (ct in cell_types) {

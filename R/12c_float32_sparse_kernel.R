@@ -331,9 +331,12 @@ materializeFloat32Kernels <- function(object, verbose = TRUE) {
 #' @param minAveCellNeighor Minimum average represented neighbors.
 #' @param rowNormalizeKernel,colNormalizeKernel Whether to normalize each
 #'   nonempty row or column to sum to one. They cannot both be `TRUE`.
-#' @param distType `"Euclidean2D"` or `"Euclidean3D"`.
-#' @param xDistScale,yDistScale,zDistScale Per-axis coordinate scales.
+#' @param distType `"Euclidean2D"` or `"Euclidean3D"`. `NULL` inherits the
+#'   recorded geometry.
+#' @param xDistScale,yDistScale,zDistScale Per-axis coordinate scales. `NULL`
+#'   inherits the recorded geometry.
 #' @param normalizeDistance Whether to rescale distances to a common unit.
+#'   `NULL` inherits the recorded geometry.
 #' @param normalizeMethod How the reference distance is estimated when
 #'   `normalizeDistance = TRUE`: `"global"` (median nearest-neighbor distance
 #'   over all cells, ignoring type labels), `"spacing"` (median nearest-partner
@@ -341,7 +344,14 @@ materializeFloat32Kernels <- function(object, verbose = TRUE) {
 #'   behavior). See [computeDistance()].
 #' @param normalizeTarget Target low distance percentile after normalization.
 #' @param truncateLowDist Whether to floor very small distances.
-#' @param overwrite Whether to replace existing kernel matrices.
+#' @param overwrite Whether to replace existing kernel matrices. With `FALSE`,
+#'   newly built blocks are merged into the existing set and the sigma grid
+#'   grows to match. When every requested sigma is new, CCA weights and scores
+#'   fitted at the existing sigmas survive, while cached kernel normalizers,
+#'   normalized correlations, and permutation results are cleared for
+#'   recomputation over the grown grid. If a requested sigma already has stored
+#'   kernel blocks, those blocks are replaced and all CCA-derived state is
+#'   cleared because it may depend on the replaced kernel.
 #' @param verbose Whether to report progress.
 #' @param nThreads Worker threads for the compiled kernel builder. Pass a
 #'   positive integer to fix the count, including to raise the ceiling for very
@@ -361,10 +371,10 @@ setGeneric(
       object, sigmaValues, lowerLimit = 1e-7, upperQuantile = 0.85,
       normalizeKernel = FALSE, minAveCellNeighor = 2,
       rowNormalizeKernel = FALSE, colNormalizeKernel = FALSE,
-      distType = c("Euclidean2D", "Euclidean3D"),
-      xDistScale = 1, yDistScale = 1, zDistScale = 1,
-      normalizeDistance = FALSE, normalizeMethod = "global", normalizeTarget = 0.01,
-      truncateLowDist = TRUE, overwrite = TRUE,
+      distType = NULL,
+      xDistScale = NULL, yDistScale = NULL, zDistScale = NULL,
+      normalizeDistance = NULL, normalizeMethod = NULL, normalizeTarget = NULL,
+      truncateLowDist = NULL, overwrite = TRUE,
       verbose = TRUE,
       nThreads = NULL) {
     standardGeneric("computeSparseKernelFloat32")
@@ -422,6 +432,28 @@ setGeneric(
     if (block$symmetric) represented / 2 else represented
   }, numeric(1))
   blocks[order(block_sizes, decreasing = TRUE)]
+}
+
+#' Whether a float32 merge would replace a stored bandwidth
+#'
+#' `overwrite = FALSE` is additive only when every requested sigma is new. The
+#' core writes by canonical kernel name, so an existing sigma is a replacement
+#' even though the surrounding list is retained. Such a replacement makes CCA
+#' weights fitted at that bandwidth stale and must take the full invalidation
+#' path rather than `additive_kernel`.
+#' @noRd
+.float32TouchesExistingSigma <- function(object, sigmaValues) {
+  kernel_names <- names(object@kernelMatrices)
+  if (length(kernel_names) == 0L) return(FALSE)
+
+  existing_sigmas <- vapply(kernel_names, function(name) {
+    tryCatch(
+      .parseKernelMatrixName(name)$sigma,
+      error = function(e) NA_real_
+    )
+  }, numeric(1))
+  existing_sigmas <- existing_sigmas[is.finite(existing_sigmas)]
+  any(sigmaValues %in% existing_sigmas)
 }
 
 #' Block-streamed float32 construction shared by single and multi-slide data
@@ -630,8 +662,12 @@ setGeneric(
     object <- .pruneSigmaValues(
       object, surviving = sigmaValues, invalid = invalid_values
     )
-  } else {
+  } else if (overwrite) {
     object@sigmaValues <- sigmaValues
+  } else {
+    # Additive builds keep the existing kernels, so the grid must keep their
+    # bandwidths reachable too (same principle as .pruneSigmaValues()).
+    object@sigmaValues <- sort(unique(c(object@sigmaValues, sigmaValues)))
   }
   # Only a normalizing run has a factor to record. Writing the `scaling_factor
   # <- 1` of a non-normalizing run would erase a factor computeDistance() had
@@ -654,18 +690,30 @@ setMethod(
       object, sigmaValues, lowerLimit = 1e-7, upperQuantile = 0.85,
       normalizeKernel = FALSE, minAveCellNeighor = 2,
       rowNormalizeKernel = FALSE, colNormalizeKernel = FALSE,
-      distType = c("Euclidean2D", "Euclidean3D"),
-      xDistScale = 1, yDistScale = 1, zDistScale = 1,
-      normalizeDistance = FALSE, normalizeMethod = "global", normalizeTarget = 0.01,
-      truncateLowDist = TRUE, overwrite = TRUE,
+      distType = NULL,
+      xDistScale = NULL, yDistScale = NULL, zDistScale = NULL,
+      normalizeDistance = NULL, normalizeMethod = NULL, normalizeTarget = NULL,
+      truncateLowDist = NULL, overwrite = TRUE,
       verbose = TRUE,
       nThreads = NULL) {
+    geometry <- .resolveDirectSparseGeometry(
+      object, distType, xDistScale, yDistScale, zDistScale,
+      normalizeDistance, normalizeMethod, normalizeTarget, truncateLowDist,
+      "computeSparseKernelFloat32", verbose
+    )
+    additive <- identical(overwrite, FALSE) &&
+      !.float32TouchesExistingSigma(object, sigmaValues)
+    object <- .invalidateCoProState(
+      object, if (additive) "additive_kernel" else "kernel"
+    )
     .computeSparseKernelFloat32Core(
       object, sigmaValues, lowerLimit, upperQuantile,
       normalizeKernel, minAveCellNeighor,
       rowNormalizeKernel, colNormalizeKernel,
-      match.arg(distType), xDistScale, yDistScale, zDistScale,
-      normalizeDistance, normalizeMethod, normalizeTarget, truncateLowDist, overwrite,
+      geometry$distType, geometry$xDistScale, geometry$yDistScale,
+      geometry$zDistScale, geometry$normalizeDistance,
+      geometry$normalizeMethod, geometry$normalizeTarget,
+      geometry$truncateLowDist, overwrite,
       verbose, is_multi = is(object, "CoProMulti"), nThreads = nThreads
     )
   }

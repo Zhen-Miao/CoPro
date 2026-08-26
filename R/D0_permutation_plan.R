@@ -470,12 +470,10 @@
 
     # One and two cell types have exact decompositions; every requested axis
     # comes from a single factorization of the small operator.
-    if (length(cts) == 1L) {
-      return(solve_one_type_eigen(Y_resi, cts, nCC, sdev2_list))
-    }
-    if (length(cts) == 2L) {
-      return(solve_two_type_svd(Y_resi, cts, nCC, sdev2_list))
-    }
+    exact_weights <- .solveExactSumcovAxes(
+      Y_resi, cts, nCC = nCC, sdev2_list = sdev2_list
+    )
+    if (!is.null(exact_weights)) return(exact_weights)
 
     cca_result <- optimize_bilinear(
       X_list = PCmats_local, flat_kernels = NULL, sigma = NULL,

@@ -527,6 +527,18 @@
                                       objective = "sumcor",
                                       sweep = "gauss-seidel") {
   sigma_name <- .sigmaName(sigma)
+  # Re-fitting an existing bandwidth may reduce nCC. Remove every metadata
+  # column owned by this bandwidth before writing the new axes so an old CC2+
+  # cannot survive beside a one-axis replacement.
+  metadata_prefix <- paste0("cellScore_", sigma_name, "_cc_index_")
+  current_sigma_columns <- startsWith(
+    colnames(object@metaDataSub), metadata_prefix
+  )
+  if (any(current_sigma_columns)) {
+    object@metaDataSub <- object@metaDataSub[
+      , !current_sigma_columns, drop = FALSE
+    ]
+  }
   # Gene-space CCA stores its weights in @skrCCAOut under a "gscca_"-prefixed
   # key so they cannot collide with runSkrCCA's "sigma_"-prefixed keys. The
   # two CCA flavors live in different spaces (PCA vs gene), so feeding
@@ -551,7 +563,9 @@
     space = "gene",
     objective = objective,
     requested = objective,
-    slideWeight = "equal",
+    # Slide weighting only parameterizes the SUMCOR criterion; mirror the
+    # PC-space record, which stores NA when no weighting was applied.
+    slideWeight = if (identical(objective, "sumcor")) "equal" else NA_character_,
     sweep = sweep,
     slides = slides,
     droppedSlides = character(0)
@@ -911,6 +925,10 @@ setMethod(
 
     # Step 4: Store results
     if (verbose) message("Step 4: Storing results...")
+    # Gene-space fits are additive across sigma: the store below replaces the
+    # current sigma's score blocks while retaining the other fitted bandwidths.
+    # Clear only state that cannot coexist with a newly added CCA result.
+    object <- .invalidateCoProState(object, "additive_cca")
     object <- .storeGeneSpaceCCAResults(
       object, w_list, gsd$Z_by_slide, sigma,
       cts, nCC, gsd$genes, gsd$slides,

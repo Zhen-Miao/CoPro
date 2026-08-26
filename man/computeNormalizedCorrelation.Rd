@@ -45,8 +45,9 @@ for single slide analysis, it is ignored, with default value "perSlide".}
 \code{"legacy"}, \code{"unwhitened"}, \code{"kernel"}, \code{"variogram"}. See details.}
 
 \item{normalizerControl}{A named list tuning the \code{"variogram"} normalizer.
-\code{distType}, \code{xDistScale}, \code{yDistScale}, \code{zDistScale} must match what was
-passed to \code{\link[=computeDistance]{computeDistance()}} (they are not stored on the object).
+\code{distType}, \code{xDistScale}, \code{yDistScale}, and \code{zDistScale} default to \code{NULL}
+and inherit the geometry recorded by the distance/kernel builder. Explicit
+values must match that record.
 \code{range} accepts a named numeric vector of per-cell-type ranges, in
 normalized distance units, to skip estimation. Remaining entries
 (\code{maxCells}, \code{nBins}, \code{maxLagQuantile}, \code{minCorrelation}, \code{minBins},
@@ -93,11 +94,8 @@ sigma and biases the selected bandwidth upward.}
 \item{\code{"kernel"}}{Force \eqn{R = K(\sigma)}, the matched-sigma self-kernel,
 with the unit diagonal restored. Errors if the self-kernels are absent
 rather than falling back. This over-counts noise at large sigma and
-biases the selected bandwidth downward, and it carries a second problem:
-\code{\link[=computeSelfDistance]{computeSelfDistance()}} normalizes self-distances by its own scaling
-factor rather than the one \code{\link[=computeDistance]{computeDistance()}} recorded, so a self-kernel
-"at the same sigma" is generally at a different physical bandwidth from
-the cross-kernel. Provided as a diagnostic, not for analysis.}
+biases the selected bandwidth downward. Provided as a diagnostic, not
+for analysis.}
 \item{\code{"variogram"}}{Estimate one within-type autocorrelation range per
 cell type from the feature-averaged spatial autocorrelation of the PC
 scores, and use \eqn{R = \exp(-d^2/2\ell^2)}. The range is a property of

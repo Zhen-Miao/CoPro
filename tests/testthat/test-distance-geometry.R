@@ -219,19 +219,45 @@ test_that("kernel arguments that contradict the record are an error", {
                         yDistScale = 2.5, verbose = FALSE, normalizeDistance = TRUE))
 })
 
-test_that("computeSparseKernel warns rather than errors on a mismatch", {
+test_that("direct sparse kernels inherit geometry and reject explicit mismatches", {
   obj <- .two_type_obj()
   d <- computeDistance(obj, distType = "Euclidean2D", yDistScale = 2.5,
                        verbose = FALSE, normalizeDistance = TRUE)
 
-  expect_warning(
-    computeSparseKernel(d, sigmaValues = 0.1, distType = "Euclidean2D",
-                        verbose = FALSE, normalizeDistance = TRUE),
-    "different coordinates")
+  inherited <- expect_no_warning(computeSparseKernel(
+    d, sigmaValues = 0.1, minAveCellNeighor = 1, verbose = FALSE
+  ))
+  expect_equal(getDistanceGeometry(inherited)$yDistScale, 2.5)
+
+  expect_error(
+    computeSparseKernel(
+      d, sigmaValues = 0.1, minAveCellNeighor = 1,
+      yDistScale = 1, verbose = FALSE
+    ),
+    "yDistScale"
+  )
   # Called as intended -- instead of computeDistance() -- nothing fires.
   expect_no_warning(
     computeSparseKernel(obj, sigmaValues = 0.1, distType = "Euclidean2D",
                         verbose = FALSE, normalizeDistance = TRUE))
+})
+
+test_that("direct float32 kernels use the same geometry gate", {
+  obj <- .two_type_obj()
+  d <- computeDistance(obj, distType = "Euclidean2D", yDistScale = 2.5,
+                       verbose = FALSE, normalizeDistance = TRUE)
+
+  inherited <- expect_no_warning(computeSparseKernelFloat32(
+    d, sigmaValues = 0.1, minAveCellNeighor = 1, verbose = FALSE
+  ))
+  expect_equal(getDistanceGeometry(inherited)$yDistScale, 2.5)
+  expect_error(
+    computeSparseKernelFloat32(
+      d, sigmaValues = 0.1, minAveCellNeighor = 1,
+      yDistScale = 1, verbose = FALSE
+    ),
+    "yDistScale"
+  )
 })
 
 

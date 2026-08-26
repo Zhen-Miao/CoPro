@@ -36,16 +36,16 @@
 
 #' Default tuning for whitening-operator construction
 #'
-#' `distType` and the axis scales are not stored on the object, so they are
-#' repeated here; they must match what was passed to [computeDistance()] or the
-#' whitening operator will live in different units from the kernel.
+#' Geometry entries default to `NULL` and are resolved from the object's
+#' canonical `distanceGeometry` record. Supplying one explicitly is supported
+#' as a consistency assertion; a contradiction is an error.
 #' @noRd
 .normalizerControlDefaults <- function() {
   list(
-    distType = "Euclidean2D",
-    xDistScale = 1,
-    yDistScale = 1,
-    zDistScale = 1,
+    distType = NULL,
+    xDistScale = NULL,
+    yDistScale = NULL,
+    zDistScale = NULL,
     ## variogram estimation
     maxCells = 2000L,       # subsample size for the autocorrelation estimate
     nBins = 25L,            # distance bins
@@ -70,6 +70,38 @@
          paste(names(defaults), collapse = ", "), ".")
   }
   utils::modifyList(defaults, control)
+}
+
+#' Resolve variogram coordinates against the analysis-kernel geometry
+#' @noRd
+.resolveNormalizerGeometry <- function(object, control) {
+  geometry <- .resolveDistanceGeometry(
+    object,
+    requested = list(
+      distType = control$distType,
+      xDistScale = control$xDistScale,
+      yDistScale = control$yDistScale,
+      zDistScale = control$zDistScale,
+      normalizeDistance = NULL,
+      normalizeMethod = NULL,
+      normalizeTarget = NULL,
+      truncateLowDist = NULL
+    ),
+    what = "normalizer = \"variogram\"", verbose = FALSE
+  )
+  if (identical(geometry$distType, "Morphology-Aware")) {
+    stop(
+      "normalizer = \"variogram\" cannot reconstruct Morphology-Aware ",
+      "distances from coordinates. Use normalizer = \"kernel\" with stored ",
+      "self-kernels, or normalizer = \"unwhitened\".",
+      call. = FALSE
+    )
+  }
+  control$distType <- geometry$distType
+  control$xDistScale <- geometry$xDistScale
+  control$yDistScale <- geometry$yDistScale
+  control$zDistScale <- geometry$zDistScale
+  control
 }
 
 #' Feature-averaged spatial autocorrelation range of a score matrix
@@ -156,9 +188,9 @@
 #' the unit diagonal is added back explicitly -- `R` is a correlation operator
 #' and must have `R_ii = 1`.
 #'
-#' @param coords Raw (unscaled) coordinates.
+#' @param coords Axis-scaled coordinates, before the global distance factor.
 #' @param range Autocorrelation range, in normalized distance units.
-#' @param scaling_factor Raw-to-normalized distance ratio.
+#' @param scaling_factor Coordinate-to-normalized distance ratio.
 #' @noRd
 .buildWhiteningOperator <- function(coords, range, scaling_factor, lowerLimit) {
   n <- nrow(coords)
@@ -181,14 +213,13 @@
 #' @return Named list of operators, with attribute `"ranges"`.
 #' @noRd
 .variogramOperators <- function(object, scoreMats, cts, control, slide = NULL) {
-  scaling_factor <- if (length(object@distanceScaleFactor) == 1L) {
-    object@distanceScaleFactor
-  } else {
+  scaling_factor <- .recoverDistanceScaleFactor(object)
+  if (!is.finite(scaling_factor) || scaling_factor <= 0) {
     warning("`distanceScaleFactor` is not set on this object (it predates the ",
-            "slot, or computeDistance() was never run); assuming 1. If the ",
-            "distances were normalized, the whitening operator will be in the ",
-            "wrong units -- rerun computeDistance().")
-    1
+            "slot, or no distance/kernel step recorded one); assuming 1. If ",
+            "the distances were normalized, rerun computeDistance() or a ",
+            "sparse kernel builder before using the variogram normalizer.")
+    scaling_factor <- 1
   }
 
   operators <- setNames(vector("list", length(cts)), cts)
@@ -313,6 +344,7 @@
   }
 
   ## variogram: operators are sigma-independent, so build them once
+  control <- .resolveNormalizerGeometry(object, control)
   if (is.null(slides)) {
     operators <- .variogramOperators(object, scoreMats, cts, control, slide = NULL)
     ranges <- attr(operators, "ranges")
@@ -337,33 +369,6 @@
   }
 
   list(mode = normalizer, ranges = ranges, get = getter)
-}
-
-#' Warn when a cross-type denominator was built from self-kernels
-#'
-#' `computeSelfDistance()` derives its own normalization factor from the
-#' self-distance percentiles instead of reusing `@distanceScaleFactor`, so a
-#' self-kernel indexed by "sigma = s" is generally at a different physical
-#' bandwidth from the cross-kernel indexed by the same s. Anything that whitens
-#' a *cross*-type kernel with those inherits the mismatch.
-#'
-#' A within-type analysis is exempt: there the whitening operator and the
-#' analysis kernel are the same matrix, built by `computeKernelMatrix()` under
-#' one scaling factor, so there is nothing to mismatch. Hence the count passed
-#' in is of whitened cross-type pairs, not of whitened pairs.
-#' @noRd
-.warnSelfKernelUnits <- function(resolver, whitened_cross_pairs) {
-  if (whitened_cross_pairs == 0L) return(invisible(NULL))
-  if (!resolver$mode %in% c("legacy", "kernel")) return(invisible(NULL))
-  warning(
-    "The denominator was whitened with matched-sigma self-kernels. ",
-    "computeSelfDistance() normalizes self-distances with its own scaling ",
-    "factor rather than the one computeDistance() recorded, so those kernels ",
-    "are generally at a different physical bandwidth from the cross-kernel at ",
-    "the same nominal sigma. Prefer normalizer = \"variogram\".",
-    call. = FALSE
-  )
-  invisible(NULL)
 }
 
 #' Human-readable summary of what a resolver actually applied

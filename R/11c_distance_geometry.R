@@ -68,9 +68,9 @@
   if (!is.null(recorded[["normalizeDistance"]])) {
     recorded[["normalizeDistance"]]
   } else {
-    # Unreachable in practice: inheriting with nothing recorded already errored
-    # in .resolveSelfDistanceScaling(). TRUE is the honest description anyway --
-    # the blocks did get scaled.
+    # Unreachable in practice: .selfScaleFactor() rejects inheritance without
+    # a recorded factor. TRUE is the honest description anyway -- the blocks
+    # did get scaled.
     TRUE
   }
 }
@@ -554,28 +554,6 @@
   }
   object@distanceScaleFactor <- numeric(0)
   object
-}
-
-#' Warn when a step builds coordinates that disagree with the recorded ones
-#'
-#' Used by entry points such as [computeSparseKernel()] whose arguments have
-#' concrete defaults, so "not supplied" and "supplied the default value" cannot
-#' be told apart. Erroring would punish the documented usage (calling it
-#' *instead of* [computeDistance()], where nothing is recorded and nothing
-#' fires); a warning still removes the silence.
-#' @noRd
-.warnDistanceGeometryMismatch <- function(object, requested, what) {
-  recorded <- .getDistanceGeometry(object)
-  conflicts <- .geometryConflicts(recorded, requested)
-  if (length(conflicts) == 0) return(invisible(FALSE))
-  warning(sprintf(
-    paste0("%s is using different coordinates than the geometry recorded by ",
-           "%s():\n%s\nThe result will use the arguments given to %s, so this ",
-           "object will hold matrices built on two different coordinate bases."),
-    what, if (is.null(recorded$source)) "an earlier step" else recorded$source,
-    paste(conflicts, collapse = "\n"), what
-  ), call. = FALSE)
-  invisible(TRUE)
 }
 
 #' Get the coordinate geometry a CoPro object's distances and kernels use

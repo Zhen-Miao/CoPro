@@ -615,6 +615,125 @@ test_that("runGeneSpaceCCA integration test with CoProMulti object", {
   expect_true(paste0("gscca_sigma_", 0.1) %in% names(obj@skrCCAOut))
 })
 
+test_that("repeated gene-space fits retain scores for earlier sigmas", {
+  obj <- create_test_copro_multi(
+    n_cells_per_slide = 60, n_slides = 2, n_genes = 30,
+    n_cell_types = 2, seed = 43
+  )
+  obj <- subsetData(obj, cellTypesOfInterest = c("CellTypeA", "CellTypeB"))
+  obj <- suppressMessages(computeDistance(
+    obj, distType = "Euclidean2D", normalizeDistance = TRUE,
+    verbose = FALSE
+  ))
+  obj <- suppressWarnings(computeKernelMatrix(
+    obj, sigmaValues = c(0.05, 0.1), minAveCellNeighor = 1,
+    verbose = FALSE
+  ))
+
+  first <- suppressWarnings(suppressMessages(runGeneSpaceCCA(
+    obj, sigma = 0.05, nCC = 1, min_prevalence = 0, min_cells = 0,
+    max_iter = 50, tol = 1e-3, verbose = FALSE
+  )))
+  first_gene_scores <- first@geneScores
+  first_cell_scores <- first@cellScores
+  first_metadata_column <- "cellScore_sigma_0.05_cc_index_1"
+  first_metadata_scores <- first@metaDataSub[[first_metadata_column]]
+
+  both <- suppressWarnings(suppressMessages(runGeneSpaceCCA(
+    first, sigma = 0.1, nCC = 1, min_prevalence = 0, min_cells = 0,
+    max_iter = 50, tol = 1e-3, verbose = FALSE
+  )))
+
+  expect_true(all(
+    c("gscca_sigma_0.05", "gscca_sigma_0.1") %in% names(both@skrCCAOut)
+  ))
+  for (key in names(first_gene_scores)) {
+    expect_identical(both@geneScores[[key]], first_gene_scores[[key]])
+  }
+  for (key in names(first_cell_scores)) {
+    expect_identical(both@cellScores[[key]], first_cell_scores[[key]])
+  }
+  expect_identical(
+    both@metaDataSub[[first_metadata_column]], first_metadata_scores
+  )
+  expect_true(all(vapply(c(0.05, 0.1), function(sigma) {
+    all(vapply(c("CellTypeA", "CellTypeB"), function(cell_type) {
+      !is.null(both@geneScores[[
+        CoPro:::.createGeneScoresName(sigma, cell_type, slide = NULL)
+      ]]) && !is.null(both@cellScores[[
+        CoPro:::.createCellScoresName(sigma, cell_type, slide = NULL)
+      ]])
+    }, logical(1)))
+  }, logical(1))))
+})
+
+test_that("additive gene-space refits clear stale derived results", {
+  obj <- create_test_copro_multi(
+    n_cells_per_slide = 60, n_slides = 2, n_genes = 30,
+    n_cell_types = 2, seed = 44
+  )
+  obj <- subsetData(obj, cellTypesOfInterest = c("CellTypeA", "CellTypeB"))
+  obj <- suppressMessages(computeDistance(
+    obj, distType = "Euclidean2D", normalizeDistance = TRUE,
+    verbose = FALSE
+  ))
+  obj <- suppressWarnings(computeKernelMatrix(
+    obj, sigmaValues = c(0.05, 0.1), minAveCellNeighor = 1,
+    verbose = FALSE
+  ))
+
+  first <- suppressWarnings(suppressMessages(runGeneSpaceCCA(
+    obj, sigma = 0.05, nCC = 1, min_prevalence = 0, min_cells = 0,
+    max_iter = 50, tol = 1e-3, verbose = FALSE
+  )))
+  first_cca <- first@skrCCAOut[["gscca_sigma_0.05"]]
+  first_gene_scores <- first@geneScores
+  first_cell_scores <- first@cellScores
+
+  # Results derived from the pre-refit state must not survive the refit
+  # (the additive_cca edge of the invalidation graph).
+  first@normalizedCorrelation <- list(old_correlation = 1)
+  first@bidirCorrelation <- list(old_bidir = 1)
+  first@sigmaValueChoice <- 99
+  first@geneScoresRegression <- list(old_regression = matrix(1))
+  first@geneScoresTest <- list(old_tests = TRUE)
+  first@nPermu <- 10
+  first@skrCCAPermuOut <- list(old_permutation = list())
+  first@cellPermu <- list(old_permutation = 1:5)
+  first@normalizedCorrelationPermu <- list(old_permutation = 1)
+  first@bidirCorrelationPermu <- list(old_permutation = 1)
+  first@conditionalPermu <- list(old_conditional = TRUE)
+  attr(first, "permutationProvenance") <- list(old = TRUE)
+  attr(first, "fairSigmaPermu") <- list(old = TRUE)
+
+  both <- suppressWarnings(suppressMessages(runGeneSpaceCCA(
+    first, sigma = 0.1, nCC = 1, min_prevalence = 0, min_cells = 0,
+    max_iter = 50, tol = 1e-3, verbose = FALSE
+  )))
+
+  cleared_slots <- c(
+    "normalizedCorrelation", "bidirCorrelation", "sigmaValueChoice",
+    "geneScoresRegression", "geneScoresTest",
+    "nPermu", "skrCCAPermuOut", "cellPermu",
+    "normalizedCorrelationPermu", "bidirCorrelationPermu", "conditionalPermu"
+  )
+  for (slot_name in cleared_slots) {
+    expect_length(methods::slot(both, slot_name), 0)
+  }
+  expect_null(attr(both, "permutationProvenance", exact = TRUE))
+  expect_null(attr(both, "fairSigmaPermu", exact = TRUE))
+
+  # The earlier bandwidth's fit survives as the exact stored object, not
+  # merely as matching downstream projections.
+  expect_identical(both@skrCCAOut[["gscca_sigma_0.05"]], first_cca)
+  expect_identical(
+    both@geneScores[names(first_gene_scores)], first_gene_scores
+  )
+  expect_identical(
+    both@cellScores[names(first_cell_scores)], first_cell_scores
+  )
+})
+
 test_that("runGeneSpaceCCA validates sigma against available values", {
   skip_if_not_installed("CoPro")
 
@@ -1328,6 +1447,43 @@ test_that("both sweeps produce unit-norm weights and run for 3 cell types", {
         expect_equal(sqrt(sum(w[[ct]][, cc]^2)), 1, tolerance = 1e-6,
                      info = paste(sw, ct, cc))
       }
+    }
+  }
+})
+
+test_that("gene-space first and subsequent wrappers use the shared axis iterator", {
+  fx <- .sweep_fixture(nct = 3L)
+  for (sw in c("gauss-seidel", "jacobi")) {
+    first <- suppressWarnings(suppressMessages(optimize_genespace_avg_corr(
+      fx$C_self, fx$C_cross, fx$slides, fx$cts,
+      max_iter = 300, tol = 1e-6, verbose = FALSE, sweep = sw
+    )))
+    first_direct <- suppressWarnings(suppressMessages(
+      CoPro:::.optimizeGeneSpaceAxis(
+        fx$C_self, fx$C_cross, fx$slides, fx$cts,
+        component = 1L, max_iter = 300, tol = 1e-6,
+        verbose = FALSE, sweep = sw
+      )
+    ))
+    all_axes <- suppressWarnings(suppressMessages(optimize_genespace_avg_corr_n(
+      fx$C_self, fx$C_cross, fx$slides, fx$cts,
+      w_list = first, nCC = 2L,
+      max_iter = 300, tol = 1e-6, verbose = FALSE, sweep = sw
+    )))
+    second_direct <- suppressWarnings(suppressMessages(
+      CoPro:::.optimizeGeneSpaceAxis(
+        fx$C_self, fx$C_cross, fx$slides, fx$cts,
+        component = 2L, previous_weights = first,
+        max_iter = 300, tol = 1e-6, verbose = FALSE, sweep = sw
+      )
+    ))
+
+    expect_equal(first, first_direct, tolerance = 0, info = sw)
+    for (ct in fx$cts) {
+      expect_equal(
+        all_axes[[ct]][, 2L, drop = FALSE], second_direct[[ct]],
+        tolerance = 0, info = paste(sw, ct)
+      )
     }
   }
 })

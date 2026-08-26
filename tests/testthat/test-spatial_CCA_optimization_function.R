@@ -376,6 +376,59 @@ test_that("multi-slide two-type SVD uses the sum of slide operators", {
                tolerance = 1e-8)
 })
 
+test_that("single- and multi-slide SUMCOV adapters share one solve pipeline", {
+  set.seed(20260825)
+  cell_types <- c("TypeA", "TypeB", "TypeC")
+  dims <- c(TypeA = 5L, TypeB = 6L, TypeC = 7L)
+  cells <- c(TypeA = 24L, TypeB = 21L, TypeC = 19L)
+  X <- setNames(lapply(cell_types, function(ct) {
+    matrix(rnorm(cells[[ct]] * dims[[ct]]), cells[[ct]], dims[[ct]])
+  }), cell_types)
+
+  pairs <- combn(cell_types, 2L, simplify = FALSE)
+  single_kernels <- list()
+  multi_kernels <- list()
+  for (pair in pairs) {
+    K <- matrix(
+      rnorm(cells[[pair[[1L]]]] * cells[[pair[[2L]]]]),
+      cells[[pair[[1L]]]], cells[[pair[[2L]]]]
+    )
+    single_kernels[[paste0(
+      "kernel|sigma0.1|", pair[[1L]], "|", pair[[2L]]
+    )]] <- K
+    multi_kernels[[paste0(
+      "kernel|sigma0.1|Slide1|", pair[[1L]], "|", pair[[2L]]
+    )]] <- K
+  }
+
+  single_first <- suppressMessages(suppressWarnings(optimize_bilinear(
+    X, single_kernels, sigma = 0.1,
+    max_iter = 2000, tol = 1e-10, step_size = 0.7
+  )))
+  multi_first <- suppressMessages(suppressWarnings(
+    optimize_bilinear_multi_slides(
+      list(Slide1 = X), multi_kernels, sigma = 0.1, slides = "Slide1",
+      max_iter = 2000, tol = 1e-10, step_size = 0.7
+    )
+  ))
+
+  single_all <- suppressMessages(suppressWarnings(optimize_bilinear_n(
+    X, single_kernels, sigma = 0.1, w_list = single_first,
+    cellTypesOfInterest = cell_types, nCC = 2,
+    max_iter = 2000, tol = 1e-10, step_size = 0.7
+  )))
+  multi_all <- suppressMessages(suppressWarnings(
+    optimize_bilinear_n_multi_slides(
+      list(Slide1 = X), multi_kernels, sigma = 0.1, slides = "Slide1",
+      w_list = multi_first, cellTypesOfInterest = cell_types, nCC = 2,
+      max_iter = 2000, tol = 1e-10, step_size = 0.7
+    )
+  ))
+
+  expect_equal(multi_first, single_first, tolerance = 0)
+  expect_equal(multi_all, single_all, tolerance = 0)
+})
+
 test_that("weight vectors are normalized", {
   set.seed(42)
   n_cells <- 50

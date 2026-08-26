@@ -14,14 +14,14 @@ computeSparseKernelFloat32(
   minAveCellNeighor = 2,
   rowNormalizeKernel = FALSE,
   colNormalizeKernel = FALSE,
-  distType = c("Euclidean2D", "Euclidean3D"),
-  xDistScale = 1,
-  yDistScale = 1,
-  zDistScale = 1,
-  normalizeDistance = FALSE,
-  normalizeMethod = "global",
-  normalizeTarget = 0.01,
-  truncateLowDist = TRUE,
+  distType = NULL,
+  xDistScale = NULL,
+  yDistScale = NULL,
+  zDistScale = NULL,
+  normalizeDistance = NULL,
+  normalizeMethod = NULL,
+  normalizeTarget = NULL,
+  truncateLowDist = NULL,
   overwrite = TRUE,
   verbose = TRUE,
   nThreads = NULL
@@ -36,14 +36,14 @@ computeSparseKernelFloat32(
   minAveCellNeighor = 2,
   rowNormalizeKernel = FALSE,
   colNormalizeKernel = FALSE,
-  distType = c("Euclidean2D", "Euclidean3D"),
-  xDistScale = 1,
-  yDistScale = 1,
-  zDistScale = 1,
-  normalizeDistance = FALSE,
-  normalizeMethod = "global",
-  normalizeTarget = 0.01,
-  truncateLowDist = TRUE,
+  distType = NULL,
+  xDistScale = NULL,
+  yDistScale = NULL,
+  zDistScale = NULL,
+  normalizeDistance = NULL,
+  normalizeMethod = NULL,
+  normalizeTarget = NULL,
+  truncateLowDist = NULL,
   overwrite = TRUE,
   verbose = TRUE,
   nThreads = NULL
@@ -66,11 +66,14 @@ row sum.}
 \item{rowNormalizeKernel, colNormalizeKernel}{Whether to normalize each
 nonempty row or column to sum to one. They cannot both be \code{TRUE}.}
 
-\item{distType}{\code{"Euclidean2D"} or \code{"Euclidean3D"}.}
+\item{distType}{\code{"Euclidean2D"} or \code{"Euclidean3D"}. \code{NULL} inherits the
+recorded geometry.}
 
-\item{xDistScale, yDistScale, zDistScale}{Per-axis coordinate scales.}
+\item{xDistScale, yDistScale, zDistScale}{Per-axis coordinate scales. \code{NULL}
+inherits the recorded geometry.}
 
-\item{normalizeDistance}{Whether to rescale distances to a common unit.}
+\item{normalizeDistance}{Whether to rescale distances to a common unit.
+\code{NULL} inherits the recorded geometry.}
 
 \item{normalizeMethod}{How the reference distance is estimated when
 \code{normalizeDistance = TRUE}: \code{"global"} (median nearest-neighbor distance
@@ -82,7 +85,14 @@ behavior). See \code{\link[=computeDistance]{computeDistance()}}.}
 
 \item{truncateLowDist}{Whether to floor very small distances.}
 
-\item{overwrite}{Whether to replace existing kernel matrices.}
+\item{overwrite}{Whether to replace existing kernel matrices. With \code{FALSE},
+newly built blocks are merged into the existing set and the sigma grid
+grows to match. When every requested sigma is new, CCA weights and scores
+fitted at the existing sigmas survive, while cached kernel normalizers,
+normalized correlations, and permutation results are cleared for
+recomputation over the grown grid. If a requested sigma already has stored
+kernel blocks, those blocks are replaced and all CCA-derived state is
+cleared because it may depend on the replaced kernel.}
 
 \item{verbose}{Whether to report progress.}
 

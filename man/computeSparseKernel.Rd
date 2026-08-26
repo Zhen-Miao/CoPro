@@ -15,14 +15,14 @@ computeSparseKernel(
   minAveCellNeighor = 2,
   rowNormalizeKernel = FALSE,
   colNormalizeKernel = FALSE,
-  distType = c("Euclidean2D", "Euclidean3D"),
-  xDistScale = 1,
-  yDistScale = 1,
-  zDistScale = 1,
-  normalizeDistance = FALSE,
-  normalizeMethod = "global",
-  normalizeTarget = 0.01,
-  truncateLowDist = TRUE,
+  distType = NULL,
+  xDistScale = NULL,
+  yDistScale = NULL,
+  zDistScale = NULL,
+  normalizeDistance = NULL,
+  normalizeMethod = NULL,
+  normalizeTarget = NULL,
+  truncateLowDist = NULL,
   verbose = TRUE
 )
 
@@ -35,14 +35,14 @@ computeSparseKernel(
   minAveCellNeighor = 2,
   rowNormalizeKernel = FALSE,
   colNormalizeKernel = FALSE,
-  distType = c("Euclidean2D", "Euclidean3D"),
-  xDistScale = 1,
-  yDistScale = 1,
-  zDistScale = 1,
-  normalizeDistance = FALSE,
-  normalizeMethod = "global",
-  normalizeTarget = 0.01,
-  truncateLowDist = TRUE,
+  distType = NULL,
+  xDistScale = NULL,
+  yDistScale = NULL,
+  zDistScale = NULL,
+  normalizeDistance = NULL,
+  normalizeMethod = NULL,
+  normalizeTarget = NULL,
+  truncateLowDist = NULL,
   verbose = TRUE
 )
 
@@ -55,14 +55,14 @@ computeSparseKernel(
   minAveCellNeighor = 2,
   rowNormalizeKernel = FALSE,
   colNormalizeKernel = FALSE,
-  distType = c("Euclidean2D", "Euclidean3D"),
-  xDistScale = 1,
-  yDistScale = 1,
-  zDistScale = 1,
-  normalizeDistance = FALSE,
-  normalizeMethod = "global",
-  normalizeTarget = 0.01,
-  truncateLowDist = TRUE,
+  distType = NULL,
+  xDistScale = NULL,
+  yDistScale = NULL,
+  zDistScale = NULL,
+  normalizeDistance = NULL,
+  normalizeMethod = NULL,
+  normalizeTarget = NULL,
+  truncateLowDist = NULL,
   verbose = TRUE
 )
 }
@@ -96,15 +96,17 @@ normalized? Note that row or column wise normalization will result in an
 asymmetric result in skrCCA inference.}
 
 \item{distType}{"Euclidean2D" or "Euclidean3D" (Morphology-Aware is not
-supported by the sparse path).}
+supported by the sparse path). \code{NULL} inherits the recorded geometry.}
 
-\item{xDistScale, yDistScale, zDistScale}{per-axis coordinate scales.}
+\item{xDistScale, yDistScale, zDistScale}{Per-axis coordinate scales. \code{NULL}
+inherits the recorded geometry.}
 
 \item{normalizeDistance, normalizeTarget, truncateLowDist}{distance-processing
-options, matching \code{\link[=computeDistance]{computeDistance()}}.}
+options, matching \code{\link[=computeDistance]{computeDistance()}}. \code{NULL} inherits the recorded
+geometry.}
 
 \item{normalizeMethod}{How the reference distance is estimated when
-\code{normalizeDistance = TRUE}. \code{"global"} (default) uses the median
+\code{normalizeDistance = TRUE}. \code{"global"} uses the median
 nearest-neighbor distance over all cells of interest, ignoring their type
 labels, so the unit is a property of the tissue rather than of whichever
 blocks this call builds. \code{"spacing"} measures each cell-type block and
