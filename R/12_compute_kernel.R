@@ -539,6 +539,7 @@ setMethod("computeKernelMatrix", "CoPro",
                    normalizeDistance = NULL, normalizeMethod = NULL, normalizeTarget = NULL,
                    truncateLowDist = NULL,
                    verbose = TRUE) {
+            object <- .invalidateCoProState(object, "kernel")
             .computeKernelDispatch(object, sigmaValues, lowerLimit, upperQuantile,
                                    normalizeKernel, minAveCellNeighor, rowNormalizeKernel,
                                    colNormalizeKernel, verbose,

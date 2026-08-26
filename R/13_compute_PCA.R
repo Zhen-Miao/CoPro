@@ -666,6 +666,7 @@ setMethod("computePCA", "CoProSingle",
           function(object, nPCA = 40, center = TRUE, scale. = TRUE,
                    scalePCs = TRUE) {
             cts <- .check_pca_input(object, nPCA, center, scale., scalePCs)
+            object <- .invalidateCoProState(object, "pca")
             object <- .compute_pca_single(object, nPCA, center, scale., scalePCs, cts)
             return(object)
           })
@@ -687,6 +688,7 @@ setMethod("computePCA", "CoProMulti",
               object, nPCA, center, scale., scalePCs, dataUse,
               center_per_slide
             )
+            object <- .invalidateCoProState(object, "pca")
             object <- .compute_pca_multi(object, nPCA, center, scale., scalePCs,
                                          dataUse, center_per_slide, cts)
             return(object)

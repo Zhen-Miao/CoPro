@@ -49,6 +49,8 @@ setGeneric("subsetData",
     )
   }
 
+  object <- .invalidateCoProState(object, "subset")
+
   ## subset the data
   object@cellTypesOfInterest <- ctoi
   object@normalizedDataSub <- object@normalizedData[idx, , drop = FALSE]

@@ -195,6 +195,10 @@ setMethod("computeSelfDistance", "CoProMulti",
     return(object)
   }
 
+  object <- .invalidateCoProState(
+    object, if (overwrite) "distance" else "self_distance"
+  )
+
   # Initialize or preserve existing distances
   if (overwrite || length(object@distances) == 0) {
     distances <- list()
@@ -349,6 +353,10 @@ setMethod("computeSelfDistance", "CoProMulti",
     warning("Only one cell type detected. Use computeDistance() instead for single cell type.")
     return(object)
   }
+
+  object <- .invalidateCoProState(
+    object, if (overwrite) "distance" else "self_distance"
+  )
   
   slides <- getSlideList(object)
   
@@ -554,6 +562,7 @@ setMethod("computeSelfKernel", "CoPro",
                    distType = NULL, xDistScale = NULL, yDistScale = NULL, zDistScale = NULL,
                    normalizeDistance = NULL, normalizeMethod = NULL, normalizeTarget = NULL,
                    truncateLowDist = NULL) {
+            object <- .invalidateCoProState(object, "self_kernel")
             .computeSelfKernelDispatch(
               object, sigmaValues, lowerLimit, upperQuantile,
               normalizeKernel, minAveCellNeighor, rowNormalizeKernel,

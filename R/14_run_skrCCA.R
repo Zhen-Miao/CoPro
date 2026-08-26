@@ -516,13 +516,7 @@
           slide = NULL
         )
       }
-      if (length(cts) == 1L) {
-        return(solve_one_type_eigen(
-          Y_resi, cts, nCC = nCC,
-          sdev2_list = data_matrices$sdev2_list
-        ))
-      }
-      return(solve_two_type_svd(
+      return(.solveExactSumcovAxes(
         Y_resi, cts, nCC = nCC,
         sdev2_list = data_matrices$sdev2_list
       ))
@@ -717,6 +711,7 @@
 #' @noRd
 .runSkrCCAUnified <- function(object, validation_result,
  scalePCs, nCC, tol, transferred_weight_1, maxIter, step_size = 1) {
+  object <- .invalidateCoProState(object, "cca")
   
   # Extract parameters from validation result
   cts <- validation_result$cts

@@ -942,14 +942,10 @@ optimize_sumcor_pca_n <- function(X_list_all, flat_kernels, sigma, slides,
   .validateOptimizerParams(max_iter, tol, step_size)
   Y_aggregate <- .aggregateSlideOperators(ops)
 
-  if (length(cell_types) == 1L) {
-    return(solve_one_type_eigen(Y_aggregate, cell_types, nCC = nCC,
-                                sdev2_list = sdev2_list))
-  }
-  if (length(cell_types) == 2L) {
-    return(solve_two_type_svd(Y_aggregate, cell_types, nCC = nCC,
-                              sdev2_list = sdev2_list))
-  }
+  exact_weights <- .solveExactSumcovAxes(
+    Y_aggregate, cell_types, nCC = nCC, sdev2_list = sdev2_list
+  )
+  if (!is.null(exact_weights)) return(exact_weights)
 
   feature_counts <- setNames(
     vapply(cell_types, function(ct) ncol(ops$G[[ops$slides[[1L]]]][[ct]]),
@@ -968,22 +964,17 @@ optimize_sumcor_pca_n <- function(X_list_all, flat_kernels, sigma, slides,
   ))
   if (nCC == 1L) return(w1)
 
-  # For >2 cell types there is no exact all-axis solver, so reuse the SUMCOV
-  # sequential route: deflate the aggregate operator and refine.
-  Y_resi <- Y_aggregate
-  w_list <- w1
-  for (qq in seq_len(nCC - 1L)) {
-    Y_resi <- apply_deflation(Y_resi, w_list, qq, cell_types, sdev2_list,
-                              deflation = "projection")
-    w_next <- suppressWarnings(bilinear_w_from_Y_resi(
-      w_list_new = initialize_next_component(Y_resi, cell_types),
-      Y_resi = Y_resi, n_features = feature_counts,
-      max_iter = max_iter, tol = tol, step_size = step_size,
-      sdev2_list = sdev2_list
-    ))
-    for (ct in cell_types) {
-      w_list[[ct]] <- cbind(w_list[[ct]], w_next[[ct]])
-    }
-  }
-  w_list
+  # For >2 cell types there is no exact all-axis solver. Reuse the same
+  # deflation/initialization pipeline as the ordinary SUMCOV entry points.
+  suppressWarnings(.extendSumcovFromY(
+    Y_resi = Y_aggregate,
+    w_list = w1,
+    cell_types = cell_types,
+    nCC = nCC,
+    feature_counts = feature_counts,
+    max_iter = max_iter,
+    tol = tol,
+    step_size = step_size,
+    sdev2_list = sdev2_list
+  ))
 }

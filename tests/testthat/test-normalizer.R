@@ -97,18 +97,9 @@ test_that("legacy silently whitens once self-kernels are present", {
   expect_match(getNormalizerInfo(legacy)$description, "self-kernel")
   expect_match(getNormalizerInfo(unwh)$description, "R = I")
 
-  ## A cross-type self-kernel still carries the physical-units caveat, but its
-  ## diagonal is repaired in the private whitening copy before use.
-  seen <- character(0)
-  withCallingHandlers(
-    suppressMessages(computeNormalizedCorrelation(obj)),
-    warning = function(w) {
-      seen <<- c(seen, conditionMessage(w))
-      invokeRestart("muffleWarning")
-    }
-  )
-  expect_true(any(grepl("different physical bandwidth", seen)))
-  expect_false(any(grepl("all-zero diagonal", seen)))
+  ## Cross- and self-kernels share the recorded geometry and scale factor; the
+  ## private whitening copy only needs its unit diagonal repaired.
+  expect_no_warning(suppressMessages(computeNormalizedCorrelation(obj)))
 })
 
 test_that("a zero-diagonal stored kernel gets a unit-diagonal whitening copy", {
@@ -148,27 +139,13 @@ test_that("legacy and kernel modes use the same repaired self-kernel", {
   expect_equal(cc1(legacy, "sigma_0.05"), cc1(fixed, "sigma_0.05"))
 })
 
-test_that("a within-type analysis is exempt from the self-kernel units warning", {
-  ## With one cell type the whitening operator IS the analysis kernel, built by
-  ## computeKernelMatrix() under a single scaling factor, so there is no
-  ## mismatch to warn about.
+test_that("a within-type self-kernel normalizer needs no units warning", {
   obj <- quiet(make_smooth_object(n_per_type = 120, n_genes = 40,
                                   subset_to = "TypeA", n_pca = 6))
   obj <- quiet(computeKernelMatrix(obj, sigmaValues = 0.05, verbose = FALSE))
   obj <- quiet(runSkrCCA(obj, scalePCs = TRUE, nCC = 1))
 
-  ## The units warning is about mixing a self-kernel built by
-  ## computeSelfDistance() with a cross-kernel built by computeDistance().
-  ## There is no cross-kernel in a within-type analysis.
-  seen <- character(0)
-  withCallingHandlers(
-    suppressMessages(computeNormalizedCorrelation(obj)),
-    warning = function(w) {
-      seen <<- c(seen, conditionMessage(w))
-      invokeRestart("muffleWarning")
-    }
-  )
-  expect_false(any(grepl("different physical bandwidth", seen)))
+  expect_no_warning(suppressMessages(computeNormalizedCorrelation(obj)))
 })
 
 test_that("the variogram normalizer recovers a planted autocorrelation range", {
@@ -208,6 +185,40 @@ test_that("a supplied range bypasses estimation and changes the denominator", {
   expect_equal(unname(getNormalizerInfo(large)$ranges[["TypeA"]]), 0.08)
   ## a wider whitening operator means a larger null SD, hence a smaller ratio
   expect_lt(abs(cc1(large, "sigma_0.05")), abs(cc1(small, "sigma_0.05")))
+})
+
+test_that("the variogram normalizer inherits canonical axis scales", {
+  obj <- quiet(make_smooth_object(n_per_type = 150, n_genes = 40))
+  obj <- quiet(computeDistance(
+    obj, distType = "Euclidean2D", yDistScale = 2.5,
+    normalizeDistance = FALSE, verbose = FALSE
+  ))
+  obj <- quiet(computeKernelMatrix(
+    obj, sigmaValues = 0.05, method = "sparse", verbose = FALSE
+  ))
+  obj <- quiet(runSkrCCA(obj, scalePCs = TRUE, nCC = 1))
+  ranges <- c(TypeA = 0.04, TypeB = 0.04)
+
+  inherited <- quiet(computeNormalizedCorrelation(
+    obj, normalizer = "variogram",
+    normalizerControl = list(range = ranges)
+  ))
+  explicit <- quiet(computeNormalizedCorrelation(
+    obj, normalizer = "variogram",
+    normalizerControl = list(yDistScale = 2.5, range = ranges)
+  ))
+
+  expect_equal(
+    inherited@normalizedCorrelation,
+    explicit@normalizedCorrelation
+  )
+  expect_error(
+    quiet(computeNormalizedCorrelation(
+      obj, normalizer = "variogram",
+      normalizerControl = list(yDistScale = 1, range = ranges)
+    )),
+    "yDistScale"
+  )
 })
 
 test_that("normalizerControl rejects unknown entries", {

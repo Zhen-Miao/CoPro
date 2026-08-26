@@ -331,9 +331,12 @@ materializeFloat32Kernels <- function(object, verbose = TRUE) {
 #' @param minAveCellNeighor Minimum average represented neighbors.
 #' @param rowNormalizeKernel,colNormalizeKernel Whether to normalize each
 #'   nonempty row or column to sum to one. They cannot both be `TRUE`.
-#' @param distType `"Euclidean2D"` or `"Euclidean3D"`.
-#' @param xDistScale,yDistScale,zDistScale Per-axis coordinate scales.
+#' @param distType `"Euclidean2D"` or `"Euclidean3D"`. `NULL` inherits the
+#'   recorded geometry.
+#' @param xDistScale,yDistScale,zDistScale Per-axis coordinate scales. `NULL`
+#'   inherits the recorded geometry.
 #' @param normalizeDistance Whether to rescale distances to a common unit.
+#'   `NULL` inherits the recorded geometry.
 #' @param normalizeMethod How the reference distance is estimated when
 #'   `normalizeDistance = TRUE`: `"global"` (median nearest-neighbor distance
 #'   over all cells, ignoring type labels), `"spacing"` (median nearest-partner
@@ -361,10 +364,10 @@ setGeneric(
       object, sigmaValues, lowerLimit = 1e-7, upperQuantile = 0.85,
       normalizeKernel = FALSE, minAveCellNeighor = 2,
       rowNormalizeKernel = FALSE, colNormalizeKernel = FALSE,
-      distType = c("Euclidean2D", "Euclidean3D"),
-      xDistScale = 1, yDistScale = 1, zDistScale = 1,
-      normalizeDistance = FALSE, normalizeMethod = "global", normalizeTarget = 0.01,
-      truncateLowDist = TRUE, overwrite = TRUE,
+      distType = NULL,
+      xDistScale = NULL, yDistScale = NULL, zDistScale = NULL,
+      normalizeDistance = NULL, normalizeMethod = NULL, normalizeTarget = NULL,
+      truncateLowDist = NULL, overwrite = TRUE,
       verbose = TRUE,
       nThreads = NULL) {
     standardGeneric("computeSparseKernelFloat32")
@@ -654,18 +657,26 @@ setMethod(
       object, sigmaValues, lowerLimit = 1e-7, upperQuantile = 0.85,
       normalizeKernel = FALSE, minAveCellNeighor = 2,
       rowNormalizeKernel = FALSE, colNormalizeKernel = FALSE,
-      distType = c("Euclidean2D", "Euclidean3D"),
-      xDistScale = 1, yDistScale = 1, zDistScale = 1,
-      normalizeDistance = FALSE, normalizeMethod = "global", normalizeTarget = 0.01,
-      truncateLowDist = TRUE, overwrite = TRUE,
+      distType = NULL,
+      xDistScale = NULL, yDistScale = NULL, zDistScale = NULL,
+      normalizeDistance = NULL, normalizeMethod = NULL, normalizeTarget = NULL,
+      truncateLowDist = NULL, overwrite = TRUE,
       verbose = TRUE,
       nThreads = NULL) {
+    geometry <- .resolveDirectSparseGeometry(
+      object, distType, xDistScale, yDistScale, zDistScale,
+      normalizeDistance, normalizeMethod, normalizeTarget, truncateLowDist,
+      "computeSparseKernelFloat32", verbose
+    )
+    object <- .invalidateCoProState(object, "kernel")
     .computeSparseKernelFloat32Core(
       object, sigmaValues, lowerLimit, upperQuantile,
       normalizeKernel, minAveCellNeighor,
       rowNormalizeKernel, colNormalizeKernel,
-      match.arg(distType), xDistScale, yDistScale, zDistScale,
-      normalizeDistance, normalizeMethod, normalizeTarget, truncateLowDist, overwrite,
+      geometry$distType, geometry$xDistScale, geometry$yDistScale,
+      geometry$zDistScale, geometry$normalizeDistance,
+      geometry$normalizeMethod, geometry$normalizeTarget,
+      geometry$truncateLowDist, overwrite,
       verbose, is_multi = is(object, "CoProMulti"), nThreads = nThreads
     )
   }

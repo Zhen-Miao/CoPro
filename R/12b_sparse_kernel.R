@@ -625,16 +625,40 @@
 #' @noRd
 .pairPercentileProb <- function(n_i, n_j) min(1e-3, 2 / max(n_i, n_j))
 
+#' Resolve geometry for a direct sparse-kernel entry point
+#'
+#' Direct sparse APIs use `NULL` defaults so omission means inheritance, just as
+#' it does for `computeKernelMatrix()`. This helper keeps their public methods
+#' aligned and leaves the low-level builders with fully resolved scalar values.
+#' @noRd
+.resolveDirectSparseGeometry <- function(
+    object, distType, xDistScale, yDistScale, zDistScale,
+    normalizeDistance, normalizeMethod, normalizeTarget, truncateLowDist,
+    what, verbose) {
+  if (!is.null(distType)) {
+    distType <- match.arg(distType, c("Euclidean2D", "Euclidean3D"))
+  }
+  .resolveDistanceGeometry(
+    object,
+    requested = list(
+      distType = distType,
+      xDistScale = xDistScale,
+      yDistScale = yDistScale,
+      zDistScale = zDistScale,
+      normalizeDistance = normalizeDistance,
+      normalizeMethod = normalizeMethod,
+      normalizeTarget = normalizeTarget,
+      truncateLowDist = truncateLowDist
+    ),
+    what = what, verbose = verbose
+  )
+}
+
 #' Record the geometry a sparse kernel core built its coordinates on
 #'
-#' Reached from two directions. Via [computeKernelMatrix()] /
-#' [computeSelfKernel()] the arguments were already reconciled against any
-#' recorded geometry by `.resolveDistanceGeometry()`, so nothing can conflict
-#' here. Via [computeSparseKernel()] / [computeSparseKernelFloat32()] they are
-#' whatever the caller passed -- those generics have concrete defaults, so a
-#' disagreement can only be warned about, not attributed to an explicit
-#' argument. Either way the record ends up describing the coordinates the
-#' kernels were actually built on.
+#' Every public route resolves its arguments before reaching a core. Resolve
+#' once more at this invariant boundary so an internal caller cannot create a
+#' mixed-coordinate object either; contradictions are errors.
 #' @noRd
 .recordSparseKernelGeometry <- function(object, distType, xDistScale, yDistScale,
                                         zDistScale, normalizeDistance,
@@ -646,21 +670,16 @@
     normalizeMethod = normalizeMethod,
     normalizeTarget = normalizeTarget, truncateLowDist = truncateLowDist
   )
-  .warnDistanceGeometryMismatch(object, requested, what)
   recorded <- .getDistanceGeometry(object)
+  geometry <- .resolveDistanceGeometry(
+    object, requested = requested, what = what, verbose = FALSE
+  )
   # A record describes the scaling the matrices ended up on, so the self-kernel
   # paths' "inherit" instruction resolves to whatever it inherited from.
-  normalizeDistance <- .recordedNormalizeDistance(normalizeDistance, recorded)
-  object@distanceGeometry <- .makeDistanceGeometry(
-    distType, xDistScale, yDistScale, zDistScale,
-    normalizeDistance, normalizeMethod, normalizeTarget, truncateLowDist,
-    source = if (length(recorded) > 0 && !is.null(recorded$source) &&
-                 length(.geometryConflicts(recorded, requested)) == 0) {
-      recorded$source
-    } else {
-      what
-    }
+  geometry$normalizeDistance <- .recordedNormalizeDistance(
+    geometry$normalizeDistance, recorded
   )
+  object@distanceGeometry <- geometry
   object
 }
 
@@ -1189,12 +1208,14 @@
 #'
 #' @inheritParams computeKernelMatrix
 #' @param distType "Euclidean2D" or "Euclidean3D" (Morphology-Aware is not
-#'   supported by the sparse path).
-#' @param xDistScale,yDistScale,zDistScale per-axis coordinate scales.
+#'   supported by the sparse path). `NULL` inherits the recorded geometry.
+#' @param xDistScale,yDistScale,zDistScale Per-axis coordinate scales. `NULL`
+#'   inherits the recorded geometry.
 #' @param normalizeDistance,normalizeTarget,truncateLowDist distance-processing
-#'   options, matching [computeDistance()].
+#'   options, matching [computeDistance()]. `NULL` inherits the recorded
+#'   geometry.
 #' @param normalizeMethod How the reference distance is estimated when
-#'   `normalizeDistance = TRUE`. `"global"` (default) uses the median
+#'   `normalizeDistance = TRUE`. `"global"` uses the median
 #'   nearest-neighbor distance over all cells of interest, ignoring their type
 #'   labels, so the unit is a property of the tissue rather than of whichever
 #'   blocks this call builds. `"spacing"` measures each cell-type block and
@@ -1211,10 +1232,10 @@ setGeneric(
   function(object, sigmaValues, lowerLimit = 1e-7, upperQuantile = 0.85,
            normalizeKernel = FALSE, minAveCellNeighor = 2,
            rowNormalizeKernel = FALSE, colNormalizeKernel = FALSE,
-           distType = c("Euclidean2D", "Euclidean3D"),
-           xDistScale = 1, yDistScale = 1, zDistScale = 1,
-           normalizeDistance = FALSE, normalizeMethod = "global", normalizeTarget = 0.01,
-           truncateLowDist = TRUE, verbose = TRUE) standardGeneric("computeSparseKernel")
+           distType = NULL,
+           xDistScale = NULL, yDistScale = NULL, zDistScale = NULL,
+           normalizeDistance = NULL, normalizeMethod = NULL, normalizeTarget = NULL,
+           truncateLowDist = NULL, verbose = TRUE) standardGeneric("computeSparseKernel")
 )
 
 #' @rdname computeSparseKernel
@@ -1223,16 +1244,25 @@ setMethod("computeSparseKernel", "CoProSingle",
           function(object, sigmaValues, lowerLimit = 1e-7, upperQuantile = 0.85,
                    normalizeKernel = FALSE, minAveCellNeighor = 2,
                    rowNormalizeKernel = FALSE, colNormalizeKernel = FALSE,
-                   distType = c("Euclidean2D", "Euclidean3D"),
-                   xDistScale = 1, yDistScale = 1, zDistScale = 1,
-                   normalizeDistance = FALSE, normalizeMethod = "global", normalizeTarget = 0.01,
-                   truncateLowDist = TRUE, verbose = TRUE) {
-            distType <- match.arg(distType)
+                   distType = NULL,
+                   xDistScale = NULL, yDistScale = NULL, zDistScale = NULL,
+                   normalizeDistance = NULL, normalizeMethod = NULL, normalizeTarget = NULL,
+                   truncateLowDist = NULL, verbose = TRUE) {
+            geometry <- .resolveDirectSparseGeometry(
+              object, distType, xDistScale, yDistScale, zDistScale,
+              normalizeDistance, normalizeMethod, normalizeTarget,
+              truncateLowDist, "computeSparseKernel", verbose
+            )
+            object <- .invalidateCoProState(object, "kernel")
             .computeSparseKernelCore(object, sigmaValues, lowerLimit, upperQuantile,
                                      normalizeKernel, minAveCellNeighor,
                                      rowNormalizeKernel, colNormalizeKernel, verbose,
-                                     distType, xDistScale, yDistScale, zDistScale,
-                                     normalizeDistance, normalizeMethod, normalizeTarget, truncateLowDist)
+                                     geometry$distType, geometry$xDistScale,
+                                     geometry$yDistScale, geometry$zDistScale,
+                                     geometry$normalizeDistance,
+                                     geometry$normalizeMethod,
+                                     geometry$normalizeTarget,
+                                     geometry$truncateLowDist)
           })
 
 #' @rdname computeSparseKernel
@@ -1241,14 +1271,23 @@ setMethod("computeSparseKernel", "CoProMulti",
           function(object, sigmaValues, lowerLimit = 1e-7, upperQuantile = 0.85,
                    normalizeKernel = FALSE, minAveCellNeighor = 2,
                    rowNormalizeKernel = FALSE, colNormalizeKernel = FALSE,
-                   distType = c("Euclidean2D", "Euclidean3D"),
-                   xDistScale = 1, yDistScale = 1, zDistScale = 1,
-                   normalizeDistance = FALSE, normalizeMethod = "global", normalizeTarget = 0.01,
-                   truncateLowDist = TRUE, verbose = TRUE) {
-            distType <- match.arg(distType)
+                   distType = NULL,
+                   xDistScale = NULL, yDistScale = NULL, zDistScale = NULL,
+                   normalizeDistance = NULL, normalizeMethod = NULL, normalizeTarget = NULL,
+                   truncateLowDist = NULL, verbose = TRUE) {
+            geometry <- .resolveDirectSparseGeometry(
+              object, distType, xDistScale, yDistScale, zDistScale,
+              normalizeDistance, normalizeMethod, normalizeTarget,
+              truncateLowDist, "computeSparseKernel", verbose
+            )
+            object <- .invalidateCoProState(object, "kernel")
             .computeSparseKernelCoreMulti(object, sigmaValues, lowerLimit, upperQuantile,
                                           normalizeKernel, minAveCellNeighor,
                                           rowNormalizeKernel, colNormalizeKernel, verbose,
-                                          distType, xDistScale, yDistScale, zDistScale,
-                                          normalizeDistance, normalizeMethod, normalizeTarget, truncateLowDist)
+                                          geometry$distType, geometry$xDistScale,
+                                          geometry$yDistScale, geometry$zDistScale,
+                                          geometry$normalizeDistance,
+                                          geometry$normalizeMethod,
+                                          geometry$normalizeTarget,
+                                          geometry$truncateLowDist)
           })

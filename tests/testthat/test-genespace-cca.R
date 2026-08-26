@@ -1332,6 +1332,43 @@ test_that("both sweeps produce unit-norm weights and run for 3 cell types", {
   }
 })
 
+test_that("gene-space first and subsequent wrappers use the shared axis iterator", {
+  fx <- .sweep_fixture(nct = 3L)
+  for (sw in c("gauss-seidel", "jacobi")) {
+    first <- suppressWarnings(suppressMessages(optimize_genespace_avg_corr(
+      fx$C_self, fx$C_cross, fx$slides, fx$cts,
+      max_iter = 300, tol = 1e-6, verbose = FALSE, sweep = sw
+    )))
+    first_direct <- suppressWarnings(suppressMessages(
+      CoPro:::.optimizeGeneSpaceAxis(
+        fx$C_self, fx$C_cross, fx$slides, fx$cts,
+        component = 1L, max_iter = 300, tol = 1e-6,
+        verbose = FALSE, sweep = sw
+      )
+    ))
+    all_axes <- suppressWarnings(suppressMessages(optimize_genespace_avg_corr_n(
+      fx$C_self, fx$C_cross, fx$slides, fx$cts,
+      w_list = first, nCC = 2L,
+      max_iter = 300, tol = 1e-6, verbose = FALSE, sweep = sw
+    )))
+    second_direct <- suppressWarnings(suppressMessages(
+      CoPro:::.optimizeGeneSpaceAxis(
+        fx$C_self, fx$C_cross, fx$slides, fx$cts,
+        component = 2L, previous_weights = first,
+        max_iter = 300, tol = 1e-6, verbose = FALSE, sweep = sw
+      )
+    ))
+
+    expect_equal(first, first_direct, tolerance = 0, info = sw)
+    for (ct in fx$cts) {
+      expect_equal(
+        all_axes[[ct]][, 2L, drop = FALSE], second_direct[[ct]],
+        tolerance = 0, info = paste(sw, ct)
+      )
+    }
+  }
+})
+
 test_that("gene-space objective = sumcov drops the per-slide denominators", {
   # Completes the {space} x {objective} grid: gene space can run the same
   # criterion runSkrCCA() defaults to.

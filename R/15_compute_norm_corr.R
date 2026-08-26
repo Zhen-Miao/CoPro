@@ -33,11 +33,8 @@
 #'   \item{`"kernel"`}{Force \eqn{R = K(\sigma)}, the matched-sigma self-kernel,
 #'     with the unit diagonal restored. Errors if the self-kernels are absent
 #'     rather than falling back. This over-counts noise at large sigma and
-#'     biases the selected bandwidth downward, and it carries a second problem:
-#'     [computeSelfDistance()] normalizes self-distances by its own scaling
-#'     factor rather than the one [computeDistance()] recorded, so a self-kernel
-#'     "at the same sigma" is generally at a different physical bandwidth from
-#'     the cross-kernel. Provided as a diagnostic, not for analysis.}
+#'     biases the selected bandwidth downward. Provided as a diagnostic, not
+#'     for analysis.}
 #'   \item{`"variogram"`}{Estimate one within-type autocorrelation range per
 #'   cell type from the feature-averaged spatial autocorrelation of the PC
 #'   scores, and use \eqn{R = \exp(-d^2/2\ell^2)}. The range is a property of
@@ -83,8 +80,9 @@
 #' @param normalizer Which whitening operators to use in the denominator; one of
 #'   `"legacy"`, `"unwhitened"`, `"kernel"`, `"variogram"`. See details.
 #' @param normalizerControl A named list tuning the `"variogram"` normalizer.
-#'   `distType`, `xDistScale`, `yDistScale`, `zDistScale` must match what was
-#'   passed to [computeDistance()] (they are not stored on the object).
+#'   `distType`, `xDistScale`, `yDistScale`, and `zDistScale` default to `NULL`
+#'   and inherit the geometry recorded by the distance/kernel builder. Explicit
+#'   values must match that record.
 #'   `range` accepts a named numeric vector of per-cell-type ranges, in
 #'   normalized distance units, to skip estimation. Remaining entries
 #'   (`maxCells`, `nBins`, `maxLagQuantile`, `minCorrelation`, `minBins`,
@@ -459,7 +457,6 @@ setGeneric(
   ## pair). `resolver` supplies R_x and R_y; see .makeWhiteningResolver().
   message("Calculating whitened-Frobenius normalizers, this may take a while.")
   whitened_pairs <- 0L
-  whitened_cross_pairs <- 0L
   total_pairs <- 0L
 
   sigma_names <- .sigmaName(sigmaValues)
@@ -490,9 +487,6 @@ setGeneric(
       total_pairs <- total_pairs + 1L
       if (!is.null(Rx) && !is.null(Ry)) {
         whitened_pairs <- whitened_pairs + 1L
-        if (cellType1 != cellType2) {
-          whitened_cross_pairs <- whitened_cross_pairs + 1L
-        }
       }
       cache_key <- .kernelNormalizerKey(
         sigma_val, cellType1, cellType2, slide = NULL
@@ -514,7 +508,6 @@ setGeneric(
 
   description <- .describeNormalizer(resolver, whitened_pairs, total_pairs)
   message("Normalizer: ", description)
-  .warnSelfKernelUnits(resolver, whitened_cross_pairs)
   if (resolver$mode == "variogram" && length(resolver$ranges) > 0) {
     message("  fitted autocorrelation ranges: ",
             paste(names(resolver$ranges),
@@ -703,7 +696,6 @@ setMethod(
   # --- Precompute whitened-Frobenius normalizers (Per Slide, Per Sigma) ---
   message("Calculating whitened-Frobenius normalizers (can take time)...")
   whitened_pairs <- 0L
-  whitened_cross_pairs <- 0L
   total_pairs <- 0L
   norm_K_all <- setNames(vector("list", length = length(sigmas_run)), sigmas_run)
   normalizer_cache <- attr(object, "kernelNormalizerCache", exact = TRUE)
@@ -737,7 +729,6 @@ setMethod(
           total_pairs <- total_pairs + 1L
           if (!is.null(Rx) && !is.null(Ry)) {
             whitened_pairs <- whitened_pairs + 1L
-            if (ct_i != ct_j) whitened_cross_pairs <- whitened_cross_pairs + 1L
           }
           cache_key <- .kernelNormalizerKey(
             sigma_val, ct_i, ct_j, slide = sID
@@ -768,7 +759,6 @@ setMethod(
 
   description <- .describeNormalizer(resolver, whitened_pairs, total_pairs)
   message("Normalizer: ", description)
-  .warnSelfKernelUnits(resolver, whitened_cross_pairs)
   message("Finished calculating whitened-Frobenius normalizers.")
   attr(norm_K_all, "kernelNormalizerCache") <- normalizer_cache
   attr(norm_K_all, "normalizerInfo") <- list(

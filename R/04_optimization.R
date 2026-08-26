@@ -204,41 +204,21 @@ optimize_bilinear <- function(X_list, flat_kernels, sigma, max_iter = 1000,
     .validateYResi(Y_resi, cell_types, feature_counts)
   }
 
-  # The one-type problem is a symmetric Rayleigh-quotient problem, while the
-  # two-type problem is an ordinary singular-vector variational problem. Both
-  # have exact direct solutions and should not enter power iteration.
-  if (length(cell_types) == 1L) {
-    return(solve_one_type_eigen(
-      Y_resi, cell_types, nCC = 1L, sdev2_list = sdev2_list
-    ))
+  initial_weights <- if (length(cell_types) > 2L) {
+    initialize_weights_svd(X_list, cell_types)
+  } else {
+    NULL
   }
-
-  if (length(cell_types) == 2L) {
-    return(solve_two_type_svd(
-      Y_resi, cell_types, nCC = 1L, sdev2_list = sdev2_list
-    ))
-  }
-
-  # Initialize the non-SVD cases.
-  w_list <- initialize_weights_svd(X_list, cell_types)
-
-  w_list <- bilinear_w_from_Y_resi(
-    w_list_new = w_list,
+  .solveSumcovFirstFromY(
     Y_resi = Y_resi,
-    n_features = feature_counts,
+    initial_weights = initial_weights,
+    cell_types = cell_types,
+    feature_counts = feature_counts,
     max_iter = max_iter,
     tol = tol,
     step_size = step_size,
     sdev2_list = sdev2_list
   )
-
-  # Ensure final format is list of single-column matrices
-  for (ct in cell_types) {
-    if (!is.matrix(w_list[[ct]]) || ncol(w_list[[ct]]) != 1) {
-      w_list[[ct]] <- matrix(w_list[[ct]], ncol = 1)
-    }
-  }
-  return(w_list)
 }
 
 #' Compute PC-space operator matrices
@@ -718,6 +698,159 @@ bilinear_w_from_Y_resi <- function(w_list_new, Y_resi,
   return(w_list_new)
 }
 
+#' Return the exact fixed-operator SUMCOV axes when one exists
+#'
+#' The one-type Rayleigh quotient and two-type bilinear problem have direct
+#' eigendecomposition/SVD solutions. Keeping that dispatch here prevents the
+#' single-slide, multi-slide, first-axis, and later-axis entry points from each
+#' growing their own subtly different copy of the same branching rule.
+#'
+#' @param Y_resi Fixed PC-space cross-operators.
+#' @param cell_types Cell types in operator order.
+#' @param nCC Number of axes requested.
+#' @param sdev2_list Optional diagonal CCA metrics.
+#' @return A named weight list for one or two cell types; `NULL` otherwise.
+#' @noRd
+.solveExactSumcovAxes <- function(Y_resi, cell_types, nCC,
+                                  sdev2_list = NULL) {
+  if (length(cell_types) == 1L) {
+    return(solve_one_type_eigen(
+      Y_resi, cell_types, nCC = nCC, sdev2_list = sdev2_list
+    ))
+  }
+  if (length(cell_types) == 2L) {
+    return(solve_two_type_svd(
+      Y_resi, cell_types, nCC = nCC, sdev2_list = sdev2_list
+    ))
+  }
+  NULL
+}
+
+#' Check whether accepted axes can be replaced by the exact SUMCOV solution
+#'
+#' With no accepted weights, the direct solution is unconditional. Once a
+#' caller supplies an axis (notably score transfer), later axes must remain
+#' conditional on it unless it is the same leading direct-solver direction.
+#'
+#' @param w_list Existing axes, or `NULL` for an ordinary fit.
+#' @param exact_weights Result from `.solveExactSumcovAxes()`.
+#' @inheritParams .solveExactSumcovAxes
+#' @return `TRUE` when `exact_weights` is the applicable solution.
+#' @noRd
+.canUseExactSumcovAxes <- function(w_list, exact_weights, cell_types,
+                                   sdev2_list = NULL) {
+  if (is.null(exact_weights)) return(FALSE)
+  if (is.null(w_list)) return(TRUE)
+  if (length(cell_types) == 1L) {
+    return(matches_one_type_first_axis(
+      w_list, exact_weights, cell_types, sdev2_list = sdev2_list
+    ))
+  }
+  matches_two_type_first_axis(
+    w_list, exact_weights, cell_types, sdev2_list = sdev2_list
+  )
+}
+
+#' Solve the first SUMCOV axis from fixed PC-space operators
+#'
+#' Data layout affects how `Y_resi` and the deterministic starting weights are
+#' built, but it does not affect the optimization after that point. This helper
+#' is therefore shared by both single- and multi-slide public entry points.
+#'
+#' @param initial_weights Deterministic starting weights for iterative cases.
+#' @param feature_counts Named feature count for each cell type.
+#' @param direct_one_type Whether to use the exact one-type solver.
+#' @inheritParams .solveExactSumcovAxes
+#' @inheritParams bilinear_w_from_Y_resi
+#' @return Named list of single-column weight matrices.
+#' @noRd
+.solveSumcovFirstFromY <- function(Y_resi, initial_weights, cell_types,
+                                   feature_counts, max_iter, tol,
+                                   step_size = 1, sdev2_list = NULL,
+                                   direct_one_type = TRUE) {
+  use_exact <- length(cell_types) == 2L ||
+    (length(cell_types) == 1L && isTRUE(direct_one_type))
+  if (use_exact) {
+    return(.solveExactSumcovAxes(
+      Y_resi, cell_types, nCC = 1L, sdev2_list = sdev2_list
+    ))
+  }
+  if (is.null(initial_weights)) {
+    stop("initial_weights are required for iterative SUMCOV optimization")
+  }
+
+  result <- bilinear_w_from_Y_resi(
+    w_list_new = initial_weights,
+    Y_resi = Y_resi,
+    n_features = feature_counts,
+    max_iter = max_iter,
+    tol = tol,
+    step_size = step_size,
+    sdev2_list = sdev2_list
+  )
+  for (ct in cell_types) {
+    if (!is.matrix(result[[ct]]) || ncol(result[[ct]]) != 1L) {
+      result[[ct]] <- matrix(result[[ct]], ncol = 1L)
+    }
+  }
+  result
+}
+
+#' Extend an accepted SUMCOV solution using fixed PC-space operators
+#'
+#' This is the single source of truth for exact-solver reuse, conditional
+#' deflation, deterministic initialization, damping, and component appending.
+#' Single- and multi-slide wrappers differ only in how they construct
+#' `Y_resi`; once constructed, the solve is algebraically identical.
+#'
+#' @param w_list Named matrices containing already accepted axes.
+#' @param nCC Total number of axes requested.
+#' @inheritParams .solveSumcovFirstFromY
+#' @return `w_list` extended through `nCC`.
+#' @noRd
+.extendSumcovFromY <- function(Y_resi, w_list, cell_types, nCC,
+                               feature_counts, max_iter, tol,
+                               step_size = 1, sdev2_list = NULL) {
+  exact_weights <- .solveExactSumcovAxes(
+    Y_resi, cell_types, nCC = nCC, sdev2_list = sdev2_list
+  )
+  if (.canUseExactSumcovAxes(
+    w_list, exact_weights, cell_types, sdev2_list = sdev2_list
+  )) {
+    return(exact_weights)
+  }
+
+  k_start <- ncol(w_list[[cell_types[[1L]]]])
+  deflation_method <- if (length(cell_types) == 2L) "rank1" else "projection"
+  for (qq in k_start:(nCC - 1L)) {
+    Y_resi <- apply_deflation(
+      Y_resi, w_list, qq, cell_types, sdev2_list,
+      deflation = deflation_method
+    )
+
+    if (length(cell_types) == 1L) {
+      next_weights <- solve_one_type_eigen(
+        Y_resi, cell_types, nCC = 1L, sdev2_list = sdev2_list
+      )
+    } else {
+      next_weights <- bilinear_w_from_Y_resi(
+        w_list_new = initialize_next_component(Y_resi, cell_types),
+        Y_resi = Y_resi,
+        n_features = feature_counts,
+        max_iter = max_iter,
+        tol = tol,
+        step_size = step_size,
+        sdev2_list = sdev2_list
+      )
+    }
+
+    for (ct in cell_types) {
+      w_list[[ct]] <- cbind(w_list[[ct]], next_weights[[ct]])
+    }
+  }
+  w_list
+}
+
 #' Run multi version of skrCCA to detect subsequent components (Single Slide)
 #' Uses flat kernel structure for consistent data access
 #'
@@ -752,7 +885,6 @@ optimize_bilinear_n <- function(X_list, flat_kernels, sigma, w_list,
   # Validate inputs based on assumption they are already subsetted
   cts <- cellTypesOfInterest
   n_mat <- length(cts)
-  is_within <- (n_mat == 1)
 
   
   if (length(X_list) != n_mat || length(w_list) != n_mat ||
@@ -782,77 +914,17 @@ optimize_bilinear_n <- function(X_list, flat_kernels, sigma, w_list,
     .validateYResi(Y_resi, cts, feature_counts)
   }
 
-  # In an ordinary one-type run, one symmetric eigendecomposition returns all
-  # axes. Preserve the conditional route when the caller supplied a different
-  # first direction (for example, a transferred weight).
-  if (n_mat == 1L) {
-    eigen_weights <- solve_one_type_eigen(
-      Y_resi, cts, nCC = nCC, sdev2_list = sdev2_list
-    )
-    if (matches_one_type_first_axis(
-      w_list, eigen_weights, cts, sdev2_list = sdev2_list
-    )) {
-      return(eigen_weights)
-    }
-  }
-
-  # The ordinary two-type run has an exact all-axis SVD. Preserve the
-  # sequential path when a supplied/transferred first axis does not equal the
-  # leading singular direction, because later axes are then conditional on
-  # that external direction.
-  if (n_mat == 2L) {
-    svd_weights <- solve_two_type_svd(
-      Y_resi, cts, nCC = nCC, sdev2_list = sdev2_list
-    )
-    if (matches_two_type_first_axis(
-      w_list, svd_weights, cts, sdev2_list = sdev2_list
-    )) {
-      return(svd_weights)
-    }
-  }
-
-  # Loop to compute components k_start + 1 up to nCC
-  for (qq in k_start:(nCC - 1)) {
-    # Step 1: Apply deflation using component qq
-    # Rank-one subtraction is identical to projection for two-type singular
-    # vectors, but not for the multi-set (>2 type) stationary equations. Full
-    # projection is required there to keep later axes orthogonal within every
-    # cell type. apply_deflation() implements the weighted (oblique) projection
-    # for the scalePCs = FALSE case, so both metrics use projection and give the
-    # same axes -- scalePCs stays a pure reparametrization.
-    deflation_method <- if (n_mat == 2L) "rank1" else "projection"
-    Y_resi <- apply_deflation(
-      Y_resi, w_list, qq, cts, sdev2_list,
-      deflation = deflation_method
-    )
-
-    if (n_mat == 1L) {
-      # The residual remains a symmetric generalized eigenproblem.
-      w_list_qq_plus_1 <- solve_one_type_eigen(
-        Y_resi, cts, nCC = 1L, sdev2_list = sdev2_list
-      )
-    } else {
-      # Step 2: Initialize w_list_new for component qq+1
-      w_list_new <- initialize_next_component(Y_resi, cts)
-
-      # Step 3: Iterative refinement using the helper function
-      w_list_qq_plus_1 <- bilinear_w_from_Y_resi(
-        w_list_new = w_list_new,
-        Y_resi = Y_resi,
-        n_features = feature_counts,
-        max_iter = max_iter,
-        tol = tol,
-        step_size = step_size,
-        sdev2_list = sdev2_list)
-    }
-
-    # Step 4: Add the new component (qq+1) to w_list
-    for (ct in cts) {
-      w_list[[ct]] <- cbind(w_list[[ct]], w_list_qq_plus_1[[ct]])
-    }
-  } # end component loop qq
-
-  return(w_list)
+  .extendSumcovFromY(
+    Y_resi = Y_resi,
+    w_list = w_list,
+    cell_types = cts,
+    nCC = nCC,
+    feature_counts = feature_counts,
+    max_iter = max_iter,
+    tol = tol,
+    step_size = step_size,
+    sdev2_list = sdev2_list
+  )
 }
 
 #' @importFrom parallel mclapply
@@ -1222,45 +1294,25 @@ optimize_bilinear_multi_slides <- function(X_list_all, flat_kernels, sigma, slid
     X_list_all, flat_kernels, sigma, slides, cell_types, n_cores
   )
 
-  # Stacking samples with a block-diagonal spatial kernel is algebraically
-  # equivalent to summing their PC-space operators. We deliberately keep the
-  # sum and never materialize that larger kernel. The resulting two-type
-  # problem has the same exact SVD solution as the single-slide case.
-  if (n_cell_types == 2L) {
-    return(solve_two_type_svd(
-      Y_aggregate, cell_types, nCC = 1L, sdev2_list = sdev2_list
-    ))
+  iterative <- n_cell_types > 2L || (is_within && !isTRUE(direct_solve))
+  initial_weights <- if (iterative) {
+    initialize_weights_multi_slide(
+      X_list_all, cell_types, use_aggregation = TRUE
+    )
+  } else {
+    NULL
   }
-
-  # Handle within-cell-type case with direct solution
-  if (is_within && direct_solve) {
-    return(solve_one_type_eigen(
-      Y_aggregate, cell_types, nCC = 1L, sdev2_list = sdev2_list
-    ))
-  }
-  
-  # Initialize weights
-  w_list <- initialize_weights_multi_slide(X_list_all, cell_types, use_aggregation = TRUE)
-
-  # Iterative optimization on the aggregated small operators.
-  w_list <- bilinear_w_from_Y_resi(
-    w_list_new = w_list,
+  .solveSumcovFirstFromY(
     Y_resi = Y_aggregate,
-    n_features = feature_counts,
+    initial_weights = initial_weights,
+    cell_types = cell_types,
+    feature_counts = feature_counts,
     max_iter = max_iter,
     tol = tol,
     step_size = step_size,
-    sdev2_list = sdev2_list
+    sdev2_list = sdev2_list,
+    direct_one_type = direct_solve
   )
-  
-  # Ensure proper matrix format
-  for (ct in cell_types) {
-    if (!is.matrix(w_list[[ct]]) || ncol(w_list[[ct]]) != 1) {
-      w_list[[ct]] <- matrix(w_list[[ct]], ncol = 1)
-    }
-  }
-  
-  return(w_list)
 }
 
 #' Multi-slide SkrCCA optimization - Multiple Components
@@ -1294,11 +1346,9 @@ optimize_bilinear_n_multi_slides <- function(X_list_all, flat_kernels, sigma, sl
   # Validate inputs
   validated <- validate_multi_slide_inputs(X_list_all, NULL, 
                                           expected_cell_types = cellTypesOfInterest)
-  n_slides <- validated$n_slides
   cell_types <- cellTypesOfInterest
   n_cell_types <- length(cell_types)
   feature_counts <- validated$feature_counts
-  is_within <- (n_cell_types == 1)
   
   # Validate w_list
   if (length(w_list) != n_cell_types || 
@@ -1326,68 +1376,15 @@ optimize_bilinear_n_multi_slides <- function(X_list_all, flat_kernels, sigma, sl
     X_list_all, flat_kernels, sigma, slides, cell_types, n_cores
   )
 
-  if (n_cell_types == 1L) {
-    eigen_weights <- solve_one_type_eigen(
-      Y_resi, cell_types, nCC = nCC, sdev2_list = sdev2_list
-    )
-    if (matches_one_type_first_axis(
-      w_list, eigen_weights, cell_types, sdev2_list = sdev2_list
-    )) {
-      return(eigen_weights)
-    }
-  }
-
-  # Obtain all ordinary two-type axes from the same exact SVD when the supplied
-  # first axis is the leading singular direction. A transferred first axis
-  # deliberately falls back to conditional sequential deflation.
-  if (n_cell_types == 2L) {
-    svd_weights <- solve_two_type_svd(
-      Y_resi, cell_types, nCC = nCC, sdev2_list = sdev2_list
-    )
-    if (matches_two_type_first_axis(
-      w_list, svd_weights, cell_types, sdev2_list = sdev2_list
-    )) {
-      return(svd_weights)
-    }
-  }
-  
-  # Compute additional components
-  for (qq in k_start:(nCC - 1)) {
-
-    # Full projection is needed for multi-set axes because their stationary
-    # vectors are not pairwise singular vectors. apply_deflation() implements
-    # the weighted (oblique) projection for scalePCs = FALSE, so both metrics
-    # use projection and give the same axes.
-    deflation_method <- if (n_cell_types == 2L) "rank1" else "projection"
-    Y_resi <- apply_deflation(
-      Y_resi, w_list, qq, cell_types, sdev2_list,
-      deflation = deflation_method
-    )
-    
-    if (n_cell_types == 1L) {
-      w_list_qq_plus_1 <- solve_one_type_eigen(
-        Y_resi, cell_types, nCC = 1L, sdev2_list = sdev2_list
-      )
-    } else {
-      # Initialize and refine the next component.
-      w_list_new <- initialize_next_component(Y_resi, cell_types)
-
-      w_list_qq_plus_1 <- bilinear_w_from_Y_resi(
-        w_list_new = w_list_new,
-        Y_resi = Y_resi,
-        n_features = feature_counts,
-        max_iter = max_iter,
-        tol = tol,
-        step_size = step_size,
-        sdev2_list = sdev2_list
-      )
-    }
-
-    # Append the new component.
-    for (ct in cell_types) {
-      w_list[[ct]] <- cbind(w_list[[ct]], w_list_qq_plus_1[[ct]])
-    }
-  }
-  
-  return(w_list)
+  .extendSumcovFromY(
+    Y_resi = Y_resi,
+    w_list = w_list,
+    cell_types = cell_types,
+    nCC = nCC,
+    feature_counts = feature_counts,
+    max_iter = max_iter,
+    tol = tol,
+    step_size = step_size,
+    sdev2_list = sdev2_list
+  )
 }

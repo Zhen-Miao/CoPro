@@ -484,52 +484,6 @@ setGeneric(
   stop('`normalizeDistance` must be TRUE, FALSE, or "inherit".')
 }
 
-#' Resolve the scaling factor for a set of within-type distances
-#'
-#' Self-distances used to be normalized on their own low-distance percentile,
-#' independently of the factor [computeDistance()] derived from the cross-type
-#' distances. The two differ in general, so a self-kernel indexed by
-#' "sigma = s" then sits at a different physical bandwidth from the cross-kernel
-#' at the same nominal `s`, and anything that combines them -- notably the
-#' whitened denominator of [computeNormalizedCorrelation()] -- silently mixes
-#' scales. `"inherit"` avoids that by reusing the recorded factor; `"own"` keeps
-#' the historical behaviour but says so when the two disagree.
-#'
-#' @param min_percentile Low-distance percentile of the self-distances.
-#' @param recorded Value of `object@distanceScaleFactor`, possibly empty.
-#' @return A single positive scaling factor.
-#' @noRd
-.resolveSelfDistanceScaling <- function(normalizeDistance, min_percentile,
-                                        recorded, target = 0.01) {
-  mode <- .normalizeDistanceMode(normalizeDistance)
-  has_recorded <- length(recorded) == 1L && is.finite(recorded) && recorded > 0
-
-  if (identical(mode, "none")) return(1)
-
-  if (identical(mode, "inherit")) {
-    if (!has_recorded) {
-      stop('normalizeDistance = "inherit" reuses the scaling factor recorded ',
-           "by computeDistance(), and this object has none. Run ",
-           "computeDistance() first, or pass TRUE / FALSE.")
-    }
-    return(recorded)
-  }
-
-  if (!is.finite(min_percentile) || min_percentile <= 0) return(1)
-  own <- target / min_percentile
-  if (has_recorded && !isTRUE(all.equal(own, recorded, tolerance = 0.01))) {
-    warning(sprintf(
-      paste0("Self-distances were normalized on their own low-distance ",
-             "percentile (factor %g), which differs from the factor ",
-             "computeDistance() recorded for the cross-type distances ",
-             "(factor %g). A self-kernel at a given nominal sigma is then at a ",
-             "different physical bandwidth from the cross-kernel at the same ",
-             'sigma. Pass normalizeDistance = "inherit" to share one scale.'),
-      own, recorded), call. = FALSE)
-  }
-  own
-}
-
 # Helper function to process distance matrix
 .processDistanceMatrix <- function(distances_ij, truncateLowDist,
                                   percentile_choice = NULL, set_diag_inf = FALSE) {
@@ -837,6 +791,7 @@ setMethod("computeDistance", "CoProSingle", function(object, distType = c("Eucli
                                                     truncateLowDist = TRUE, verbose = TRUE,
                                                     knn_k = 10, geodesic_threshold = 10, geodesic_cutoff = 7) {
   distType <- match.arg(distType)
+  object <- .invalidateCoProState(object, "distance")
   .computeDistanceCore(object, distType, xDistScale, yDistScale, zDistScale,
                       normalizeDistance, normalizeMethod, truncateLowDist, verbose,
                       knn_k, geodesic_threshold, geodesic_cutoff,
@@ -854,6 +809,7 @@ setMethod("computeDistance", "CoProMulti", function(object, distType = c("Euclid
                                                    truncateLowDist = TRUE, verbose = TRUE,
                                                    knn_k = 10, geodesic_threshold = 10, geodesic_cutoff = 7) {
   distType <- match.arg(distType)
+  object <- .invalidateCoProState(object, "distance")
   .computeDistanceCoreMulti(object, distType, xDistScale, yDistScale, zDistScale,
                            normalizeDistance, normalizeMethod, truncateLowDist, verbose,
                            knn_k, geodesic_threshold, geodesic_cutoff,

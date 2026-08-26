@@ -911,6 +911,7 @@ setMethod(
 
     # Step 4: Store results
     if (verbose) message("Step 4: Storing results...")
+    object <- .invalidateCoProState(object, "cca")
     object <- .storeGeneSpaceCCAResults(
       object, w_list, gsd$Z_by_slide, sigma,
       cts, nCC, gsd$genes, gsd$slides,
