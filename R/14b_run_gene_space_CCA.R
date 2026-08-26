@@ -563,7 +563,9 @@
     space = "gene",
     objective = objective,
     requested = objective,
-    slideWeight = "equal",
+    # Slide weighting only parameterizes the SUMCOR criterion; mirror the
+    # PC-space record, which stores NA when no weighting was applied.
+    slideWeight = if (identical(objective, "sumcor")) "equal" else NA_character_,
     sweep = sweep,
     slides = slides,
     droppedSlides = character(0)
