@@ -268,7 +268,7 @@ test_that("additive self-kernels preserve CCA weights and scores", {
   expect_length(object@normalizedCorrelationPermu, 0)
 })
 
-test_that("additive float32 kernels preserve CCA state at existing sigmas", {
+test_that("additive float32 kernels preserve CCA state at untouched sigmas", {
   object <- .state_test_object(seed = 817)
   object <- suppressMessages(computePCA(object, nPCA = 5))
   object <- computeDistance(
@@ -326,4 +326,65 @@ test_that("additive float32 kernels preserve CCA state at existing sigmas", {
   expect_length(object@skrCCAOut, 0)
   expect_identical(object@sigmaValues, 4)
   .expect_cca_dependents_empty(object)
+})
+
+test_that("float32 replacement invalidates CCA state at touched sigmas", {
+  object <- .state_test_object(seed = 818)
+  object <- suppressMessages(computePCA(object, nPCA = 5))
+  object <- computeDistance(
+    object, distType = "Euclidean2D", normalizeDistance = FALSE,
+    verbose = FALSE
+  )
+  object <- computeKernelMatrix(
+    object, sigmaValues = 3, method = "dense", dropDistances = FALSE,
+    verbose = FALSE
+  )
+  kernel_name <- names(object@kernelMatrices)[[1L]]
+  kernel_before <- as.matrix(object@kernelMatrices[[kernel_name]])
+  object <- .seed_cca_dependents(object)
+
+  object <- suppressWarnings(computeSparseKernelFloat32(
+    object, sigmaValues = 3, rowNormalizeKernel = TRUE,
+    overwrite = FALSE, minAveCellNeighor = 1, verbose = FALSE
+  ))
+
+  kernel_after <- as.matrix(asDoubleSparseMatrix(
+    object@kernelMatrices[[kernel_name]]
+  ))
+  expect_false(isTRUE(all.equal(kernel_after, kernel_before)))
+  expect_identical(object@sigmaValues, 3)
+  expect_length(object@skrCCAOut, 0)
+  expect_length(object@nCC, 0)
+  .expect_cca_dependents_empty(object)
+})
+
+test_that("single-type self-kernel no-ops preserve all derived state", {
+  object <- create_test_copro_single(
+    n_cells = 80, n_genes = 20, n_cell_types = 1, seed = 819
+  )
+  object <- subsetData(
+    object, cellTypesOfInterest = "CellTypeA", saveOriginal = TRUE
+  )
+  object <- suppressMessages(computePCA(object, nPCA = 5))
+  object <- computeDistance(
+    object, distType = "Euclidean2D", normalizeDistance = FALSE,
+    verbose = FALSE
+  )
+  object <- computeKernelMatrix(
+    object, sigmaValues = 3, method = "dense", dropDistances = FALSE,
+    minAveCellNeighor = 1, verbose = FALSE
+  )
+  object <- .seed_cca_dependents(object)
+  attr(object, "kernelNormalizerCache") <- list(valid_cache = TRUE)
+
+  for (overwrite in c(FALSE, TRUE)) {
+    expect_warning(
+      result <- computeSelfKernel(
+        object, sigmaValues = 3, method = "dense", overwrite = overwrite,
+        minAveCellNeighor = 1, verbose = FALSE
+      ),
+      "Only one cell type detected"
+    )
+    expect_identical(result, object)
+  }
 })

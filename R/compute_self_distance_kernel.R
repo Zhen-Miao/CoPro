@@ -562,13 +562,21 @@ setMethod("computeSelfKernel", "CoPro",
                    distType = NULL, xDistScale = NULL, yDistScale = NULL, zDistScale = NULL,
                    normalizeDistance = NULL, normalizeMethod = NULL, normalizeTarget = NULL,
                    truncateLowDist = NULL) {
+            method <- match.arg(method)
+            if (length(object@cellTypesOfInterest) == 1L) {
+              warning(
+                "Only one cell type detected. Use computeKernelMatrix() ",
+                "instead for single cell type."
+              )
+              return(object)
+            }
             object <- .invalidateCoProState(
               object, if (isTRUE(overwrite)) "kernel" else "self_kernel"
             )
             .computeSelfKernelDispatch(
               object, sigmaValues, lowerLimit, upperQuantile,
               normalizeKernel, minAveCellNeighor, rowNormalizeKernel,
-              colNormalizeKernel, method = match.arg(method),
+              colNormalizeKernel, method = method,
               autoThreshold = autoThreshold, distType = distType,
               xDistScale = xDistScale, yDistScale = yDistScale,
               zDistScale = zDistScale, normalizeDistance = normalizeDistance,

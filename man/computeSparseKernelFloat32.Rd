@@ -87,9 +87,12 @@ behavior). See \code{\link[=computeDistance]{computeDistance()}}.}
 
 \item{overwrite}{Whether to replace existing kernel matrices. With \code{FALSE},
 newly built blocks are merged into the existing set and the sigma grid
-grows to match; CCA weights and scores fitted at the untouched sigmas
-survive, while cached kernel normalizers, normalized correlations, and
-permutation results are cleared for recomputation over the grown grid.}
+grows to match. When every requested sigma is new, CCA weights and scores
+fitted at the existing sigmas survive, while cached kernel normalizers,
+normalized correlations, and permutation results are cleared for
+recomputation over the grown grid. If a requested sigma already has stored
+kernel blocks, those blocks are replaced and all CCA-derived state is
+cleared because it may depend on the replaced kernel.}
 
 \item{verbose}{Whether to report progress.}
 

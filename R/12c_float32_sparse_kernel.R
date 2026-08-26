@@ -346,9 +346,12 @@ materializeFloat32Kernels <- function(object, verbose = TRUE) {
 #' @param truncateLowDist Whether to floor very small distances.
 #' @param overwrite Whether to replace existing kernel matrices. With `FALSE`,
 #'   newly built blocks are merged into the existing set and the sigma grid
-#'   grows to match; CCA weights and scores fitted at the untouched sigmas
-#'   survive, while cached kernel normalizers, normalized correlations, and
-#'   permutation results are cleared for recomputation over the grown grid.
+#'   grows to match. When every requested sigma is new, CCA weights and scores
+#'   fitted at the existing sigmas survive, while cached kernel normalizers,
+#'   normalized correlations, and permutation results are cleared for
+#'   recomputation over the grown grid. If a requested sigma already has stored
+#'   kernel blocks, those blocks are replaced and all CCA-derived state is
+#'   cleared because it may depend on the replaced kernel.
 #' @param verbose Whether to report progress.
 #' @param nThreads Worker threads for the compiled kernel builder. Pass a
 #'   positive integer to fix the count, including to raise the ceiling for very
@@ -429,6 +432,28 @@ setGeneric(
     if (block$symmetric) represented / 2 else represented
   }, numeric(1))
   blocks[order(block_sizes, decreasing = TRUE)]
+}
+
+#' Whether a float32 merge would replace a stored bandwidth
+#'
+#' `overwrite = FALSE` is additive only when every requested sigma is new. The
+#' core writes by canonical kernel name, so an existing sigma is a replacement
+#' even though the surrounding list is retained. Such a replacement makes CCA
+#' weights fitted at that bandwidth stale and must take the full invalidation
+#' path rather than `additive_kernel`.
+#' @noRd
+.float32TouchesExistingSigma <- function(object, sigmaValues) {
+  kernel_names <- names(object@kernelMatrices)
+  if (length(kernel_names) == 0L) return(FALSE)
+
+  existing_sigmas <- vapply(kernel_names, function(name) {
+    tryCatch(
+      .parseKernelMatrixName(name)$sigma,
+      error = function(e) NA_real_
+    )
+  }, numeric(1))
+  existing_sigmas <- existing_sigmas[is.finite(existing_sigmas)]
+  any(sigmaValues %in% existing_sigmas)
 }
 
 #' Block-streamed float32 construction shared by single and multi-slide data
@@ -676,8 +701,10 @@ setMethod(
       normalizeDistance, normalizeMethod, normalizeTarget, truncateLowDist,
       "computeSparseKernelFloat32", verbose
     )
+    additive <- identical(overwrite, FALSE) &&
+      !.float32TouchesExistingSigma(object, sigmaValues)
     object <- .invalidateCoProState(
-      object, if (isTRUE(overwrite)) "kernel" else "additive_kernel"
+      object, if (additive) "additive_kernel" else "kernel"
     )
     .computeSparseKernelFloat32Core(
       object, sigmaValues, lowerLimit, upperQuantile,
