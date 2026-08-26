@@ -19,14 +19,14 @@ computeSparseKernelFloat32(
   minAveCellNeighor = 2,
   rowNormalizeKernel = FALSE,
   colNormalizeKernel = FALSE,
-  distType = c("Euclidean2D", "Euclidean3D"),
-  xDistScale = 1,
-  yDistScale = 1,
-  zDistScale = 1,
-  normalizeDistance = FALSE,
-  normalizeMethod = "global",
-  normalizeTarget = 0.01,
-  truncateLowDist = TRUE,
+  distType = NULL,
+  xDistScale = NULL,
+  yDistScale = NULL,
+  zDistScale = NULL,
+  normalizeDistance = NULL,
+  normalizeMethod = NULL,
+  normalizeTarget = NULL,
+  truncateLowDist = NULL,
   overwrite = TRUE,
   verbose = TRUE,
   nThreads = NULL
@@ -42,14 +42,14 @@ computeSparseKernelFloat32(
   minAveCellNeighor = 2,
   rowNormalizeKernel = FALSE,
   colNormalizeKernel = FALSE,
-  distType = c("Euclidean2D", "Euclidean3D"),
-  xDistScale = 1,
-  yDistScale = 1,
-  zDistScale = 1,
-  normalizeDistance = FALSE,
-  normalizeMethod = "global",
-  normalizeTarget = 0.01,
-  truncateLowDist = TRUE,
+  distType = NULL,
+  xDistScale = NULL,
+  yDistScale = NULL,
+  zDistScale = NULL,
+  normalizeDistance = NULL,
+  normalizeMethod = NULL,
+  normalizeTarget = NULL,
+  truncateLowDist = NULL,
   overwrite = TRUE,
   verbose = TRUE,
   nThreads = NULL
@@ -89,15 +89,17 @@ computeSparseKernelFloat32(
 
 - distType:
 
-  `"Euclidean2D"` or `"Euclidean3D"`.
+  `"Euclidean2D"` or `"Euclidean3D"`. `NULL` inherits the recorded
+  geometry.
 
 - xDistScale, yDistScale, zDistScale:
 
-  Per-axis coordinate scales.
+  Per-axis coordinate scales. `NULL` inherits the recorded geometry.
 
 - normalizeDistance:
 
-  Whether to rescale distances to a common unit.
+  Whether to rescale distances to a common unit. `NULL` inherits the
+  recorded geometry.
 
 - normalizeMethod:
 
@@ -118,7 +120,15 @@ computeSparseKernelFloat32(
 
 - overwrite:
 
-  Whether to replace existing kernel matrices.
+  Whether to replace existing kernel matrices. With `FALSE`, newly built
+  blocks are merged into the existing set and the sigma grid grows to
+  match. When every requested sigma is new, CCA weights and scores
+  fitted at the existing sigmas survive, while cached kernel
+  normalizers, normalized correlations, and permutation results are
+  cleared for recomputation over the grown grid. If a requested sigma
+  already has stored kernel blocks, those blocks are replaced and all
+  CCA-derived state is cleared because it may depend on the replaced
+  kernel.
 
 - verbose:
 

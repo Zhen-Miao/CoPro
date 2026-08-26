@@ -64,10 +64,10 @@ computeNormalizedCorrelation(
 - normalizerControl:
 
   A named list tuning the `"variogram"` normalizer. `distType`,
-  `xDistScale`, `yDistScale`, `zDistScale` must match what was passed to
-  [`computeDistance()`](https://zhen-miao.github.io/CoPro/reference/computeDistance.md)
-  (they are not stored on the object). `range` accepts a named numeric
-  vector of per-cell-type ranges, in normalized distance units, to skip
+  `xDistScale`, `yDistScale`, and `zDistScale` default to `NULL` and
+  inherit the geometry recorded by the distance/kernel builder. Explicit
+  values must match that record. `range` accepts a named numeric vector
+  of per-cell-type ranges, in normalized distance units, to skip
   estimation. Remaining entries (`maxCells`, `nBins`, `maxLagQuantile`,
   `minCorrelation`, `minBins`, `lowerLimit`) tune the fit and the
   operator's truncation.
@@ -118,14 +118,8 @@ sigma grid, and therefore which bandwidth `sigmaValueChoice` ends up at.
   Force \\R = K(\sigma)\\, the matched-sigma self-kernel, with the unit
   diagonal restored. Errors if the self-kernels are absent rather than
   falling back. This over-counts noise at large sigma and biases the
-  selected bandwidth downward, and it carries a second problem:
-  [`computeSelfDistance()`](https://zhen-miao.github.io/CoPro/reference/computeSelfDistance.md)
-  normalizes self-distances by its own scaling factor rather than the
-  one
-  [`computeDistance()`](https://zhen-miao.github.io/CoPro/reference/computeDistance.md)
-  recorded, so a self-kernel "at the same sigma" is generally at a
-  different physical bandwidth from the cross-kernel. Provided as a
-  diagnostic, not for analysis.
+  selected bandwidth downward. Provided as a diagnostic, not for
+  analysis.
 
 - `"variogram"`:
 

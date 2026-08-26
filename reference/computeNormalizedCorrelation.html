@@ -124,8 +124,9 @@ for single slide analysis, it is ignored, with default value "perSlide".</p></dd
 
 <dt id="arg-normalizercontrol">normalizerControl<a class="anchor" aria-label="anchor" href="#arg-normalizercontrol"></a></dt>
 <dd><p>A named list tuning the <code>"variogram"</code> normalizer.
-<code>distType</code>, <code>xDistScale</code>, <code>yDistScale</code>, <code>zDistScale</code> must match what was
-passed to <code><a href="computeDistance.html">computeDistance()</a></code> (they are not stored on the object).
+<code>distType</code>, <code>xDistScale</code>, <code>yDistScale</code>, and <code>zDistScale</code> default to <code>NULL</code>
+and inherit the geometry recorded by the distance/kernel builder. Explicit
+values must match that record.
 <code>range</code> accepts a named numeric vector of per-cell-type ranges, in
 normalized distance units, to skip estimation. Remaining entries
 (<code>maxCells</code>, <code>nBins</code>, <code>maxLagQuantile</code>, <code>minCorrelation</code>, <code>minBins</code>,
@@ -173,11 +174,8 @@ sigma and biases the selected bandwidth upward.</p></dd>
 <dd><p>Force \(R = K(\sigma)\), the matched-sigma self-kernel,
 with the unit diagonal restored. Errors if the self-kernels are absent
 rather than falling back. This over-counts noise at large sigma and
-biases the selected bandwidth downward, and it carries a second problem:
-<code><a href="computeSelfDistance.html">computeSelfDistance()</a></code> normalizes self-distances by its own scaling
-factor rather than the one <code><a href="computeDistance.html">computeDistance()</a></code> recorded, so a self-kernel
-"at the same sigma" is generally at a different physical bandwidth from
-the cross-kernel. Provided as a diagnostic, not for analysis.</p></dd>
+biases the selected bandwidth downward. Provided as a diagnostic, not
+for analysis.</p></dd>
 
 <dt><code>"variogram"</code></dt>
 <dd><p>Estimate one within-type autocorrelation range per

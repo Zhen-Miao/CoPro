@@ -24,14 +24,14 @@ computeSparseKernel(
   minAveCellNeighor = 2,
   rowNormalizeKernel = FALSE,
   colNormalizeKernel = FALSE,
-  distType = c("Euclidean2D", "Euclidean3D"),
-  xDistScale = 1,
-  yDistScale = 1,
-  zDistScale = 1,
-  normalizeDistance = FALSE,
-  normalizeMethod = "global",
-  normalizeTarget = 0.01,
-  truncateLowDist = TRUE,
+  distType = NULL,
+  xDistScale = NULL,
+  yDistScale = NULL,
+  zDistScale = NULL,
+  normalizeDistance = NULL,
+  normalizeMethod = NULL,
+  normalizeTarget = NULL,
+  truncateLowDist = NULL,
   verbose = TRUE
 )
 
@@ -45,14 +45,14 @@ computeSparseKernel(
   minAveCellNeighor = 2,
   rowNormalizeKernel = FALSE,
   colNormalizeKernel = FALSE,
-  distType = c("Euclidean2D", "Euclidean3D"),
-  xDistScale = 1,
-  yDistScale = 1,
-  zDistScale = 1,
-  normalizeDistance = FALSE,
-  normalizeMethod = "global",
-  normalizeTarget = 0.01,
-  truncateLowDist = TRUE,
+  distType = NULL,
+  xDistScale = NULL,
+  yDistScale = NULL,
+  zDistScale = NULL,
+  normalizeDistance = NULL,
+  normalizeMethod = NULL,
+  normalizeTarget = NULL,
+  truncateLowDist = NULL,
   verbose = TRUE
 )
 
@@ -66,14 +66,14 @@ computeSparseKernel(
   minAveCellNeighor = 2,
   rowNormalizeKernel = FALSE,
   colNormalizeKernel = FALSE,
-  distType = c("Euclidean2D", "Euclidean3D"),
-  xDistScale = 1,
-  yDistScale = 1,
-  zDistScale = 1,
-  normalizeDistance = FALSE,
-  normalizeMethod = "global",
-  normalizeTarget = 0.01,
-  truncateLowDist = TRUE,
+  distType = NULL,
+  xDistScale = NULL,
+  yDistScale = NULL,
+  zDistScale = NULL,
+  normalizeDistance = NULL,
+  normalizeMethod = NULL,
+  normalizeTarget = NULL,
+  truncateLowDist = NULL,
   verbose = TRUE
 )
 ```
@@ -126,21 +126,22 @@ computeSparseKernel(
 - distType:
 
   "Euclidean2D" or "Euclidean3D" (Morphology-Aware is not supported by
-  the sparse path).
+  the sparse path). `NULL` inherits the recorded geometry.
 
 - xDistScale, yDistScale, zDistScale:
 
-  per-axis coordinate scales.
+  Per-axis coordinate scales. `NULL` inherits the recorded geometry.
 
 - normalizeDistance, normalizeTarget, truncateLowDist:
 
   distance-processing options, matching
   [`computeDistance()`](https://zhen-miao.github.io/CoPro/reference/computeDistance.md).
+  `NULL` inherits the recorded geometry.
 
 - normalizeMethod:
 
   How the reference distance is estimated when
-  `normalizeDistance = TRUE`. `"global"` (default) uses the median
+  `normalizeDistance = TRUE`. `"global"` uses the median
   nearest-neighbor distance over all cells of interest, ignoring their
   type labels, so the unit is a property of the tissue rather than of
   whichever blocks this call builds. `"spacing"` measures each cell-type

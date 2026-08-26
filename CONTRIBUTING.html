@@ -70,7 +70,7 @@
 <h2 id="r-cmd-check-ci-parity">R CMD check (CI-parity)<a class="anchor" aria-label="anchor" href="#r-cmd-check-ci-parity"></a></h2>
 <p>The GitHub Actions workflow invokes:</p>
 <div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu">rcmdcheck</span><span class="fu">::</span><span class="fu"><a href="http://r-lib.github.io/rcmdcheck/reference/rcmdcheck.html" class="external-link">rcmdcheck</a></span><span class="op">(</span></span>
+<code class="sourceCode R"><span><span class="fu">rcmdcheck</span><span class="fu">::</span><span class="fu">rcmdcheck</span><span class="op">(</span></span>
 <span>  build_args <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"--no-build-vignettes"</span><span class="op">)</span>,</span>
 <span>  args       <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"--no-vignettes"</span>, <span class="st">"--no-manual"</span>, <span class="st">"--ignore-vignettes"</span><span class="op">)</span></span>
 <span><span class="op">)</span></span></code></pre></div>

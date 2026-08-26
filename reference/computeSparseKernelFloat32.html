@@ -76,14 +76,14 @@ block's neighbor data are released before the next block.</p>
 <span>  minAveCellNeighor <span class="op">=</span> <span class="fl">2</span>,</span>
 <span>  rowNormalizeKernel <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  colNormalizeKernel <span class="op">=</span> <span class="cn">FALSE</span>,</span>
-<span>  distType <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"Euclidean2D"</span>, <span class="st">"Euclidean3D"</span><span class="op">)</span>,</span>
-<span>  xDistScale <span class="op">=</span> <span class="fl">1</span>,</span>
-<span>  yDistScale <span class="op">=</span> <span class="fl">1</span>,</span>
-<span>  zDistScale <span class="op">=</span> <span class="fl">1</span>,</span>
-<span>  normalizeDistance <span class="op">=</span> <span class="cn">FALSE</span>,</span>
-<span>  normalizeMethod <span class="op">=</span> <span class="st">"global"</span>,</span>
-<span>  normalizeTarget <span class="op">=</span> <span class="fl">0.01</span>,</span>
-<span>  truncateLowDist <span class="op">=</span> <span class="cn">TRUE</span>,</span>
+<span>  distType <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  xDistScale <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  yDistScale <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  zDistScale <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  normalizeDistance <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  normalizeMethod <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  normalizeTarget <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  truncateLowDist <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  overwrite <span class="op">=</span> <span class="cn">TRUE</span>,</span>
 <span>  verbose <span class="op">=</span> <span class="cn">TRUE</span>,</span>
 <span>  nThreads <span class="op">=</span> <span class="cn">NULL</span></span>
@@ -99,14 +99,14 @@ block's neighbor data are released before the next block.</p>
 <span>  minAveCellNeighor <span class="op">=</span> <span class="fl">2</span>,</span>
 <span>  rowNormalizeKernel <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  colNormalizeKernel <span class="op">=</span> <span class="cn">FALSE</span>,</span>
-<span>  distType <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"Euclidean2D"</span>, <span class="st">"Euclidean3D"</span><span class="op">)</span>,</span>
-<span>  xDistScale <span class="op">=</span> <span class="fl">1</span>,</span>
-<span>  yDistScale <span class="op">=</span> <span class="fl">1</span>,</span>
-<span>  zDistScale <span class="op">=</span> <span class="fl">1</span>,</span>
-<span>  normalizeDistance <span class="op">=</span> <span class="cn">FALSE</span>,</span>
-<span>  normalizeMethod <span class="op">=</span> <span class="st">"global"</span>,</span>
-<span>  normalizeTarget <span class="op">=</span> <span class="fl">0.01</span>,</span>
-<span>  truncateLowDist <span class="op">=</span> <span class="cn">TRUE</span>,</span>
+<span>  distType <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  xDistScale <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  yDistScale <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  zDistScale <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  normalizeDistance <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  normalizeMethod <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  normalizeTarget <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  truncateLowDist <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  overwrite <span class="op">=</span> <span class="cn">TRUE</span>,</span>
 <span>  verbose <span class="op">=</span> <span class="cn">TRUE</span>,</span>
 <span>  nThreads <span class="op">=</span> <span class="cn">NULL</span></span>
@@ -148,15 +148,18 @@ nonempty row or column to sum to one. They cannot both be <code>TRUE</code>.</p>
 
 
 <dt id="arg-disttype">distType<a class="anchor" aria-label="anchor" href="#arg-disttype"></a></dt>
-<dd><p><code>"Euclidean2D"</code> or <code>"Euclidean3D"</code>.</p></dd>
+<dd><p><code>"Euclidean2D"</code> or <code>"Euclidean3D"</code>. <code>NULL</code> inherits the
+recorded geometry.</p></dd>
 
 
 <dt id="arg-xdistscale-ydistscale-zdistscale">xDistScale, yDistScale, zDistScale<a class="anchor" aria-label="anchor" href="#arg-xdistscale-ydistscale-zdistscale"></a></dt>
-<dd><p>Per-axis coordinate scales.</p></dd>
+<dd><p>Per-axis coordinate scales. <code>NULL</code>
+inherits the recorded geometry.</p></dd>
 
 
 <dt id="arg-normalizedistance">normalizeDistance<a class="anchor" aria-label="anchor" href="#arg-normalizedistance"></a></dt>
-<dd><p>Whether to rescale distances to a common unit.</p></dd>
+<dd><p>Whether to rescale distances to a common unit.
+<code>NULL</code> inherits the recorded geometry.</p></dd>
 
 
 <dt id="arg-normalizemethod">normalizeMethod<a class="anchor" aria-label="anchor" href="#arg-normalizemethod"></a></dt>
@@ -176,7 +179,14 @@ behavior). See <code><a href="computeDistance.html">computeDistance()</a></code>
 
 
 <dt id="arg-overwrite">overwrite<a class="anchor" aria-label="anchor" href="#arg-overwrite"></a></dt>
-<dd><p>Whether to replace existing kernel matrices.</p></dd>
+<dd><p>Whether to replace existing kernel matrices. With <code>FALSE</code>,
+newly built blocks are merged into the existing set and the sigma grid
+grows to match. When every requested sigma is new, CCA weights and scores
+fitted at the existing sigmas survive, while cached kernel normalizers,
+normalized correlations, and permutation results are cleared for
+recomputation over the grown grid. If a requested sigma already has stored
+kernel blocks, those blocks are replaced and all CCA-derived state is
+cleared because it may depend on the replaced kernel.</p></dd>
 
 
 <dt id="arg-verbose">verbose<a class="anchor" aria-label="anchor" href="#arg-verbose"></a></dt>
