@@ -201,13 +201,69 @@ test_that("computeSelfDistance preserves cross-kernels and drops stale self-kern
   n_a <- sum(object@cellTypesSub == "CellTypeA")
   object@kernelMatrices[[self_name]] <- diag(n_a)
   object <- .seed_cca_dependents(object)
+  cca_before <- object@skrCCAOut
+  scores_before <- lapply(
+    c("cellScores", "geneScores", "geneScoresRegression", "geneScoresTest"),
+    function(slot_name) methods::slot(object, slot_name)
+  )
 
   object <- computeSelfDistance(object, verbose = FALSE, overwrite = FALSE)
 
   expect_true(all(cross_names %in% names(object@kernelMatrices)))
   expect_false(self_name %in% names(object@kernelMatrices))
   expect_identical(object@sigmaValues, 3)
-  expect_length(object@skrCCAOut, 0)
-  expect_length(object@nCC, 0)
-  .expect_cca_dependents_empty(object)
+  expect_identical(object@skrCCAOut, cca_before)
+  expect_identical(object@nCC, 2)
+  score_slots <- c(
+    "cellScores", "geneScores", "geneScoresRegression", "geneScoresTest"
+  )
+  for (index in seq_along(score_slots)) {
+    expect_identical(
+      methods::slot(object, score_slots[[index]]), scores_before[[index]]
+    )
+  }
+  expect_true(any(grepl("^cellScore_", colnames(object@metaDataSub))))
+
+  invalidated_slots <- c(
+    "normalizedCorrelation", "bidirCorrelation", "sigmaValueChoice",
+    "nPermu", "skrCCAPermuOut", "cellPermu",
+    "normalizedCorrelationPermu", "bidirCorrelationPermu", "conditionalPermu"
+  )
+  for (slot_name in invalidated_slots) {
+    expect_length(methods::slot(object, slot_name), 0)
+  }
+  expect_null(attr(object, "kernelNormalizerCache", exact = TRUE))
+  expect_null(attr(object, "permutationProvenance", exact = TRUE))
+  expect_null(attr(object, "fairSigmaPermu", exact = TRUE))
+})
+
+test_that("additive self-kernels preserve CCA weights and scores", {
+  object <- .state_test_object(seed = 816)
+  object <- suppressMessages(computePCA(object, nPCA = 5))
+  object <- computeDistance(
+    object, distType = "Euclidean2D", normalizeDistance = FALSE,
+    verbose = FALSE
+  )
+  object <- computeKernelMatrix(
+    object, sigmaValues = 3, method = "dense", dropDistances = FALSE,
+    verbose = FALSE
+  )
+  object <- .seed_cca_dependents(object)
+  cca_before <- object@skrCCAOut
+  scores_before <- object@cellScores
+
+  object <- suppressWarnings(computeSelfKernel(
+    object, sigmaValues = 3, method = "sparse", overwrite = FALSE,
+    minAveCellNeighor = 1, verbose = FALSE
+  ))
+
+  expect_identical(object@skrCCAOut, cca_before)
+  expect_identical(object@nCC, 2)
+  expect_identical(object@cellScores, scores_before)
+  expect_gt(sum(vapply(names(object@kernelMatrices), function(name) {
+    parsed <- CoPro:::.parseKernelMatrixName(name)
+    identical(parsed$cellType1, parsed$cellType2)
+  }, logical(1))), 0)
+  expect_length(object@normalizedCorrelation, 0)
+  expect_length(object@normalizedCorrelationPermu, 0)
 })

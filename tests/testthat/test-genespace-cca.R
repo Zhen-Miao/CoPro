@@ -615,6 +615,58 @@ test_that("runGeneSpaceCCA integration test with CoProMulti object", {
   expect_true(paste0("gscca_sigma_", 0.1) %in% names(obj@skrCCAOut))
 })
 
+test_that("repeated gene-space fits retain scores for earlier sigmas", {
+  obj <- create_test_copro_multi(
+    n_cells_per_slide = 60, n_slides = 2, n_genes = 30,
+    n_cell_types = 2, seed = 43
+  )
+  obj <- subsetData(obj, cellTypesOfInterest = c("CellTypeA", "CellTypeB"))
+  obj <- suppressMessages(computeDistance(
+    obj, distType = "Euclidean2D", normalizeDistance = TRUE,
+    verbose = FALSE
+  ))
+  obj <- suppressWarnings(computeKernelMatrix(
+    obj, sigmaValues = c(0.05, 0.1), minAveCellNeighor = 1,
+    verbose = FALSE
+  ))
+
+  first <- suppressWarnings(suppressMessages(runGeneSpaceCCA(
+    obj, sigma = 0.05, nCC = 1, min_prevalence = 0, min_cells = 0,
+    max_iter = 50, tol = 1e-3, verbose = FALSE
+  )))
+  first_gene_scores <- first@geneScores
+  first_cell_scores <- first@cellScores
+  first_metadata_column <- "cellScore_sigma_0.05_cc_index_1"
+  first_metadata_scores <- first@metaDataSub[[first_metadata_column]]
+
+  both <- suppressWarnings(suppressMessages(runGeneSpaceCCA(
+    first, sigma = 0.1, nCC = 1, min_prevalence = 0, min_cells = 0,
+    max_iter = 50, tol = 1e-3, verbose = FALSE
+  )))
+
+  expect_true(all(
+    c("gscca_sigma_0.05", "gscca_sigma_0.1") %in% names(both@skrCCAOut)
+  ))
+  for (key in names(first_gene_scores)) {
+    expect_identical(both@geneScores[[key]], first_gene_scores[[key]])
+  }
+  for (key in names(first_cell_scores)) {
+    expect_identical(both@cellScores[[key]], first_cell_scores[[key]])
+  }
+  expect_identical(
+    both@metaDataSub[[first_metadata_column]], first_metadata_scores
+  )
+  expect_true(all(vapply(c(0.05, 0.1), function(sigma) {
+    all(vapply(c("CellTypeA", "CellTypeB"), function(cell_type) {
+      !is.null(both@geneScores[[
+        CoPro:::.createGeneScoresName(sigma, cell_type, slide = NULL)
+      ]]) && !is.null(both@cellScores[[
+        CoPro:::.createCellScoresName(sigma, cell_type, slide = NULL)
+      ]])
+    }, logical(1)))
+  }, logical(1))))
+})
+
 test_that("runGeneSpaceCCA validates sigma against available values", {
   skip_if_not_installed("CoPro")
 

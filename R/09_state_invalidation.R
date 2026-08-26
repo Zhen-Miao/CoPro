@@ -11,9 +11,12 @@
   distance = "kernel",
   self_distance = "self_kernel",
   kernel = c("kernel_cache", "cca"),
-  self_kernel = c("kernel_cache", "cca"),
+  self_kernel = c("kernel_cache", "correlation", "permutation"),
   kernel_cache = character(0),
   cca = c("correlation", "scores", "permutation"),
+  additive_cca = c(
+    "correlation", "regression_scores", "score_tests", "permutation"
+  ),
   correlation = character(0),
   scores = c("regression_scores", "score_tests"),
   regression_scores = character(0),

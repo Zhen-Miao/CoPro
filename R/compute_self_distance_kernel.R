@@ -562,7 +562,9 @@ setMethod("computeSelfKernel", "CoPro",
                    distType = NULL, xDistScale = NULL, yDistScale = NULL, zDistScale = NULL,
                    normalizeDistance = NULL, normalizeMethod = NULL, normalizeTarget = NULL,
                    truncateLowDist = NULL) {
-            object <- .invalidateCoProState(object, "self_kernel")
+            object <- .invalidateCoProState(
+              object, if (isTRUE(overwrite)) "kernel" else "self_kernel"
+            )
             .computeSelfKernelDispatch(
               object, sigmaValues, lowerLimit, upperQuantile,
               normalizeKernel, minAveCellNeighor, rowNormalizeKernel,
