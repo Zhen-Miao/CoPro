@@ -1,4 +1,13 @@
-
+# =============================================================================
+# Statistics on permuted fits
+# -----------------------------------------------------------------------------
+# Turns the refitted draws produced by D1 (fixed sigma), D3 (fair sigma), and
+# D4 (conditional) into test results: per-draw normalized correlations
+# (computeNormalizedCorrelationPermu), observed reference values
+# (compute_ground_truth_ncorr), and Phipson-Smyth p-values under the
+# max-over-pairs aggregation (calculate_pvalue). See D0_permutation_plan.R
+# for the architecture overview.
+# =============================================================================
 
 #' Compute Normalized Correlation for Permutation Results
 #'

@@ -1,3 +1,14 @@
+# =============================================================================
+# Selection-fair bandwidth inference
+# -----------------------------------------------------------------------------
+# runSkrCCAPermu_FairSigma() re-optimizes every permutation draw across the
+# full bandwidth grid and keeps each draw's best statistic (a Westfall-Young
+# maxT over sigma), so the null faces the same bandwidth selection as the
+# observed fit. Reuses the same draw within a sweep so the null maximum
+# inherits the observed statistic's cross-scale correlation. See
+# D0_permutation_plan.R for the architecture overview.
+# =============================================================================
+
 .get_ncorr_kernel_info <- function(flat_kernels, sigma, cts,
                                    normalizer_cache = NULL,
                                    slide = NULL) {

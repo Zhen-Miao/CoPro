@@ -34,6 +34,10 @@ jobs:
 
       - uses: r-lib/actions/setup-r-dependencies@v2
         with:
+          # Bump to discard cached binaries after a runner-image update; a
+          # cached BPCells built against the old image's libhdf5 fails to
+          # dyn.load when downlit autolinks vignettes.
+          cache-version: 2
           extra-packages: any::pkgdown, local::.
           dependencies: '"hard"'
           needs: website

@@ -225,8 +225,11 @@ NULL
 #' `"size"` weights each slide by \eqn{\sqrt{n_i^{(s)} n_j^{(s)}}}, so larger
 #' slides count for more without letting per-slide variance back in.
 #' `"covariance"` uses \eqn{\sigma_i^{(s)} \sigma_j^{(s)}}, which cancels the
-#' denominator and reproduces SUMCOV exactly; it exists so the equivalence can
-#' be asserted in a test and is not offered as an analysis choice.
+#' denominator so the optimized objective is SUMCOV exactly; it exists so the
+#' equivalence can be asserted in a test and is not offered as an analysis
+#' choice. Only single-slide fits take the exact eigen/SVD route, so across
+#' multiple slides the returned weights match `objective = "sumcov"` to
+#' optimizer tolerance rather than bit for bit.
 #'
 #' Note the cell-count bookkeeping. `.sumcorSigma()` returns
 #' \eqn{\|X_i^{(s)} w_i\|}, which already carries a factor \eqn{\sqrt{n_i}}

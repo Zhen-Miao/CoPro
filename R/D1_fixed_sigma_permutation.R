@@ -1,4 +1,14 @@
-
+# =============================================================================
+# Fixed-sigma cell-level permutation
+# -----------------------------------------------------------------------------
+# Builds the null draws (.getCellPermu's global/bin/toroidal/pc
+# constructions), resolves which objective each draw must be refit under
+# (.resolvePermutationObjective), and runs runSkrCCAPermu(), the
+# fixed-bandwidth test. Draws are materialized through the operator plan in
+# D0_permutation_plan.R (see its header for the architecture overview) and
+# the refitted axes are scored by the statistics in
+# D2_permutation_statistics.R.
+# =============================================================================
 
 #' Generate Cell Permutation Indices
 #'
