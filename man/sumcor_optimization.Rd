@@ -39,7 +39,7 @@ cell types at any cell counts, and for three or more only when the counts
 are equal; \code{.sumcorReducesToSumcov()} is that test. Outside it the criteria
 have genuinely different maximizers, and the full-gradient optimizer runs
 rather than short-circuiting. Under \code{slideWeight = "size"} the mismatch is
-\eqn{1 + O(1/n)} and usually immaterial; it is \code{"equal"} -- strict
-Kettenring SUMCOR and the multi-slide default -- where it can be material.
+\eqn{1 + O(1/n)} and usually immaterial; it is \code{"equal"}, the multi-slide
+default with equal nominal coefficients, where it can be material.
 }
 \keyword{internal}

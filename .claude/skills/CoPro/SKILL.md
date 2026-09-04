@@ -291,7 +291,7 @@ Number of canonical components. CC1 captures the strongest signal. Use `nCC = 2-
 ### objective, slideWeight, space (1.3.0)
 
 - `objective`: `"sumcov"` (single-slide default) maximizes the summed kernel covariance; `"sumcor"` (multi-slide and gene-space default) divides each slide's cross term by that slide's own score scales. On one slide they coincide for 1-2 cell types (any counts) or 3+ at equal counts, and CoPro short-circuits to the exact solvers there; otherwise an explicit `"sumcor"` runs the full-gradient optimizer.
-- `slideWeight`: `"equal"` (strict Kettenring SUMCOR, default) or `"size"` (reintroduce `sqrt(n_i n_j)`); only with `"sumcor"`.
+- `slideWeight`: `"equal"` (default; equal nominal coefficients on the slide/pair terms -- not Kettenring SUMCOR, since the kernel-smoothed numerator over an unsmoothed denominator is not bounded by 1 and kernel scale still enters) or `"size"` (add the explicit `sqrt(n_i n_j)` factor); only with `"sumcor"`. Read `getCCADiagnostics()` after a PC-space SUMCOR fit for stopping status, projected-gradient residual, and Gram conditioning.
 - `space`: `"pca"` (default) or `"gene"` (forwards to `runGeneSpaceCCA()`; pass the bandwidth as `sigmaChoice`).
 - `step_size` in (0, 1] damps the iteration under both objectives (shorter step along the same geodesic). Reach for it only when a fit oscillates.
 - Read back what was optimized with `getCCAObjective(obj)`.

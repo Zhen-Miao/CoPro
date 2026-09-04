@@ -53,7 +53,8 @@ iteration stays monotone. Also damps the SUMCOV warm start.}
 }
 \value{
 Named list of single-column weight matrices, with attributes
-\code{"objective"} and \code{"slideWeight"}.
+\code{"objective"}, \code{"slideWeight"}, and \code{"ccaDiagnostics"}. See
+\code{\link[=getCCADiagnostics]{getCCADiagnostics()}} for the diagnostic fields.
 }
 \description{
 Maximizes the per-slide self-normalized objective

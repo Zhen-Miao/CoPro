@@ -99,6 +99,9 @@ PC-space optimizer described here. \code{"gene"} forwards to
 \code{\link[=runGeneSpaceCCA]{runGeneSpaceCCA()}}, which needs a single \code{sigma} -- supply it through
 \code{sigmaChoice} -- and accepts its own arguments (\code{clip}, \code{min_prevalence},
 \code{streaming}, ...) through \code{...}.
+PC-space SUMCOR uses the full ratio gradient. The current gene-space
+SUMCOR solver uses a frozen-denominator surrogate and does not inherit
+the PC-space stationarity guarantee.
 
 Under \code{space = "gene"}, \code{objective}, \code{tol}, \code{maxIter} and
 \code{minCellsPerSlide} are forwarded \strong{only when you supply them}, because the
@@ -135,13 +138,13 @@ them it runs the full-gradient SUMCOR optimizer, so an explicit
 matrix condition is checked directly; this matters when several slides
 informed the PCA but filtering leaves only one slide for CCA.
 
-Across slides they always differ. SUMCOV factors exactly as
+Across slides they generally differ. SUMCOV factors exactly as
 \eqn{\sum_s \sigma_i^{(s)} \sigma_j^{(s)} \rho_{ij}^{(s)}} -- with no
 \eqn{\sqrt{n_i n_j}} factor, since \eqn{\sigma_i \sigma_j \rho_{ij}} is
 the SUMCOV term already -- so it already sums per-slide correlations,
 weighted by per-slide score scale. That scale factor is what lets a slide
 with inflated variance along the canonical direction dominate; \code{"sumcor"}
-removes it, and \code{slideWeight = "size"} reintroduces the cell-count factor
+removes it, and \code{slideWeight = "size"} adds the explicit cell-count factor
 \eqn{\sqrt{n_i n_j}} on its own.
 The default is \code{"sumcov"} for single-slide objects and \code{"sumcor"} for
 multi-slide objects. The latter is paired with the within-slide PCA
@@ -161,8 +164,11 @@ arise, and error rather than mix criteria if that is ever relaxed.}
 
 \item{slideWeight}{Per-slide weighting, only valid with
 \code{objective = "sumcor"} (an error otherwise, since under \code{"sumcov"} the
-weighting is fixed by the objective). \code{"equal"} (default) gives every
-slide the same vote, matching \code{\link[=runGeneSpaceCCA]{runGeneSpaceCCA()}}. \code{"size"} weights slide \code{s}
+weighting is fixed by the objective). \code{"equal"} (default) gives equal
+nominal coefficients to slide/pair terms, matching \code{\link[=runGeneSpaceCCA]{runGeneSpaceCCA()}}.
+Kernel scaling can still affect their relative influence. Equal slide
+weights are not equal specimen weights when specimens have different
+numbers of sections. \code{"size"} weights slide \code{s}
 by \eqn{\sqrt{n_i^{(s)} n_j^{(s)}}}, so larger slides count for more
 without per-slide variance re-entering.}
 
@@ -179,6 +185,7 @@ otherwise.}
 \value{
 CoPro object with skrCCA results computed. The objective actually
 used is recorded on \verb{@skrCCAOut} and readable with \code{\link[=getCCAObjective]{getCCAObjective()}}.
+PC-space SUMCOR numerical diagnostics are readable with \code{\link[=getCCADiagnostics]{getCCADiagnostics()}}.
 }
 \description{
 runSkrCCA
@@ -201,6 +208,21 @@ slide. Thus batch-robust multi-slide analysis needs both defaults: within-slide
 preprocessing before PCA and the per-slide self-normalized objective.
 }
 
+\section{Numerical diagnostics}{
+
+The recommended multi-slide route is \verb{space = "pca", objective = "sumcor"}
+with the default within-slide PCA preprocessing. It uses the full ratio
+gradient and an Armijo line search, or an algebraically equivalent SUMCOV
+reduction. Inspect \code{\link[=getCCADiagnostics]{getCCADiagnostics()}} after fitting: it records the
+stopping status, projected-gradient residual, accepted objective trace,
+per-slide Gram conditioning, and denominator-floor use for each axis.
+Convergence is a first-order numerical condition, not a global optimum or
+a biological-recovery guarantee. The smooth stationarity argument assumes
+positive marginal metrics on the retained space; an active hard floor does
+not satisfy that assumption. Diagnostics do not change the objective,
+regularize the Gram matrices, or choose a new feature space.
+}
+
 \examples{
 \donttest{
 toy <- readRDS(system.file("extdata", "toy_copro_data.rds", package = "CoPro"))
@@ -220,7 +242,7 @@ obj <- runSkrCCA(obj, scalePCs = TRUE, nCC = 2)
 \seealso{
 \code{\link[=computePCA]{computePCA()}}, \code{\link[=computeKernelMatrix]{computeKernelMatrix()}},
 \code{\link[=computeNormalizedCorrelation]{computeNormalizedCorrelation()}}, \code{\link[=computeGeneAndCellScores]{computeGeneAndCellScores()}},
-\code{\link[=runGeneSpaceCCA]{runGeneSpaceCCA()}}, \code{\link[=getCCAObjective]{getCCAObjective()}}
+\code{\link[=runGeneSpaceCCA]{runGeneSpaceCCA()}}, \code{\link[=getCCAObjective]{getCCAObjective()}}, \code{\link[=getCCADiagnostics]{getCCADiagnostics()}}
 
 Other spatial-pipeline: 
 \code{\link{computeDistance}()},

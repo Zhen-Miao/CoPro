@@ -673,8 +673,9 @@
 #' @param verbose Print progress messages (default TRUE).
 #' @param sweep Block sweep for the power iteration: \code{"gauss-seidel"}
 #'   (default) or \code{"jacobi"}. Gauss-Seidel reads the blocks already updated
-#'   in the current sweep, which makes each block update an exact maximization
-#'   over that block and rules out convergence to a negative objective. Jacobi
+#'   in the current sweep. With undamped updates this exactly maximizes the
+#'   frozen-denominator surrogate over that block; it does not exactly maximize
+#'   the ratio objective. Jacobi
 #'   reads only the previous iterate and can settle on the negative singular
 #'   pair, which is why it needs a post-hoc sign repair -- valid for two cell
 #'   types, not for three or more. Kept so results computed before
@@ -682,30 +683,35 @@
 #'
 #'   The guarantee is about the **sign, not solution quality**. Under
 #'   \code{objective = "sumcor"} the frozen-\code{sigma} sweep maximizes a
-#'   surrogate rather than the objective itself, so which local optimum each
-#'   sweep reaches is data-dependent and neither dominates the other.
+#'   surrogate rather than the objective itself. Its fixed points need not be
+#'   stationary points of the ratio objective; neither sweep dominates the
+#'   other in solution quality.
 #'   Gauss-Seidel is the default because it cannot produce the pathology the
 #'   sign repair was covering for, not because it optimizes better. See
 #'   [optimize_genespace_avg_corr()].
 #' @param objective \code{"sumcor"} (default) normalizes each slide's cross
 #'   term by that slide's own score scales. \code{"sumcov"} fixes every scale at
 #'   1, giving the plain sum of kernel-smoothed cross-covariances -- the
-#'   gene-space counterpart of [runSkrCCA()]'s default objective, provided so
+#'   gene-space counterpart of `runSkrCCA(objective = "sumcov")`, provided so
 #'   the space and the criterion can be varied independently.
 #'
 #' @return The CoPro object with gene weights in \code{geneScores},
 #'   cell scores in \code{cellScores}, and weight vectors in \code{skrCCAOut}.
 #'
 #' @details
-#' The objective maximized is:
+#' The target ratio objective is:
 #' \deqn{f_{avg}(w) = \frac{1}{S} \sum_{s=1}^{S} \sum_{A<B}
 #'   \frac{w_A^\top C_{AB}^{(s)} w_B}{\sigma_A^{(s)} \sigma_B^{(s)}}}
 #' where \eqn{\sigma_A^{(s)} = \sqrt{w_A^\top C_{AA}^{(s)} w_A}} is the
-#' per-slide score standard deviation. Subsequent components use Gram-Schmidt
+#' per-slide score norm. Subsequent components use Gram-Schmidt
 #' deflation in weight space. The power iteration uses a frozen-sigma
 #' surrogate (sigma values held fixed at the previous iterate when computing
-#' each weight update), making the algorithm an ALS-style alternating
-#' maximization rather than exact coordinate ascent.
+#' each weight update). Convergence of that iteration does not establish
+#' ratio-objective stationarity or global optimality. Use
+#' `runSkrCCA(space = "pca", objective = "sumcor")` for the full-gradient
+#' route and inspect [getCCADiagnostics()]. Switching spaces also changes the
+#' feature representation and preprocessing; the optimization guarantee alone
+#' does not establish better biological recovery.
 #'
 #' Covariances are applied as matrix-free operators. The implementation keeps
 #' standardized `Z` matrices and kernel blocks and evaluates
