@@ -60,8 +60,8 @@ can lower the objective. Retained so results computed before
 
 Note what the Gauss-Seidel guarantee covers: the \strong{sign}, not solution
 quality. Under \code{objective = "sumcor"} the frozen-\code{sigma} sweep maximizes a
-surrogate rather than the objective itself, so which local optimum each
-sweep reaches is data-dependent and neither sweep dominates the other --
+surrogate rather than the objective itself. Its fixed points need not be
+stationary points of the ratio objective. Neither sweep dominates the other --
 measured across 8 configurations, Jacobi was ahead in one. Gauss-Seidel is
 the default because it cannot produce the pathology the sign repair existed
 to cover, not because it is the better optimizer.}

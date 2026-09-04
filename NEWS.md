@@ -1,5 +1,17 @@
 # CoPro (development version)
 
+## Multi-sample workflow and numerical diagnostics
+
+* PC-space SUMCOR is the primary documented multi-sample workflow, matching
+  the existing `CoProMulti` defaults. Gene-space SUMCOR remains available as
+  a frozen-denominator surrogate; its fixed points are not guaranteed to be
+  stationary points of the ratio objective.
+* `getCCADiagnostics()` exposes saved PC-space SUMCOR stopping status,
+  projected-gradient residuals, objective traces, per-slide Gram conditioning,
+  and score-denominator flooring. Supplied axes and equivalent SUMCOV
+  reductions are labeled separately. Older objects remain readable without
+  diagnostic records. Fitting defaults, objectives, and inference are unchanged.
+
 ## Frozen cross-slide score transfer
 
 * `fit_score_reference()` freezes cell-type-specific training means,

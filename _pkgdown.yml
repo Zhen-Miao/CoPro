@@ -51,6 +51,7 @@ reference:
       - getSelfKernelMatrix
       - getDistanceGeometry
       - getCCAObjective
+      - getCCADiagnostics
       - getNormalizerInfo
       - getColocScores
       - getSlideID
@@ -127,6 +128,7 @@ articles:
     navbar: "Advanced"
     contents:
       - colon_d3_cross_type
+      - multi_sample_workflow
       - colon_d0_multi_slide
       - colon_d9_multi_slide
       - kidney_guided_gradient

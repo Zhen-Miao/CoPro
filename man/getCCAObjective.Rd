@@ -35,11 +35,12 @@ getCCAObjective(obj)
 }
 }
 \seealso{
-\code{\link[=runSkrCCA]{runSkrCCA()}}
+\code{\link[=runSkrCCA]{runSkrCCA()}}, \code{\link[=getCCADiagnostics]{getCCADiagnostics()}}
 
 Other scores-and-correlation: 
 \code{\link{computeGeneAndCellScores}()},
 \code{\link{computeNormalizedCorrelation}()},
+\code{\link{getCCADiagnostics}()},
 \code{\link{getNormalizerInfo}()}
 }
 \concept{scores-and-correlation}

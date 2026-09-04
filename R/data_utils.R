@@ -25,7 +25,7 @@
 #'     co-progression with orthogonal CCA axes.}
 #'   \item{\code{colon_d0_multi}}{Colon Day 0 healthy organoid data
 #'     (3 slides from different regions). Demonstrates multi-slide
-#'     gene-space CCA with \code{runGeneSpaceCCA}.}
+#'     PC-space SUMCOR with \code{runSkrCCA} and an optional gene-space example.}
 #'   \item{\code{colon_d3_multi}}{Colon Day 3 organoid data (3 slides).
 #'     Demonstrates multi-slide joint analysis with \code{newCoProMulti}
 #'     and score transfer across biological replicates.}

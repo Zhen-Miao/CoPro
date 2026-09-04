@@ -143,6 +143,7 @@ so users should inspect missingness when valid-pair coverage varies by sigma.
 
 Other scores-and-correlation: 
 \code{\link{computeGeneAndCellScores}()},
+\code{\link{getCCADiagnostics}()},
 \code{\link{getCCAObjective}()},
 \code{\link{getNormalizerInfo}()}
 }

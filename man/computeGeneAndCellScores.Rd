@@ -46,6 +46,7 @@ replicates.
 
 Other scores-and-correlation: 
 \code{\link{computeNormalizedCorrelation}()},
+\code{\link{getCCADiagnostics}()},
 \code{\link{getCCAObjective}()},
 \code{\link{getNormalizerInfo}()}
 }

@@ -34,8 +34,8 @@
 #' are equal; `.sumcorReducesToSumcov()` is that test. Outside it the criteria
 #' have genuinely different maximizers, and the full-gradient optimizer runs
 #' rather than short-circuiting. Under `slideWeight = "size"` the mismatch is
-#' \eqn{1 + O(1/n)} and usually immaterial; it is `"equal"` -- strict
-#' Kettenring SUMCOR and the multi-slide default -- where it can be material.
+#' \eqn{1 + O(1/n)} and usually immaterial; it is `"equal"`, the multi-slide
+#' default with equal nominal coefficients, where it can be material.
 #'
 #' @name sumcor_optimization
 #' @keywords internal
@@ -202,8 +202,11 @@ NULL
 #'
 #' No division by \eqn{n_i^{(s)}} happens, so this is a norm rather than a
 #' root-mean-square. The ratio
-#' \eqn{\rho_{ij}^{(s)} = w_i' Y_{ij}^{(s)} w_j / (\sigma_i \sigma_j)} is then
-#' cell-count invariant with no further bookkeeping; see `.sumcorSlideWeight()`.
+#' \eqn{\rho_{ij}^{(s)} = w_i' Y_{ij}^{(s)} w_j / (\sigma_i \sigma_j)}
+#' is invariant to score rescaling, but its cell-count behavior also depends
+#' on kernel normalization. With an unnormalized kernel, uniformly replicating
+#' cells in the two types by factors \eqn{r_i,r_j} multiplies this ratio by
+#' \eqn{\sqrt{r_i r_j}}. See `.sumcorSlideWeight()`.
 #'
 #' @param w_list Named list of single-column weight matrices.
 #' @param ops Structure from `.computeSlideOperators()`.
@@ -221,7 +224,8 @@ NULL
 
 #' Slide weight for one (slide, pair) term
 #'
-#' `"equal"` gives Kettenring SUMCOR, matching the gene-space objective.
+#' `"equal"` gives equal nominal weights in the kernel SUMCOR-type objective,
+#' matching the gene-space objective. A term need not be bounded by one.
 #' `"size"` weights each slide by \eqn{\sqrt{n_i^{(s)} n_j^{(s)}}}, so larger
 #' slides count for more without letting per-slide variance back in.
 #' `"covariance"` uses \eqn{\sigma_i^{(s)} \sigma_j^{(s)}}, which cancels the
@@ -233,9 +237,11 @@ NULL
 #'
 #' Note the cell-count bookkeeping. `.sumcorSigma()` returns
 #' \eqn{\|X_i^{(s)} w_i\|}, which already carries a factor \eqn{\sqrt{n_i}}
-#' relative to a root-mean-square, so `rho` is cell-count invariant on its own
-#' and `"size"` is the factor that *reintroduces* size. That also means
-#' `"covariance"` needs no `n` factor: \eqn{\sigma_i \sigma_j \rho_{ij} =
+#' relative to a root-mean-square. This does not by itself make `rho`
+#' cell-count invariant: the kernel-smoothed numerator has its own size
+#' scaling. `"size"` adds an explicit size weight; `"equal"` does not remove
+#' implicit kernel-size weighting. The algebraic cancellation for
+#' `"covariance"` still needs no `n` factor: \eqn{\sigma_i \sigma_j \rho_{ij} =
 #' w_i' Y_{ij} w_j} is the SUMCOV term exactly.
 #' @noRd
 .sumcorSlideWeight <- function(slideWeight, ops, s, ct_i, ct_j, sigma_s) {
@@ -593,7 +599,7 @@ NULL
 #' @param verbose Report convergence.
 #' @param label Text used in messages.
 #' @return A list with `w_list`, `objective`, `gradient_norm`, `iterations`,
-#'   and the monotone `objective_trace`.
+#'   `objective_trace`, `converged`, `stop_reason`, and `floor_encountered`.
 #' @noRd
 .sumcorIterate <- function(w_init, ops, slideWeight, sdev2_list = NULL,
                            prev_axes = NULL, max_iter = 200, tol = 1e-6,
@@ -632,7 +638,9 @@ NULL
     matrix(as.numeric(w) / norm, ncol = 1L)
   }), cell_types)
 
-  obj <- .sumcorObjective(w_list, ops, slideWeight)
+  sigma_all <- .sumcorSigma(w_list, ops)
+  floor_encountered <- any(unlist(sigma_all) <= .SUMCOR_SIGMA_FLOOR)
+  obj <- .sumcorObjective(w_list, ops, slideWeight, sigma_all)
   objective_trace <- obj
   converged <- FALSE
   iter <- 0L
@@ -642,7 +650,7 @@ NULL
   stalled <- FALSE
 
   while (iter < max_iter) {
-    gradient <- .sumcorGradient(w_list, ops, slideWeight)
+    gradient <- .sumcorGradient(w_list, ops, slideWeight, sigma_all)
     tangent <- .sumcorTangentGradient(gradient, w_list, prev_axes)
     block_norms <- vapply(tangent, function(g) {
       sqrt(sum(as.numeric(g)^2))
@@ -669,7 +677,10 @@ NULL
     for (line_search in seq_len(60L)) {
       candidate <- .sumcorRetract(w_list, tangent, step, prev_axes)
       if (!any(vapply(candidate, is.null, logical(1)))) {
-        obj_new <- .sumcorObjective(candidate, ops, slideWeight)
+        sigma_new <- .sumcorSigma(candidate, ops)
+        floor_encountered <- floor_encountered ||
+          any(unlist(sigma_new) <= .SUMCOR_SIGMA_FLOOR)
+        obj_new <- .sumcorObjective(candidate, ops, slideWeight, sigma_new)
         armijo_rhs <- obj + 1e-4 * step * slope
         numerical_slack <- 100 * .Machine$double.eps * max(1, abs(obj))
         if (is.finite(obj_new) && obj_new + numerical_slack >= armijo_rhs) {
@@ -686,6 +697,7 @@ NULL
     }
 
     w_list <- candidate
+    sigma_all <- sigma_new
     obj <- obj_new
     objective_trace <- c(objective_trace, obj)
     iter <- iter + 1L
@@ -697,7 +709,7 @@ NULL
 
   # Report stationarity at the returned point, not at the previous iterate.
   final_gradient <- .sumcorTangentGradient(
-    .sumcorGradient(w_list, ops, slideWeight), w_list, prev_axes
+    .sumcorGradient(w_list, ops, slideWeight, sigma_all), w_list, prev_axes
   )
   gradient_norm <- max(vapply(final_gradient, function(g) {
     sqrt(sum(as.numeric(g)^2))
@@ -733,7 +745,12 @@ NULL
     objective = obj,
     gradient_norm = gradient_norm,
     iterations = iter,
-    objective_trace = objective_trace
+    objective_trace = objective_trace,
+    converged = converged,
+    stop_reason = if (converged) "gradient_tolerance" else if (stalled) {
+      "line_search_stalled"
+    } else "max_iter",
+    floor_encountered = floor_encountered
   )
 }
 
@@ -767,7 +784,8 @@ NULL
 #' @param verbose Report progress.
 #' @param ops Optional precomputed `.computeSlideOperators()` structure.
 #' @return Named list of single-column weight matrices, with attributes
-#'   `"objective"` and `"slideWeight"`.
+#'   `"objective"`, `"slideWeight"`, and `"ccaDiagnostics"`. See
+#'   [getCCADiagnostics()] for the diagnostic fields.
 #' @keywords internal
 #' @export
 optimize_sumcor_pca <- function(X_list_all, flat_kernels, sigma, slides,
@@ -803,6 +821,9 @@ optimize_sumcor_pca <- function(X_list_all, flat_kernels, sigma, slides,
     result <- .unwhitenWeights(warm, sdev2_list)
     attr(result, "objective") <- obj_val
     attr(result, "slideWeight") <- slideWeight
+    attr(result, "ccaDiagnostics") <- .sumcorDiagnosticsForAxes(
+      warm, ops_w, slideWeight, tol, "sumcov_reduction"
+    )
     return(result)
   }
 
@@ -818,6 +839,10 @@ optimize_sumcor_pca <- function(X_list_all, flat_kernels, sigma, slides,
   result <- .unwhitenWeights(fit$w_list, sdev2_list)
   attr(result, "objective") <- fit$objective
   attr(result, "slideWeight") <- slideWeight
+  attr(result, "ccaDiagnostics") <- .recordSumcorAxis(
+    .newSumcorDiagnostics(ops_w), fit$w_list, ops_w, slideWeight,
+    1L, tol, "full_gradient", fit
+  )
   result
 }
 
@@ -831,7 +856,8 @@ optimize_sumcor_pca <- function(X_list_all, flat_kernels, sigma, slides,
 #' @param w_list Weight matrices holding the components already computed.
 #' @param nCC Total number of components wanted.
 #' @return Named list of `nPC x nCC` weight matrices, with an `"objectives"`
-#'   attribute holding the per-axis objective values.
+#'   attribute holding the per-axis objective values and `"ccaDiagnostics"`
+#'   containing saved numerical diagnostics; see [getCCADiagnostics()].
 #' @keywords internal
 #' @export
 optimize_sumcor_pca_n <- function(X_list_all, flat_kernels, sigma, slides,
@@ -864,6 +890,7 @@ optimize_sumcor_pca_n <- function(X_list_all, flat_kernels, sigma, slides,
   # The supplied axes arrive in the caller's parametrization; deflation happens
   # in whitened coordinates alongside everything else.
   w_list_w <- .whitenWeights(w_list, sdev2_list)
+  diagnostics <- attr(w_list, "ccaDiagnostics", exact = TRUE)
 
   # One slide with coinciding per-pair constants: all axes come from the exact
   # SUMCOV solvers, for the same reason the first component does.
@@ -882,11 +909,26 @@ optimize_sumcor_pca_n <- function(X_list_all, flat_kernels, sigma, slides,
     if (.axesAgree(warm, w_list_w, k_start, cell_types)) {
       result <- .unwhitenWeights(warm, sdev2_list)
       attr(result, "slideWeight") <- slideWeight
+      # Matching an algebraic solution does not turn a supplied axis into a
+      # convergence claim. Measure its returned direction but retain its source.
+      axis_solvers <- rep("sumcov_reduction", nCC)
+      supplied <- if (is.null(diagnostics)) seq_len(k_start) else {
+        diagnostics$components$component[diagnostics$components$solver == "supplied"]
+      }
+      axis_solvers[supplied] <- "supplied"
+      attr(result, "ccaDiagnostics") <- .sumcorDiagnosticsForAxes(
+        warm, ops_w, slideWeight, tol, axis_solvers
+      )
       return(result)
     }
   }
 
   objectives <- rep(NA_real_, nCC)
+  if (is.null(diagnostics)) {
+    diagnostics <- .sumcorDiagnosticsForAxes(
+      w_list_w, ops_w, slideWeight, tol, "supplied"
+    )
+  }
 
   for (cc in seq(k_start + 1L, nCC)) {
     prev_axes <- setNames(lapply(cell_types, function(ct) {
@@ -914,11 +956,15 @@ optimize_sumcor_pca_n <- function(X_list_all, flat_kernels, sigma, slides,
     for (ct in cell_types) {
       w_list_w[[ct]] <- cbind(w_list_w[[ct]], fit$w_list[[ct]])
     }
+    diagnostics <- .recordSumcorAxis(
+      diagnostics, w_list_w, ops_w, slideWeight, cc, tol, "full_gradient", fit
+    )
   }
 
   w_list <- .unwhitenWeights(w_list_w, sdev2_list)
   attr(w_list, "objectives") <- objectives
   attr(w_list, "slideWeight") <- slideWeight
+  attr(w_list, "ccaDiagnostics") <- diagnostics
   w_list
 }
 

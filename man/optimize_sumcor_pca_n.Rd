@@ -59,7 +59,8 @@ iteration stays monotone. Also damps the SUMCOV warm start.}
 }
 \value{
 Named list of \verb{nPC x nCC} weight matrices, with an \code{"objectives"}
-attribute holding the per-axis objective values.
+attribute holding the per-axis objective values and \code{"ccaDiagnostics"}
+containing saved numerical diagnostics; see \code{\link[=getCCADiagnostics]{getCCADiagnostics()}}.
 }
 \description{
 Computes components \code{k_start + 1} through \code{nCC} by weight-space Gram-Schmidt
