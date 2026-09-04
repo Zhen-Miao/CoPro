@@ -25,11 +25,13 @@ and `droppedSlides`.
 
 ## See also
 
-[`runSkrCCA()`](https://zhen-miao.github.io/CoPro/reference/runSkrCCA.md)
+[`runSkrCCA()`](https://zhen-miao.github.io/CoPro/reference/runSkrCCA.md),
+[`getCCADiagnostics()`](https://zhen-miao.github.io/CoPro/reference/getCCADiagnostics.md)
 
 Other scores-and-correlation:
 [`computeGeneAndCellScores()`](https://zhen-miao.github.io/CoPro/reference/computeGeneAndCellScores.md),
 [`computeNormalizedCorrelation()`](https://zhen-miao.github.io/CoPro/reference/computeNormalizedCorrelation.md),
+[`getCCADiagnostics()`](https://zhen-miao.github.io/CoPro/reference/getCCADiagnostics.md),
 [`getNormalizerInfo()`](https://zhen-miao.github.io/CoPro/reference/getNormalizerInfo.md)
 
 ## Examples

@@ -54,5 +54,6 @@ robust to `nPCA` and reproduce better across replicates.
 
 Other scores-and-correlation:
 [`computeNormalizedCorrelation()`](https://zhen-miao.github.io/CoPro/reference/computeNormalizedCorrelation.md),
+[`getCCADiagnostics()`](https://zhen-miao.github.io/CoPro/reference/getCCADiagnostics.md),
 [`getCCAObjective()`](https://zhen-miao.github.io/CoPro/reference/getCCAObjective.md),
 [`getNormalizerInfo()`](https://zhen-miao.github.io/CoPro/reference/getNormalizerInfo.md)

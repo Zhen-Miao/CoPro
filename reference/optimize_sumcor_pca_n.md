@@ -96,4 +96,6 @@ optimize_sumcor_pca_n(
 ## Value
 
 Named list of `nPC x nCC` weight matrices, with an `"objectives"`
-attribute holding the per-axis objective values.
+attribute holding the per-axis objective values and `"ccaDiagnostics"`
+containing saved numerical diagnostics; see
+[`getCCADiagnostics()`](https://zhen-miao.github.io/CoPro/reference/getCCADiagnostics.md).

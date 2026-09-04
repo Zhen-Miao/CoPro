@@ -56,7 +56,8 @@ Available datasets:
 - `colon_d0_multi`:
 
   Colon Day 0 healthy organoid data (3 slides from different regions).
-  Demonstrates multi-slide gene-space CCA with `runGeneSpaceCCA`.
+  Demonstrates multi-slide PC-space SUMCOR with `runSkrCCA` and an
+  optional gene-space example.
 
 - `colon_d3_multi`:
 

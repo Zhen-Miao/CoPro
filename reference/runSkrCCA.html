@@ -25,7 +25,8 @@
     <li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Advanced</h6></li>
     <li><a class="dropdown-item" href="../articles/colon_d3_cross_type.html">Cross-cell-type co-progression with orthogonal axes (Colon Day 3)</a></li>
-    <li><a class="dropdown-item" href="../articles/colon_d0_multi_slide.html">Multi-slide, multi-type joint analysis (Colon Day 0)</a></li>
+    <li><a class="dropdown-item" href="../articles/multi_sample_workflow.html">Recommended multi-sample workflow: PC-space SUMCOR</a></li>
+    <li><a class="dropdown-item" href="../articles/colon_d0_multi_slide.html">Gene-space multi-slide example (Colon Day 0)</a></li>
     <li><a class="dropdown-item" href="../articles/colon_d9_multi_slide.html">Multi-slide analysis and score transfer (Colon Day 9)</a></li>
     <li><a class="dropdown-item" href="../articles/kidney_guided_gradient.html">Supervised detection of spatial gradients (Kidney)</a></li>
     <li><hr class="dropdown-divider"></li>
@@ -170,7 +171,10 @@ SUMCOR run stays monotone. It also damps the SUMCOV warm start.</p></dd>
 PC-space optimizer described here. <code>"gene"</code> forwards to
 <code><a href="runGeneSpaceCCA.html">runGeneSpaceCCA()</a></code>, which needs a single <code>sigma</code> – supply it through
 <code>sigmaChoice</code> – and accepts its own arguments (<code>clip</code>, <code>min_prevalence</code>,
-<code>streaming</code>, ...) through <code>...</code>.</p>
+<code>streaming</code>, ...) through <code>...</code>.
+PC-space SUMCOR uses the full ratio gradient. The current gene-space
+SUMCOR solver uses a frozen-denominator surrogate and does not inherit
+the PC-space stationarity guarantee.</p>
 <p>Under <code>space = "gene"</code>, <code>objective</code>, <code>tol</code>, <code>maxIter</code> and
 <code>minCellsPerSlide</code> are forwarded <strong>only when you supply them</strong>, because the
 two entry points have different defaults (<code>objective</code> is <code>"sumcov"</code> for
@@ -204,13 +208,13 @@ them it runs the full-gradient SUMCOR optimizer, so an explicit
 <code>objective = "sumcor"</code> always optimizes the requested criterion. The
 matrix condition is checked directly; this matters when several slides
 informed the PCA but filtering leaves only one slide for CCA.</p>
-<p>Across slides they always differ. SUMCOV factors exactly as
+<p>Across slides they generally differ. SUMCOV factors exactly as
 \(\sum_s \sigma_i^{(s)} \sigma_j^{(s)} \rho_{ij}^{(s)}\) – with no
 \(\sqrt{n_i n_j}\) factor, since \(\sigma_i \sigma_j \rho_{ij}\) is
 the SUMCOV term already – so it already sums per-slide correlations,
 weighted by per-slide score scale. That scale factor is what lets a slide
 with inflated variance along the canonical direction dominate; <code>"sumcor"</code>
-removes it, and <code>slideWeight = "size"</code> reintroduces the cell-count factor
+removes it, and <code>slideWeight = "size"</code> adds the explicit cell-count factor
 \(\sqrt{n_i n_j}\) on its own.
 The default is <code>"sumcov"</code> for single-slide objects and <code>"sumcor"</code> for
 multi-slide objects. The latter is paired with the within-slide PCA
@@ -231,8 +235,11 @@ arise, and error rather than mix criteria if that is ever relaxed.</p></dd>
 <dt id="arg-slideweight">slideWeight<a class="anchor" aria-label="anchor" href="#arg-slideweight"></a></dt>
 <dd><p>Per-slide weighting, only valid with
 <code>objective = "sumcor"</code> (an error otherwise, since under <code>"sumcov"</code> the
-weighting is fixed by the objective). <code>"equal"</code> (default) gives every
-slide the same vote, matching <code><a href="runGeneSpaceCCA.html">runGeneSpaceCCA()</a></code>. <code>"size"</code> weights slide <code>s</code>
+weighting is fixed by the objective). <code>"equal"</code> (default) gives equal
+nominal coefficients to slide/pair terms, matching <code><a href="runGeneSpaceCCA.html">runGeneSpaceCCA()</a></code>.
+Kernel scaling can still affect their relative influence. Equal slide
+weights are not equal specimen weights when specimens have different
+numbers of sections. <code>"size"</code> weights slide <code>s</code>
 by \(\sqrt{n_i^{(s)} n_j^{(s)}}\), so larger slides count for more
 without per-slide variance re-entering.</p></dd>
 
@@ -254,7 +261,8 @@ otherwise.</p></dd>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
     <p>CoPro object with skrCCA results computed. The objective actually
-used is recorded on <code>@skrCCAOut</code> and readable with <code><a href="getCCAObjective.html">getCCAObjective()</a></code>.</p>
+used is recorded on <code>@skrCCAOut</code> and readable with <code><a href="getCCAObjective.html">getCCAObjective()</a></code>.
+PC-space SUMCOR numerical diagnostics are readable with <code><a href="getCCADiagnostics.html">getCCADiagnostics()</a></code>.</p>
     </div>
     <div class="section level2">
     <h2 id="batch-effects">Batch effects<a class="anchor" aria-label="anchor" href="#batch-effects"></a></h2>
@@ -276,10 +284,26 @@ slide. Thus batch-robust multi-slide analysis needs both defaults: within-slide
 preprocessing before PCA and the per-slide self-normalized objective.</p>
     </div>
     <div class="section level2">
+    <h2 id="numerical-diagnostics">Numerical diagnostics<a class="anchor" aria-label="anchor" href="#numerical-diagnostics"></a></h2>
+
+
+<p>The recommended multi-slide route is <code>space = "pca", objective = "sumcor"</code>
+with the default within-slide PCA preprocessing. It uses the full ratio
+gradient and an Armijo line search, or an algebraically equivalent SUMCOV
+reduction. Inspect <code><a href="getCCADiagnostics.html">getCCADiagnostics()</a></code> after fitting: it records the
+stopping status, projected-gradient residual, accepted objective trace,
+per-slide Gram conditioning, and denominator-floor use for each axis.
+Convergence is a first-order numerical condition, not a global optimum or
+a biological-recovery guarantee. The smooth stationarity argument assumes
+positive marginal metrics on the retained space; an active hard floor does
+not satisfy that assumption. Diagnostics do not change the objective,
+regularize the Gram matrices, or choose a new feature space.</p>
+    </div>
+    <div class="section level2">
     <h2 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a></h2>
     <div class="dont-index"><p><code><a href="computePCA.html">computePCA()</a></code>, <code><a href="computeKernelMatrix.html">computeKernelMatrix()</a></code>,
 <code><a href="computeNormalizedCorrelation.html">computeNormalizedCorrelation()</a></code>, <code><a href="computeGeneAndCellScores.html">computeGeneAndCellScores()</a></code>,
-<code><a href="runGeneSpaceCCA.html">runGeneSpaceCCA()</a></code>, <code><a href="getCCAObjective.html">getCCAObjective()</a></code></p>
+<code><a href="runGeneSpaceCCA.html">runGeneSpaceCCA()</a></code>, <code><a href="getCCAObjective.html">getCCAObjective()</a></code>, <code><a href="getCCADiagnostics.html">getCCADiagnostics()</a></code></p>
 <p>Other spatial-pipeline:
 <code><a href="computeDistance.html">computeDistance()</a></code>,
 <code><a href="computeKernelMatrix.html">computeKernelMatrix()</a></code>,

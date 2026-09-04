@@ -39,5 +39,5 @@ when the counts are equal; `.sumcorReducesToSumcov()` is that test.
 Outside it the criteria have genuinely different maximizers, and the
 full-gradient optimizer runs rather than short-circuiting. Under
 `slideWeight = "size"` the mismatch is \\1 + O(1/n)\\ and usually
-immaterial; it is `"equal"` – strict Kettenring SUMCOR and the
-multi-slide default – where it can be material.
+immaterial; it is `"equal"`, the multi-slide default with equal nominal
+coefficients, where it can be material.

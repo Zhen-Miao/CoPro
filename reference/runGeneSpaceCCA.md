@@ -141,19 +141,21 @@ runGeneSpaceCCA(
 
   Block sweep for the power iteration: `"gauss-seidel"` (default) or
   `"jacobi"`. Gauss-Seidel reads the blocks already updated in the
-  current sweep, which makes each block update an exact maximization
-  over that block and rules out convergence to a negative objective.
-  Jacobi reads only the previous iterate and can settle on the negative
-  singular pair, which is why it needs a post-hoc sign repair – valid
-  for two cell types, not for three or more. Kept so results computed
-  before `"gauss-seidel"` became the default reproduce exactly.
+  current sweep. With undamped updates this exactly maximizes the
+  frozen-denominator surrogate over that block; it does not exactly
+  maximize the ratio objective. Jacobi reads only the previous iterate
+  and can settle on the negative singular pair, which is why it needs a
+  post-hoc sign repair – valid for two cell types, not for three or
+  more. Kept so results computed before `"gauss-seidel"` became the
+  default reproduce exactly.
 
   The guarantee is about the **sign, not solution quality**. Under
   `objective = "sumcor"` the frozen-`sigma` sweep maximizes a surrogate
-  rather than the objective itself, so which local optimum each sweep
-  reaches is data-dependent and neither dominates the other.
-  Gauss-Seidel is the default because it cannot produce the pathology
-  the sign repair was covering for, not because it optimizes better. See
+  rather than the objective itself. Its fixed points need not be
+  stationary points of the ratio objective; neither sweep dominates the
+  other in solution quality. Gauss-Seidel is the default because it
+  cannot produce the pathology the sign repair was covering for, not
+  because it optimizes better. See
   [`optimize_genespace_avg_corr()`](https://zhen-miao.github.io/CoPro/reference/optimize_genespace_avg_corr.md).
 
 - objective:
@@ -161,10 +163,8 @@ runGeneSpaceCCA(
   `"sumcor"` (default) normalizes each slide's cross term by that
   slide's own score scales. `"sumcov"` fixes every scale at 1, giving
   the plain sum of kernel-smoothed cross-covariances – the gene-space
-  counterpart of
-  [`runSkrCCA()`](https://zhen-miao.github.io/CoPro/reference/runSkrCCA.md)'s
-  default objective, provided so the space and the criterion can be
-  varied independently.
+  counterpart of `runSkrCCA(objective = "sumcov")`, provided so the
+  space and the criterion can be varied independently.
 
 ## Value
 
@@ -178,15 +178,20 @@ Requires kernel matrices to already be computed via
 Does NOT require
 [`computePCA`](https://zhen-miao.github.io/CoPro/reference/computePCA.md).
 
-The objective maximized is: \$\$f\_{avg}(w) = \frac{1}{S}
+The target ratio objective is: \$\$f\_{avg}(w) = \frac{1}{S}
 \sum\_{s=1}^{S} \sum\_{A\<B} \frac{w_A^\top C\_{AB}^{(s)}
 w_B}{\sigma_A^{(s)} \sigma_B^{(s)}}\$\$ where \\\sigma_A^{(s)} =
-\sqrt{w_A^\top C\_{AA}^{(s)} w_A}\\ is the per-slide score standard
-deviation. Subsequent components use Gram-Schmidt deflation in weight
-space. The power iteration uses a frozen-sigma surrogate (sigma values
-held fixed at the previous iterate when computing each weight update),
-making the algorithm an ALS-style alternating maximization rather than
-exact coordinate ascent.
+\sqrt{w_A^\top C\_{AA}^{(s)} w_A}\\ is the per-slide score norm.
+Subsequent components use Gram-Schmidt deflation in weight space. The
+power iteration uses a frozen-sigma surrogate (sigma values held fixed
+at the previous iterate when computing each weight update). Convergence
+of that iteration does not establish ratio-objective stationarity or
+global optimality. Use `runSkrCCA(space = "pca", objective = "sumcor")`
+for the full-gradient route and inspect
+[`getCCADiagnostics()`](https://zhen-miao.github.io/CoPro/reference/getCCADiagnostics.md).
+Switching spaces also changes the feature representation and
+preprocessing; the optimization guarantee alone does not establish
+better biological recovery.
 
 Covariances are applied as matrix-free operators. The implementation
 keeps standardized `Z` matrices and kernel blocks and evaluates

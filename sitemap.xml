@@ -10,6 +10,7 @@
 <url><loc>https://zhen-miao.github.io/CoPro/articles/index.html</loc></url>
 <url><loc>https://zhen-miao.github.io/CoPro/articles/kidney_guided_gradient.html</loc></url>
 <url><loc>https://zhen-miao.github.io/CoPro/articles/large_datasets.html</loc></url>
+<url><loc>https://zhen-miao.github.io/CoPro/articles/multi_sample_workflow.html</loc></url>
 <url><loc>https://zhen-miao.github.io/CoPro/articles/organoid_one_type.html</loc></url>
 <url><loc>https://zhen-miao.github.io/CoPro/authors.html</loc></url>
 <url><loc>https://zhen-miao.github.io/CoPro/index.html</loc></url>
@@ -54,6 +55,7 @@
 <url><loc>https://zhen-miao.github.io/CoPro/reference/fit_score_reference.html</loc></url>
 <url><loc>https://zhen-miao.github.io/CoPro/reference/generate_toroidal_permutations.html</loc></url>
 <url><loc>https://zhen-miao.github.io/CoPro/reference/genespace_optimization.html</loc></url>
+<url><loc>https://zhen-miao.github.io/CoPro/reference/getCCADiagnostics.html</loc></url>
 <url><loc>https://zhen-miao.github.io/CoPro/reference/getCCAObjective.html</loc></url>
 <url><loc>https://zhen-miao.github.io/CoPro/reference/getCellScores.html</loc></url>
 <url><loc>https://zhen-miao.github.io/CoPro/reference/getCellScoresInSitu.html</loc></url>

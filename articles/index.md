@@ -11,7 +11,9 @@
 
 - [Cross-cell-type co-progression with orthogonal axes (Colon Day
   3)](https://zhen-miao.github.io/CoPro/articles/colon_d3_cross_type.md):
-- [Multi-slide, multi-type joint analysis (Colon Day
+- [Recommended multi-sample workflow: PC-space
+  SUMCOR](https://zhen-miao.github.io/CoPro/articles/multi_sample_workflow.md):
+- [Gene-space multi-slide example (Colon Day
   0)](https://zhen-miao.github.io/CoPro/articles/colon_d0_multi_slide.md):
 - [Multi-slide analysis and score transfer (Colon Day
   9)](https://zhen-miao.github.io/CoPro/articles/colon_d9_multi_slide.md):

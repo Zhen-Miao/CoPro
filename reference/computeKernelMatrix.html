@@ -37,7 +37,8 @@ within the object."></head><body>
     <li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Advanced</h6></li>
     <li><a class="dropdown-item" href="../articles/colon_d3_cross_type.html">Cross-cell-type co-progression with orthogonal axes (Colon Day 3)</a></li>
-    <li><a class="dropdown-item" href="../articles/colon_d0_multi_slide.html">Multi-slide, multi-type joint analysis (Colon Day 0)</a></li>
+    <li><a class="dropdown-item" href="../articles/multi_sample_workflow.html">Recommended multi-sample workflow: PC-space SUMCOR</a></li>
+    <li><a class="dropdown-item" href="../articles/colon_d0_multi_slide.html">Gene-space multi-slide example (Colon Day 0)</a></li>
     <li><a class="dropdown-item" href="../articles/colon_d9_multi_slide.html">Multi-slide analysis and score transfer (Colon Day 9)</a></li>
     <li><a class="dropdown-item" href="../articles/kidney_guided_gradient.html">Supervised detection of spatial gradients (Kidney)</a></li>
     <li><hr class="dropdown-divider"></li>
@@ -145,9 +146,15 @@ default is 0.85.</p></dd>
 
 
 <dt id="arg-normalizekernel">normalizeKernel<a class="anchor" aria-label="anchor" href="#arg-normalizekernel"></a></dt>
-<dd><p>Whether to normalize the kernel matrix?
-Default = FALSE. Note that normalization will not affect any downstream
-analyses, it is for numerical stability and easier interpretation only.</p></dd>
+<dd><p>Whether to normalize the kernel matrix (default
+<code>FALSE</code>). With neither row nor column normalization selected, divide by
+the median row sum among row sums above the numerical cutoff. This is not
+spectral- or Frobenius-norm normalization and does not guarantee that the
+fitting association ratio is bounded by one. Pair- or slide-specific
+scaling can change relative weights in joint fitting and hence downstream
+results. For the separate scale-normalized evaluation statistic, see
+<code>computeNormalizedCorrelation(normalizer = "unwhitened")</code>; that argument
+does not change the fitting objective.</p></dd>
 
 
 <dt id="arg-minavecellneighor">minAveCellNeighor<a class="anchor" aria-label="anchor" href="#arg-minavecellneighor"></a></dt>

@@ -172,5 +172,6 @@ coverage varies by sigma.
 
 Other scores-and-correlation:
 [`computeGeneAndCellScores()`](https://zhen-miao.github.io/CoPro/reference/computeGeneAndCellScores.md),
+[`getCCADiagnostics()`](https://zhen-miao.github.io/CoPro/reference/getCCADiagnostics.md),
 [`getCCAObjective()`](https://zhen-miao.github.io/CoPro/reference/getCCAObjective.md),
 [`getNormalizerInfo()`](https://zhen-miao.github.io/CoPro/reference/getNormalizerInfo.md)

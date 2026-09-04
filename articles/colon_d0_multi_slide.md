@@ -1,14 +1,20 @@
-# Multi-slide, multi-type joint analysis (Colon Day 0)
+# Gene-space multi-slide example (Colon Day 0)
 
 ## Overview
 
-When multiple tissue slides are available from the same condition, CoPro
-can analyze them **jointly** using `newCoProMulti`. This vignette
-demonstrates the **gene-space CCA** workflow (`runGeneSpaceCCA`), which
-operates directly on gene expression rather than PCA space. Gene-space
-CCA is designed for multi-slide analysis: it maximizes the average
-per-slide canonical correlation, preventing batch-level mean shifts from
-inflating the objective.
+For new multi-sample analyses, start with the [recommended PC-space
+SUMCOR
+workflow](https://zhen-miao.github.io/CoPro/articles/multi_sample_workflow.md),
+which includes numerical convergence and conditioning diagnostics.
+
+This vignette retains the **gene-space CCA** example and its gene-space
+figures.
+[`runGeneSpaceCCA()`](https://zhen-miao.github.io/CoPro/reference/runGeneSpaceCCA.md)
+works directly on expression, with per-slide centering and scaling. Its
+SUMCOR iteration uses a frozen-denominator surrogate: a converged fixed
+point need not be stationary for the ratio objective. The full-gradient
+PC-space guarantee does not apply to this solver. The displayed results
+illustrate the gene-space alternative.
 
 This vignette walks through the full multi-slide workflow using three
 healthy colon Day 0 slides from different tissue regions:
@@ -223,8 +229,8 @@ plot of chunk insitu-cc1
 
 CoPro finds axes along which nearby cells of different types co-vary.
 Here we plot the spatially smoothed epithelial score against the raw
-fibroblast score — strong correlation confirms genuine cross-cell-type
-co-progression.
+fibroblast score — the association visualizes the pattern fitted on
+these slides.
 
 ``` r
 
@@ -308,10 +314,9 @@ plot of chunk top-genes-cc1
 
 ## Cross-slide consistency
 
-Since each slide comes from a different tissue region, consistent
-gene-space CCA scores across slides confirm a robust biological signal.
-We compare per-slide score distributions and cross-cell-type
-correlations.
+Since each slide comes from a different tissue region, we inspect how
+the fitted gene-space CCA scores vary across slides. We compare
+per-slide score distributions and cross-cell-type correlations.
 
 ### Per-slide score distributions
 
@@ -397,8 +402,8 @@ plot of chunk per-slide-corr
 ## Key points
 
 1.  **`runGeneSpaceCCA`** operates directly in gene space, avoiding PCA.
-    It maximizes the average per-slide canonical correlation, which
-    naturally handles batch effects across slides.
+    It targets an average of per-slide standardized associations using a
+    surrogate iteration, without a ratio-stationarity guarantee.
 2.  **No PCA required**: the pipeline is `computeDistance` →
     `computeKernelMatrix` → `runGeneSpaceCCA`. Gene filtering and
     standardization are handled internally.

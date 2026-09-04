@@ -98,9 +98,15 @@ computeSparseKernel(
 
 - normalizeKernel:
 
-  Whether to normalize the kernel matrix? Default = FALSE. Note that
-  normalization will not affect any downstream analyses, it is for
-  numerical stability and easier interpretation only.
+  Whether to normalize the kernel matrix (default `FALSE`). With neither
+  row nor column normalization selected, divide by the median row sum
+  among row sums above the numerical cutoff. This is not spectral- or
+  Frobenius-norm normalization and does not guarantee that the fitting
+  association ratio is bounded by one. Pair- or slide-specific scaling
+  can change relative weights in joint fitting and hence downstream
+  results. For the separate scale-normalized evaluation statistic, see
+  `computeNormalizedCorrelation(normalizer = "unwhitened")`; that
+  argument does not change the fitting objective.
 
 - minAveCellNeighor:
 

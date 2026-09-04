@@ -126,7 +126,9 @@ runSkrCCA(
   [`runGeneSpaceCCA()`](https://zhen-miao.github.io/CoPro/reference/runGeneSpaceCCA.md),
   which needs a single `sigma` – supply it through `sigmaChoice` – and
   accepts its own arguments (`clip`, `min_prevalence`, `streaming`, ...)
-  through `...`.
+  through `...`. PC-space SUMCOR uses the full ratio gradient. The
+  current gene-space SUMCOR solver uses a frozen-denominator surrogate
+  and does not inherit the PC-space stationarity guarantee.
 
   Under `space = "gene"`, `objective`, `tol`, `maxIter` and
   `minCellsPerSlide` are forwarded **only when you supply them**,
@@ -167,16 +169,17 @@ runSkrCCA(
   checked directly; this matters when several slides informed the PCA
   but filtering leaves only one slide for CCA.
 
-  Across slides they always differ. SUMCOV factors exactly as \\\sum_s
-  \sigma_i^{(s)} \sigma_j^{(s)} \rho\_{ij}^{(s)}\\ – with no \\\sqrt{n_i
-  n_j}\\ factor, since \\\sigma_i \sigma_j \rho\_{ij}\\ is the SUMCOV
-  term already – so it already sums per-slide correlations, weighted by
-  per-slide score scale. That scale factor is what lets a slide with
-  inflated variance along the canonical direction dominate; `"sumcor"`
-  removes it, and `slideWeight = "size"` reintroduces the cell-count
-  factor \\\sqrt{n_i n_j}\\ on its own. The default is `"sumcov"` for
-  single-slide objects and `"sumcor"` for multi-slide objects. The
-  latter is paired with the within-slide PCA preprocessing that
+  Across slides they generally differ. SUMCOV factors exactly as
+  \\\sum_s \sigma_i^{(s)} \sigma_j^{(s)} \rho\_{ij}^{(s)}\\ – with no
+  \\\sqrt{n_i n_j}\\ factor, since \\\sigma_i \sigma_j \rho\_{ij}\\ is
+  the SUMCOV term already – so it already sums per-slide correlations,
+  weighted by per-slide score scale. That scale factor is what lets a
+  slide with inflated variance along the canonical direction dominate;
+  `"sumcor"` removes it, and `slideWeight = "size"` adds the explicit
+  cell-count factor \\\sqrt{n_i n_j}\\ on its own. The default is
+  `"sumcov"` for single-slide objects and `"sumcor"` for multi-slide
+  objects. The latter is paired with the within-slide PCA preprocessing
+  that
   [`computePCA()`](https://zhen-miao.github.io/CoPro/reference/computePCA.md)
   now uses by default.
 
@@ -202,11 +205,14 @@ runSkrCCA(
 
   Per-slide weighting, only valid with `objective = "sumcor"` (an error
   otherwise, since under `"sumcov"` the weighting is fixed by the
-  objective). `"equal"` (default) gives every slide the same vote,
-  matching
+  objective). `"equal"` (default) gives equal nominal coefficients to
+  slide/pair terms, matching
   [`runGeneSpaceCCA()`](https://zhen-miao.github.io/CoPro/reference/runGeneSpaceCCA.md).
-  `"size"` weights slide `s` by \\\sqrt{n_i^{(s)} n_j^{(s)}}\\, so
-  larger slides count for more without per-slide variance re-entering.
+  Kernel scaling can still affect their relative influence. Equal slide
+  weights are not equal specimen weights when specimens have different
+  numbers of sections. `"size"` weights slide `s` by \\\sqrt{n_i^{(s)}
+  n_j^{(s)}}\\, so larger slides count for more without per-slide
+  variance re-entering.
 
 - minCellsPerSlide:
 
@@ -228,6 +234,8 @@ runSkrCCA(
 CoPro object with skrCCA results computed. The objective actually used
 is recorded on `@skrCCAOut` and readable with
 [`getCCAObjective()`](https://zhen-miao.github.io/CoPro/reference/getCCAObjective.md).
+PC-space SUMCOR numerical diagnostics are readable with
+[`getCCADiagnostics()`](https://zhen-miao.github.io/CoPro/reference/getCCADiagnostics.md).
 
 ## Batch effects
 
@@ -247,6 +255,22 @@ every slide. Thus batch-robust multi-slide analysis needs both defaults:
 within-slide preprocessing before PCA and the per-slide self-normalized
 objective.
 
+## Numerical diagnostics
+
+The recommended multi-slide route is
+`space = "pca", objective = "sumcor"` with the default within-slide PCA
+preprocessing. It uses the full ratio gradient and an Armijo line
+search, or an algebraically equivalent SUMCOV reduction. Inspect
+[`getCCADiagnostics()`](https://zhen-miao.github.io/CoPro/reference/getCCADiagnostics.md)
+after fitting: it records the stopping status, projected-gradient
+residual, accepted objective trace, per-slide Gram conditioning, and
+denominator-floor use for each axis. Convergence is a first-order
+numerical condition, not a global optimum or a biological-recovery
+guarantee. The smooth stationarity argument assumes positive marginal
+metrics on the retained space; an active hard floor does not satisfy
+that assumption. Diagnostics do not change the objective, regularize the
+Gram matrices, or choose a new feature space.
+
 ## See also
 
 [`computePCA()`](https://zhen-miao.github.io/CoPro/reference/computePCA.md),
@@ -254,7 +278,8 @@ objective.
 [`computeNormalizedCorrelation()`](https://zhen-miao.github.io/CoPro/reference/computeNormalizedCorrelation.md),
 [`computeGeneAndCellScores()`](https://zhen-miao.github.io/CoPro/reference/computeGeneAndCellScores.md),
 [`runGeneSpaceCCA()`](https://zhen-miao.github.io/CoPro/reference/runGeneSpaceCCA.md),
-[`getCCAObjective()`](https://zhen-miao.github.io/CoPro/reference/getCCAObjective.md)
+[`getCCAObjective()`](https://zhen-miao.github.io/CoPro/reference/getCCAObjective.md),
+[`getCCADiagnostics()`](https://zhen-miao.github.io/CoPro/reference/getCCADiagnostics.md)
 
 Other spatial-pipeline:
 [`computeDistance()`](https://zhen-miao.github.io/CoPro/reference/computeDistance.md),

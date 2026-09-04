@@ -5,12 +5,12 @@
 <meta charset="utf-8">
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
 <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-<title>Multi-slide, multi-type joint analysis (Colon Day 0) • CoPro</title>
+<title>Gene-space multi-slide example (Colon Day 0) • CoPro</title>
 <script src="../deps/jquery-3.6.0/jquery-3.6.0.min.js"></script><meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
 <link href="../deps/bootstrap-5.3.8/bootstrap.min.css" rel="stylesheet">
 <script src="../deps/bootstrap-5.3.8/bootstrap.bundle.min.js"></script><link href="../deps/font-awesome-6.5.2/css/all.min.css" rel="stylesheet">
 <link href="../deps/font-awesome-6.5.2/css/v4-shims.min.css" rel="stylesheet">
-<script src="../deps/headroom-0.11.0/headroom.min.js"></script><script src="../deps/headroom-0.11.0/jQuery.headroom.min.js"></script><script src="../deps/bootstrap-toc-1.0.1/bootstrap-toc.min.js"></script><script src="../deps/clipboard.js-2.0.11/clipboard.min.js"></script><script src="../deps/search-1.0.0/autocomplete.jquery.min.js"></script><script src="../deps/search-1.0.0/fuse.min.js"></script><script src="../deps/search-1.0.0/mark.min.js"></script><!-- pkgdown --><script src="../pkgdown.js"></script><meta property="og:title" content="Multi-slide, multi-type joint analysis (Colon Day 0)">
+<script src="../deps/headroom-0.11.0/headroom.min.js"></script><script src="../deps/headroom-0.11.0/jQuery.headroom.min.js"></script><script src="../deps/bootstrap-toc-1.0.1/bootstrap-toc.min.js"></script><script src="../deps/clipboard.js-2.0.11/clipboard.min.js"></script><script src="../deps/search-1.0.0/autocomplete.jquery.min.js"></script><script src="../deps/search-1.0.0/fuse.min.js"></script><script src="../deps/search-1.0.0/mark.min.js"></script><!-- pkgdown --><script src="../pkgdown.js"></script><meta property="og:title" content="Gene-space multi-slide example (Colon Day 0)">
 </head>
 <body>
     <a href="#main" class="visually-hidden-focusable">Skip to contents</a>
@@ -40,7 +40,8 @@
     <li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Advanced</h6></li>
     <li><a class="dropdown-item" href="../articles/colon_d3_cross_type.html">Cross-cell-type co-progression with orthogonal axes (Colon Day 3)</a></li>
-    <li><a class="dropdown-item" href="../articles/colon_d0_multi_slide.html">Multi-slide, multi-type joint analysis (Colon Day 0)</a></li>
+    <li><a class="dropdown-item" href="../articles/multi_sample_workflow.html">Recommended multi-sample workflow: PC-space SUMCOR</a></li>
+    <li><a class="dropdown-item" href="../articles/colon_d0_multi_slide.html">Gene-space multi-slide example (Colon Day 0)</a></li>
     <li><a class="dropdown-item" href="../articles/colon_d9_multi_slide.html">Multi-slide analysis and score transfer (Colon Day 9)</a></li>
     <li><a class="dropdown-item" href="../articles/kidney_guided_gradient.html">Supervised detection of spatial gradients (Kidney)</a></li>
     <li><hr class="dropdown-divider"></li>
@@ -68,7 +69,7 @@
 <div class="row">
   <main id="main" class="col-md-9"><div class="page-header">
 
-      <h1>Multi-slide, multi-type joint analysis (Colon Day 0)</h1>
+      <h1>Gene-space multi-slide example (Colon Day 0)</h1>
             
             <h4 data-toc-skip class="date">2026-07-29</h4>
       
@@ -81,14 +82,16 @@
 <div class="section level2">
 <h2 id="overview">Overview<a class="anchor" aria-label="anchor" href="#overview"></a>
 </h2>
-<p>When multiple tissue slides are available from the same condition,
-CoPro can analyze them <strong>jointly</strong> using
-<code>newCoProMulti</code>. This vignette demonstrates the
-<strong>gene-space CCA</strong> workflow (<code>runGeneSpaceCCA</code>),
-which operates directly on gene expression rather than PCA space.
-Gene-space CCA is designed for multi-slide analysis: it maximizes the
-average per-slide canonical correlation, preventing batch-level mean
-shifts from inflating the objective.</p>
+<p>For new multi-sample analyses, start with the <a href="multi_sample_workflow.html">recommended PC-space SUMCOR
+workflow</a>, which includes numerical convergence and conditioning
+diagnostics.</p>
+<p>This vignette retains the <strong>gene-space CCA</strong> example and
+its gene-space figures. <code><a href="../reference/runGeneSpaceCCA.html">runGeneSpaceCCA()</a></code> works directly on
+expression, with per-slide centering and scaling. Its SUMCOR iteration
+uses a frozen-denominator surrogate: a converged fixed point need not be
+stationary for the ratio objective. The full-gradient PC-space guarantee
+does not apply to this solver. The displayed results illustrate the
+gene-space alternative.</p>
 <p>This vignette walks through the full multi-slide workflow using three
 healthy colon Day 0 slides from different tissue regions:</p>
 <ol style="list-style-type: decimal">
@@ -284,8 +287,8 @@ slides indicate a robust biological signal.</p>
 </h2>
 <p>CoPro finds axes along which nearby cells of different types co-vary.
 Here we plot the spatially smoothed epithelial score against the raw
-fibroblast score — strong correlation confirms genuine cross-cell-type
-co-progression.</p>
+fibroblast score — the association visualizes the pattern fitted on
+these slides.</p>
 <div class="sourceCode" id="cb14"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">df_cc1</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/getCorrTwoTypes.html">getCorrTwoTypes</a></span><span class="op">(</span><span class="va">multi_obj</span>,</span>
 <span>  sigmaValueChoice <span class="op">=</span> <span class="va">sigma_choice</span>,</span>
@@ -363,10 +366,9 @@ rankings across replicates.</p>
 <div class="section level2">
 <h2 id="cross-slide-consistency">Cross-slide consistency<a class="anchor" aria-label="anchor" href="#cross-slide-consistency"></a>
 </h2>
-<p>Since each slide comes from a different tissue region, consistent
-gene-space CCA scores across slides confirm a robust biological signal.
-We compare per-slide score distributions and cross-cell-type
-correlations.</p>
+<p>Since each slide comes from a different tissue region, we inspect how
+the fitted gene-space CCA scores vary across slides. We compare
+per-slide score distributions and cross-cell-type correlations.</p>
 <div class="section level3">
 <h3 id="per-slide-score-distributions">Per-slide score distributions<a class="anchor" aria-label="anchor" href="#per-slide-score-distributions"></a>
 </h3>
@@ -449,8 +451,9 @@ correlations.</p>
 <ol style="list-style-type: decimal">
 <li>
 <strong><code>runGeneSpaceCCA</code></strong> operates directly in
-gene space, avoiding PCA. It maximizes the average per-slide canonical
-correlation, which naturally handles batch effects across slides.</li>
+gene space, avoiding PCA. It targets an average of per-slide
+standardized associations using a surrogate iteration, without a
+ratio-stationarity guarantee.</li>
 <li>
 <strong>No PCA required</strong>: the pipeline is
 <code>computeDistance</code> → <code>computeKernelMatrix</code> →

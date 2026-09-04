@@ -31,7 +31,8 @@ batch-level mean shifts from inflating the objective."></head><body>
     <li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Advanced</h6></li>
     <li><a class="dropdown-item" href="../articles/colon_d3_cross_type.html">Cross-cell-type co-progression with orthogonal axes (Colon Day 3)</a></li>
-    <li><a class="dropdown-item" href="../articles/colon_d0_multi_slide.html">Multi-slide, multi-type joint analysis (Colon Day 0)</a></li>
+    <li><a class="dropdown-item" href="../articles/multi_sample_workflow.html">Recommended multi-sample workflow: PC-space SUMCOR</a></li>
+    <li><a class="dropdown-item" href="../articles/colon_d0_multi_slide.html">Gene-space multi-slide example (Colon Day 0)</a></li>
     <li><a class="dropdown-item" href="../articles/colon_d9_multi_slide.html">Multi-slide analysis and score transfer (Colon Day 9)</a></li>
     <li><a class="dropdown-item" href="../articles/kidney_guided_gradient.html">Supervised detection of spatial gradients (Kidney)</a></li>
     <li><hr class="dropdown-divider"></li>
@@ -195,16 +196,18 @@ streaming path (e.g., <code>lowerLimit</code>, <code>upperQuantile</code>,
 <dt id="arg-sweep">sweep<a class="anchor" aria-label="anchor" href="#arg-sweep"></a></dt>
 <dd><p>Block sweep for the power iteration: <code>"gauss-seidel"</code>
 (default) or <code>"jacobi"</code>. Gauss-Seidel reads the blocks already updated
-in the current sweep, which makes each block update an exact maximization
-over that block and rules out convergence to a negative objective. Jacobi
+in the current sweep. With undamped updates this exactly maximizes the
+frozen-denominator surrogate over that block; it does not exactly maximize
+the ratio objective. Jacobi
 reads only the previous iterate and can settle on the negative singular
 pair, which is why it needs a post-hoc sign repair – valid for two cell
 types, not for three or more. Kept so results computed before
 <code>"gauss-seidel"</code> became the default reproduce exactly.</p>
 <p>The guarantee is about the <strong>sign, not solution quality</strong>. Under
 <code>objective = "sumcor"</code> the frozen-<code>sigma</code> sweep maximizes a
-surrogate rather than the objective itself, so which local optimum each
-sweep reaches is data-dependent and neither dominates the other.
+surrogate rather than the objective itself. Its fixed points need not be
+stationary points of the ratio objective; neither sweep dominates the
+other in solution quality.
 Gauss-Seidel is the default because it cannot produce the pathology the
 sign repair was covering for, not because it optimizes better. See
 <code><a href="optimize_genespace_avg_corr.html">optimize_genespace_avg_corr()</a></code>.</p></dd>
@@ -214,7 +217,7 @@ sign repair was covering for, not because it optimizes better. See
 <dd><p><code>"sumcor"</code> (default) normalizes each slide's cross
 term by that slide's own score scales. <code>"sumcov"</code> fixes every scale at
 1, giving the plain sum of kernel-smoothed cross-covariances – the
-gene-space counterpart of <code><a href="runSkrCCA.html">runSkrCCA()</a></code>'s default objective, provided so
+gene-space counterpart of <code>runSkrCCA(objective = "sumcov")</code>, provided so
 the space and the criterion can be varied independently.</p></dd>
 
 </dl></div>
@@ -228,15 +231,19 @@ cell scores in <code>cellScores</code>, and weight vectors in <code>skrCCAOut</c
     <p>Requires kernel matrices to already be computed via
 <code><a href="computeKernelMatrix.html">computeKernelMatrix</a></code>. Does NOT require
 <code><a href="computePCA.html">computePCA</a></code>.</p>
-<p>The objective maximized is:
+<p>The target ratio objective is:
 $$f_{avg}(w) = \frac{1}{S} \sum_{s=1}^{S} \sum_{A&lt;B}
   \frac{w_A^\top C_{AB}^{(s)} w_B}{\sigma_A^{(s)} \sigma_B^{(s)}}$$
 where \(\sigma_A^{(s)} = \sqrt{w_A^\top C_{AA}^{(s)} w_A}\) is the
-per-slide score standard deviation. Subsequent components use Gram-Schmidt
+per-slide score norm. Subsequent components use Gram-Schmidt
 deflation in weight space. The power iteration uses a frozen-sigma
 surrogate (sigma values held fixed at the previous iterate when computing
-each weight update), making the algorithm an ALS-style alternating
-maximization rather than exact coordinate ascent.</p>
+each weight update). Convergence of that iteration does not establish
+ratio-objective stationarity or global optimality. Use
+<code>runSkrCCA(space = "pca", objective = "sumcor")</code> for the full-gradient
+route and inspect <code><a href="getCCADiagnostics.html">getCCADiagnostics()</a></code>. Switching spaces also changes the
+feature representation and preprocessing; the optimization guarantee alone
+does not establish better biological recovery.</p>
 <p>Covariances are applied as matrix-free operators. The implementation keeps
 standardized <code>Z</code> matrices and kernel blocks and evaluates
 <code>Z_i' K_ij (Z_j w_j)</code> on demand, avoiding the former dense <code>G x G</code>

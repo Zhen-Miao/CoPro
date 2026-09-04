@@ -29,7 +29,8 @@ reparametrization."></head><body>
     <li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Advanced</h6></li>
     <li><a class="dropdown-item" href="../articles/colon_d3_cross_type.html">Cross-cell-type co-progression with orthogonal axes (Colon Day 3)</a></li>
-    <li><a class="dropdown-item" href="../articles/colon_d0_multi_slide.html">Multi-slide, multi-type joint analysis (Colon Day 0)</a></li>
+    <li><a class="dropdown-item" href="../articles/multi_sample_workflow.html">Recommended multi-sample workflow: PC-space SUMCOR</a></li>
+    <li><a class="dropdown-item" href="../articles/colon_d0_multi_slide.html">Gene-space multi-slide example (Colon Day 0)</a></li>
     <li><a class="dropdown-item" href="../articles/colon_d9_multi_slide.html">Multi-slide analysis and score transfer (Colon Day 9)</a></li>
     <li><a class="dropdown-item" href="../articles/kidney_guided_gradient.html">Supervised detection of spatial gradients (Kidney)</a></li>
     <li><hr class="dropdown-divider"></li>
@@ -151,7 +152,8 @@ iteration stays monotone. Also damps the SUMCOV warm start.</p></dd>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
     <p>Named list of <code>nPC x nCC</code> weight matrices, with an <code>"objectives"</code>
-attribute holding the per-axis objective values.</p>
+attribute holding the per-axis objective values and <code>"ccaDiagnostics"</code>
+containing saved numerical diagnostics; see <code><a href="getCCADiagnostics.html">getCCADiagnostics()</a></code>.</p>
     </div>
 
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>

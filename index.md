@@ -72,12 +72,33 @@ Prefer the regression weights — they avoid PCA collinearity, are
 insensitive to the `nPCA` choice, and reproduce better across
 replicates.
 
-For `CoProMulti`, these same calls use the batch-robust defaults: genes
-are centered and scaled within each `(slide, cell type)` block before
-one shared PCA is fit, and
-[`runSkrCCA()`](https://zhen-miao.github.io/CoPro/reference/runSkrCCA.md)
-optimizes equal-slide SUMCOR. Pass `center_per_slide = FALSE` and
-`objective = "sumcov"` only when reproducing the legacy pooled workflow.
+For `CoProMulti`, the recommended PC-space workflow centers and scales
+genes within each `(slide, cell type)` block before one shared PCA, then
+fits
+`runSkrCCA(space = "pca", objective = "sumcor", slideWeight = "equal")`.
+These are the current defaults. The full ratio gradient supports a
+first-order stationarity claim under positive marginal conditioning; it
+does not establish global optimality or biological recovery. The
+gene-space SUMCOR alternative uses a frozen-denominator surrogate and
+does not inherit that guarantee.
+
+Inspect saved numerical diagnostics after fitting:
+
+``` r
+
+diagnostics <- getCCADiagnostics(obj)  # one record per fitted bandwidth
+diagnostics[[1]]$components           # status, residual, objective, floor use
+diagnostics[[1]]$conditioning         # per-slide/type Gram eigenvalues and rank
+```
+
+These diagnostics are available for PC-space SUMCOR fits; older objects,
+SUMCOV fits, and gene-space fits have no record. Equal slide weights are
+equal nominal slide/pair coefficients, not necessarily equal specimen
+weights or removal of implicit kernel-size effects. See the [recommended
+multi-sample
+walkthrough](https://zhen-miao.github.io/CoPro/articles/multi_sample_workflow.html)
+for a complete example. Pass `center_per_slide = FALSE` and
+`objective = "sumcov"` to reproduce the legacy pooled workflow.
 
 For comparable scores on new slides, freeze the fitted training
 reference and apply it unchanged to a subsetted target object:

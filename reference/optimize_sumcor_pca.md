@@ -89,7 +89,9 @@ optimize_sumcor_pca(
 ## Value
 
 Named list of single-column weight matrices, with attributes
-`"objective"` and `"slideWeight"`.
+`"objective"`, `"slideWeight"`, and `"ccaDiagnostics"`. See
+[`getCCADiagnostics()`](https://zhen-miao.github.io/CoPro/reference/getCCADiagnostics.md)
+for the diagnostic fields.
 
 ## Details
 

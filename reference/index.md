@@ -75,6 +75,8 @@ Retrieve analysis results
   use
 - [`getCCAObjective()`](https://zhen-miao.github.io/CoPro/reference/getCCAObjective.md)
   : What objective produced an object's CCA weights
+- [`getCCADiagnostics()`](https://zhen-miao.github.io/CoPro/reference/getCCADiagnostics.md)
+  : Inspect saved PC-space SUMCOR solver diagnostics
 - [`getNormalizerInfo()`](https://zhen-miao.github.io/CoPro/reference/getNormalizerInfo.md)
   : Report the normalizer actually used
 - [`getColocScores()`](https://zhen-miao.github.io/CoPro/reference/getColocScores.md)
