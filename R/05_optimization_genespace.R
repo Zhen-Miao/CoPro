@@ -435,7 +435,7 @@ NULL
 #' @param objective `"sumcor"` (default) divides each slide's cross term by that
 #'   slide's own score scales. `"sumcov"` fixes every scale at 1, giving the
 #'   plain sum of kernel-smoothed cross-covariances -- the gene-space
-#'   counterpart of [runSkrCCA()]'s default.
+#'   counterpart of `runSkrCCA(objective = "sumcov")`.
 #'
 #' @return Named list of weight vectors, one per cell type (each a G x 1 matrix).
 #' @importFrom stats rnorm

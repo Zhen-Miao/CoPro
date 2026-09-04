@@ -1,6 +1,25 @@
 # Diagnostics use the whitened PC coordinates in which SUMCOR is optimized.
 # They record numerical behavior without changing the objective or the fit.
 
+# Scale a single-column weight to unit Euclidean norm. A degenerate column is
+# returned unchanged so that its zero score norm stays visible downstream.
+.unitDirection <- function(v) {
+  norm <- sqrt(sum(as.numeric(v)^2))
+  if (is.finite(norm) && norm > .SUMCOR_SIGMA_FLOOR) v / norm else v
+}
+
+# Diagnostics are bookkeeping about a fit that has already succeeded. Build
+# them under their own handler so that a failure here degrades to a missing
+# record with its own warning, rather than being reported as an optimization
+# failure for the bandwidth.
+.trySumcorDiagnostics <- function(expr) {
+  tryCatch(expr, error = function(e) {
+    warning("SUMCOR diagnostics could not be recorded: ", conditionMessage(e),
+            call. = FALSE)
+    NULL
+  })
+}
+
 .newSumcorDiagnostics <- function(ops) {
   conditioning <- do.call(rbind, lapply(ops$slides, function(s) {
     do.call(rbind, lapply(ops$cell_types, function(ct) {
@@ -34,9 +53,14 @@
 .recordSumcorAxis <- function(diagnostics, w_list, ops, slideWeight,
                               component, tol, solver, fit = NULL) {
   w <- lapply(w_list, function(m) m[, component, drop = FALSE])
-  prev <- if (component > 1L) {
-    lapply(w_list, function(m) m[, seq_len(component - 1L), drop = FALSE])
-  } else NULL
+  if (is.null(fit)) {
+    # Optimizer iterates live on the unit sphere, but a supplied axis arrives
+    # in whitened coordinates with whatever norm the caller's parametrization
+    # gave it (a `scalePCs = FALSE` transfer satisfies w'Dw = 1, not ||w|| = 1).
+    # The tangent projection below assumes ||w|| = 1, and the objective is
+    # scale-free, so measure the direction.
+    w <- lapply(w, .unitDirection)
+  }
   score_norms <- do.call(rbind, lapply(ops$slides, function(s) {
     do.call(rbind, lapply(ops$cell_types, function(ct) {
       value <- as.numeric(crossprod(w[[ct]], ops$G[[s]][[ct]] %*% w[[ct]]))
@@ -47,6 +71,9 @@
     }))
   }))
   if (is.null(fit)) {
+    prev <- if (component > 1L) {
+      lapply(w_list, function(m) m[, seq_len(component - 1L), drop = FALSE])
+    } else NULL
     gradient <- .sumcorTangentGradient(
       .sumcorGradient(w, ops, slideWeight), w, prev
     )
@@ -139,11 +166,18 @@
 #' `floor_encountered` includes the initial point and all evaluated line-search
 #' trials, including rejected trials. The warm-start solver is not monitored.
 #' `solver = "sumcov_reduction"` means that the ratio problem reduced
-#' algebraically to SUMCOV. Its returned residual is checked explicitly;
-#' iteration counts are zero for direct one/two-type solutions and unavailable
-#' (`NA`) for the iterative multiblock reduction. Only the returned point is
-#' checked for denominator flooring in that route.
+#' algebraically to SUMCOV. The reduction test is a numerical one (Gram
+#' matrices proportional to the identity to `1e-8` relative tolerance), so the
+#' returned axis is measured against the SUMCOR residual explicitly and can
+#' report `converged = FALSE` with `status = "residual_above_tolerance"`
+#' without the fit itself warning; read this column rather than assuming the
+#' shortcut met `tol`. Iteration counts are zero for direct one/two-type
+#' solutions and unavailable (`NA`) for the iterative multiblock reduction.
+#' Only the returned point is checked for denominator flooring in that route.
 #' `solver = "supplied"` has `converged = NA`: the axis was not optimized here.
+#' Its residual and score norms are measured on the unit-norm direction of the
+#' supplied weight in whitened coordinates, so they are comparable with the
+#' fitted axes regardless of how the weight was scaled when it was supplied.
 #'
 #' The smooth stationarity argument requires positive marginal metrics on the
 #' retained feature space and no active denominator floor. Numerical full rank
@@ -152,16 +186,29 @@
 #' score norms, and residuals together. These diagnostics neither add a ridge
 #' nor filter additional slides or features.
 #'
+#' Recording the diagnostics never changes whether a fit succeeds: if the
+#' record cannot be built, the bandwidth keeps its fitted weights, the record
+#' is `NULL`, and a separate warning says so.
+#'
 #' @seealso [runSkrCCA()], [getCCAObjective()]
 #' @family scores-and-correlation
 #' @export
 #' @examples
-#' \dontrun{
-#' obj <- computePCA(obj, nPCA = 15, center_per_slide = TRUE)
-#' obj <- runSkrCCA(obj, space = "pca", objective = "sumcor")
-#' diagnostics <- getCCADiagnostics(obj)
-#' diagnostics[[1]]$components
-#' diagnostics[[1]]$conditioning
+#' \donttest{
+#' toy <- readRDS(system.file("extdata", "toy_copro_data.rds", package = "CoPro"))
+#' obj <- newCoProSingle(
+#'   normalizedData = toy$normalizedData,
+#'   locationData   = toy$locationData,
+#'   metaData       = toy$metaData,
+#'   cellTypes      = toy$cellTypes
+#' )
+#' obj <- subsetData(obj, cellTypesOfInterest = unique(toy$cellTypes))
+#' obj <- computePCA(obj, nPCA = 10)
+#' obj <- computeKernelMatrix(obj, sigmaValues = 0.1, verbose = FALSE)
+#' obj <- runSkrCCA(obj, objective = "sumcor", nCC = 2)
+#' diagnostics <- getCCADiagnostics(obj, sigma = 0.1)
+#' diagnostics$components
+#' diagnostics$conditioning
 #' }
 getCCADiagnostics <- function(object, sigma = NULL) {
   if (!inherits(object, "CoPro")) {

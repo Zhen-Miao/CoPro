@@ -52,9 +52,7 @@ sigma_range <- detectSigmaRange(obj)
 sigma_values <- sigma_range$sigmaValues
 # One geometry-based bandwidth for this example, in locationData units.
 sigma_choice <- sigma_values[ceiling(length(sigma_values) / 2)]
-obj <- computeKernelMatrix(
-  obj, sigmaValues = sigma_choice, normalizeKernel = TRUE
-)
+obj <- computeKernelMatrix(obj, sigmaValues = sigma_choice)
 obj <- runSkrCCA(
   obj, space = "pca", objective = "sumcor", slideWeight = "equal",
   nCC = 2, maxIter = 1000, tol = 1e-5
@@ -68,12 +66,16 @@ in kernel geometry or guarantee equal total weight per specimen when a specimen
 has more sections. Record the slide-to-specimen mapping and the intended
 weighting when describing a multi-sample analysis.
 
-The fitting term is `a' K b / (||a|| ||b||)`. It is invariant to score
-rescaling, but need not lie between -1 and 1. `normalizeKernel = TRUE`
-uses median eligible row-sum scaling when row/column normalization is not
-selected; it is neither spectral nor total-mass normalization. Its setting
-is part of the fitted objective. The bandwidth above is chosen from geometry,
-not claimed to maximize association.
+The fitting term is `a' K b / (||a|| ||b||)`, with the kernel left at the
+`computeKernelMatrix()` default (clipped at `upperQuantile`, not normalized),
+as in the package quick start. It is invariant to score rescaling, but need
+not lie between -1 and 1, and it is not cell-count invariant: replicating cells
+of the two types by factors `r_i, r_j` scales it by `sqrt(r_i r_j)`.
+`normalizeKernel = TRUE` divides each cross-type block by the median of its
+row sums; that changes the scaling to `sqrt(r_i / r_j)` and reweights the
+slide/pair terms, so treat it as part of the fitted objective rather than a
+cosmetic choice and record it if you use it. The bandwidth above is chosen from
+geometry, not claimed to maximize association.
 
 ## Inspect convergence and conditioning
 
@@ -130,10 +132,15 @@ score; changing the fitting space is separate from choosing these reported
 gene weights.
 
 The explicit downstream `unwhitened` normalizer divides by the centered
-kernel's Frobenius norm as well as the score norms. For centered scores and a
-nonzero denominator, this reported statistic is bounded in absolute value by
-one. It does not change the directions fitted above. Other downstream
-normalizers answer different questions; record which one was used.
+kernel's Frobenius norm as well as the score norms. With the default
+`aggregateDenominator = "sum"`, scores centered within each slide (the
+`center_per_slide = TRUE` PCA above), and a nonzero denominator, the reported
+statistic is bounded in absolute value by one on every slide and in aggregate.
+`aggregateDenominator = "rss"` is a different statistic that can exceed one
+across concordant slides, and a pooled-centered legacy PCA does not satisfy the
+within-slide centering the identity relies on. The normalizer does not change
+the directions fitted above. Other downstream normalizers answer different
+questions; record which one was used.
 
 ## The gene-space alternative
 

@@ -206,7 +206,11 @@ NULL
 #' is invariant to score rescaling, but its cell-count behavior also depends
 #' on kernel normalization. With an unnormalized kernel, uniformly replicating
 #' cells in the two types by factors \eqn{r_i,r_j} multiplies this ratio by
-#' \eqn{\sqrt{r_i r_j}}. See `.sumcorSlideWeight()`.
+#' \eqn{\sqrt{r_i r_j}}. Under `normalizeKernel = TRUE` each cross-type block
+#' is divided by the median of its row sums, which scales with the replication
+#' factor of the block's column type only, so the ratio is multiplied by
+#' \eqn{\sqrt{r_i / r_j}} instead (row/column normalization behave the same
+#' way). No setting makes it cell-count invariant. See `.sumcorSlideWeight()`.
 #'
 #' @param w_list Named list of single-column weight matrices.
 #' @param ops Structure from `.computeSlideOperators()`.
@@ -696,6 +700,10 @@ NULL
       break
     }
 
+    # Invariant: `sigma_all` is always `.sumcorSigma(w_list, ops)`. It is only
+    # reassigned here, in lockstep with `w_list`, and `sigma_new` was computed
+    # for exactly this `candidate` on the one path that sets `accepted`. Keep
+    # those coupled if the line search is ever restructured.
     w_list <- candidate
     sigma_all <- sigma_new
     obj <- obj_new
@@ -821,8 +829,8 @@ optimize_sumcor_pca <- function(X_list_all, flat_kernels, sigma, slides,
     result <- .unwhitenWeights(warm, sdev2_list)
     attr(result, "objective") <- obj_val
     attr(result, "slideWeight") <- slideWeight
-    attr(result, "ccaDiagnostics") <- .sumcorDiagnosticsForAxes(
-      warm, ops_w, slideWeight, tol, "sumcov_reduction"
+    attr(result, "ccaDiagnostics") <- .trySumcorDiagnostics(
+      .sumcorDiagnosticsForAxes(warm, ops_w, slideWeight, tol, "sumcov_reduction")
     )
     return(result)
   }
@@ -839,10 +847,10 @@ optimize_sumcor_pca <- function(X_list_all, flat_kernels, sigma, slides,
   result <- .unwhitenWeights(fit$w_list, sdev2_list)
   attr(result, "objective") <- fit$objective
   attr(result, "slideWeight") <- slideWeight
-  attr(result, "ccaDiagnostics") <- .recordSumcorAxis(
+  attr(result, "ccaDiagnostics") <- .trySumcorDiagnostics(.recordSumcorAxis(
     .newSumcorDiagnostics(ops_w), fit$w_list, ops_w, slideWeight,
     1L, tol, "full_gradient", fit
-  )
+  ))
   result
 }
 
@@ -916,8 +924,8 @@ optimize_sumcor_pca_n <- function(X_list_all, flat_kernels, sigma, slides,
         diagnostics$components$component[diagnostics$components$solver == "supplied"]
       }
       axis_solvers[supplied] <- "supplied"
-      attr(result, "ccaDiagnostics") <- .sumcorDiagnosticsForAxes(
-        warm, ops_w, slideWeight, tol, axis_solvers
+      attr(result, "ccaDiagnostics") <- .trySumcorDiagnostics(
+        .sumcorDiagnosticsForAxes(warm, ops_w, slideWeight, tol, axis_solvers)
       )
       return(result)
     }
@@ -925,8 +933,8 @@ optimize_sumcor_pca_n <- function(X_list_all, flat_kernels, sigma, slides,
 
   objectives <- rep(NA_real_, nCC)
   if (is.null(diagnostics)) {
-    diagnostics <- .sumcorDiagnosticsForAxes(
-      w_list_w, ops_w, slideWeight, tol, "supplied"
+    diagnostics <- .trySumcorDiagnostics(
+      .sumcorDiagnosticsForAxes(w_list_w, ops_w, slideWeight, tol, "supplied")
     )
   }
 
@@ -956,9 +964,13 @@ optimize_sumcor_pca_n <- function(X_list_all, flat_kernels, sigma, slides,
     for (ct in cell_types) {
       w_list_w[[ct]] <- cbind(w_list_w[[ct]], fit$w_list[[ct]])
     }
-    diagnostics <- .recordSumcorAxis(
-      diagnostics, w_list_w, ops_w, slideWeight, cc, tol, "full_gradient", fit
-    )
+    # A record that already failed to build stays NULL rather than restarting
+    # as a partial record from this axis onward.
+    if (!is.null(diagnostics)) {
+      diagnostics <- .trySumcorDiagnostics(.recordSumcorAxis(
+        diagnostics, w_list_w, ops_w, slideWeight, cc, tol, "full_gradient", fit
+      ))
+    }
   }
 
   w_list <- .unwhitenWeights(w_list_w, sdev2_list)

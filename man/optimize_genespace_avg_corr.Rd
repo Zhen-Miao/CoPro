@@ -69,7 +69,7 @@ to cover, not because it is the better optimizer.}
 \item{objective}{\code{"sumcor"} (default) divides each slide's cross term by that
 slide's own score scales. \code{"sumcov"} fixes every scale at 1, giving the
 plain sum of kernel-smoothed cross-covariances -- the gene-space
-counterpart of \code{\link[=runSkrCCA]{runSkrCCA()}}'s default.}
+counterpart of \code{runSkrCCA(objective = "sumcov")}.}
 }
 \value{
 Named list of weight vectors, one per cell type (each a G x 1 matrix).

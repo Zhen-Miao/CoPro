@@ -53,11 +53,18 @@ global-optimum or biological-recovery certificate.
 \code{floor_encountered} includes the initial point and all evaluated line-search
 trials, including rejected trials. The warm-start solver is not monitored.
 \code{solver = "sumcov_reduction"} means that the ratio problem reduced
-algebraically to SUMCOV. Its returned residual is checked explicitly;
-iteration counts are zero for direct one/two-type solutions and unavailable
-(\code{NA}) for the iterative multiblock reduction. Only the returned point is
-checked for denominator flooring in that route.
+algebraically to SUMCOV. The reduction test is a numerical one (Gram
+matrices proportional to the identity to \code{1e-8} relative tolerance), so the
+returned axis is measured against the SUMCOR residual explicitly and can
+report \code{converged = FALSE} with \code{status = "residual_above_tolerance"}
+without the fit itself warning; read this column rather than assuming the
+shortcut met \code{tol}. Iteration counts are zero for direct one/two-type
+solutions and unavailable (\code{NA}) for the iterative multiblock reduction.
+Only the returned point is checked for denominator flooring in that route.
 \code{solver = "supplied"} has \code{converged = NA}: the axis was not optimized here.
+Its residual and score norms are measured on the unit-norm direction of the
+supplied weight in whitened coordinates, so they are comparable with the
+fitted axes regardless of how the weight was scaled when it was supplied.
 
 The smooth stationarity argument requires positive marginal metrics on the
 retained feature space and no active denominator floor. Numerical full rank
@@ -65,20 +72,33 @@ alone does not establish good conditioning or the statistical assumptions
 of a recovery theorem. Inspect the smallest eigenvalues, condition numbers,
 score norms, and residuals together. These diagnostics neither add a ridge
 nor filter additional slides or features.
+
+Recording the diagnostics never changes whether a fit succeeds: if the
+record cannot be built, the bandwidth keeps its fitted weights, the record
+is \code{NULL}, and a separate warning says so.
 }
 \examples{
-\dontrun{
-obj <- computePCA(obj, nPCA = 15, center_per_slide = TRUE)
-obj <- runSkrCCA(obj, space = "pca", objective = "sumcor")
-diagnostics <- getCCADiagnostics(obj)
-diagnostics[[1]]$components
-diagnostics[[1]]$conditioning
+\donttest{
+toy <- readRDS(system.file("extdata", "toy_copro_data.rds", package = "CoPro"))
+obj <- newCoProSingle(
+  normalizedData = toy$normalizedData,
+  locationData   = toy$locationData,
+  metaData       = toy$metaData,
+  cellTypes      = toy$cellTypes
+)
+obj <- subsetData(obj, cellTypesOfInterest = unique(toy$cellTypes))
+obj <- computePCA(obj, nPCA = 10)
+obj <- computeKernelMatrix(obj, sigmaValues = 0.1, verbose = FALSE)
+obj <- runSkrCCA(obj, objective = "sumcor", nCC = 2)
+diagnostics <- getCCADiagnostics(obj, sigma = 0.1)
+diagnostics$components
+diagnostics$conditioning
 }
 }
 \seealso{
 \code{\link[=runSkrCCA]{runSkrCCA()}}, \code{\link[=getCCAObjective]{getCCAObjective()}}
 
-Other scores-and-correlation:
+Other scores-and-correlation: 
 \code{\link{computeGeneAndCellScores}()},
 \code{\link{computeNormalizedCorrelation}()},
 \code{\link{getCCAObjective}()},

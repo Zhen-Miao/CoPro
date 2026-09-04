@@ -11,6 +11,15 @@
   and score-denominator flooring. Supplied axes and equivalent SUMCOV
   reductions are labeled separately. Older objects remain readable without
   diagnostic records. Fitting defaults, objectives, and inference are unchanged.
+* Documentation correction to two 1.3.0 statements below. The per-slide
+  SUMCOR term divides a kernel-smoothed cross term by unsmoothed score norms,
+  so it is not bounded by 1 and `slideWeight = "equal"` is not strict
+  Kettenring SUMCOR; it gives equal nominal coefficients to the slide/pair
+  terms. The term is also not cell-count invariant: uniformly replicating
+  cells scales it by `sqrt(r_i r_j)` with an unnormalized kernel and by
+  `sqrt(r_i / r_j)` under `normalizeKernel = TRUE`. `"size"` adds an explicit
+  `sqrt(n_i n_j)` factor rather than "reintroducing" one. No code changed;
+  `computeKernelMatrix()` help now states what `normalizeKernel` does.
 
 ## Frozen cross-slide score transfer
 

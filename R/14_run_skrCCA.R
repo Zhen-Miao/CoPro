@@ -485,11 +485,11 @@
         lapply(cts, function(ct) w_first[[ct]][, 1L, drop = FALSE]), cts
       )
       if (!is.null(transferred_weight_1)) {
-        diagnostics <- .sumcorDiagnosticsForAxes(
+        diagnostics <- .trySumcorDiagnostics(.sumcorDiagnosticsForAxes(
           .whitenWeights(w_first, data_matrices$sdev2_list),
           .whitenSlideOperators(ops, data_matrices$sdev2_list),
           slideWeight, tol, "supplied"
-        )
+        ))
       }
       attr(w_first, "ccaDiagnostics") <- diagnostics
       if (nCC == 1L) return(w_first)
