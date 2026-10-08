@@ -1,4 +1,4 @@
-# CoPro (development version)
+# CoPro 1.3.0
 
 ## Multi-sample workflow and numerical diagnostics
 
@@ -169,8 +169,6 @@ generics whose two bodies genuinely differ (`computePCA()`, `subsetData()`,
 * Fixed a detached roxygen block in `R/D0_permutation_plan.R`: the docs for
   `.buildYPlan()` sat above `.permutationPairTypes()`, leaving the first
   undocumented and the second with two glued-together blocks.
-
-# CoPro 1.3.0
 
 ## Choosing the canonical criterion
 
@@ -869,6 +867,24 @@ generics whose two bodies genuinely differ (`computePCA()`, `subsetData()`,
   summarized by a replicate sign-flip test and replicate bootstrap interval.
   Cell-level permutation functions now reject `CoProMulti` objects rather than
   presenting cell shuffles as replicate-level inference.
+* `generate_toroidal_permutations()` now performs the torus translation it
+  documents. It wrapped coordinates on the observed extent, `max(x) - min(x)`,
+  which on a lattice of `n` columns at spacing `s` is `(n - 1) * s` -- one
+  spacing short of the period. Shifted coordinates therefore did not land on
+  lattice sites at all, and the rank match that follows compressed `n` columns
+  onto `n - 1` positions rather than rotating them. On a 6x6 lattice all 200
+  draws distorted pairwise torus distances, by up to three lattice spacings,
+  and the reachable maps numbered 25 rather than 36. The wrap now uses the
+  period (span plus the median gap between adjacent distinct coordinates,
+  which is exactly the spacing on a lattice), so every draw preserves every
+  pairwise torus distance and the induced maps are the full translation group.
+  Separately, shifts were drawn on `[0.1, 0.9]` of the extent, which excluded
+  the identity and every near-identity element: the reference set was not a
+  group, and since the statistic varies smoothly with the shift, clipping the
+  ends pushes null p-values toward both extremes and inflates the rejection
+  rate. Shifts are now uniform on the whole torus. This changes
+  `runSkrCCAPermu*(permu_method = "toroidal")` results; previous toroidal
+  p-values should not be compared with new ones.
 * Permutation provenance is bound to the null it describes. Running
   `runSkrCCAPermu_Conditional()` after a base `runSkrCCAPermu()` on the same
   object no longer re-labels the base-path null, so a later `calculate_pvalue()`
