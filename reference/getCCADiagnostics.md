@@ -138,11 +138,11 @@ obj <- runSkrCCA(obj, objective = "sumcor", nCC = 2)
 diagnostics <- getCCADiagnostics(obj, sigma = 0.1)
 diagnostics$components
 #>   component           solver             status converged objective
-#> 1         1 sumcov_reduction gradient_tolerance      TRUE 1.8382729
-#> 2         2 sumcov_reduction gradient_tolerance      TRUE 0.3218882
+#> 1         1 sumcov_reduction gradient_tolerance      TRUE 1.8382734
+#> 2         2 sumcov_reduction gradient_tolerance      TRUE 0.3218891
 #>   gradient_norm tolerance iterations floor_encountered
-#> 1  1.200960e-15     1e-05          0             FALSE
-#> 2  7.699152e-16     1e-05          0             FALSE
+#> 1  1.714052e-15     1e-05          0             FALSE
+#> 2  8.239898e-16     1e-05          0             FALSE
 diagnostics$conditioning
 #>           slide  cell_type n_cells n_features rank min_eigenvalue
 #> 1 .single_slide Epithelial     100         10   10             99
