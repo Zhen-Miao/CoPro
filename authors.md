@@ -8,7 +8,7 @@
 ## Citation
 
 Source:
-[`inst/CITATION`](https://github.com/Zhen-Miao/CoPro/blob/main/inst/CITATION)
+[`inst/CITATION`](https://github.com/Zhen-Miao/CoPro/blob/v1.3.0/inst/CITATION)
 
 Miao Z, Qu Y, Huang S, Laux L, Peters S, Aristel A, Zhang Z,
 Niedernhofer L, McMahon A, Kim J, Zhang NR (2026). Dissecting the
