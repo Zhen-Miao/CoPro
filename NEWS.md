@@ -1,4 +1,4 @@
-# CoPro (development version)
+# CoPro 1.3.0
 
 ## Multi-sample workflow and numerical diagnostics
 
@@ -169,8 +169,6 @@ generics whose two bodies genuinely differ (`computePCA()`, `subsetData()`,
 * Fixed a detached roxygen block in `R/D0_permutation_plan.R`: the docs for
   `.buildYPlan()` sat above `.permutationPairTypes()`, leaving the first
   undocumented and the second with two glued-together blocks.
-
-# CoPro 1.3.0
 
 ## Choosing the canonical criterion
 
